@@ -160,7 +160,7 @@ class GP_world():
         obs_idx = obs[:, 0].astype(int)
         obs_rewards = obs[:, 3]
         
-        # Covariance matrix of the observed points
+        # Covariance matrix of the already observed points
         K_obs = K_inf[obs_idx][:, obs_idx]
         
         # Covariance matrix between input points (i.e. points to be predicted) and observed points
@@ -171,9 +171,9 @@ class GP_world():
         
         # Posterior mean calculation
         post_mean = K_pred @ inv_K @ obs_rewards
-        # post_cov = K - K_inpts @ inv_K @ K_inpts.T
+        post_cov = K_inf[pred_idx][:, pred_idx] - K_pred @ inv_K @ K_pred.T
         
-        return post_mean
+        return post_mean, post_cov
     
 
     ## model chooses between two points
