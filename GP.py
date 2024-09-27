@@ -135,7 +135,7 @@ class GP_world():
         return obs
     
     ## generate points to choose between
-    def gen_preds(self, samples, n_pred):
+    def gen_preds(self, samples, n_pred=1):
         preds = []
         for i in range(2):
             pred_idx = np.random.randint(0, self.N**2, size=n_pred)
@@ -145,7 +145,7 @@ class GP_world():
             pred_rewards = samples[pred_coords[:, 0], pred_coords[:, 1]] #i.e. the true rewards
             preds.append(np.column_stack([pred_idx, pred_coords, pred_rewards]))
 
-        ## convert into 5x4x2 array
+        ## convert into nx4x2 array
         preds = np.array(preds)
 
         return preds
