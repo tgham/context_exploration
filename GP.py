@@ -5,6 +5,7 @@ import seaborn as sns
 import scipy
 from scipy.spatial.distance import cdist
 import warnings
+import heapq
 
 
 class GP_world():
@@ -119,7 +120,11 @@ class GP_world():
         samples = np.random.multivariate_normal(mean, K).reshape(self.N, self.N)
 
         #normalise
-        samples = (samples - np.min(samples))/(np.max(samples)-np.min(samples))
+        lower, upper = 0, 1
+        samples = lower + (upper - lower) * (samples - np.min(samples)) / (np.max(samples) - np.min(samples))
+
+        # make all samples non-negative
+        samples += np.abs(np.min(samples))
         return samples
     
 
@@ -180,6 +185,7 @@ class GP_world():
     def trajectory(self, points, samples, metric = 'chebyshev'):
 
         ## convert start and end points to 2D coordinates
+        start, goal = points
         x1, y1 = points[0].astype(int)
         x2, y2 = points[1].astype(int)
         traj = [(x1, y1)]
@@ -217,9 +223,77 @@ class GP_world():
                 traj.append((x1, y1))
 
         ## calculate the reward along this trajectory
-        route_reward = [samples[x, y] for x, y in traj]
+        route_cost = [samples[x, y] for x, y in traj]
         
-        return traj, route_reward
+        return traj, route_cost
+    
+
+    ## calculate the optimal trajectory between the two points (i.e. the trajectory with the lowest cumulative cost)
+    def optimal_trajectory(self, points, samples, metric = 'chebyshev'):
+
+        # Initialize the open list (priority queue) and closed list (visited nodes)
+        start, goal = points
+        start = tuple(map(int, start))
+        goal = tuple(map(int, goal))
+        open_list = []
+        heapq.heappush(open_list, (0 + self.heuristic(start, goal, metric), 0, start, []))
+        closed_list = set()
+
+        while open_list:
+            # Pop the node with the lowest total cost from the priority queue
+            estimated_total_cost, current_cost, current_point, path = heapq.heappop(open_list)
+            if current_point in closed_list:
+                continue
+            
+            # Add the current point to the path
+            path = path + [current_point]
+            
+            # If we reached the goal, return the path and the accumulated reward
+            if current_point == goal:
+                route_cost = [samples[x, y] for x, y in path]
+                return path, route_cost
+            
+            # Mark this point as visited
+            closed_list.add(current_point)
+            
+            # Explore neighbors
+            for neighbor in self.get_neighbors(current_point, samples.shape, metric):
+                if neighbor not in closed_list:
+                    # Calculate new cost to reach this neighbor
+                    new_cost = current_cost + samples[neighbor]
+                    # Add the neighbor to the open list with its estimated total cost
+                    estimated_total_cost = new_cost + self.heuristic(neighbor, goal, metric) + 0.001 * new_cost
+                    heapq.heappush(open_list, (estimated_total_cost, new_cost, neighbor, path))
+        
+        # If there's no path found, return empty
+        return [], []
+    
+    def heuristic(self, current, goal, metric = 'chebyshev'):
+        x1, y1 = current
+        x2, y2 = goal
+        if metric == 'chebyshev':
+            return max(abs(x2 - x1), abs(y2 - y1))
+        elif metric == 'manhattan':
+            return abs(x2 - x1) + abs(y2 - y1)
+        
+    ## get all possible neighbours for a given point in the grid
+    def get_neighbors(self, point, grid_shape, metric = 'chebyshev'):
+        x, y = point
+        neighbors = []
+        if metric == 'chebyshev':
+            for dx in [-1, 0, 1]:
+                for dy in [-1, 0, 1]:
+                    if dx == 0 and dy == 0:
+                        continue  # Skip the current point itself
+                    new_x, new_y = x + dx, y + dy
+                    if 0 <= new_x < grid_shape[0] and 0 <= new_y < grid_shape[1]:
+                        neighbors.append((new_x, new_y))
+        elif metric == 'manhattan':
+            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                new_x, new_y = x + dx, y + dy
+                if 0 <= new_x < grid_shape[0] and 0 <= new_y < grid_shape[1]:
+                    neighbors.append((new_x, new_y))
+        return neighbors
 
     
 

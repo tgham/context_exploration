@@ -4,7 +4,9 @@ import seaborn as sns
 
 ## visualise the samples
 def plot_r(sampled_rewards, ax, title=None, cbar=False):
-    sns.heatmap(sampled_rewards, ax=ax, cbar=cbar, square=True, cmap='viridis', vmin=0, vmax=1,  cbar_kws={'ticks': [0, 1], 'label': '$', 'shrink': 0.7})
+    vmin = np.min(sampled_rewards)
+    vmax = np.max(sampled_rewards)
+    sns.heatmap(sampled_rewards, ax=ax, cbar=cbar, square=True, cmap='viridis', vmin=vmin, vmax=vmax,  cbar_kws={'ticks': [0, 1], 'label': '$', 'shrink': 0.7})
     # ax.imshow(sampled_rewards, extent=(0, self.N, 0, self.N), origin = 'upper')
     # ax.set_xticks(np.arange(0, self.N+1, 5))
     # ax.set_yticks(np.arange(0, self.N+1, 5))
@@ -42,3 +44,20 @@ def plot_RPE(RPE, ax, title=None, cbar = False):
     ax.set_title(title)
     return ax
 
+## plot path between two points
+def plot_traj(trajs, ax, title=None):
+    
+    ## plot direct and optimal trajectories using different markers
+    markers = ['x', '*']
+
+    for ti, traj in enumerate(trajs):
+        ## plot start and goal points in red and green
+        ax.scatter(traj[0][1]+0.5, traj[0][0]+0.5, color='red', s=100)
+        ax.scatter(traj[-1][1]+0.5, traj[-1][0]+0.5, color='green', s=100)
+
+        ## plot path
+        for t in traj[1:-1]:
+            ax.plot(t[1]+0.5, t[0]+0.5, markers[ti], color='black', markersize=10, linewidth=10)
+    
+    # ax.legend(['Start', 'Goal','Direct', 'Optimal'], loc='upper right')
+    ## legend for start and goal, and the two paths
