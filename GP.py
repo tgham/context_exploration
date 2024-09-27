@@ -370,3 +370,4 @@ class GP_world():
             warnings.warn("Kernel matrix is not positive semi-definite.", UserWarning)
 
         return np.any([not symm, not psd])
+

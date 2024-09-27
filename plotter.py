@@ -61,3 +61,4 @@ def plot_traj(trajs, ax, title=None):
     
     # ax.legend(['Start', 'Goal','Direct', 'Optimal'], loc='upper right')
     ## legend for start and goal, and the two paths
+     
