@@ -3,8 +3,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 ## visualise the samples
-def plot_r(sampled_rewards, ax, title=None):
-    sns.heatmap(sampled_rewards, ax=ax, cbar=False, square=True, cmap='viridis', vmin=0, vmax=1)
+def plot_r(sampled_rewards, ax, title=None, cbar=False):
+    sns.heatmap(sampled_rewards, ax=ax, cbar=cbar, square=True, cmap='viridis', vmin=0, vmax=1,  cbar_kws={'ticks': [0, 1], 'label': '$', 'shrink': 0.7})
     # ax.imshow(sampled_rewards, extent=(0, self.N, 0, self.N), origin = 'upper')
     # ax.set_xticks(np.arange(0, self.N+1, 5))
     # ax.set_yticks(np.arange(0, self.N+1, 5))
@@ -14,6 +14,8 @@ def plot_r(sampled_rewards, ax, title=None):
     # ax.set_ylabel('Y')
     ax.set_title(title)
     # ax.set_title('Sampled Reward Distribution,\nkernel: {}'.format(self.kernel_type))
+    if cbar:
+        ax.collections[0].colorbar.set_label('$')
     return ax
 
 ## visualise training points
@@ -31,8 +33,10 @@ def plot_kernel(K, ax, title=None):
     return ax
 
 ## plot RPE
-def plot_RPE(RPE, ax, title=None):
-    sns.heatmap(RPE, ax=ax, cbar=False, square=True, cmap='coolwarm_r', vmin=-1, vmax=1)
+def plot_RPE(RPE, ax, title=None, cbar = False):
+    sns.heatmap(RPE, ax=ax, cbar=cbar, square=True, cmap='coolwarm_r', vmin=-1, vmax=1, cbar_kws={'ticks': [-1, 0, 1], 'label': 'RPE', 'shrink': 0.7})
+    # if cbar:
+    #     ax.collections[0].colorbar.set_label('RPE')
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_title(title)
