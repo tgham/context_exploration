@@ -182,7 +182,7 @@ class GP_world():
     
 
     ## calculate shortest direct trajectory between two points, and the reward/cost along this trajectory
-    def trajectory(self, points, samples, metric = 'chebyshev'):
+    def trajectory(self, points, samples, metric = 'chebyshev', manhattan_order = 'x'):
 
         ## convert start and end points to 2D coordinates
         start, goal = points
@@ -205,22 +205,37 @@ class GP_world():
 
         ## only allow agent to move in cardinal directions
         elif metric == 'manhattan':
+
+            # first move in x direction, then y direction
+            if manhattan_order == 'x':
+                while x1 != x2:
+                    if x2 > x1:
+                        x1 += 1  # Move right
+                    else:
+                        x1 -= 1  # Move left
+                    traj.append((x1, y1))
+                while y1 != y2:
+                    if y2 > y1:
+                        y1 += 1  # Move up
+                    else:
+                        y1 -= 1  # Move down
+                    traj.append((x1, y1))
             
-            # first move in x direction
-            while x1 != x2:
-                if x2 > x1:
-                    x1 += 1  # Move right
-                else:
-                    x1 -= 1  # Move left
-                traj.append((x1, y1))
-            
-            # Then, move vertically until y1 == y2
-            while y1 != y2:
-                if y2 > y1:
-                    y1 += 1  # Move up
-                else:
-                    y1 -= 1  # Move down
-                traj.append((x1, y1))
+            # first move in y direction, then x direction
+            elif manhattan_order == 'y':
+                while y1 != y2:
+                    if y2 > y1:
+                        y1 += 1  # Move up
+                    else:
+                        y1 -= 1  # Move down
+                    traj.append((x1, y1))
+                while x1 != x2:
+                    if x2 > x1:
+                        x1 += 1  # Move right
+                    else:
+                        x1 -= 1  # Move left
+                    traj.append((x1, y1))
+
 
         ## calculate the reward along this trajectory
         route_cost = [samples[x, y] for x, y in traj]
@@ -229,18 +244,20 @@ class GP_world():
     
 
     ## calculate the optimal trajectory between the two points (i.e. the trajectory with the lowest cumulative cost)
-    def optimal_trajectory(self, points, samples, metric = 'chebyshev'):
+    def optimal_trajectory(self, points, samples, metric = 'chebyshev', h_w = 0):
 
         # Initialize the open list (priority queue) and closed list (visited nodes)
         start, goal = points
         start = tuple(map(int, start))
         goal = tuple(map(int, goal))
         open_list = []
-        heapq.heappush(open_list, (0 + self.heuristic(start, goal, metric), 0, start, []))
+
+        ## weighted combination of g(n) (actual cost) and h(n) (heuristic for step count)
+        heapq.heappush(open_list, (0 + h_w* self.heuristic(start, goal, metric), 0, start, []))
         closed_list = set()
 
+        # Pop the node with the lowest total cost from the priority queue
         while open_list:
-            # Pop the node with the lowest total cost from the priority queue
             estimated_total_cost, current_cost, current_point, path = heapq.heappop(open_list)
             if current_point in closed_list:
                 continue
@@ -261,9 +278,11 @@ class GP_world():
                 if neighbor not in closed_list:
                     # Calculate new cost to reach this neighbor
                     new_cost = current_cost + samples[neighbor]
-                    # Add the neighbor to the open list with its estimated total cost
-                    estimated_total_cost = new_cost + self.heuristic(neighbor, goal, metric) + 0.001 * new_cost
+                    
+                    # Add the neighbor to the open list with its weighted total cost
+                    weighted_total_cost = (1-h_w) * new_cost + h_w*self.heuristic(neighbor, goal, metric)
                     heapq.heappush(open_list, (estimated_total_cost, new_cost, neighbor, path))
+
         
         # If there's no path found, return empty
         return [], []

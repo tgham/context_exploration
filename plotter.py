@@ -48,7 +48,7 @@ def plot_RPE(RPE, ax, title=None, cbar = False):
 def plot_traj(trajs, ax, title=None):
     
     ## plot direct and optimal trajectories using different markers
-    markers = ['x', '*']
+    markers = ['*','x','x']
 
     for ti, traj in enumerate(trajs):
         ## plot start and goal points in red and green
