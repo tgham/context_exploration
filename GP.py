@@ -176,11 +176,50 @@ class GP_world():
         return post_mean, post_cov
     
 
-    ## model chooses between two points
-    def sigmoid(self, x, tau=1):
-        p1 = 1/(1 + np.exp(-x)/tau)
-        p2 = 1-p1
-        return np.array([p1, p2])
+    ## calculate shortest direct trajectory between two points, and the reward/cost along this trajectory
+    def trajectory(self, points, samples, metric = 'chebyshev'):
+
+        ## convert start and end points to 2D coordinates
+        x1, y1 = points[0].astype(int)
+        x2, y2 = points[1].astype(int)
+        traj = [(x1, y1)]
+        
+        ## allow agent to move diagonally
+        if metric == 'chebyshev':
+            # while trajectory[-1] != end:
+            while (x1, y1) != (x2, y2):
+                
+                ## determine direction of movement
+                dx = np.sign(x2 - x1)  # -1, 0, or 1 for x direction
+                dy = np.sign(y2 - y1)  # -1, 0, or 1 for y direction
+                
+                # Move in the direction of the target (i.e. diag if both dx and dy are non-zero)
+                x1, y1 = (x1 + dx, y1 + dy)
+                traj.append((int(x1), int(y1)))
+
+        ## only allow agent to move in cardinal directions
+        elif metric == 'manhattan':
+            
+            # first move in x direction
+            while x1 != x2:
+                if x2 > x1:
+                    x1 += 1  # Move right
+                else:
+                    x1 -= 1  # Move left
+                traj.append((x1, y1))
+            
+            # Then, move vertically until y1 == y2
+            while y1 != y2:
+                if y2 > y1:
+                    y1 += 1  # Move up
+                else:
+                    y1 -= 1  # Move down
+                traj.append((x1, y1))
+
+        ## calculate the reward along this trajectory
+        route_reward = [samples[x, y] for x, y in traj]
+        
+        return traj, route_reward
 
     
 
