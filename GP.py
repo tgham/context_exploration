@@ -6,6 +6,7 @@ import scipy
 from scipy.spatial.distance import cdist
 import warnings
 import heapq
+from collections import defaultdict
 
 
 class GP_world():
@@ -274,7 +275,7 @@ class GP_world():
             closed_list.add(current_point)
             
             # Explore neighbors
-            for neighbor in self.get_neighbors(current_point, samples.shape, metric):
+            for neighbor in self.get_neighbors(current_point, metric):
                 if neighbor not in closed_list:
                     # Calculate new cost to reach this neighbor
                     new_cost = current_cost + samples[neighbor]
@@ -287,6 +288,7 @@ class GP_world():
         # If there's no path found, return empty
         return [], []
     
+    ## h(n), i.e. the estimated cost to reach the goal from the current point (although I think this is just taking into account distance rather than reward)
     def heuristic(self, current, goal, metric = 'chebyshev'):
         x1, y1 = current
         x2, y2 = goal
@@ -296,7 +298,7 @@ class GP_world():
             return abs(x2 - x1) + abs(y2 - y1)
         
     ## get all possible neighbours for a given point in the grid
-    def get_neighbors(self, point, grid_shape, metric = 'chebyshev'):
+    def get_neighbors(self, point, metric = 'chebyshev'):
         x, y = point
         neighbors = []
         if metric == 'chebyshev':
@@ -305,16 +307,79 @@ class GP_world():
                     if dx == 0 and dy == 0:
                         continue  # Skip the current point itself
                     new_x, new_y = x + dx, y + dy
-                    if 0 <= new_x < grid_shape[0] and 0 <= new_y < grid_shape[1]:
+                    if 0 <= new_x < self.N and 0 <= new_y < self.N:
                         neighbors.append((new_x, new_y))
         elif metric == 'manhattan':
             for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                 new_x, new_y = x + dx, y + dy
-                if 0 <= new_x < grid_shape[0] and 0 <= new_y < grid_shape[1]:
+                if 0 <= new_x < self.N and 0 <= new_y < self.N:
                     neighbors.append((new_x, new_y))
         return neighbors
 
     
+    ### jaccard similarity between two paths
+    def jaccard(self, list1, list2):
+        s1 = set(list1)
+        s2 = set(list2)
+        return len(s1.intersection(s2)) / len(s1.union(s2))
+    
+    ## global jaccard similarity between all paths
+    def global_jaccard(self, paths):
+        set_paths = [set(path) for path in paths]
+        intersection = set.intersection(*set_paths)
+        union = set.union(*set_paths)
+        return len(intersection) / len(union)
+    
+    
+    ## entropy-based diversity of the path
+    def entropy(self, paths):
+
+        ## count the number of paths that visit each cell
+        cell_counts = defaultdict(int)
+        total_paths = len(paths)
+        for path in paths:
+            for cell in path:
+                cell_counts[cell] += 1
+
+        ## calculate entropy, giving less weight to cells visited by more paths
+        entropy = 0
+        for cell in cell_counts:
+            p = cell_counts[cell] / total_paths
+            entropy -= p * np.log(p) * (1-p)
+
+        return entropy
+    
+    ## as above, but for overlapping patches
+    def patch_entropy(self, paths, patch_size = 2):
+        cell_counts = defaultdict(int)
+        total_paths = len(paths)
+        for path in paths:
+            for cell in path:
+                patches = self.get_patches(cell, patch_size = patch_size)
+                for patch in patches:
+                    cell_counts[patch] += 1
+        
+        entropy = 0
+        for cell in cell_counts:
+            p = cell_counts[cell] / total_paths
+            entropy -= p * np.log(p) * (1-p)
+        
+        return entropy
+    
+    ## function for getting the number of overlapping nxn patches that a cell is a part of
+    def get_patches(self, cell, overlap = True, patch_size = 2):
+        x, y = cell
+        patches = []
+        
+        if overlap:
+            # Determine the range of top-left corners this cell contributes to
+            for i in range(max(0, x - patch_size + 1), min(x + 1, self.N - patch_size + 1)):
+                for j in range(max(0, y - patch_size + 1), min(y + 1, self.N - patch_size + 1)):
+                    patches.append((i, j))
+        
+        return patches
+    
+
 
     ## compute log marginal likelihood of set of observations, given the inference kernel
     def likelihood(self, K_inf, obs, sigma=0.01):
