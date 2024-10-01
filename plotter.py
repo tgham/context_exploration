@@ -26,7 +26,7 @@ def plot_obs(obs, ax, text=False):
         if text:
             ax.text(y,x , round(r, 2), ha='center', va='center', color='red') # note the x,y are flipped because they are matrix indices
         else:
-            ax.scatter(y, x, color='red')
+            ax.scatter(y, x, color='red', marker='x', s=100)
 
 ## plot kernel
 def plot_kernel(K, ax, title=None):
