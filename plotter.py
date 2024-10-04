@@ -4,8 +4,10 @@ import seaborn as sns
 
 ## visualise the samples
 def plot_r(sampled_rewards, ax, title=None, cbar=False):
-    vmin = np.min(sampled_rewards)
-    vmax = np.max(sampled_rewards)
+    # vmin = np.min(sampled_rewards)
+    # vmax = np.max(sampled_rewards)
+    vmin = 0
+    vmax = 1
     sns.heatmap(sampled_rewards, ax=ax, cbar=cbar, square=True, cmap='viridis', vmin=vmin, vmax=vmax,  cbar_kws={'ticks': [0, 1], 'label': '$', 'shrink': 0.7})
     # ax.imshow(sampled_rewards, extent=(0, self.N, 0, self.N), origin = 'upper')
     # ax.set_xticks(np.arange(0, self.N+1, 5))
@@ -17,7 +19,7 @@ def plot_r(sampled_rewards, ax, title=None, cbar=False):
     ax.set_title(title)
     # ax.set_title('Sampled Reward Distribution,\nkernel: {}'.format(self.kernel_type))
     if cbar:
-        ax.collections[0].colorbar.set_label('$')
+        ax.collections[0].colorbar.set_label('Route cost')
     return ax
 
 ## visualise training points
@@ -26,7 +28,7 @@ def plot_obs(obs, ax, text=False):
         if text:
             ax.text(y,x , round(r, 2), ha='center', va='center', color='red') # note the x,y are flipped because they are matrix indices
         else:
-            ax.scatter(y, x, color='red', marker='x', s=100)
+            ax.scatter(y+0.5, x+0.5, color='red', marker='x', s=100)
 
 ## plot kernel
 def plot_kernel(K, ax, title=None):
@@ -57,7 +59,7 @@ def plot_traj(trajs, ax, title=None):
 
         ## plot path
         for t in traj[1:-1]:
-            ax.plot(t[1]+0.5, t[0]+0.5, markers[ti], color='black', markersize=10, linewidth=10)
+            ax.plot(t[1]+0.5, t[0]+0.5, markers[ti], color='white', markersize=10, linewidth=10)
     
     # ax.legend(['Start', 'Goal','Direct', 'Optimal'], loc='upper right')
     ## legend for start and goal, and the two paths
