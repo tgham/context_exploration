@@ -22,6 +22,14 @@ def plot_r(sampled_rewards, ax, title=None, cbar=False):
         ax.collections[0].colorbar.set_label('Route cost')
     return ax
 
+def plot_state(current, goal, ax, title=None):
+    ax.scatter(current[1]+0.5, current[0]+0.5, color='red', s=200)
+    ax.scatter(goal[1]+0.5, goal[0]+0.5, color='green', s=200)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_title(title)
+    return ax
+
 ## visualise training points
 def plot_obs(obs, ax, text=False):
     for i, (_, x, y, r) in enumerate(obs):

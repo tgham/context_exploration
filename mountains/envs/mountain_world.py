@@ -3,6 +3,17 @@ import gymnasium as gym
 from gymnasium import spaces
 import pygame
 import numpy as np
+from plotter import *
+import matplotlib.pyplot as plt
+from matplotlib import animation
+import seaborn as sns
+import scipy
+from scipy.spatial.distance import cdist
+import warnings
+import heapq
+from collections import defaultdict
+from IPython.display import display, clear_output
+# from PIL import image
 
 
 class Actions(Enum):
@@ -15,9 +26,61 @@ class Actions(Enum):
 class MountainEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, render_mode=None, size=5):
-        self.size = size  # The size of the square grid
-        self.window_size = 512  # The size of the PyGame window
+    def __init__(self, N, params=None, render_mode=None, size=5):
+        
+        ### GP inits
+
+        ## initialise the GP grid
+        self.N = N
+        x = np.arange(N)
+        y = np.arange(N)
+        X,Y = np.meshgrid(x,y)
+        self.locations = np.column_stack([X.ravel(), Y.ravel()])
+
+        ## set the kernel parameters
+        if params is None:
+            self.c = 0
+            self.scale = 1.0
+            self.theta = 0
+            self.sigma_f = 1.0
+            self.length_scale = 2
+            self.periodic_length_scale = 4
+            self.period = 8
+            self.periodic_theta = 0
+        else:
+            self.c = params[0]
+            self.scale = params[1]
+            self.theta = params[2]
+            self.sigma_f = params[3]
+            self.length_scale = params[4]
+            self.periodic_length_scale = params[5]
+            self.period = params[6]
+            self.periodic_theta = params[7]
+
+
+
+        ## initialise the kernels
+        self.K_lin = self.linear()
+        self.K_lin_x = self.linear_1D(0)
+        self.K_lin_y = self.linear_1D(1)
+        self.K_rbf = self.rbf()
+        self.K_rbf_x = self.rbf_1D(0)
+        self.K_rbf_y = self.rbf_1D(1)
+        self.K_periodic_x = self.periodic(0)
+        self.K_periodic_y = self.periodic(1)
+
+        ## define mountain costs as samples from the GP
+        ## (for now, let's just use the RBF kernel)
+        # self.costs = self.sample(self.K_rbf)
+        self.costs = self.sample(self.K_rbf_x)
+        self.cost_threshold = 1 ## ideally this would be a ratio of the optimal cost to the actual cost
+
+
+        
+        ### gym inits
+
+        ## sizes
+        self.window_size = 512
 
         # Observations are dictionaries with the agent's and the target's location.
         # Each location is encoded as an element of {0, ..., `size`}^2,
@@ -57,9 +120,152 @@ class MountainEnv(gym.Env):
         self.window = None
         self.clock = None
 
+
+    #### define the kernels
+
+    ## linear kernels
+    
+    # linear kernel over x,y, i.e. similarity as a function of the distance from the origin (0,0)
+    def linear(self):
+        dists = np.sqrt(self.locations[:, 0]**2 + self.locations[:, 1]**2)
+        K = np.outer(dists, dists) + self.c
+        return K
+    
+    # linear kernel over x-distance (0) or y-distance (1), i.e. similarity as a function of the distance from (0,:) or (:,0), where the basis vectors are determined by the angle theta (in radians)    
+    def linear_1D(self, dim = 0):
+
+        # define basis vectors
+        rotation = np.array([[np.cos(self.theta), -np.sin(self.theta)], [np.sin(self.theta), np.cos(self.theta)]])
+        rotated_locations = np.dot(self.locations, rotation)
+        # dists = np.subtract.outer(rotated_locations[:, dim], rotated_locations[:, dim])
+
+        # calculate distances
+        dists = rotated_locations[:,dim] * self.scale**2
+        K = np.outer(dists, dists) + self.c
+        return K
+
+    
+
+    ## RBFs 
+
+    # RBF kernel over x,y (i.e. Euclidean distance)
+    def rbf(self):
+        dists = cdist(self.locations, self.locations, metric='euclidean')
+        K = self.sigma_f**2 * np.exp(-0.5 * (dists / self.length_scale)**2)
+        return K
+
+    # RBF kernel over just x-distance or y-distance
+    def rbf_1D(self, dim=0):
+
+        # define basis vectors
+        rotation = np.array([[np.cos(self.theta), -np.sin(self.theta)], [np.sin(self.theta), np.cos(self.theta)]])
+        rotated_locations = np.dot(self.locations, rotation)
+
+        # calculate distances
+        dists = np.subtract.outer(rotated_locations[:, dim], rotated_locations[:, dim])
+        K = self.sigma_f**2 * np.exp(-0.5 * (dists / self.length_scale)**2)
+        return K
+    
+
+    ## periodic kernel
+    def periodic(self, dim=0):
+        rotation = np.array([[np.cos(self.periodic_theta), -np.sin(self.periodic_theta)], [np.sin(self.periodic_theta), np.cos(self.periodic_theta)]])
+        rotated_locations = np.dot(self.locations, rotation)
+        dists = np.subtract.outer(rotated_locations[:, dim], rotated_locations[:, dim])
+        K = self.sigma_f**2 * np.exp(-2 * np.sin(np.pi * dists / self.period)**2 / self.periodic_length_scale**2)
+        return K
+
+
+    ## sample from the GP
+    def sample(self, K):
+
+        ## check kernel is valid
+        self.k_check(K)
+
+        # sample
+        mean = np.zeros(self.N**2)
+        samples = np.random.multivariate_normal(mean, K).reshape(self.N, self.N)
+
+        #normalise
+        lower, upper = 0, 1
+        samples = lower + (upper - lower) * (samples - np.min(samples)) / (np.max(samples) - np.min(samples))
+
+        # make all samples non-negative
+        samples += np.abs(np.min(samples))
+        return samples
+    
+
+    ## use GP regression to predict posterior distribution of rewards, given these observations,based on the currently inferred kernel
+    def post_pred(self, K_inf, obs, pred=None, sigma=0.01):
+        if pred is None:
+            pred_idx = np.arange(self.N**2)
+        else:
+            pred_idx = pred
+
+        obs_idx = obs[:, 0].astype(int)
+        obs_rewards = obs[:, 3]
+        
+        # Covariance matrix of the already observed points
+        K_obs = K_inf[obs_idx][:, obs_idx]
+        
+        # Covariance matrix between input points (i.e. points to be predicted) and observed points
+        K_pred = K_inf[pred_idx][:, obs_idx]
+        
+        # inversion covariance matrix
+        inv_K = np.linalg.inv(K_obs + sigma**2 * np.eye(len(obs_idx)))
+        
+        # Posterior mean calculation
+        post_mean = K_pred @ inv_K @ obs_rewards
+        post_cov = K_inf[pred_idx][:, pred_idx] - K_pred @ inv_K @ K_pred.T
+        
+        return post_mean, post_cov
+    
+
+    ## check that kernel is PSD and symmetric
+    def k_check(self, K):
+        symm = np.allclose(K,K.T)
+        if not symm:
+            warnings.warn("Kernel matrix is not symmetric.", UserWarning)
+        
+        eigenvalues = np.linalg.eigvals(K)
+        psd = np.all(eigenvalues >= -1e-10)
+        if not psd:
+            warnings.warn("Kernel matrix is not positive semi-definite.", UserWarning)
+
+        return np.any([not symm, not psd])
+    
+    ## compute log marginal likelihood of set of observations, given the inference kernel
+    def likelihood(self, K_inf, obs, sigma=0.01):
+        n_obs = len(obs)
+        obs_idx = obs[:, 0].astype(int) #i.e. x
+        obs_rewards = obs[:, 3] #i.e. y
+        K_tmp = K_inf[obs_idx][:,obs_idx] 
+        K_tmp = K_tmp + ((sigma**2) * np.eye(n_obs))
+        self.k_check(K_tmp)
+        
+        ## cholesky decomp
+        L = scipy.linalg.cholesky(K_tmp, lower=True, check_finite=False)
+        alpha = scipy.linalg.cho_solve((L, True), obs_rewards, check_finite=False)
+
+        ## calculate log likelihood terms
+        log_det = np.sum(np.log(np.diag(L))) 
+        quad_form = 0.5 * (obs_rewards@alpha)
+        norm_term = 0.5 * n_obs * np.log(2*np.pi)
+        ll = -quad_form - log_det - norm_term
+
+        return ll
+    
+
+    #### (still need to do the remaining GP funcs, e.g. trajectories)
+
+
+
+    ### RL env inits
+
+
+    ## get info from current state
     def _get_obs(self):
         return {"agent": self._agent_location, "target": self._target_location}
-
     def _get_info(self):
         return {
             "distance": np.linalg.norm(
@@ -67,115 +273,196 @@ class MountainEnv(gym.Env):
             )
         }
 
+    ## reset the environment
     def reset(self, seed=None, options=None):
         # We need the following line to seed self.np_random
         super().reset(seed=seed)
 
-        # Choose the agent's location uniformly at random
-        self._agent_location = self.np_random.integers(0, self.size, size=2, dtype=int)
 
-        # We will sample the target's location randomly until it does not
-        # coincide with the agent's location
-        self._target_location = self._agent_location
-        while np.array_equal(self._target_location, self._agent_location):
+        ## sample start and goal locations, ensuring they are sufficiently far apart 
+        ## (COULD ALSO ENSURE THAT THE START LOCATION IS A LOCAL MAXIMUM)
+        dist = 0
+        min_dist = self.N*0.6
+        while dist<min_dist:
+            self._agent_location = self.np_random.integers(0, self.N, size=2, dtype=int)
             self._target_location = self.np_random.integers(
-                0, self.size, size=2, dtype=int
+                0, self.N, size=2, dtype=int
             )
+            dist = np.max(cdist([self._agent_location, self._target_location], [self._agent_location, self._target_location], metric='cityblock'))
+            print(dist)
 
+        ## initialise trial info
+        self.t = 0
         observation = self._get_obs()
         info = self._get_info()
+        self.accrued_cost = 0
 
-        if self.render_mode == "human":
-            self._render_frame()
+        ## get the cost of the optimal trajectory, and use this to set the cost threshold
+        o_traj, o_route_cost = self.optimal_trajectory()
+        self.optimal_cost = np.sum(o_route_cost)
+        self.cost_threshold = self.optimal_cost * 1.3 ## arbitrary threshold for now
+
+        # if self.render_mode == "human":
+        #     self._render_frame()
 
         return observation, info
 
+    ## take a step in the environment
     def step(self, action):
         # Map the action (element of {0,1,2,3}) to the direction we walk in
+        self.t += 1
         direction = self._action_to_direction[action]
         # We use `np.clip` to make sure we don't leave the grid
         self._agent_location = np.clip(
-            self._agent_location + direction, 0, self.size - 1
+            self._agent_location + direction, 0, self.N - 1
         )
+
+        ## get the cost of the current state
+        cost = self.costs[self._agent_location[0], self._agent_location[1]]
+        self.accrued_cost += cost
+
         # An episode is done iff the agent has reached the target
-        terminated = np.array_equal(self._agent_location, self._target_location)
-        reward = 1 if terminated else 0  # Binary sparse rewards
+        if np.array_equal(self._agent_location, self._target_location):
+            self.msg = "Target reached in {} steps".format(self.t)
+            self.terminated = True
+            reward = 1
+        elif self.accrued_cost > self.cost_threshold:
+            self.msg = "Out of fuel in in {} steps".format(self.t)
+            self.terminated = True
+            reward = 0
+        else:
+            self.terminated = False
+            reward = 0
         observation = self._get_obs()
         info = self._get_info()
+        terminated = self.terminated
 
-        if self.render_mode == "human":
-            self._render_frame()
+        # if self.render_mode == "human":
+        #     self._render_frame()
+        self.render()
 
         return observation, reward, terminated, False, info
 
+    ## rendering funcs
     def render(self):
-        if self.render_mode == "rgb_array":
-            return self._render_frame()
+        # Clear the current output
+        clear_output(wait=True)
+        
+        # Check if we already have a figure, if not create one
+        if not hasattr(self, 'fig') or not plt.fignum_exists(self.fig.number):
+            self.fig, self.ax = plt.subplots(1, 1, figsize=(5, 5))
+        else:
+            # Clear the existing axes
+            self.ax.clear()
+        
+        # Plot the reward distribution (heatmap)
+        title = 't={}\naccrued cost: {}\nthreshold: {}'.format(self.t, self.accrued_cost, self.cost_threshold)
+        plot_r(self.costs, self.ax)
+        
+        # Plot the agent and target positions
+        plot_state(self._agent_location, self._target_location, self.ax, title=title)
+        
+        # Adjust the layout to prevent overlapping
+        plt.tight_layout()
+        
+        # Display the plot
+        display(self.fig)
+        
+        # Instead of closing the figure, we'll just clear the current display
+        clear_output(wait=True)
+        
+        # # Add a small delay to allow the plot to update
+        if self.terminated:
+            print(self.msg)
+            plt.pause(2)
+        else:
+            plt.pause(0.4)
 
-    def _render_frame(self):
-        if self.window is None and self.render_mode == "human":
-            pygame.init()
-            pygame.display.init()
-            self.window = pygame.display.set_mode((self.window_size, self.window_size))
-        if self.clock is None and self.render_mode == "human":
-            self.clock = pygame.time.Clock()
-
-        canvas = pygame.Surface((self.window_size, self.window_size))
-        canvas.fill((255, 255, 255))
-        pix_square_size = (
-            self.window_size / self.size
-        )  # The size of a single grid square in pixels
-
-        # First we draw the target
-        pygame.draw.rect(
-            canvas,
-            (255, 0, 0),
-            pygame.Rect(
-                pix_square_size * self._target_location,
-                (pix_square_size, pix_square_size),
-            ),
-        )
-        # Now we draw the agent
-        pygame.draw.circle(
-            canvas,
-            (0, 0, 255),
-            (self._agent_location + 0.5) * pix_square_size,
-            pix_square_size / 3,
-        )
-
-        # Finally, add some gridlines
-        for x in range(self.size + 1):
-            pygame.draw.line(
-                canvas,
-                0,
-                (0, pix_square_size * x),
-                (self.window_size, pix_square_size * x),
-                width=3,
-            )
-            pygame.draw.line(
-                canvas,
-                0,
-                (pix_square_size * x, 0),
-                (pix_square_size * x, self.window_size),
-                width=3,
-            )
-
-        if self.render_mode == "human":
-            # The following line copies our drawings from `canvas` to the visible window
-            self.window.blit(canvas, canvas.get_rect())
-            pygame.event.pump()
-            pygame.display.update()
-
-            # We need to ensure that human-rendering occurs at the predefined framerate.
-            # The following line will automatically add a delay to
-            # keep the framerate stable.
-            self.clock.tick(self.metadata["render_fps"])
-        else:  # rgb_array
-            return np.transpose(
-                np.array(pygame.surfarray.pixels3d(canvas)), axes=(1, 0, 2)
-            )
 
     def close(self):
         if self.window is not None:
             pygame.display.quit()
             pygame.quit()
+
+
+    ## calculate the optimal trajectory between the two points (i.e. the trajectory with the lowest cumulative cost)
+    def optimal_trajectory(self, metric = 'chebyshev', h_w = 0):
+
+        # Initialize the open list (priority queue) and closed list (visited nodes)
+        start, goal = [self._agent_location, self._target_location]
+        start = tuple(map(int, start))
+        goal = tuple(map(int, goal))
+        open_list = []
+
+        ## weighted combination of g(n) (actual cost) and h(n) (heuristic for step count)
+        heapq.heappush(open_list, (0 + h_w* self.heuristic(start, goal, metric), 0, start, []))
+        closed_list = set()
+
+        # Pop the node with the lowest total cost from the priority queue
+        while open_list:
+            estimated_total_cost, current_cost, current_point, path = heapq.heappop(open_list)
+            if current_point in closed_list:
+                continue
+            
+            # Add the current point to the path
+            path = path + [current_point]
+            
+            # If we reached the goal, return the path and the accumulated reward
+            if current_point == goal:
+                route_cost = [self.costs[x, y] for x, y in path]
+                return path, route_cost
+            
+            # Mark this point as visited
+            closed_list.add(current_point)
+            
+            # Explore neighbors
+            for neighbor in self.get_neighbors(current_point, metric):
+                if neighbor not in closed_list:
+                    # Calculate new cost to reach this neighbor
+                    new_cost = current_cost + self.costs[neighbor]
+                    
+                    # Add the neighbor to the open list with its weighted total cost
+                    weighted_total_cost = (1-h_w) * new_cost + h_w*self.heuristic(neighbor, goal, metric)
+                    heapq.heappush(open_list, (estimated_total_cost, new_cost, neighbor, path))
+
+        
+        # If there's no path found, return empty
+        return [], []
+    
+    ## h(n), i.e. the estimated cost to reach the goal from the current point (although I think this is just taking into account distance rather than reward)
+    def heuristic(self, current, goal, metric = 'chebyshev'):
+        x1, y1 = current
+        x2, y2 = goal
+        if metric == 'chebyshev':
+            return max(abs(x2 - x1), abs(y2 - y1))
+        elif metric == 'manhattan':
+            return abs(x2 - x1) + abs(y2 - y1)
+        
+    ## get all possible neighbours for a given point in the grid
+    def get_neighbors(self, point, metric = 'chebyshev'):
+        x, y = point
+        neighbors = []
+        if metric == 'chebyshev':
+            for dx in [-1, 0, 1]:
+                for dy in [-1, 0, 1]:
+                    if dx == 0 and dy == 0:
+                        continue  # Skip the current point itself
+                    new_x, new_y = x + dx, y + dy
+                    if 0 <= new_x < self.N and 0 <= new_y < self.N:
+                        neighbors.append((new_x, new_y))
+        elif metric == 'manhattan':
+            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                new_x, new_y = x + dx, y + dy
+                if 0 <= new_x < self.N and 0 <= new_y < self.N:
+                    neighbors.append((new_x, new_y))
+        return neighbors
+
+    ## define some policies
+    def random_policy(self):
+        return self.action_space.sample()
+    
+    def greedy_policy(self, current, target, eps=0):
+        if np.random.rand() < eps:
+            return self.random_policy()
+        else:
+            return np.argmin([np.linalg.norm(current + self._action_to_direction[i] - target) for i in range(4)])
