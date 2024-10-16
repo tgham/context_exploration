@@ -59,15 +59,22 @@ def plot_traj(trajs, ax, title=None):
     
     ## plot direct and optimal trajectories using different markers
     markers = ['*','x','x']
+    colours = ['white','red','red']
+
+    # if len(trajs[0]) ==2:
+    #     trajs = [trajs]    
 
     for ti, traj in enumerate(trajs):
-        ## plot start and goal points in red and green
-        ax.scatter(traj[0][1]+0.5, traj[0][0]+0.5, color='red', s=100)
-        ax.scatter(traj[-1][1]+0.5, traj[-1][0]+0.5, color='green', s=100)
 
-        ## plot path
-        for t in traj[1:-1]:
-            ax.plot(t[1]+0.5, t[0]+0.5, markers[ti], color='white', markersize=10, linewidth=10)
+        ## plot start and goal points in red and green
+        # ax.scatter(traj[0][1]+0.5, traj[0][0]+0.5, color='red', s=100)
+        # ax.scatter(traj[-1][1]+0.5, traj[-1][0]+0.5, color='green', s=100))
+        # print(traj[1:-1])
+
+        ## plot path(s)
+        # for t in traj[1:-1]:
+        for t in traj:
+            ax.plot(t[1]+0.5, t[0]+0.5, markers[ti], color=colours[ti], markersize=10, linewidth=10)
     
     # ax.legend(['Start', 'Goal','Direct', 'Optimal'], loc='upper right')
     ## legend for start and goal, and the two paths

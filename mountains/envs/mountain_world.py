@@ -9,6 +9,7 @@ from matplotlib import animation
 import seaborn as sns
 import scipy
 from scipy.spatial.distance import cdist
+from scipy.special import softmax
 import warnings
 import heapq
 from collections import defaultdict
@@ -22,11 +23,16 @@ class Actions(Enum):
     left = 2
     down = 3
 
+    north_east = 4
+    north_west = 5
+    south_east = 6
+    south_west = 7
+
 
 class MountainEnv(gym.Env):
-    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
+    # metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, N, params=None, render_mode=None, size=5):
+    def __init__(self, N, params=None, metric = 'cityblock', true_k=None, render_mode=None, size=5):
         
         ### GP inits
 
@@ -46,7 +52,7 @@ class MountainEnv(gym.Env):
             self.length_scale = 2
             self.periodic_length_scale = 4
             self.period = 8
-            self.periodic_theta = 0
+            self.periodic_theta = np.pi/4
         else:
             self.c = params[0]
             self.scale = params[1]
@@ -68,12 +74,32 @@ class MountainEnv(gym.Env):
         self.K_rbf_y = self.rbf_1D(1)
         self.K_periodic_x = self.periodic(0)
         self.K_periodic_y = self.periodic(1)
+        self.all_Ks = [self.K_lin, self.K_lin_x, self.K_lin_y, self.K_rbf, self.K_rbf_x, self.K_rbf_y, self.K_periodic_x, self.K_periodic_y]
 
         ## define mountain costs as samples from the GP
         ## (for now, let's just use the RBF kernel)
-        # self.costs = self.sample(self.K_rbf)
-        self.costs = self.sample(self.K_rbf_x)
-        self.cost_threshold = 1 ## ideally this would be a ratio of the optimal cost to the actual cost
+        if true_k == 'lin':
+            self.K_inf = self.K_lin
+        elif true_k == 'lin_x':
+            self.K_inf = self.K_lin_x
+        elif true_k == 'lin_y':
+            self.K_inf = self.K_lin_y
+        elif true_k == 'rbf':
+            self.K_inf = self.K_rbf
+        elif true_k == 'rbf_x':
+            self.K_inf = self.K_rbf_x
+        elif true_k == 'rbf_y':
+            self.K_inf = self.K_rbf_y
+        elif true_k == 'periodic_x':
+            self.K_inf = self.K_periodic_x
+        elif true_k == 'periodic_y':
+            self.K_inf = self.K_periodic_y
+        else: #default
+            self.K_inf = self.K_rbf
+        
+        # self.costs = self.sample(self.K_rbf_x)
+        self.costs = self.sample(self.K_inf)
+        self.cost_threshold = 1 
 
 
         
@@ -92,22 +118,39 @@ class MountainEnv(gym.Env):
             }
         )
 
-        # We have 4 actions, corresponding to "right", "up", "left", "down", "right"
-        self.action_space = spaces.Discrete(4)
+        # define actions, depending on metric
+        self.metric = metric
 
         """
         The following dictionary maps abstract actions from `self.action_space` to 
         the direction we will walk in if that action is taken.
         i.e. 0 corresponds to "right", 1 to "up" etc.
         """
-        self._action_to_direction = {
-            Actions.right.value: np.array([1, 0]),
-            Actions.up.value: np.array([0, 1]),
-            Actions.left.value: np.array([-1, 0]),
-            Actions.down.value: np.array([0, -1]),
-        }
+        if self.metric == 'cityblock':
+            self.action_space = spaces.Discrete(4)
+            self._action_to_direction = {
+                Actions.right.value: np.array([1, 0]),
+                Actions.up.value: np.array([0, 1]),
+                Actions.left.value: np.array([-1, 0]),
+                Actions.down.value: np.array([0, -1]),
+            }
+            self.n_actions = 4
+        elif self.metric == 'chebyshev':
+            self.action_space = spaces.Discrete(8)
+            self._action_to_direction = {
+                Actions.right.value: np.array([1, 0]),
+                Actions.up.value: np.array([0, 1]),
+                Actions.left.value: np.array([-1, 0]),
+                Actions.down.value: np.array([0, -1]),
 
-        assert render_mode is None or render_mode in self.metadata["render_modes"]
+                Actions.north_east.value: np.array([1, 1]),
+                Actions.north_west.value: np.array([-1, 1]),
+                Actions.south_east.value: np.array([1, -1]),
+                Actions.south_west.value: np.array([-1, -1]),
+            }
+            self.n_actions = 8
+
+        # assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
 
         """
@@ -121,7 +164,225 @@ class MountainEnv(gym.Env):
         self.clock = None
 
 
-    #### define the kernels
+    ### RL env inits
+
+
+    ## get info from current state
+    def _get_obs(self):
+        return {"agent": self._agent_location, "target": self._target_location}
+    def _get_info(self):
+        return {
+            "distance": np.linalg.norm(
+                self._agent_location - self._target_location, ord=1
+            )
+        }
+
+    ## reset the environment
+    def reset(self, seed=None, options=None):
+        # We need the following line to seed self.np_random
+        super().reset(seed=seed)
+
+
+        ## sample start and goal locations, ensuring they are sufficiently far apart 
+        ## (COULD ALSO ENSURE THAT THE START LOCATION IS A LOCAL MAXIMUM)
+        dist = 0
+        min_dist = self.N*0.75
+        while dist<min_dist:
+            self._agent_location = self.np_random.integers(0, self.N, size=2, dtype=int)
+            self._target_location = self.np_random.integers(
+                0, self.N, size=2, dtype=int
+            )
+            dist = np.max(cdist([self._agent_location, self._target_location], [self._agent_location, self._target_location], metric='cityblock'))
+
+        ## initialise trial info
+        self.t = 0
+        self.terminated = False
+        observation = self._get_obs()
+        current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
+        info = self._get_info()
+        self.accrued_cost = current_cost # is the cost incurred in the first state?? if not, this is set to 0
+
+        ## reset obs on each trial
+        # loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
+        # self.obs = np.array([loc_idx, self._agent_location[0], self._agent_location[1], current_cost], ndmin=2)
+
+        ## or, observations accumulate over trials
+        loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
+        if not hasattr(self, 'obs') or self.obs is None:
+            self.obs = np.array([[loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+        else:
+            self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+
+        ## initialise actual trajectory as list of tuples
+        self.a_traj = [tuple(self._agent_location)]
+
+        ## get the cost of the optimal trajectory, and use this to set the cost threshold
+        self.o_traj, self.o_route_cost = self.optimal_trajectory()
+        self.optimal_cost = np.sum(self.o_route_cost) #np.sum(self.o_route_cost[1:]) # is a cost incurred in the first state??
+        self.cost_threshold = self.optimal_cost * 1.3 ## arbitrary threshold for now
+        
+
+
+        if self.render_mode == "human":
+
+            ## posterior prediction using known kernel
+            # self.posterior_mean, self.posterior_cov = self.post_pred(self.K_inf, self.obs)
+
+            ## posterior prediction using weighted kernel
+            self.posterior_mean = self.weighted_post_pred()
+            self.render()
+
+        return observation, info
+
+    ## take a step in the environment
+    def step(self, action):
+        # Map the action (element of {0,1,2,3}) to the direction we walk in
+        self.t += 1
+        direction = self._action_to_direction[action]
+
+        ## move to the new state
+        self._agent_location = np.clip(
+            self._agent_location + direction, 0, self.N - 1
+        )
+
+        ## get the cost of the current state
+        current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
+        self.accrued_cost += current_cost
+
+        ## update observation and trajectory arrays
+        self.a_traj.append(tuple(self._agent_location))
+        loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
+        self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+
+        # An episode is done iff the agent has reached the target
+        if np.array_equal(self._agent_location, self._target_location):
+            self.msg = "Target reached in {} steps".format(self.t)
+            self.terminated = True
+            reward = 1
+        # elif self.accrued_cost > self.cost_threshold:
+        #     self.msg = "Out of fuel in in {} steps".format(self.t)
+        #     self.terminated = True
+        #     reward = 0
+        else:
+            self.terminated = False
+            reward = 0
+        observation = self._get_obs()
+        info = self._get_info()
+        terminated = self.terminated
+
+        if self.render_mode == "human":
+            ## posterior prediction using known kernel
+            # self.posterior_mean, self.posterior_cov = self.post_pred(self.K_inf, self.obs)
+
+            ## posterior prediction using weighted kernel
+            self.posterior_mean = self.weighted_post_pred()
+            self.render()
+        else:
+            self.axs = None
+
+
+        return observation, reward, terminated, False, info
+
+    ## rendering funcs
+    def render(self):
+        
+        # Clear the current output
+        clear_output(wait=True)
+        
+        # Check if we already have a figure, if not create one
+        if not hasattr(self, 'fig') or not plt.fignum_exists(self.fig.number):
+            self.fig, self.axs = plt.subplots(1, 2, figsize=(7.5, 15))
+        else:
+            # Clear the existing axes
+            for ax in self.axs:
+                ax.clear()
+        
+        # Plot the full reward distribution, and the posterior distribution
+        # title = 't={}\naccrued cost: {}\nthreshold: {}'.format(self.t, np.round(self.accrued_cost,2), np.round(self.cost_threshold,2))
+        title = 't={}, optimality: {}'.format(self.t, np.round(self.accrued_cost/self.optimal_cost,2))
+        plot_r(self.costs, self.axs[0])
+        plot_r(self.posterior_mean.reshape(self.N, self.N), self.axs[1], title=title)
+
+        ## plot the optimal trajectory and trajectory so far
+        plot_traj([self.o_traj, self.a_traj], self.axs[0])
+        plot_traj([self.o_traj, self.a_traj], self.axs[1])
+        
+        # Plot the agent and target positions
+        plot_state(self._agent_location, self._target_location, self.axs[0], title = title+"\n(true)")
+        plot_state(self._agent_location, self._target_location, self.axs[1], title = title+"\n(posterior)")
+        
+        
+        # Adjust the layout to prevent overlapping
+        plt.tight_layout()
+        
+        # Display the plot
+        display(self.fig)
+        
+        # Instead of closing the figure, we'll just clear the current display
+        clear_output(wait=True)
+        
+        # # Add a small delay to allow the plot to update
+        if self.terminated:
+            print(self.msg)
+            plt.pause(2)
+        else:
+            plt.pause(0.4)
+
+
+    def close(self):
+        if self.window is not None:
+            pygame.display.quit()
+            pygame.quit()
+
+    ### define some policies
+
+    ## random
+    def random_policy(self):
+        return self.action_space.sample()
+    
+    ## greedy wrt/ distance to target
+    def greedy_policy(self, current, target, eps=0):
+        if np.random.rand() < eps:
+            return self.random_policy()
+        else:
+            distances = cdist([current], [target], metric=self.metric).flatten()
+            return np.argmin(distances)
+        
+
+    ## greedy wrt/ both distance to target and cost, i.e. some combination of the two
+    def balanced_policy(self, current, target, eps=0, alpha=0.5):
+        if np.random.rand() < eps:
+            return self.random_policy()
+        else:
+
+            ## get adjacent states
+            next_states = np.clip(np.array([current + self._action_to_direction[i] for i in range(self.n_actions)]), 0, self.N-1)
+            next_states_idx = next_states[:, 0]*self.N + next_states[:, 1]
+            
+            
+            ## posterior prediction using known kernel
+            # next_q, next_cov = self.post_pred(self.K_inf, self.obs, pred=next_states_idx)
+            
+            ### or, posterior prediction using weighted kernel
+            next_q = self.weighted_post_pred(pred=next_states_idx)
+
+            
+            ## ensure post_mean is non-negative
+            if next_q.min() < 0:
+                next_q -= next_q.min()
+
+            
+            ## weight the distance to the target by the cost of the state
+            distances = cdist(next_states, [target], metric=self.metric).flatten()
+            combined_q = alpha * softmax(-distances) + (1-alpha) * softmax(-next_q)
+            return np.argmax(combined_q)
+
+
+    
+    
+    #### GP inits
+
+    ### define the kernels
 
     ## linear kernels
     
@@ -221,6 +482,31 @@ class MountainEnv(gym.Env):
         return post_mean, post_cov
     
 
+    ## posterior prediction weighted by the likelihood of the observations under each kernel
+    def weighted_post_pred(self, pred=None):
+        if pred is None:
+            pred_idx = np.arange(self.N**2)
+        else:
+            pred_idx = pred    
+        post_means = []
+        lls = []
+
+        ## loop through possible kernels
+        for k_inf in self.all_Ks:
+            post_mean, post_cov = self.post_pred(k_inf, self.obs, pred=pred_idx)
+            post_means.append(post_mean)
+
+            ## calculate marginal likelihood of obs given this kernel
+            ll = self.likelihood(k_inf, self.obs)
+            lls.append(ll)
+        
+        ## weight each posterior prediction by the corresponding marginal likelihood
+        k_weights = softmax(lls)
+        post_mean = np.sum([k_weights[i] * post_means[i] for i in range(len(k_weights))], axis=0)
+
+        return post_mean ## need to also do cov
+    
+
     ## check that kernel is PSD and symmetric
     def k_check(self, K):
         symm = np.allclose(K,K.T)
@@ -255,134 +541,6 @@ class MountainEnv(gym.Env):
 
         return ll
     
-
-    #### (still need to do the remaining GP funcs, e.g. trajectories)
-
-
-
-    ### RL env inits
-
-
-    ## get info from current state
-    def _get_obs(self):
-        return {"agent": self._agent_location, "target": self._target_location}
-    def _get_info(self):
-        return {
-            "distance": np.linalg.norm(
-                self._agent_location - self._target_location, ord=1
-            )
-        }
-
-    ## reset the environment
-    def reset(self, seed=None, options=None):
-        # We need the following line to seed self.np_random
-        super().reset(seed=seed)
-
-
-        ## sample start and goal locations, ensuring they are sufficiently far apart 
-        ## (COULD ALSO ENSURE THAT THE START LOCATION IS A LOCAL MAXIMUM)
-        dist = 0
-        min_dist = self.N*0.6
-        while dist<min_dist:
-            self._agent_location = self.np_random.integers(0, self.N, size=2, dtype=int)
-            self._target_location = self.np_random.integers(
-                0, self.N, size=2, dtype=int
-            )
-            dist = np.max(cdist([self._agent_location, self._target_location], [self._agent_location, self._target_location], metric='cityblock'))
-            print(dist)
-
-        ## initialise trial info
-        self.t = 0
-        observation = self._get_obs()
-        info = self._get_info()
-        self.accrued_cost = 0
-
-        ## get the cost of the optimal trajectory, and use this to set the cost threshold
-        o_traj, o_route_cost = self.optimal_trajectory()
-        self.optimal_cost = np.sum(o_route_cost)
-        self.cost_threshold = self.optimal_cost * 1.3 ## arbitrary threshold for now
-
-        # if self.render_mode == "human":
-        #     self._render_frame()
-
-        return observation, info
-
-    ## take a step in the environment
-    def step(self, action):
-        # Map the action (element of {0,1,2,3}) to the direction we walk in
-        self.t += 1
-        direction = self._action_to_direction[action]
-        # We use `np.clip` to make sure we don't leave the grid
-        self._agent_location = np.clip(
-            self._agent_location + direction, 0, self.N - 1
-        )
-
-        ## get the cost of the current state
-        cost = self.costs[self._agent_location[0], self._agent_location[1]]
-        self.accrued_cost += cost
-
-        # An episode is done iff the agent has reached the target
-        if np.array_equal(self._agent_location, self._target_location):
-            self.msg = "Target reached in {} steps".format(self.t)
-            self.terminated = True
-            reward = 1
-        elif self.accrued_cost > self.cost_threshold:
-            self.msg = "Out of fuel in in {} steps".format(self.t)
-            self.terminated = True
-            reward = 0
-        else:
-            self.terminated = False
-            reward = 0
-        observation = self._get_obs()
-        info = self._get_info()
-        terminated = self.terminated
-
-        # if self.render_mode == "human":
-        #     self._render_frame()
-        self.render()
-
-        return observation, reward, terminated, False, info
-
-    ## rendering funcs
-    def render(self):
-        # Clear the current output
-        clear_output(wait=True)
-        
-        # Check if we already have a figure, if not create one
-        if not hasattr(self, 'fig') or not plt.fignum_exists(self.fig.number):
-            self.fig, self.ax = plt.subplots(1, 1, figsize=(5, 5))
-        else:
-            # Clear the existing axes
-            self.ax.clear()
-        
-        # Plot the reward distribution (heatmap)
-        title = 't={}\naccrued cost: {}\nthreshold: {}'.format(self.t, self.accrued_cost, self.cost_threshold)
-        plot_r(self.costs, self.ax)
-        
-        # Plot the agent and target positions
-        plot_state(self._agent_location, self._target_location, self.ax, title=title)
-        
-        # Adjust the layout to prevent overlapping
-        plt.tight_layout()
-        
-        # Display the plot
-        display(self.fig)
-        
-        # Instead of closing the figure, we'll just clear the current display
-        clear_output(wait=True)
-        
-        # # Add a small delay to allow the plot to update
-        if self.terminated:
-            print(self.msg)
-            plt.pause(2)
-        else:
-            plt.pause(0.4)
-
-
-    def close(self):
-        if self.window is not None:
-            pygame.display.quit()
-            pygame.quit()
 
 
     ## calculate the optimal trajectory between the two points (i.e. the trajectory with the lowest cumulative cost)
@@ -456,13 +614,3 @@ class MountainEnv(gym.Env):
                 if 0 <= new_x < self.N and 0 <= new_y < self.N:
                     neighbors.append((new_x, new_y))
         return neighbors
-
-    ## define some policies
-    def random_policy(self):
-        return self.action_space.sample()
-    
-    def greedy_policy(self, current, target, eps=0):
-        if np.random.rand() < eps:
-            return self.random_policy()
-        else:
-            return np.argmin([np.linalg.norm(current + self._action_to_direction[i] - target) for i in range(4)])
