@@ -183,22 +183,25 @@ class MountainEnv(gym.Env):
         super().reset(seed=seed)
 
 
-        ## sample start and goal locations, ensuring they are sufficiently far apart 
+        ## sample start and goal locations, ensuring they are sufficiently far apart, and also not on the same row or column
         ## (COULD ALSO ENSURE THAT THE START LOCATION IS A LOCAL MAXIMUM)
         dist = 0
         min_dist = self.N*0.75
-        while dist<min_dist:
+        row_or_col = 1
+        while (dist<min_dist) or (row_or_col>0):
             self._agent_location = self.np_random.integers(0, self.N, size=2, dtype=int)
             self._target_location = self.np_random.integers(
                 0, self.N, size=2, dtype=int
             )
             dist = np.max(cdist([self._agent_location, self._target_location], [self._agent_location, self._target_location], metric='cityblock'))
+            row_or_col = np.sum(self._agent_location == self._target_location)
+
 
         ## initialise trial info
         self.t = 0
         self.terminated = False
         observation = self._get_obs()
-        current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
+        current_cost = self.costs[self._agent_location[0], self._agent_location[1]] + np.random.normal(0, 0.1)
         info = self._get_info()
         self.accrued_cost = current_cost # is the cost incurred in the first state?? if not, this is set to 0
 
@@ -544,7 +547,7 @@ class MountainEnv(gym.Env):
 
 
     ## calculate the optimal trajectory between the two points (i.e. the trajectory with the lowest cumulative cost)
-    def optimal_trajectory(self, metric = 'chebyshev', h_w = 0):
+    def optimal_trajectory(self, h_w = 0):
 
         # Initialize the open list (priority queue) and closed list (visited nodes)
         start, goal = [self._agent_location, self._target_location]
@@ -553,7 +556,7 @@ class MountainEnv(gym.Env):
         open_list = []
 
         ## weighted combination of g(n) (actual cost) and h(n) (heuristic for step count)
-        heapq.heappush(open_list, (0 + h_w* self.heuristic(start, goal, metric), 0, start, []))
+        heapq.heappush(open_list, (0 + h_w* self.heuristic(start, goal), 0, start, []))
         closed_list = set()
 
         # Pop the node with the lowest total cost from the priority queue
@@ -574,13 +577,13 @@ class MountainEnv(gym.Env):
             closed_list.add(current_point)
             
             # Explore neighbors
-            for neighbor in self.get_neighbors(current_point, metric):
+            for neighbor in self.get_neighbors(current_point):
                 if neighbor not in closed_list:
                     # Calculate new cost to reach this neighbor
                     new_cost = current_cost + self.costs[neighbor]
                     
                     # Add the neighbor to the open list with its weighted total cost
-                    weighted_total_cost = (1-h_w) * new_cost + h_w*self.heuristic(neighbor, goal, metric)
+                    weighted_total_cost = (1-h_w) * new_cost + h_w*self.heuristic(neighbor, goal)
                     heapq.heappush(open_list, (estimated_total_cost, new_cost, neighbor, path))
 
         
@@ -588,19 +591,19 @@ class MountainEnv(gym.Env):
         return [], []
     
     ## h(n), i.e. the estimated cost to reach the goal from the current point (although I think this is just taking into account distance rather than reward)
-    def heuristic(self, current, goal, metric = 'chebyshev'):
+    def heuristic(self, current, goal):
         x1, y1 = current
         x2, y2 = goal
-        if metric == 'chebyshev':
+        if self.metric == 'chebyshev':
             return max(abs(x2 - x1), abs(y2 - y1))
-        elif metric == 'manhattan':
+        elif self.metric == 'cityblock':
             return abs(x2 - x1) + abs(y2 - y1)
         
     ## get all possible neighbours for a given point in the grid
-    def get_neighbors(self, point, metric = 'chebyshev'):
+    def get_neighbors(self, point):
         x, y = point
         neighbors = []
-        if metric == 'chebyshev':
+        if self.metric == 'chebyshev':
             for dx in [-1, 0, 1]:
                 for dy in [-1, 0, 1]:
                     if dx == 0 and dy == 0:
@@ -608,7 +611,7 @@ class MountainEnv(gym.Env):
                     new_x, new_y = x + dx, y + dy
                     if 0 <= new_x < self.N and 0 <= new_y < self.N:
                         neighbors.append((new_x, new_y))
-        elif metric == 'manhattan':
+        elif self.metric == 'cityblock':
             for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                 new_x, new_y = x + dx, y + dy
                 if 0 <= new_x < self.N and 0 <= new_y < self.N:
