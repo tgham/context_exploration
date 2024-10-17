@@ -32,7 +32,7 @@ class Actions(Enum):
 class MountainEnv(gym.Env):
     # metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, N, params=None, metric = 'cityblock', true_k=None, render_mode=None, size=5):
+    def __init__(self, N, params=None, metric = 'cityblock', true_k=None, inf_k='known', render_mode=None, size=5):
         
         ### GP inits
 
@@ -79,28 +79,33 @@ class MountainEnv(gym.Env):
         ## define mountain costs as samples from the GP
         ## (for now, let's just use the RBF kernel)
         if true_k == 'lin':
-            self.K_inf = self.K_lin
+            self.K_gen = self.K_lin
         elif true_k == 'lin_x':
-            self.K_inf = self.K_lin_x
+            self.K_gen = self.K_lin_x
         elif true_k == 'lin_y':
-            self.K_inf = self.K_lin_y
+            self.K_gen = self.K_lin_y
         elif true_k == 'rbf':
-            self.K_inf = self.K_rbf
+            self.K_gen = self.K_rbf
         elif true_k == 'rbf_x':
-            self.K_inf = self.K_rbf_x
+            self.K_gen = self.K_rbf_x
         elif true_k == 'rbf_y':
-            self.K_inf = self.K_rbf_y
+            self.K_gen = self.K_rbf_y
         elif true_k == 'periodic_x':
-            self.K_inf = self.K_periodic_x
+            self.K_gen = self.K_periodic_x
         elif true_k == 'periodic_y':
-            self.K_inf = self.K_periodic_y
+            self.K_gen = self.K_periodic_y
         else: #default
-            self.K_inf = self.K_rbf
-        
-        # self.costs = self.sample(self.K_rbf_x)
-        self.costs = self.sample(self.K_inf)
+            self.K_gen = self.K_rbf
+        self.costs = self.sample(self.K_gen)
         self.cost_threshold = 1 
 
+        ## determine how inferences are made (i.e. with full knowledge of the kernel, or with a weighted combination of kernels)
+        self.inf_k = inf_k
+        if inf_k == 'known':
+            self.K_inf = self.K_gen
+            self.inference_func = lambda pred: self.post_pred(K_inf = self.K_inf, pred = pred)
+        elif inf_k == 'weighted':
+            self.inference_func = lambda pred: self.weighted_post_pred(pred = pred)
 
         
         ### gym inits
@@ -232,7 +237,10 @@ class MountainEnv(gym.Env):
             # self.posterior_mean, self.posterior_cov = self.post_pred(self.K_inf, self.obs)
 
             ## posterior prediction using weighted kernel
-            self.posterior_mean = self.weighted_post_pred()
+            # self.posterior_mean = self.weighted_post_pred()
+
+            self.posterior_mean, self.posterior_cov = self.inference_func(pred='all')
+
             self.render()
 
         return observation, info
@@ -278,7 +286,9 @@ class MountainEnv(gym.Env):
             # self.posterior_mean, self.posterior_cov = self.post_pred(self.K_inf, self.obs)
 
             ## posterior prediction using weighted kernel
-            self.posterior_mean = self.weighted_post_pred()
+            # self.posterior_mean = self.weighted_post_pred()
+
+            self.posterior_mean, self.posterior_cov = self.inference_func(pred='all')
             self.render()
         else:
             self.axs = None
@@ -367,7 +377,9 @@ class MountainEnv(gym.Env):
             # next_q, next_cov = self.post_pred(self.K_inf, self.obs, pred=next_states_idx)
             
             ### or, posterior prediction using weighted kernel
-            next_q = self.weighted_post_pred(pred=next_states_idx)
+            # next_q = self.weighted_post_pred(pred=next_states_idx)
+
+            next_q, next_cov = self.inference_func(pred=next_states_idx)
 
             
             ## ensure post_mean is non-negative
@@ -460,14 +472,14 @@ class MountainEnv(gym.Env):
     
 
     ## use GP regression to predict posterior distribution of rewards, given these observations,based on the currently inferred kernel
-    def post_pred(self, K_inf, obs, pred=None, sigma=0.01):
-        if pred is None:
+    def post_pred(self, K_inf, pred='all', sigma=0.01):
+        if isinstance(pred, str):
             pred_idx = np.arange(self.N**2)
         else:
             pred_idx = pred
 
-        obs_idx = obs[:, 0].astype(int)
-        obs_rewards = obs[:, 3]
+        obs_idx = self.obs[:, 0].astype(int)
+        obs_rewards = self.obs[:, 3]
         
         # Covariance matrix of the already observed points
         K_obs = K_inf[obs_idx][:, obs_idx]
@@ -486,18 +498,20 @@ class MountainEnv(gym.Env):
     
 
     ## posterior prediction weighted by the likelihood of the observations under each kernel
-    def weighted_post_pred(self, pred=None):
-        if pred is None:
+    def weighted_post_pred(self, pred='all'):
+        if isinstance(pred, str):
             pred_idx = np.arange(self.N**2)
         else:
             pred_idx = pred    
         post_means = []
+        post_covs = []
         lls = []
 
         ## loop through possible kernels
         for k_inf in self.all_Ks:
-            post_mean, post_cov = self.post_pred(k_inf, self.obs, pred=pred_idx)
+            post_mean, post_cov = self.post_pred(k_inf, pred=pred_idx)
             post_means.append(post_mean)
+            post_covs.append(post_cov)
 
             ## calculate marginal likelihood of obs given this kernel
             ll = self.likelihood(k_inf, self.obs)
@@ -507,7 +521,11 @@ class MountainEnv(gym.Env):
         k_weights = softmax(lls)
         post_mean = np.sum([k_weights[i] * post_means[i] for i in range(len(k_weights))], axis=0)
 
-        return post_mean ## need to also do cov
+        ## weighted posterior covariance
+        # post_cov = np.sum([k_weights[i] * (post_covs[i] + (post_means[i] - post_mean) @ (post_means[i] - post_mean).T) for i in range(len(k_weights))], axis=0)
+        post_cov = np.sum([k_weights[i] * (post_covs[i] + np.outer(post_means[i] - post_mean, post_means[i] - post_mean)) for i in range(len(k_weights))], axis=0) ## need to check if this is correct
+
+        return post_mean, post_cov
     
 
     ## check that kernel is PSD and symmetric
