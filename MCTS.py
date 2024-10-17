@@ -1,6 +1,7 @@
 import random
 from math import sqrt, log
 from utils import Node, Tree
+import numpy as np
 
 class MonteCarloTreeSearch():
 
@@ -8,13 +9,13 @@ class MonteCarloTreeSearch():
         self.env = env
         self.tree = tree
         self.action_space = self.env.action_space.n
-        observation = self.env.reset()
+        observation, info = self.env.reset()
         state = observation['agent']
         self.tree.add_node(Node(state=state, action=None, action_space=self.action_space, reward=0, terminal=False))
 
     def expand(self, node):
         action = node.untried_action()
-        observation, reward, terminated, _ = self.env.step(action)
+        observation, reward, terminated, _, _ = self.env.step(action)
         state=observation['agent'] ## this may not be right
         new_node = Node(state=state, action=action, action_space=self.action_space, reward=reward, terminal=terminated) 
         self.tree.add_node(new_node, node)
@@ -27,9 +28,10 @@ class MonteCarloTreeSearch():
         ## surely this needs to stop at some point, rather than rolling out until u get a terminal state?
         while True:
             action = random.randint(0, self.action_space-1)
-            observation, reward, terminated, _ = self.env.step(action)
+            observation, reward, terminated, _, _ = self.env.step(action)
             if terminated:
                 return reward
+            
 
     ## calculate E-E value
     def compute_UCT(self, parent, child, exploration_constant): # could turn this exploration constant into a param defined at init
@@ -59,9 +61,15 @@ class MonteCarloTreeSearch():
                 return self.expand(node)
             else:
                 node = self.best_child(node, exploration_constant=1.0/sqrt(2.0))
-                observation, reward, terminated, _ = self.env.step(node.action)
+                observation, reward, terminated, _, _ = self.env.step(node.action)
                 state = observation['agent']
-                assert node.state == state
+                # assert node.state == state
+                # print(state, node.state)
+                if not np.array_equal(node.state, state):
+                    # print(node.state, node.action, state)
+                    print(node.state, node.action, self.env.step(node.action))
+
+                assert np.array_equal(node.state, state)
         return node
 
     

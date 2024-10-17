@@ -171,7 +171,6 @@ class MountainEnv(gym.Env):
 
     ### RL env inits
 
-
     ## get info from current state
     def _get_obs(self):
         return {"agent": self._agent_location, "target": self._target_location}
@@ -245,6 +244,7 @@ class MountainEnv(gym.Env):
 
         return observation, info
 
+
     ## take a step in the environment
     def step(self, action):
         # Map the action (element of {0,1,2,3}) to the direction we walk in
@@ -289,12 +289,10 @@ class MountainEnv(gym.Env):
             # self.posterior_mean = self.weighted_post_pred()
 
             self.posterior_mean, self.posterior_cov = self.inference_func(pred='all')
-            self.render()
-        else:
-            self.axs = None
+            self.render()      
 
-
-        return observation, reward, terminated, False, info
+        truncated=False
+        return observation, reward, terminated, truncated, info
 
     ## rendering funcs
     def render(self):

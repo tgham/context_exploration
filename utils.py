@@ -20,7 +20,7 @@ import random
 
 
 ## create a mountain environment
-def make_env(N, params, metric, true_k, inf_k, render_mode='human'):
+def make_env(N, params, metric, true_k, inf_k, render_mode):
 
     ## register env
     
@@ -37,7 +37,7 @@ def make_env(N, params, metric, true_k, inf_k, render_mode='human'):
         kwargs={"size": N},
     )
     
-    env = gym.make("mountains/MountainEnv-v0", N=N, params=params, metric=metric, true_k=true_k, inf_k=inf_k, render_mode='human')
+    env = gym.make("mountains/MountainEnv-v0", N=N, params=params, metric=metric, true_k=true_k, inf_k=inf_k, render_mode=render_mode)
     return env
 
 
