@@ -14,6 +14,7 @@ import warnings
 import heapq
 from collections import defaultdict
 from IPython.display import display, clear_output
+from utils import *
 # from PIL import image
 
 
@@ -32,7 +33,7 @@ class Actions(Enum):
 class MountainEnv(gym.Env):
     # metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, N, params=None, metric = 'cityblock', true_k=None, inf_k='known', render_mode=None, size=5):
+    def __init__(self, N, params=None, metric = 'cityblock', true_k=None, inf_k='known', render_mode=None, r_noise=0.05,size=5):
         
         ### GP inits
 
@@ -74,7 +75,14 @@ class MountainEnv(gym.Env):
         self.K_rbf_y = self.rbf_1D(1)
         self.K_periodic_x = self.periodic(0)
         self.K_periodic_y = self.periodic(1)
-        self.all_Ks = [self.K_lin, self.K_lin_x, self.K_lin_y, self.K_rbf, self.K_rbf_x, self.K_rbf_y, self.K_periodic_x, self.K_periodic_y]
+        self.all_Ks = [
+            # self.K_lin, self.K_lin_x, self.K_lin_y, 
+            self.K_rbf, self.K_rbf_x, self.K_rbf_y, 
+            self.K_periodic_x, 
+            # self.K_periodic_y
+            ]
+        self.k_weights = np.zeros(len(self.all_Ks))
+        
 
         ## define mountain costs as samples from the GP
         ## (for now, let's just use the RBF kernel)
@@ -98,14 +106,15 @@ class MountainEnv(gym.Env):
             self.K_gen = self.K_rbf
         self.costs = self.sample(self.K_gen)
         self.cost_threshold = 1 
+        self.r_noise = r_noise
 
         ## determine how inferences are made (i.e. with full knowledge of the kernel, or with a weighted combination of kernels)
         self.inf_k = inf_k
         if inf_k == 'known':
             self.K_inf = self.K_gen
-            self.inference_func = lambda pred: self.post_pred(K_inf = self.K_inf, pred = pred)
+            self.inference_func = lambda obs, pred: self.post_pred(K_inf = self.K_inf, obs=obs, pred = pred)
         elif inf_k == 'weighted':
-            self.inference_func = lambda pred: self.weighted_post_pred(pred = pred)
+            self.inference_func = lambda obs, pred: self.weighted_post_pred(obs = obs, pred = pred)
 
         
         ### gym inits
@@ -116,12 +125,17 @@ class MountainEnv(gym.Env):
         # Observations are dictionaries with the agent's and the target's location.
         # Each location is encoded as an element of {0, ..., `size`}^2,
         # i.e. MultiDiscrete([size, size]).
+        size = 5
         self.observation_space = spaces.Dict(
             {
                 "agent": spaces.Box(0, size - 1, shape=(2,), dtype=int),
                 "target": spaces.Box(0, size - 1, shape=(2,), dtype=int),
             }
         )
+
+        ## init trial info
+        self.starts = []
+        self.goals = []
 
         # define actions, depending on metric
         self.metric = metric
@@ -157,6 +171,11 @@ class MountainEnv(gym.Env):
 
         # assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
+        # if self.render_mode == "human":
+        #     self.sim = False
+        # elif self.render_mode == "MCTS":
+        #     self.sim = True
+        # self.sim = False
 
         """
         If human-rendering is used, `self.window` will be a reference
@@ -172,7 +191,7 @@ class MountainEnv(gym.Env):
     ### RL env inits
 
     ## get info from current state
-    def _get_obs(self):
+    def get_obs(self):
         return {"agent": self._agent_location, "target": self._target_location}
     def _get_info(self):
         return {
@@ -187,25 +206,49 @@ class MountainEnv(gym.Env):
         super().reset(seed=seed)
 
 
-        ## sample start and goal locations, ensuring they are sufficiently far apart, and also not on the same row or column
-        ## (COULD ALSO ENSURE THAT THE START LOCATION IS A LOCAL MAXIMUM)
+        ## sample start and goal locations
         dist = 0
         min_dist = self.N*0.75
+        angle = 0
+        angle_tolerance = 0.4
+        angle_bounds = [45*(1+angle_tolerance), 45*(1-angle_tolerance)]
         row_or_col = 1
-        while (dist<min_dist) or (row_or_col>0):
+        goal_val = 0
+        start_val = 0
+        min_val = 0.6
+        while (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (goal_val<min_val) or (start_val<min_val):
             self._agent_location = self.np_random.integers(0, self.N, size=2, dtype=int)
             self._target_location = self.np_random.integers(
                 0, self.N, size=2, dtype=int
             )
+
+            ## distance criterion
             dist = np.max(cdist([self._agent_location, self._target_location], [self._agent_location, self._target_location], metric='cityblock'))
+
+            ## angle criterion
             row_or_col = np.sum(self._agent_location == self._target_location)
+            angle = node_angle(self._agent_location, self._target_location)
+
+            ## value criterion
+            goal_val = self.costs[self._target_location[0], self._target_location[1]]
+            goal_val = 1
+
+            start_val = self.costs[self._agent_location[0], self._agent_location[1]]
+            # start_val = 1
+
+            ## last goal distance criterion
+
+        self.starts
+
+        # self._agent_location = np.array([0,0])
+        # self._target_location = np.array([self.N-1, self.N-1])
 
 
         ## initialise trial info
         self.t = 0
         self.terminated = False
-        observation = self._get_obs()
-        current_cost = self.costs[self._agent_location[0], self._agent_location[1]] + np.random.normal(0, 0.1)
+        observation = self.get_obs()
+        current_cost = self.costs[self._agent_location[0], self._agent_location[1]] + np.random.normal(0, self.r_noise)
         info = self._get_info()
         self.accrued_cost = current_cost # is the cost incurred in the first state?? if not, this is set to 0
 
@@ -228,9 +271,11 @@ class MountainEnv(gym.Env):
         self.optimal_cost = np.sum(self.o_route_cost) #np.sum(self.o_route_cost[1:]) # is a cost incurred in the first state??
         self.cost_threshold = self.optimal_cost * 1.3 ## arbitrary threshold for now
         
+        ## posterior inference over the whole environment
+        self.posterior_mean, self.posterior_cov = self.inference_func(obs = self.obs, pred='all')
 
-
-        if self.render_mode == "human":
+        # if (self.render_mode == "human") or (self.render_mode == "MCTS"):
+        if (self.render_mode == "human") or (self.render_mode == "MCTS"):
 
             ## posterior prediction using known kernel
             # self.posterior_mean, self.posterior_cov = self.post_pred(self.K_inf, self.obs)
@@ -238,15 +283,18 @@ class MountainEnv(gym.Env):
             ## posterior prediction using weighted kernel
             # self.posterior_mean = self.weighted_post_pred()
 
-            self.posterior_mean, self.posterior_cov = self.inference_func(pred='all')
 
             self.render()
 
         return observation, info
+    
+    ## custom function for manually setting the state (for MCTS?)
+    def set_state(self, state):
+        self._agent_location = state
 
 
     ## take a step in the environment
-    def step(self, action):
+    def step(self, action, sim=False):
         # Map the action (element of {0,1,2,3}) to the direction we walk in
         self.t += 1
         direction = self._action_to_direction[action]
@@ -256,9 +304,20 @@ class MountainEnv(gym.Env):
             self._agent_location + direction, 0, self.N - 1
         )
 
-        ## get the cost of the current state
-        current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
+        ## get the predicted cost of the new state (for MCTS)
+        predicted_cost = self.posterior_mean.reshape(self.N, self.N)[self._agent_location[0], self._agent_location[1]]
+        
+        ## get the observed cost of the current state
+        current_cost = self.costs[self._agent_location[0], self._agent_location[1]] + np.random.normal(0, self.r_noise)
         self.accrued_cost += current_cost
+
+        ## return the real or sampled cost
+        if not sim:
+            cost = -current_cost
+        elif sim:
+            # cost = -predicted_cost
+            cost = -current_cost
+
 
         ## update observation and trajectory arrays
         self.a_traj.append(tuple(self._agent_location))
@@ -277,22 +336,23 @@ class MountainEnv(gym.Env):
         else:
             self.terminated = False
             reward = 0
-        observation = self._get_obs()
+        observation = self.get_obs()
         info = self._get_info()
         terminated = self.terminated
 
-        if self.render_mode == "human":
+        if (self.render_mode == "human") or ((self.render_mode == 'MCTS') & (not sim)):
             ## posterior prediction using known kernel
             # self.posterior_mean, self.posterior_cov = self.post_pred(self.K_inf, self.obs)
 
             ## posterior prediction using weighted kernel
             # self.posterior_mean = self.weighted_post_pred()
 
-            self.posterior_mean, self.posterior_cov = self.inference_func(pred='all')
+            self.posterior_mean, self.posterior_cov = self.inference_func(obs = self.obs, pred='all')
             self.render()      
 
         truncated=False
-        return observation, reward, terminated, truncated, info
+        # return observation, reward, terminated, truncated, info
+        return observation, cost, terminated, truncated, info
 
     ## rendering funcs
     def render(self):
@@ -302,7 +362,12 @@ class MountainEnv(gym.Env):
         
         # Check if we already have a figure, if not create one
         if not hasattr(self, 'fig') or not plt.fignum_exists(self.fig.number):
-            self.fig, self.axs = plt.subplots(1, 2, figsize=(7.5, 15))
+            # self.fig, self.axs = plt.subplots(1, 2, figsize=(7.5, 15))
+            if self.inf_k == 'known':
+                self.fig, self.axs = plt.subplots(1, 2, figsize=(7.5, 15))
+            elif self.inf_k == 'weighted':
+                self.fig, self.axs = plt.subplots(1, 3, figsize=(15, 15))
+
         else:
             # Clear the existing axes
             for ax in self.axs:
@@ -310,17 +375,24 @@ class MountainEnv(gym.Env):
         
         # Plot the full reward distribution, and the posterior distribution
         # title = 't={}\naccrued cost: {}\nthreshold: {}'.format(self.t, np.round(self.accrued_cost,2), np.round(self.cost_threshold,2))
-        title = 't={}, optimality: {}'.format(self.t, np.round(self.accrued_cost/self.optimal_cost,2))
+        title = 't={}, (sub-)optimality: {}%'.format(self.t, np.round(100*self.accrued_cost/self.optimal_cost))
+        title = ''
         plot_r(self.costs, self.axs[0])
         plot_r(self.posterior_mean.reshape(self.N, self.N), self.axs[1], title=title)
+
+        ## plot the kernel weights
+        if self.inf_k == 'weighted':
+            plot_k_weights(self.k_weights, self.axs[2], title='Kernel weights')
+
+
 
         ## plot the optimal trajectory and trajectory so far
         plot_traj([self.o_traj, self.a_traj], self.axs[0])
         plot_traj([self.o_traj, self.a_traj], self.axs[1])
         
         # Plot the agent and target positions
-        plot_state(self._agent_location, self._target_location, self.axs[0], title = title+"\n(true)")
-        plot_state(self._agent_location, self._target_location, self.axs[1], title = title+"\n(posterior)")
+        plot_state(self._agent_location, self._target_location, self.axs[0], title = "True mountain surface: \n"+title)
+        plot_state(self._agent_location, self._target_location, self.axs[1], title = "Posterior mountain surface: \n"+title)
         
         
         # Adjust the layout to prevent overlapping
@@ -334,7 +406,7 @@ class MountainEnv(gym.Env):
         
         # # Add a small delay to allow the plot to update
         if self.terminated:
-            print(self.msg)
+            # print(self.msg)
             plt.pause(2)
         else:
             plt.pause(0.4)
@@ -356,29 +428,41 @@ class MountainEnv(gym.Env):
         if np.random.rand() < eps:
             return self.random_policy()
         else:
-            distances = cdist([current], [target], metric=self.metric).flatten()
+            # distances = cdist([current], [target], metric=self.metric).flatten()
+            ## get adjacent states
+            next_states = np.clip(np.array([current + self._action_to_direction[i] for i in range(self.n_actions)]), 0, self.N-1)
+            
+            ## choose whichever one is closest to the target
+            distances = cdist(next_states, [target], metric='euclidean').flatten()
+            # distances = cdist(next_states, [target], metric=self.metric).flatten()
             return np.argmin(distances)
         
 
     ## greedy wrt/ both distance to target and cost, i.e. some combination of the two
-    def balanced_policy(self, current, target, eps=0, alpha=0.5):
+    def balanced_policy(self, current, target, MCTS_estimates = None, eps=0, alpha=0.5):
         if np.random.rand() < eps:
             return self.random_policy()
         else:
 
+            
             ## get adjacent states
             next_states = np.clip(np.array([current + self._action_to_direction[i] for i in range(self.n_actions)]), 0, self.N-1)
             next_states_idx = next_states[:, 0]*self.N + next_states[:, 1]
             
+            ## myopic
+            if MCTS_estimates is None:
             
-            ## posterior prediction using known kernel
-            # next_q, next_cov = self.post_pred(self.K_inf, self.obs, pred=next_states_idx)
-            
-            ### or, posterior prediction using weighted kernel
-            # next_q = self.weighted_post_pred(pred=next_states_idx)
+                ## posterior prediction using known kernel
+                # next_q, next_cov = self.post_pred(self.K_inf, self.obs, pred=next_states_idx)
+                
+                ### or, posterior prediction using weighted kernel
+                # next_q = self.weighted_post_pred(pred=next_states_idx)
 
-            next_q, next_cov = self.inference_func(pred=next_states_idx)
+                next_q, next_cov = self.inference_func(obs = self.obs, pred=next_states_idx)
 
+            ## estimates provided by MCTS
+            else:
+                next_q = MCTS_estimates
             
             ## ensure post_mean is non-negative
             if next_q.min() < 0:
@@ -389,6 +473,7 @@ class MountainEnv(gym.Env):
             distances = cdist(next_states, [target], metric=self.metric).flatten()
             combined_q = alpha * softmax(-distances) + (1-alpha) * softmax(-next_q)
             return np.argmax(combined_q)
+        
 
 
     
@@ -470,14 +555,16 @@ class MountainEnv(gym.Env):
     
 
     ## use GP regression to predict posterior distribution of rewards, given these observations,based on the currently inferred kernel
-    def post_pred(self, K_inf, pred='all', sigma=0.01):
+    def post_pred(self, K_inf, obs, pred='all', sigma=0.01):
         if isinstance(pred, str):
             pred_idx = np.arange(self.N**2)
         else:
             pred_idx = pred
 
-        obs_idx = self.obs[:, 0].astype(int)
-        obs_rewards = self.obs[:, 3]
+        obs_idx = obs[:, 0].astype(int)
+        obs_rewards = obs[:, 3]
+        # obs_idx = self.obs[:, 0].astype(int)
+        # obs_rewards = self.obs[:, 3]
         
         # Covariance matrix of the already observed points
         K_obs = K_inf[obs_idx][:, obs_idx]
@@ -496,7 +583,7 @@ class MountainEnv(gym.Env):
     
 
     ## posterior prediction weighted by the likelihood of the observations under each kernel
-    def weighted_post_pred(self, pred='all'):
+    def weighted_post_pred(self, obs, pred='all'):
         if isinstance(pred, str):
             pred_idx = np.arange(self.N**2)
         else:
@@ -504,10 +591,13 @@ class MountainEnv(gym.Env):
         post_means = []
         post_covs = []
         lls = []
+        
+        ## imperfect memory of observations
+        # obs = self.obs[-10:]
 
         ## loop through possible kernels
         for k_inf in self.all_Ks:
-            post_mean, post_cov = self.post_pred(k_inf, pred=pred_idx)
+            post_mean, post_cov = self.post_pred(k_inf, obs = obs, pred=pred_idx)
             post_means.append(post_mean)
             post_covs.append(post_cov)
 
@@ -516,12 +606,12 @@ class MountainEnv(gym.Env):
             lls.append(ll)
         
         ## weight each posterior prediction by the corresponding marginal likelihood
-        k_weights = softmax(lls)
-        post_mean = np.sum([k_weights[i] * post_means[i] for i in range(len(k_weights))], axis=0)
+        self.k_weights = softmax(lls)
+        post_mean = np.sum([self.k_weights[i] * post_means[i] for i in range(len(self.k_weights))], axis=0)
 
         ## weighted posterior covariance
         # post_cov = np.sum([k_weights[i] * (post_covs[i] + (post_means[i] - post_mean) @ (post_means[i] - post_mean).T) for i in range(len(k_weights))], axis=0)
-        post_cov = np.sum([k_weights[i] * (post_covs[i] + np.outer(post_means[i] - post_mean, post_means[i] - post_mean)) for i in range(len(k_weights))], axis=0) ## need to check if this is correct
+        post_cov = np.sum([self.k_weights[i] * (post_covs[i] + np.outer(post_means[i] - post_mean, post_means[i] - post_mean)) for i in range(len(self.k_weights))], axis=0) ## need to check if this is correct
 
         return post_mean, post_cov
     
@@ -633,3 +723,15 @@ class MountainEnv(gym.Env):
                 if 0 <= new_x < self.N and 0 <= new_y < self.N:
                     neighbors.append((new_x, new_y))
         return neighbors
+
+
+    ## generate random observations from current true GP kernel
+    def gen_obs(self, samples, n_obs):
+        obs_idx = np.random.randint(0, self.N**2, size=n_obs)
+
+        ## map these observations to the grid and get the reward values
+        obs_coords = np.column_stack(np.unravel_index(obs_idx, (self.N, self.N)))
+        obs_rewards = samples[obs_coords[:, 0], obs_coords[:, 1]]
+        obs = np.column_stack([obs_idx, obs_coords, obs_rewards])
+
+        return obs

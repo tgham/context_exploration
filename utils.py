@@ -20,7 +20,7 @@ import random
 
 
 ## create a mountain environment
-def make_env(N, params, metric, true_k, inf_k, render_mode):
+def make_env(N, params, metric, true_k, inf_k, render_mode, r_noise):
 
     ## register env
     
@@ -37,7 +37,7 @@ def make_env(N, params, metric, true_k, inf_k, render_mode):
         kwargs={"size": N},
     )
     
-    env = gym.make("mountains/MountainEnv-v0", N=N, params=params, metric=metric, true_k=true_k, inf_k=inf_k, render_mode=render_mode)
+    env = gym.make("mountains/MountainEnv-v0", N=N, params=params, metric=metric, true_k=true_k, inf_k=inf_k, render_mode=render_mode, r_noise=r_noise)
     return env
 
 
@@ -47,10 +47,7 @@ def make_env(N, params, metric, true_k, inf_k, render_mode):
 class Node:
 
     def __init__(self, state, action, action_space, reward, terminal):
-        self.identifier = str(uuid.uuid1())
-        self.parent_identifier = None
-        self.children_identifiers = []
-        self.untried_actions = list(range(action_space))
+        # self.untried_actions = list(range(action_space))
         self.state = state
         self.total_simulation_reward = 0
         self.num_visits = 0
@@ -58,6 +55,24 @@ class Node:
         self.action = action
         self.reward = reward
         self.terminal = terminal
+        self.identifier = str(uuid.uuid1())
+        # self.identifier = str(self.state) + ', '+str(self.action)
+        self.parent_identifier = None
+        self.children_identifiers = []
+
+        ## define valid actions
+        self.untried_actions = list(range(action_space))
+        self.N = 10
+        row, col = self.state
+        if row == self.N-1:
+            self.untried_actions.remove(0)
+        if row == 0:
+            self.untried_actions.remove(2)
+        if col == self.N-1:
+            self.untried_actions.remove(1)
+        if col == 0:
+            self.untried_actions.remove(3)
+
 
     def __str__(self):
         return "{}: (action={}, visits={}, reward={:d}, ratio={:0.4f})".format(
@@ -160,3 +175,14 @@ def horizontal_line(last_node_flags):
         return horizontal_line_end
     else:
         return horizontal_line
+    
+
+### misc utils
+
+## calculate the angle between two nodes
+def node_angle(a,b):
+    rad = np.arctan2(b[1]-a[1], b[0]-a[0])
+    ang = np.abs(np.degrees(rad))
+    return ang
+
+

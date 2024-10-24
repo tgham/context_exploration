@@ -8,7 +8,7 @@ def plot_r(sampled_rewards, ax, title=None, cbar=False):
     # vmax = np.max(sampled_rewards)
     vmin = 0
     vmax = 1
-    sns.heatmap(sampled_rewards, ax=ax, cbar=cbar, square=True, cmap='viridis', vmin=vmin, vmax=vmax,  cbar_kws={'ticks': [0, 1], 'label': '$', 'shrink': 0.7})
+    sns.heatmap(sampled_rewards, ax=ax, cbar=cbar, square=True, cmap='viridis', vmin=vmin, vmax=vmax,  cbar_kws={'ticks': [0, 1], 'label': 'Altitude', 'shrink': 0.7})
     # ax.imshow(sampled_rewards, extent=(0, self.N, 0, self.N), origin = 'upper')
     # ax.set_xticks(np.arange(0, self.N+1, 5))
     # ax.set_yticks(np.arange(0, self.N+1, 5))
@@ -19,7 +19,8 @@ def plot_r(sampled_rewards, ax, title=None, cbar=False):
     ax.set_title(title)
     # ax.set_title('Sampled Reward Distribution,\nkernel: {}'.format(self.kernel_type))
     if cbar:
-        ax.collections[0].colorbar.set_label('Route cost')
+        ax.collections[0].colorbar.set_label('Altitude')
+        # ax.collections[0].colorbar.set_label('Route cost')
     return ax
 
 def plot_state(current, goal, ax, title=None):
@@ -78,4 +79,14 @@ def plot_traj(trajs, ax, title=None):
     
     # ax.legend(['Start', 'Goal','Direct', 'Optimal'], loc='upper right')
     ## legend for start and goal, and the two paths
-     
+
+## plot kernel weights
+def plot_k_weights(k_weights, ax, title=None):
+
+    sns.barplot(x=np.arange(len(k_weights)), y=k_weights, ax=ax)
+    ax.set_title('Kernel weights')
+    x_labels = ['Mountain', 'N-S Valleys', 'E-W Valleys', 'Periodic Valleys']
+    ax.set_xticks(np.arange(len(k_weights)))
+    ax.set_xticklabels(x_labels, rotation=45)
+    ax.set_ylim(0,1)
+    ax.set_aspect(aspect=1.4)
