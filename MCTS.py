@@ -16,13 +16,12 @@ class MonteCarloTreeSearch():
         observation = self.env.get_obs()
         state = observation['agent']
         self.tree.add_node(Node(state=state, action=None, action_space=self.action_space, reward=0, terminal=False))
-        print('init with: ',observation)
 
     def expand(self, node):
         env_copy = copy.deepcopy(self.env)
         env_copy.set_state(node.state)
         action = node.untried_action()
-        observation, reward, terminated, truncated, info = env_copy.step(action, sim=True)
+        observation, reward, terminated, truncated, info = env_copy.step(action)
         state=observation['agent'] 
         new_node = Node(state=state, action=action, action_space=self.action_space, reward=reward, terminal=terminated) 
         self.tree.add_node(new_node, node)
@@ -40,12 +39,13 @@ class MonteCarloTreeSearch():
         env_copy.set_state(node.state)
         if node.terminal:
             return node.reward
-        # print('rollout from', node)
 
-        ## rollout until trial is terminated (surely this needs to stop at some point, rather than rolling out until u get a terminal state?)
-        while rolls < max_rolls:
+        ## rollout until trial is terminated 
+        # while rolls < max_rolls:
+        while True:
             action = random.randint(0, self.action_space-1)
-            observation, reward, terminated, _, _ = env_copy.step(action, sim=True)
+            observation, reward, terminated, _, _ = env_copy.step(action)
+            # rolls += 1
             if terminated:
                 return reward
             

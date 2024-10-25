@@ -46,14 +46,14 @@ class MountainEnv(gym.Env):
 
         ## set the kernel parameters
         if params is None:
-            self.c = 0
+            self.c = 1
             self.scale = 1.0
             self.theta = 0
             self.sigma_f = 1.0
-            self.length_scale = 2
-            self.periodic_length_scale = 4
-            self.period = 8
-            self.periodic_theta = np.pi/4
+            self.length_scale = self.N/5
+            self.period = self.N/5
+            self.periodic_length_scale = self.N/2
+            self.periodic_theta = np.pi/3
         else:
             self.c = params[0]
             self.scale = params[1]
@@ -107,6 +107,7 @@ class MountainEnv(gym.Env):
         self.costs = self.sample(self.K_gen)
         self.cost_threshold = 1 
         self.r_noise = r_noise
+        self.sim = False
 
         ## determine how inferences are made (i.e. with full knowledge of the kernel, or with a weighted combination of kernels)
         self.inf_k = inf_k
@@ -312,11 +313,11 @@ class MountainEnv(gym.Env):
         self.accrued_cost += current_cost
 
         ## return the real or sampled cost
-        if not sim:
+        if not self.sim:
             cost = -current_cost
-        elif sim:
-            # cost = -predicted_cost
-            cost = -current_cost
+        elif self.sim:
+            cost = -predicted_cost
+            # cost = -current_cost
 
 
         ## update observation and trajectory arrays
@@ -340,7 +341,7 @@ class MountainEnv(gym.Env):
         info = self._get_info()
         terminated = self.terminated
 
-        if (self.render_mode == "human") or ((self.render_mode == 'MCTS') & (not sim)):
+        if (self.render_mode == "human"):
             ## posterior prediction using known kernel
             # self.posterior_mean, self.posterior_cov = self.post_pred(self.K_inf, self.obs)
 
@@ -356,6 +357,8 @@ class MountainEnv(gym.Env):
 
     ## rendering funcs
     def render(self):
+
+        self.posterior_mean, self.posterior_cov = self.inference_func(obs = self.obs, pred='all')
         
         # Clear the current output
         clear_output(wait=True)
