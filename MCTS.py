@@ -11,19 +11,21 @@ class MonteCarloTreeSearch():
         # self.env.sim=True
         self.tree = tree
         self.action_space = self.env.action_space.n
+        self.N = self.env.N
 
         ## get initial state and goal 
         observation = self.env.get_obs()
         state = observation['agent']
-        self.tree.add_node(Node(state=state, action=None, action_space=self.action_space, reward=0, terminal=False))
+        self.tree.add_node(Node(state=state, action=None, action_space=self.action_space, reward=0, terminal=False, N=self.N))
 
     def expand(self, node):
         env_copy = copy.deepcopy(self.env)
         env_copy.set_state(node.state)
+        env_copy.set_sim(True)
         action = node.untried_action()
         observation, reward, terminated, truncated, info = env_copy.step(action)
         state=observation['agent'] 
-        new_node = Node(state=state, action=action, action_space=self.action_space, reward=reward, terminal=terminated) 
+        new_node = Node(state=state, action=action, action_space=self.action_space, reward=reward, terminal=terminated, N=self.N) 
         self.tree.add_node(new_node, node)
         # print('expanded from ', node, ' to ', new_node)
         return new_node
@@ -31,23 +33,34 @@ class MonteCarloTreeSearch():
     def rollout_policy(self, node):
 
         ## init
-        max_rolls = 100
-        rolls=0
+        total_cost = 0
+        discount_factor = 1
+        gamma = 0.99
         
         ## set the state from which the rollout is initiated
         env_copy = copy.deepcopy(self.env)
         env_copy.set_state(node.state)
+        env_copy.set_sim(True)
         if node.terminal:
-            return node.reward
+            return -node.reward
 
         ## rollout until trial is terminated 
-        # while rolls < max_rolls:
         while True:
-            action = random.randint(0, self.action_space-1)
-            observation, reward, terminated, _, _ = env_copy.step(action)
-            # rolls += 1
+
+            ## uniform random
+            # action = random.randint(0, self.action_space-1)
+
+            ## or, greedy
+            current = env_copy.get_obs()['agent']
+            target = env_copy.get_obs()['target']
+            action = env_copy.greedy_policy(current, target, eps = 0.1)
+
+            ## take action and get cost
+            observation, cost, terminated, _, _ = env_copy.step(action)
+            total_cost += cost * discount_factor
+            discount_factor *= gamma
             if terminated:
-                return reward
+                return -total_cost
             
 
     ## calculate E-E value
@@ -74,6 +87,7 @@ class MonteCarloTreeSearch():
     ## take an action according to the tree policy, i.e. take the best UCT child and see where it takes you
     def tree_policy(self):
         env_copy = copy.deepcopy(self.env)
+        env_copy.set_sim(True)
         node = self.tree.root
         t = 0
         while not node.terminal:
@@ -105,9 +119,10 @@ class MonteCarloTreeSearch():
     def backward(self, node, value):
         while node:
             node.num_visits += 1
-            node.total_simulation_reward += value
+            node.total_simulation_reward += value 
             node.performance = node.total_simulation_reward / node.num_visits
             node = self.tree.parent(node)
+
 
 
     def forward(self):

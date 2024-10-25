@@ -107,7 +107,7 @@ class MountainEnv(gym.Env):
         self.costs = self.sample(self.K_gen)
         self.cost_threshold = 1 
         self.r_noise = r_noise
-        self.sim = False
+        # self.sim = False
 
         ## determine how inferences are made (i.e. with full knowledge of the kernel, or with a weighted combination of kernels)
         self.inf_k = inf_k
@@ -238,11 +238,7 @@ class MountainEnv(gym.Env):
             # start_val = 1
 
             ## last goal distance criterion
-
-        self.starts
-
-        # self._agent_location = np.array([0,0])
-        # self._target_location = np.array([self.N-1, self.N-1])
+            # self.starts
 
 
         ## initialise trial info
@@ -263,6 +259,7 @@ class MountainEnv(gym.Env):
             self.obs = np.array([[loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
         else:
             self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+        self.obs_tmp = self.obs.copy()
 
         ## initialise actual trajectory as list of tuples
         self.a_traj = [tuple(self._agent_location)]
@@ -270,7 +267,6 @@ class MountainEnv(gym.Env):
         ## get the cost of the optimal trajectory, and use this to set the cost threshold
         self.o_traj, self.o_route_cost = self.optimal_trajectory()
         self.optimal_cost = np.sum(self.o_route_cost) #np.sum(self.o_route_cost[1:]) # is a cost incurred in the first state??
-        self.cost_threshold = self.optimal_cost * 1.3 ## arbitrary threshold for now
         
         ## posterior inference over the whole environment
         self.posterior_mean, self.posterior_cov = self.inference_func(obs = self.obs, pred='all')
@@ -293,9 +289,12 @@ class MountainEnv(gym.Env):
     def set_state(self, state):
         self._agent_location = state
 
+    def set_sim(self, sim):
+        self.sim = sim
+
 
     ## take a step in the environment
-    def step(self, action, sim=False):
+    def step(self, action):
         # Map the action (element of {0,1,2,3}) to the direction we walk in
         self.t += 1
         direction = self._action_to_direction[action]
@@ -314,26 +313,31 @@ class MountainEnv(gym.Env):
 
         ## return the real or sampled cost
         if not self.sim:
-            cost = -current_cost
+            cost = current_cost
         elif self.sim:
-            cost = -predicted_cost
-            # cost = -current_cost
+            cost = predicted_cost
 
 
-        ## update observation and trajectory arrays
+        ## update observation and trajectory arrays - i.e. agent observes along the way
+        # self.a_traj.append(tuple(self._agent_location))
+        # loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
+        # self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+
+        ## or, temporarily store observations until the end of the trial
         self.a_traj.append(tuple(self._agent_location))
         loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
-        self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+        self.obs_tmp = np.vstack([self.obs_tmp, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+
 
         # An episode is done iff the agent has reached the target
         if np.array_equal(self._agent_location, self._target_location):
             self.msg = "Target reached in {} steps".format(self.t)
             self.terminated = True
             reward = 1
-        # elif self.accrued_cost > self.cost_threshold:
-        #     self.msg = "Out of fuel in in {} steps".format(self.t)
-        #     self.terminated = True
-        #     reward = 0
+        
+            ## update observation array only once the episode is complete
+            self.obs = self.obs_tmp
+
         else:
             self.terminated = False
             reward = 0
@@ -352,7 +356,6 @@ class MountainEnv(gym.Env):
             self.render()      
 
         truncated=False
-        # return observation, reward, terminated, truncated, info
         return observation, cost, terminated, truncated, info
 
     ## rendering funcs
@@ -437,7 +440,6 @@ class MountainEnv(gym.Env):
             
             ## choose whichever one is closest to the target
             distances = cdist(next_states, [target], metric='euclidean').flatten()
-            # distances = cdist(next_states, [target], metric=self.metric).flatten()
             return np.argmin(distances)
         
 
