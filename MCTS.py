@@ -70,7 +70,7 @@ class MonteCarloTreeSearch():
         return exploitation_term + exploration_term
 
     
-    ## argmax based on UCT values?
+    ## argmax based on UCT values? 
     def best_child(self, node, exploration_constant):
         best_child = self.tree.children(node)[0]
         # print(node, self.tree.children(node)[0], 'hello')

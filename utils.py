@@ -49,7 +49,7 @@ class Node:
     def __init__(self, state, action, action_space, reward, terminal, N):
         # self.untried_actions = list(range(action_space))
         self.state = state
-        self.total_simulation_reward = 0
+        self.total_simulation_reward  = 0
         self.num_visits = 0
         self.performance = 0
         self.action = action
