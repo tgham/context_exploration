@@ -36,6 +36,8 @@ class MonteCarloTreeSearch():
         total_cost = 0
         discount_factor = 1
         gamma = 0.99
+        max_rolls = 1000
+        rolls = 0
         
         ## set the state from which the rollout is initiated
         env_copy = copy.deepcopy(self.env)
@@ -59,6 +61,14 @@ class MonteCarloTreeSearch():
             observation, cost, terminated, _, _ = env_copy.step(action)
             total_cost += cost * discount_factor
             discount_factor *= gamma
+
+            ## prevent infinite rollout
+            rolls += 1
+            if rolls > max_rolls:
+                print('exceeded max rolls')
+                terminated = True
+
+            ## check if terminated
             if terminated:
                 return -total_cost
             

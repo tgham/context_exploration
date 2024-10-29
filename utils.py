@@ -17,6 +17,8 @@ from collections import defaultdict
 from IPython.display import display, clear_output
 import uuid
 import random
+# from MCTS import MonteCarloTreeSearch
+
 
 
 ## create a mountain environment
@@ -186,3 +188,81 @@ def node_angle(a,b):
     return ang
 
 
+
+# ## parallel function for simulating many episodes within the same mountain env
+# def parallel_GP_MCTS(N, params=None, metric='cityblock', true_k=None, inf_k='known', r_noise=0.05, render_mode=None, n_episodes=100, n_trees=1000):
+    
+#     ## initiate dictionary to store the results
+#     sim_out = {
+#         'episode': [],
+#         'start': [],
+#         'goal': [],
+#         'true_k': [],
+#         'inf_k': [],
+#         'accrued_cost': [],
+#         'optimal_cost': [],
+#         'score': [],
+#         'n_steps': [],
+#         'actual_trajectory': [],
+#         'optimal_trajectory': [],
+#         'observations': []
+#     }
+    
+#     ## create mountain environment
+#     env = make_env(N, None, metric, true_k, inf_k, render_mode=None, r_noise=r_noise)
+#     observation, info = env.reset()
+
+
+#     ## loop through episodes (i.e. different start and goal states for the same mountain)
+#     for e in range(n_episodes):
+
+#         ## run episode until goal is reached
+#         end_episode = False
+#         terminated=False
+#         truncated=False
+#         steps = 0
+#         total_cost = 0
+#         while not end_episode:
+            
+#             ## init MCTS
+#             tree = Tree()
+#             MCTS = MonteCarloTreeSearch(env=env, tree=tree)
+            
+#             ## tree search
+#             for r in range(n_trees):
+#                 node = MCTS.tree_policy()
+#                 simulated_cost = MCTS.rollout_policy(node)
+#                 MCTS.backward(node, simulated_cost)
+
+#             ## get the simulated LT costs of adjacent states
+#             current_children = MCTS.tree.children(MCTS.tree.root)
+#             MCTS_estimates = np.zeros(4)+np.nan
+#             for child in current_children:
+#                 MCTS_estimates[child.action] = child.performance
+
+#             ## action selection
+#             action = np.nanargmax(MCTS_estimates)
+#             env.set_sim(False)
+#             observation, actual_cost, terminated, truncated, info = env.step(action)
+#             steps += 1
+#             total_cost += actual_cost
+
+#             ## save data and end the episode
+#             if terminated:
+#                 sim_out['episode'].append(e)
+#                 sim_out['start'].append(env.obs[0])
+#                 goal = env.get_obs()['target']
+#                 sim_out['goal'].append(goal)
+#                 sim_out['true_k'].append(env.true_k)
+#                 sim_out['inf_k'].append(env.inf_k)
+#                 sim_out['accrued_cost'].append(total_cost)
+#                 sim_out['optimal_cost'].append(env.optimal_cost)
+#                 sim_out['score'].append(env.optimal_cost/total_cost)
+#                 sim_out['n_steps'].append(steps)
+#                 sim_out['actual_trajectory'].append(env.a_traj)
+#                 sim_out['optimal_trajectory'].append(env.o_traj)
+#                 sim_out['observations'].append(env.obs)
+#                 observation, info = env.reset()
+#                 end_episode = True
+
+    # return sim_out
