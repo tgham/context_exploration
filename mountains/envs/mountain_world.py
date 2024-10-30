@@ -311,23 +311,24 @@ class MountainEnv(gym.Env):
         current_cost = self.costs[self._agent_location[0], self._agent_location[1]] + np.random.normal(0, self.r_noise)
         self.accrued_cost += current_cost
 
-        ## return the real or sampled cost
+        ## return the real cost if not simulating
         if not self.sim:
             cost = current_cost
+            
+            ## update observation and trajectory arrays - i.e. agent observes along the way
+            # self.a_traj.append(tuple(self._agent_location))
+            # loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
+            # self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+
+            ## temporarily store observations until the end of the trial
+            self.a_traj.append(tuple(self._agent_location))
+            loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
+            self.obs_tmp = np.vstack([self.obs_tmp, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+
+        ## return the predicted cost if simulating
         elif self.sim:
             cost = predicted_cost
-
-
-        ## update observation and trajectory arrays - i.e. agent observes along the way
-        # self.a_traj.append(tuple(self._agent_location))
-        # loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
-        # self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
-
-        ## or, temporarily store observations until the end of the trial
-        self.a_traj.append(tuple(self._agent_location))
-        loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
-        self.obs_tmp = np.vstack([self.obs_tmp, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
-
+            # print(len(self.obs_tmp), len(self.obs))
 
         # An episode is done iff the agent has reached the target
         if np.array_equal(self._agent_location, self._target_location):
@@ -336,7 +337,12 @@ class MountainEnv(gym.Env):
             reward = 1
         
             ## update observation array only once the episode is complete
-            self.obs = self.obs_tmp
+            if not self.sim:
+                self.obs = self.obs_tmp
+
+            ## sum of costs of route
+            self.a_route_cost = [self.costs[x, y] for x, y in self.a_traj]
+            self.actual_cost = np.sum(self.a_route_cost)
 
         else:
             self.terminated = False
@@ -439,12 +445,12 @@ class MountainEnv(gym.Env):
             next_states = np.clip(np.array([current + self._action_to_direction[i] for i in range(self.n_actions)]), 0, self.N-1)
             
             ## choose whichever one is closest to the target
-            distances = cdist(next_states, [target], metric='euclidean').flatten()
+            distances = cdist(next_states, [target], metric=self.metric).flatten()
             return np.argmin(distances)
         
 
     ## greedy wrt/ both distance to target and cost, i.e. some combination of the two
-    def balanced_policy(self, current, target, MCTS_estimates = None, eps=0, alpha=0.5):
+    def balanced_policy(self, current, target, eps=0, alpha=0.5, MCTS = False):
         if np.random.rand() < eps:
             return self.random_policy()
         else:
@@ -455,19 +461,15 @@ class MountainEnv(gym.Env):
             next_states_idx = next_states[:, 0]*self.N + next_states[:, 1]
             
             ## myopic
-            if MCTS_estimates is None:
-            
-                ## posterior prediction using known kernel
-                # next_q, next_cov = self.post_pred(self.K_inf, self.obs, pred=next_states_idx)
-                
-                ### or, posterior prediction using weighted kernel
-                # next_q = self.weighted_post_pred(pred=next_states_idx)
-
-                next_q, next_cov = self.inference_func(obs = self.obs, pred=next_states_idx)
+            # if not MCTS:
+            # next_q, next_cov = self.inference_func(obs = self.obs, pred=next_states_idx)
+            next_q = self.posterior_mean.reshape(self.N, self.N)[next_states[:, 0], next_states[:, 1]]
+            # next_q = [self.posterior_mean.reshape(self.N, self.N)[next_states[i, 0], next_states[i, 1]] for i in range(len(next_states))]
+            # self.posterior_mean.reshape(self.N, self.N)[self._agent_location[0], self._agent_location[1]]
 
             ## estimates provided by MCTS
-            else:
-                next_q = MCTS_estimates
+            # elif MCTS:
+            #     next_q = MCTS_estimates
             
             ## ensure post_mean is non-negative
             if next_q.min() < 0:
