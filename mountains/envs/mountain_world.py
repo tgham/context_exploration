@@ -684,6 +684,7 @@ class MountainEnv(gym.Env):
             # If we reached the goal, return the path and the accumulated reward
             if current_point == goal:
                 route_cost = [self.costs[x, y] for x, y in path]
+                assert np.array_equal(path[0], start)
                 return path, route_cost
             
             # Mark this point as visited

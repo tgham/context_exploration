@@ -48,7 +48,7 @@ def make_env(N, params, metric, true_k, inf_k, render_mode, r_noise):
 ## Node class
 class Node:
 
-    def __init__(self, state, action, action_space, reward, terminal, N):
+    def __init__(self, state, action, action_space, reward, terminal, N, prev_state=None):
         # self.untried_actions = list(range(action_space))
         self.state = state
         self.total_simulation_reward  = 0
@@ -62,6 +62,7 @@ class Node:
         self.parent_identifier = None
         self.children_identifiers = []
         self.N = N
+        self.prev_state = prev_state
 
         ## define valid actions
         self.untried_actions = list(range(action_space))
@@ -74,6 +75,32 @@ class Node:
             self.untried_actions.remove(1)
         if col == 0:
             self.untried_actions.remove(3)
+        
+        ## remove the action that takes P back to prev state
+        # if self.prev_state is not None:
+        #     prev_row, prev_col = self.prev_state
+        #     if row == prev_row:
+        #         if col < prev_col:
+        #             try:
+        #                 self.untried_actions.remove(1)
+        #             except:
+        #                 pass
+        #         else:
+        #             try:
+        #                 self.untried_actions.remove(3)
+        #             except:
+        #                 pass
+        #     if col == prev_col:
+        #         if row < prev_row:
+        #             try:
+        #                 self.untried_actions.remove(0)
+        #             except:
+        #                 pass
+        #         else:
+        #             try:
+        #                 self.untried_actions.remove(2)
+        #             except:
+        #                 pass
 
 
     def __str__(self):

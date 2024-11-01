@@ -35,7 +35,7 @@ class MonteCarloTreeSearch():
         ## init
         total_cost = 0
         discount_factor = 1
-        gamma = 0.99
+        gamma = 1
         max_rolls = 1000
         rolls = 0
         
@@ -87,17 +87,15 @@ class MonteCarloTreeSearch():
     
     ## argmax based on UCT values? 
     def best_child(self, node, exploration_constant):
-        best_child = self.tree.children(node)[0]
-        # print(node, self.tree.children(node)[0], 'hello')
-        best_value = self.compute_UCT(node, best_child, exploration_constant)
-        iter_children = iter(self.tree.children(node))
-        next(iter_children)
-        for child in iter_children:
-            value = self.compute_UCT(node, child, exploration_constant)
-            if value > best_value:
-                best_child = child
-                best_value = value
+        children = self.tree.children(node)
+        best_child = max(children, key=lambda child: self.compute_UCT(node, child, exploration_constant))
         return best_child
+    def second_best_child(self, node, exploration_constant):
+        children = self.tree.children(node)
+        best_child = max(children, key=lambda child: self.compute_UCT(node, child, exploration_constant))
+        children.remove(best_child)
+        second_best_child = max(children, key=lambda child: self.compute_UCT(node, child, exploration_constant))
+        return second_best_child
 
     ## take an action according to the tree policy, i.e. take the best UCT child and see where it takes you
     def tree_policy(self):
@@ -155,17 +153,36 @@ class MonteCarloTreeSearch():
 
         ## return the best action
 
-    ## return the values of all children of the root
-    # def get_values(self, node):
-    #     for child in self.tree.children(node):
+    ## tree search --> action loop
+    def search(self, tree, n_trees=1000):
+
+        ## loop through trees
+        for t in range(n_trees):
+            node = self.tree_policy()
+            simulated_cost = self.rollout_policy(node)
+            self.backward(node, simulated_cost)
+        
+        ## get simulated LT costs of adjacent states
+        current_children = self.tree.children(self.tree.root)
+        MCTS_estimates = np.zeros(4)+np.nan
+        for child in current_children:
+            MCTS_estimates[child.action] = child.performance
+
+        ## action selection
+        action = np.nanargmax(MCTS_estimates)
+        ## check if this action takes the agent back to the previous state
+        return action
+
+
 
 
 
 ## parallel function for simulating many episodes within the same mountain env
-def parallel_MCTS(m, N, params=None, metric='cityblock', true_k=None, inf_k='known', r_noise=0.05, render_mode=None, n_episodes=50, n_trees=1000):
+def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='known', r_noise=0.05, render_mode=None, n_episodes=50, agents = ['GP', 'MCTS'], n_trees=1000):
     
     ## initiate dictionary to store the results
     sim_out = {
+        'agent': [],
         'episode': [],
         'mountain': [],
         'start': [],
@@ -178,105 +195,109 @@ def parallel_MCTS(m, N, params=None, metric='cityblock', true_k=None, inf_k='kno
         'n_steps': [],
         'actual_trajectory': [],
         'optimal_trajectory': [],
-        'observations': []
+        'observations': [],
+        'RPE':[],
     }
     
     ## create mountain environment
     env = make_env(N, None, metric, true_k, inf_k, render_mode=None, r_noise=r_noise)
-    observation, info = env.reset()
-    trial_info = env.get_obs()
-    start = trial_info['agent']
-    goal = trial_info['target']
-    start_cost = env.costs[start[0], start[1]]
-    # print(start_cost==env.o_route_cost[0])
-
-
 
     ## loop through episodes (i.e. different start and goal states for the same mountain)
     for e in range(n_episodes):
 
-        ## run episode until goal is reached
-        end_episode = False
-        terminated=False
-        truncated=False
-        steps = 0
-        total_cost = start_cost
-        # total_cost = 0
+        ## reset episode
+        observation, info = env.reset()
+        start = env.get_obs()['agent']
+        current = start
+        goal = env.get_obs()['target']
 
-        while not end_episode:
-            
-            ## init MCTS
-            tree = Tree()
-            MCTS = MonteCarloTreeSearch(env=env, tree=tree)
-            
-            ## tree search
-            for r in range(n_trees):
-                node = MCTS.tree_policy()
-                simulated_cost = MCTS.rollout_policy(node)
-                MCTS.backward(node, simulated_cost)
+        ## loop through agents
+        for agent in agents:
 
-            ## get the simulated LT costs of adjacent states
-            current_children = MCTS.tree.children(MCTS.tree.root)
-            MCTS_estimates = np.zeros(4)+np.nan
-            for child in current_children:
-                MCTS_estimates[child.action] = child.performance
+            ## create inner loop copy of env
+            env_copy = copy.deepcopy(env)
+        
+            ## run episode until goal is reached
+            end_episode = False
+            terminated=False
+            steps = 0
 
-            ## action selection
-            action = np.nanargmax(MCTS_estimates)
-            # actions.append(action)
-            env.set_sim(False)
-            observation, actual_cost, terminated, truncated, info = env.step(action)
-            steps += 1
-            total_cost += actual_cost
+            while not end_episode:
+                
+                ## init MCTS
+                if agent == 'MCTS':
+                    env_copy.set_sim(True)
+                    tree = Tree()
+                    MCTS = MonteCarloTreeSearch(env=env_copy, tree=tree)
+                    assert MCTS.env.sim == True
+                    assert env_copy.sim==True
+                    action = MCTS.search(tree, n_trees)
 
-            ## prevent endless episode 
-            if steps > 50:
-                print('episode ',e,' terminated in mountain ',m,', cost: ', env.actual_cost)
+                ## otherwise, plain balanced GP
+                elif agent == 'GP':
+                    eps = 0.05
+                    alpha = 0.25
+                    action = env_copy.balanced_policy(current, goal, eps, alpha)
+                    
+                
+                ## take action
+                env_copy.set_sim(False)
+                # print(current, goal, action)
+                observation, _, terminated, truncated, info = env_copy.step(action)
+                assert ~np.array_equal(current,observation['agent'])
+                current = observation['agent']
+                steps += 1
 
-                ## reset
-                observation, info = env.reset()
-                start = env.get_obs()['agent']
-                goal = env.get_obs()['target']
-                steps = 0
-                total_cost = 0
+                ## prevent endless episode 
+                if steps > 50:
+                    print('episode ',e,' terminated in mountain ',m,' for agent ',agent,', cost: ', env_copy.accrued_cost)
 
-                ## or just skip to the next episode
-                # sim_out['episode'].append(e)
-                # sim_out['mountain'].append(m)
-                # sim_out['start'].append(start)
-                # sim_out['goal'].append(goal)
-                # sim_out['true_k'].append(true_k)
-                # sim_out['inf_k'].append(inf_k)
-                # sim_out['accrued_cost'].append(np.nan)
-                # sim_out['optimal_cost'].append(env.optimal_cost)
-                # sim_out['score'].append(np.nan)
-                # sim_out['n_steps'].append(steps)
-                # observation, info = env.reset()
-                # start = env.get_obs()['agent']
-                # goal = env.get_obs()['target']
-                # start_cost = env.costs[start[0], start[1]]
-                # end_episode = True
+                    ## reset
+                    # observation, info = env.reset()
+                    # start = env.get_obs()['agent']
+                    # goal = env.get_obs()['target']
+                    # steps = 0
+                    # total_cost = 0
 
-            ## save data and end the episode
-            if terminated:
-                sim_out['episode'].append(e)
-                sim_out['mountain'].append(m)
-                sim_out['start'].append(start)
-                sim_out['goal'].append(goal)
-                sim_out['true_k'].append(true_k)
-                sim_out['inf_k'].append(inf_k)
-                # sim_out['accrued_cost'].append(total_cost)
-                sim_out['accrued_cost'].append(env.actual_cost)
-                sim_out['optimal_cost'].append(env.optimal_cost)
-                assert env.optimal_cost <= env.actual_cost
-                sim_out['score'].append(env.optimal_cost/total_cost)
-                sim_out['n_steps'].append(steps)
-                # sim_out['actual_trajectory'].append(env.a_traj)
-                # sim_out['optimal_trajectory'].append(env.o_traj)
-                # sim_out['observations'].append(env.obs)
-                observation, info = env.reset()
-                start = env.get_obs()['agent']
-                goal = env.get_obs()['target']
-                end_episode = True
+                    ## or just skip to the next episode
+                    sim_out['agent'].append(agent)
+                    sim_out['episode'].append(e)
+                    sim_out['mountain'].append(m)
+                    sim_out['start'].append(start)
+                    sim_out['goal'].append(goal)
+                    sim_out['true_k'].append(true_k)
+                    sim_out['inf_k'].append(inf_k)
+                    sim_out['accrued_cost'].append(np.nan)
+                    sim_out['optimal_cost'].append(env_copy.optimal_cost)
+                    sim_out['score'].append(np.nan)
+                    sim_out['n_steps'].append(steps)
+                    sim_out['RPE'].append(np.nan)
+                    sim_out['actual_trajectory'].append(env_copy.a_traj)
+                    sim_out['optimal_trajectory'].append(env_copy.o_traj)
+                    sim_out['observations'].append(env_copy.obs)
+                    end_episode = True
 
-    return sim_out
+                ## save data and end the episode
+                elif terminated:
+                    sim_out['agent'].append(agent)
+                    sim_out['episode'].append(e)
+                    sim_out['mountain'].append(m)
+                    sim_out['start'].append(start)
+                    sim_out['goal'].append(goal)
+                    sim_out['true_k'].append(true_k)
+                    sim_out['inf_k'].append(inf_k)
+                    # sim_out['accrued_cost'].append(total_cost)
+                    sim_out['accrued_cost'].append(env_copy.accrued_cost)
+                    sim_out['optimal_cost'].append(env_copy.optimal_cost)
+                    if np.round(env_copy.optimal_cost,4) > np.round(env_copy.accrued_cost,4):
+                        print(env_copy.optimal_cost, env_copy.accrued_cost)
+                    assert np.round(env_copy.optimal_cost,4) <= np.round(env_copy.accrued_cost,4)
+                    sim_out['score'].append(env_copy.optimal_cost/env_copy.accrued_cost)
+                    sim_out['n_steps'].append(steps)
+                    sim_out['RPE'].append(np.mean(np.abs(env_copy.posterior_mean.reshape(N,N) - env_copy.costs)))
+                    sim_out['actual_trajectory'].append(env_copy.a_traj)
+                    sim_out['optimal_trajectory'].append(env_copy.o_traj)
+                    sim_out['observations'].append(env_copy.obs)
+                    end_episode = True
+
+    return sim_out, env.costs
