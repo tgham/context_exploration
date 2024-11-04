@@ -1,6 +1,6 @@
 import random
 from math import sqrt, log
-from utils import Node, Tree, make_env
+from utils import Node, Tree, make_env, argm
 import copy
 import numpy as np
 
@@ -16,16 +16,16 @@ class MonteCarloTreeSearch():
         ## get initial state and goal 
         observation = self.env.get_obs()
         state = observation['agent']
-        self.tree.add_node(Node(state=state, action=None, action_space=self.action_space, reward=0, terminal=False, N=self.N))
+        self.tree.add_node(Node(state=state, action=None, action_space=self.action_space, cost=0, terminal=False, N=self.N))
 
     def expand(self, node):
         env_copy = copy.deepcopy(self.env)
         env_copy.set_state(node.state)
         env_copy.set_sim(True)
         action = node.untried_action()
-        observation, reward, terminated, truncated, info = env_copy.step(action)
+        observation, cost, terminated, truncated, info = env_copy.step(action)
         state=observation['agent'] 
-        new_node = Node(state=state, action=action, action_space=self.action_space, reward=reward, terminal=terminated, N=self.N) 
+        new_node = Node(state=state, action=action, action_space=self.action_space, cost=cost, terminal=terminated, N=self.N) 
         self.tree.add_node(new_node, node)
         # print('expanded from ', node, ' to ', new_node)
         return new_node
@@ -44,7 +44,7 @@ class MonteCarloTreeSearch():
         env_copy.set_state(node.state)
         env_copy.set_sim(True)
         if node.terminal:
-            return -node.reward
+            return -node.cost
 
         ## rollout until trial is terminated 
         while True:
@@ -80,7 +80,7 @@ class MonteCarloTreeSearch():
 
     ## calculate E-E value
     def compute_UCT(self, parent, child, exploration_constant): # could turn this exploration constant into a param defined at init
-        exploitation_term = child.total_simulation_reward / child.num_visits
+        exploitation_term = child.total_simulation_cost / child.num_visits
         exploration_term = exploration_constant * sqrt(2 * log(parent.num_visits) / child.num_visits)
         return exploitation_term + exploration_term
 
@@ -88,20 +88,20 @@ class MonteCarloTreeSearch():
     ## argmax based on UCT values? 
     def best_child(self, node, exploration_constant):
         children = self.tree.children(node)
-        best_child = max(children, key=lambda child: self.compute_UCT(node, child, exploration_constant))
+        UCTs = [self.compute_UCT(node, child, exploration_constant) for child in children]
+        max_UCT = np.max(UCTs)
+        max_idx = argm(UCTs, max_UCT)
+        best_child = children[max_idx]
+        assert self.compute_UCT(node, best_child, exploration_constant) == max_UCT
+        # best_child = max(children, key=lambda child: self.compute_UCT(node, child, exploration_constant))
         return best_child
-    def second_best_child(self, node, exploration_constant):
-        children = self.tree.children(node)
-        best_child = max(children, key=lambda child: self.compute_UCT(node, child, exploration_constant))
-        children.remove(best_child)
-        second_best_child = max(children, key=lambda child: self.compute_UCT(node, child, exploration_constant))
-        return second_best_child
 
     ## take an action according to the tree policy, i.e. take the best UCT child and see where it takes you
-    def tree_policy(self):
+    def tree_policy(self, root = None):
         env_copy = copy.deepcopy(self.env)
         env_copy.set_sim(True)
-        node = self.tree.root
+        if root is None:
+            node = self.tree.root ## need some way of setting the current node to the current state
         t = 0
         while not node.terminal:
             if self.tree.is_expandable(node):
@@ -110,15 +110,15 @@ class MonteCarloTreeSearch():
                 
             else:
                 state_tmp = node.state
+                env_state_tmp = env_copy.get_obs()['agent']
                 # print('fully expanded: ', node)
                 node = self.best_child(node, exploration_constant=1.0/sqrt(2.0))
-                # print('best child is ',node)
-                # print()
-                # observation, reward, terminated, _, _ = self.env.step(node.action) ## I think this needs to actually change the state, bc u need to simulate what happens later.
-                observation, reward, terminated, _, _ = env_copy.step(node.action)
+                observation, cost, terminated, _, _ = env_copy.step(node.action)
                 state = observation['agent']
                 if not np.array_equal(node.state, state):
-                    print(node.state, node.action, state)
+                    print('started in ', state_tmp)
+                    print('supposed to take action ', node.action, ' to ', node.state)
+                    print('ended up moving from ',env_state_tmp,' to', state)
                 assert np.array_equal(node.state, state)
 
                 # if np.all(state_tmp == state):
@@ -128,12 +128,12 @@ class MonteCarloTreeSearch():
         return node
 
     
-    ## backup rewards until you reach the root
+    ## backup costs until you reach the root
     def backward(self, node, value):
         while node:
             node.num_visits += 1
-            node.total_simulation_reward += value 
-            node.performance = node.total_simulation_reward / node.num_visits
+            node.total_simulation_cost += value 
+            node.performance = node.total_simulation_cost / node.num_visits
             node = self.tree.parent(node)
 
 
@@ -169,9 +169,16 @@ class MonteCarloTreeSearch():
             MCTS_estimates[child.action] = child.performance
 
         ## action selection
-        action = np.nanargmax(MCTS_estimates)
+        if np.isnan(np.sum(MCTS_estimates)):
+            print(self.tree.root)
+        max_MCTS = np.nanmax(MCTS_estimates)
+        action = argm(MCTS_estimates, max_MCTS)
+        assert MCTS_estimates[action] == np.nanmax(MCTS_estimates)
         ## check if this action takes the agent back to the previous state
-        return action
+
+        ## new root is the state that the agent has just reached
+        new_node = self.best_child(self.tree.root, exploration_constant=0)
+        return action, new_node
 
 
 
@@ -216,6 +223,9 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
 
             ## create inner loop copy of env
             env_copy = copy.deepcopy(env)
+            tree = Tree()
+            MCTS = MonteCarloTreeSearch(env=env_copy, tree=tree)
+
         
             ## run episode until goal is reached
             end_episode = False
@@ -227,8 +237,8 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
                 ## init MCTS
                 if agent == 'MCTS':
                     env_copy.set_sim(True)
-                    tree = Tree()
-                    MCTS = MonteCarloTreeSearch(env=env_copy, tree=tree)
+                    # tree = Tree()
+                    # MCTS = MonteCarloTreeSearch(env=env_copy, tree=tree)
                     assert MCTS.env.sim == True
                     assert env_copy.sim==True
                     action = MCTS.search(tree, n_trees)
@@ -236,7 +246,7 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
                 ## otherwise, plain balanced GP
                 elif agent == 'GP':
                     eps = 0.05
-                    alpha = 0.25
+                    alpha = 0.3
                     action = env_copy.balanced_policy(current, goal, eps, alpha)
                     
                 
@@ -249,7 +259,7 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
                 steps += 1
 
                 ## prevent endless episode 
-                if steps > 50:
+                if steps >= 50:
                     print('episode ',e,' terminated in mountain ',m,' for agent ',agent,', cost: ', env_copy.accrued_cost)
 
                     ## reset
