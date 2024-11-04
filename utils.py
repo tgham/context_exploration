@@ -48,14 +48,14 @@ def make_env(N, params, metric, true_k, inf_k, render_mode, r_noise):
 ## Node class
 class Node:
 
-    def __init__(self, state, action, action_space, reward, terminal, N, prev_state=None):
+    def __init__(self, state, action, action_space, cost, terminal, N, prev_state=None):
         # self.untried_actions = list(range(action_space))
         self.state = state
-        self.total_simulation_reward  = 0
+        self.total_simulation_cost  = 0
         self.num_visits = 0
         self.performance = 0
         self.action = action
-        self.reward = reward
+        self.cost = cost
         self.terminal = terminal
         self.identifier = str(uuid.uuid1())
         # self.identifier = str(self.state) + ', '+str(self.action)
@@ -66,15 +66,15 @@ class Node:
 
         ## define valid actions
         self.untried_actions = list(range(action_space))
-        row, col = self.state
-        if row == self.N-1:
-            self.untried_actions.remove(0)
-        if row == 0:
-            self.untried_actions.remove(2)
-        if col == self.N-1:
-            self.untried_actions.remove(1)
-        if col == 0:
-            self.untried_actions.remove(3)
+        # row, col = self.state
+        # if row == self.N-1:
+        #     self.untried_actions.remove(0)
+        # if row == 0:
+        #     self.untried_actions.remove(2)
+        # if col == self.N-1:
+        #     self.untried_actions.remove(1)
+        # if col == 0:
+        #     self.untried_actions.remove(3)
         
         ## remove the action that takes P back to prev state
         # if self.prev_state is not None:
@@ -104,11 +104,11 @@ class Node:
 
 
     def __str__(self):
-        return "{}: (action={}, visits={}, reward={:d}, ratio={:0.4f})".format(
+        return "{}: (action={}, visits={}, cost={:d}, ratio={:0.4f})".format(
                                                   self.state,
                                                   self.action,
                                                   self.num_visits,
-                                                  int(self.total_simulation_reward),
+                                                  int(self.total_simulation_cost),
                                                   self.performance)
 
     ## select a random untried action
@@ -213,3 +213,8 @@ def node_angle(a,b):
     rad = np.arctan2(b[1]-a[1], b[0]-a[0])
     ang = np.abs(np.degrees(rad))
     return ang
+
+## random choice between multiple minima/maxima
+def argm(x, extreme_val):
+    indices = np.where(x == extreme_val)[0]
+    return np.random.choice(indices)
