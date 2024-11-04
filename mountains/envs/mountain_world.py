@@ -328,7 +328,7 @@ class MountainEnv(gym.Env):
         ## return the predicted cost if simulating
         elif self.sim:
             cost = predicted_cost
-            # print(len(self.obs_tmp), len(self.obs))
+            # cost = current_cost
 
         # An episode is done iff the agent has reached the target
         if np.array_equal(self._agent_location, self._target_location):
@@ -446,7 +446,10 @@ class MountainEnv(gym.Env):
             
             ## choose whichever one is closest to the target
             distances = cdist(next_states, [target], metric=self.metric).flatten()
-            return np.argmin(distances)
+            min_distance = np.min(distances)
+            action = argm(distances, min_distance)
+            assert distances[action] == np.min(distances)
+            return action
         
 
     ## greedy wrt/ both distance to target and cost, i.e. some combination of the two
@@ -479,7 +482,10 @@ class MountainEnv(gym.Env):
             ## weight the distance to the target by the cost of the state
             distances = cdist(next_states, [target], metric=self.metric).flatten()
             combined_q = alpha * softmax(-distances) + (1-alpha) * softmax(-next_q)
-            return np.argmax(combined_q)
+            max_combined_q = np.max(combined_q)
+            action = argm(combined_q, max_combined_q)
+            assert combined_q[action] == np.max(combined_q)
+            return action
         
 
 
