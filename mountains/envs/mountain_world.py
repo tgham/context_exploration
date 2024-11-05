@@ -266,6 +266,8 @@ class MountainEnv(gym.Env):
 
         ## get the cost of the optimal trajectory, and use this to set the cost threshold
         self.o_traj, self.o_route_cost = self.optimal_trajectory()
+        self.o_traj.pop(-1)
+        self.o_traj.pop(0)
         self.optimal_cost = np.sum(self.o_route_cost) #np.sum(self.o_route_cost[1:]) # is a cost incurred in the first state??
         
         ## posterior inference over the whole environment
@@ -327,8 +329,8 @@ class MountainEnv(gym.Env):
 
         ## return the predicted cost if simulating
         elif self.sim:
-            cost = predicted_cost
-            # cost = current_cost
+            # cost = predicted_cost
+            cost = current_cost
 
         # An episode is done iff the agent has reached the target
         if np.array_equal(self._agent_location, self._target_location):
@@ -339,6 +341,10 @@ class MountainEnv(gym.Env):
             ## update observation array only once the episode is complete
             if not self.sim:
                 self.obs = self.obs_tmp
+
+                ## (REMOVE COST OF FIRST AND FINAL STATE??)
+                self.a_traj.pop(0)
+                self.a_traj.pop(-1)
 
             ## sum of costs of route
             self.a_route_cost = [self.costs[x, y] for x, y in self.a_traj]
