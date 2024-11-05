@@ -16,7 +16,12 @@ class MonteCarloTreeSearch():
         ## get initial state and goal 
         observation = self.env.get_obs()
         state = observation['agent']
-        self.tree.add_node(Node(state=state, action=None, action_space=self.action_space, cost=0, terminal=False, N=self.N))
+
+        ## (AND THE STARTING COST?)
+        starting_cost = self.env.costs[state[0], state[1]]
+
+        self.tree.add_node(Node(state=state, action=None, action_space=self.action_space, cost=starting_cost, terminal=False, N=self.N))
+        # self.tree.add_node(Node(state=state, action=None, action_space=self.action_space, cost=0, terminal=False, N=self.N))
 
     def expand(self, node):
         env_copy = copy.deepcopy(self.env)
@@ -24,8 +29,11 @@ class MonteCarloTreeSearch():
         env_copy.set_sim(True)
         action = node.untried_action()
         observation, cost, terminated, truncated, info = env_copy.step(action)
-        state=observation['agent'] 
-        new_node = Node(state=state, action=action, action_space=self.action_space, cost=cost, terminal=terminated, N=self.N) 
+        state=observation['agent']
+        if not terminated:
+            new_node = Node(state=state, action=action, action_space=self.action_space, cost=cost, terminal=terminated, N=self.N) 
+        else:
+            new_node = Node(state=state, action=action, action_space=self.action_space, cost=0, terminal=terminated, N=self.N)
         self.tree.add_node(new_node, node)
         # print('expanded from ', node, ' to ', new_node)
         return new_node
@@ -43,6 +51,11 @@ class MonteCarloTreeSearch():
         env_copy = copy.deepcopy(self.env)
         env_copy.set_state(node.state)
         env_copy.set_sim(True)
+
+        ## (BEGIN WITH COST OF CURRENT STATE?)
+        # start = env_copy.get_obs()['agent']
+        # total_cost += env_copy.costs[start[0], start[1]]
+
         if node.terminal:
             return -node.cost
 
@@ -76,6 +89,11 @@ class MonteCarloTreeSearch():
             ## check if terminated
             if terminated:
                 return -total_cost
+            
+            
+            # ## IF YOU WANT THE COST OF THE FINAL STATE, THIS SHOULD COME EARLIER
+            # total_cost += cost * discount_factor
+            # discount_factor *= gamma
             
 
     ## calculate E-E value
@@ -177,8 +195,8 @@ class MonteCarloTreeSearch():
         ## check if this action takes the agent back to the previous state
 
         ## new root is the state that the agent has just reached
-        new_node = self.best_child(self.tree.root, exploration_constant=0)
-        return action, new_node
+        next_node = self.best_child(self.tree.root, exploration_constant=0)
+        return action, next_node
 
 
 
@@ -241,12 +259,12 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
                     # MCTS = MonteCarloTreeSearch(env=env_copy, tree=tree)
                     assert MCTS.env.sim == True
                     assert env_copy.sim==True
-                    action = MCTS.search(tree, n_trees)
+                    action, next_node = MCTS.search(tree, n_trees)
 
                 ## otherwise, plain balanced GP
                 elif agent == 'GP':
                     eps = 0.05
-                    alpha = 0.3
+                    alpha = 0.4
                     action = env_copy.balanced_policy(current, goal, eps, alpha)
                     
                 
@@ -309,5 +327,10 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
                     sim_out['optimal_trajectory'].append(env_copy.o_traj)
                     sim_out['observations'].append(env_copy.obs)
                     end_episode = True
+
+                ## new root for the next search
+                if agent == 'MCTS':
+                    tree.root = next_node
+
 
     return sim_out, env.costs
