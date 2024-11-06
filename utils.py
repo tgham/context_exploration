@@ -17,6 +17,7 @@ from collections import defaultdict
 from IPython.display import display, clear_output
 import uuid
 import random
+from collections import deque
 # from MCTS import MonteCarloTreeSearch
 
 
@@ -203,6 +204,35 @@ class Tree:
             lines += "{}{}\n".format(edge, node)
         print(lines)
 
+
+    ## calculate value of each S-A node
+    def action_tree(self):
+
+        ## average over all nodes in the tree
+        tree_q = np.zeros((self.N, self.N, 4))
+        tree_q_counts = np.zeros((self.N, self.N, 4))
+        queue = deque([self.root])
+        while queue:
+            node = queue.popleft()
+            for child in self.children(node):
+                tree_q[node.state[0], node.state[1], child.action] += child.performance
+                tree_q_counts[node.state[0], node.state[1], child.action] += 1
+                queue.append(child)
+        tree_q /= tree_q_counts
+
+        ## or just standard saving??
+        # tree_q = np.zeros((N, N, 4)) + np.nan
+        # tree_q_counts = np.zeros((N, N, 4))
+        # queue = deque([tree.root])
+        # while queue:
+        #     node = queue.popleft()
+        #     for child in tree.children(node):
+        #         tree_q[node.state[0], node.state[1], child.action] = child.performance
+        #         tree_q_counts[node.state[0], node.state[1], child.action] += 1
+        #         queue.append(child)
+
+        return tree_q
+    
 ## some extra functions related to the tree
 def vertical_lines(last_node_flags):
     vertical_lines = []
