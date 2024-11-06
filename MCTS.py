@@ -13,6 +13,9 @@ class MonteCarloTreeSearch():
         self.action_space = self.env.action_space.n
         self.N = self.env.N
 
+        ## visit counts??
+        # self.n_state_visits = np.zeros((self.N, self.N))
+
         ## get initial state and goal 
         observation = self.env.get_obs()
         state = observation['agent']
@@ -98,8 +101,10 @@ class MonteCarloTreeSearch():
 
     ## calculate E-E value
     def compute_UCT(self, parent, child, exploration_constant): # could turn this exploration constant into a param defined at init
-        exploitation_term = child.total_simulation_cost / child.num_visits
-        exploration_term = exploration_constant * sqrt(2 * log(parent.num_visits) / child.num_visits)
+        # exploitation_term = child.total_simulation_cost / child.n_visits
+        # exploration_term = exploration_constant * sqrt(2 * log(parent.n_visits) / child.n_visits)
+        exploitation_term = child.performance
+        exploration_term = exploration_constant * sqrt(log(self.tree.n_state_visits[parent.state[0], parent.state[1]]) / child.n_visits)
         return exploitation_term + exploration_term
 
     
@@ -147,11 +152,16 @@ class MonteCarloTreeSearch():
 
     
     ## backup costs until you reach the root
-    def backward(self, node, value):
+    def backward(self, node, cost):
         while node:
-            node.num_visits += 1
-            node.total_simulation_cost += value 
-            node.performance = node.total_simulation_cost / node.num_visits
+            # node.n_visits += 1
+            # self.n_state_visits[node.state[0], node.state[1]] += 1
+            # node.total_simulation_cost += cost
+            # node.performance = node.total_simulation_cost / node.n_visits
+            # node = self.tree.parent(node)
+            node.n_visits += 1
+            self.tree.n_state_visits[node.state[0], node.state[1]] += 1
+            node.performance = node.performance + (cost - node.performance) / node.n_visits
             node = self.tree.parent(node)
 
 
@@ -241,7 +251,7 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
 
             ## create inner loop copy of env
             env_copy = copy.deepcopy(env)
-            tree = Tree()
+            tree = Tree(N)
             MCTS = MonteCarloTreeSearch(env=env_copy, tree=tree)
 
         

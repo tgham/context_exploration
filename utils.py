@@ -52,7 +52,7 @@ class Node:
         # self.untried_actions = list(range(action_space))
         self.state = state
         self.total_simulation_cost  = 0
-        self.num_visits = 0
+        self.n_visits = 0
         self.performance = 0
         self.action = action
         self.cost = cost
@@ -104,11 +104,10 @@ class Node:
 
 
     def __str__(self):
-        return "{}: (action={}, visits={}, cost={:d}, ratio={:0.4f})".format(
+        return "{}: (action={}, visits={}, performance={:0.4f})".format(
                                                   self.state,
                                                   self.action,
-                                                  self.num_visits,
-                                                  int(self.total_simulation_cost),
+                                                  self.n_visits,
                                                   self.performance)
 
     ## select a random untried action
@@ -117,14 +116,33 @@ class Node:
         self.untried_actions.remove(action)
         return action
     
+# class State_Node:
+#     def __init__(self, state, cost, terminal, N, prev_state=None):
+#         # self.untried_actions = list(range(action_space))
+#         self.state = state
+#         self.total_simulation_cost  = 0
+#         self.n_visits = 0
+#         self.performance = 0
+#         self.action = action
+#         self.cost = cost
+#         self.terminal = terminal
+#         self.identifier = str(uuid.uuid1())
+#         # self.identifier = str(self.state) + ', '+str(self.action)
+#         self.parent_identifier = None
+#         self.children_identifiers = []
+#         self.N = N
+#         self.prev_state = prev_state
+
 
 
 ## Tree class
 class Tree:
 
-    def __init__(self):
+    def __init__(self,N):
         self.nodes = {}
         self.root = None
+        self.N = N
+        self.n_state_visits = np.zeros((N,N))
 
     ## check if node is expandable
     def is_expandable(self, node):
