@@ -253,13 +253,26 @@ class MountainEnv(gym.Env):
         # loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
         # self.obs = np.array([loc_idx, self._agent_location[0], self._agent_location[1], current_cost], ndmin=2)
 
-        ## or, observations accumulate over trials
+        ## or, observations accumulate over trials, and agent observes starting position
         loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
         if not hasattr(self, 'obs') or self.obs is None:
-            self.obs = np.array([[loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+            self.obs = np.array([[loc_idx, self._agent_location[0], self._agent_location[1], current_cost]]) 
         else:
+            # print(len(self.obs))
             self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
         self.obs_tmp = self.obs.copy()
+
+        ## or, observations accumulate over trials, but agent doesn't observe starting position
+        # loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
+        # if not hasattr(self, 'obs') or self.obs is None:
+        #     self.obs = None
+        #     self.obs_tmp = np.array([[loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+        # else:
+        #     self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+        #     self.obs_tmp = self.obs.copy()
+
+
+
 
         ## initialise actual trajectory as list of tuples
         self.a_traj = [tuple(self._agent_location)]
@@ -272,6 +285,8 @@ class MountainEnv(gym.Env):
         
         ## posterior inference over the whole environment
         self.posterior_mean, self.posterior_cov = self.inference_func(obs = self.obs, pred='all')
+        # print(self.posterior_mean, self.obs)
+        # print(len(self.obs_tmp))
 
         # if (self.render_mode == "human") or (self.render_mode == "MCTS"):
         if (self.render_mode == "human") or (self.render_mode == "MCTS"):
@@ -281,7 +296,6 @@ class MountainEnv(gym.Env):
 
             ## posterior prediction using weighted kernel
             # self.posterior_mean = self.weighted_post_pred()
-
 
             self.render()
 
@@ -329,18 +343,16 @@ class MountainEnv(gym.Env):
 
         ## return the predicted cost if simulating
         elif self.sim:
-            # cost = predicted_cost
-            cost = current_cost
+            cost = predicted_cost
+            # cost = current_cost
 
         # An episode is done iff the agent has reached the target
         if np.array_equal(self._agent_location, self._target_location):
-            self.msg = "Target reached in {} steps".format(self.t)
             self.terminated = True
-            reward = 1
         
             ## update observation array only once the episode is complete
             if not self.sim:
-                self.obs = self.obs_tmp
+                self.obs = self.obs_tmp.copy()
 
                 ## (REMOVE COST OF FIRST AND FINAL STATE??)
                 self.a_traj.pop(0)
@@ -566,6 +578,7 @@ class MountainEnv(gym.Env):
 
         #normalise
         lower, upper = 0, 1
+        # lower+=0.01
         samples = lower + (upper - lower) * (samples - np.min(samples)) / (np.max(samples) - np.min(samples))
 
         # make all samples non-negative
@@ -580,23 +593,30 @@ class MountainEnv(gym.Env):
         else:
             pred_idx = pred
 
-        obs_idx = obs[:, 0].astype(int)
-        obs_rewards = obs[:, 3]
-        # obs_idx = self.obs[:, 0].astype(int)
-        # obs_rewards = self.obs[:, 3]
+        if obs is not None:
+            obs_idx = obs[:, 0].astype(int)
+            obs_rewards = obs[:, 3]
+            # obs_idx = self.obs[:, 0].astype(int)
+            # obs_rewards = self.obs[:, 3]
+            
+            # Covariance matrix of the already observed points
+            K_obs = K_inf[obs_idx][:, obs_idx]
+            
+            # Covariance matrix between input points (i.e. points to be predicted) and observed points
+            K_pred = K_inf[pred_idx][:, obs_idx]
+            
+            # inversion covariance matrix
+            inv_K = np.linalg.inv(K_obs + sigma**2 * np.eye(len(obs_idx)))
+            
+            # Posterior mean calculation
+            post_mean = K_pred @ inv_K @ obs_rewards
+            post_cov = K_inf[pred_idx][:, pred_idx] - K_pred @ inv_K @ K_pred.T
         
-        # Covariance matrix of the already observed points
-        K_obs = K_inf[obs_idx][:, obs_idx]
-        
-        # Covariance matrix between input points (i.e. points to be predicted) and observed points
-        K_pred = K_inf[pred_idx][:, obs_idx]
-        
-        # inversion covariance matrix
-        inv_K = np.linalg.inv(K_obs + sigma**2 * np.eye(len(obs_idx)))
-        
-        # Posterior mean calculation
-        post_mean = K_pred @ inv_K @ obs_rewards
-        post_cov = K_inf[pred_idx][:, pred_idx] - K_pred @ inv_K @ K_pred.T
+        ## or if starting from nothing, just return the prior
+        elif obs is None:
+            post_mean = np.zeros(len(pred_idx)) + 0.5
+            post_cov = K_inf[pred_idx][:, pred_idx]
+
         
         return post_mean, post_cov
     
