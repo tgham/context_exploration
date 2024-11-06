@@ -3,6 +3,8 @@ from math import sqrt, log
 from utils import Node, Tree, make_env, argm
 import copy
 import numpy as np
+from tqdm.auto import tqdm
+
 
 class MonteCarloTreeSearch():
 
@@ -234,23 +236,33 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
         'RPE':[],
     }
     
-    ## create mountain environment
+    ## create base mountain environment
     env = make_env(N, None, metric, true_k, inf_k, render_mode=None, r_noise=r_noise)
 
+    ## copy env so that each agent makes its own observations 
+    agent_envs = [copy.deepcopy(env) for _ in agents]
+
     ## loop through episodes (i.e. different start and goal states for the same mountain)
-    for e in range(n_episodes):
+    print() # for some reason need this to get the pbar to appear
+    for e in tqdm(range(n_episodes), desc='Mountain_'+str(m), position=m+1, leave=False):
 
         ## reset episode
-        observation, info = env.reset()
-        start = env.get_obs()['agent']
-        current = start
-        goal = env.get_obs()['target']
+        # observation, info = env.reset()
+        # start = env.get_obs()['agent']
+        # current = start
+        # goal = env.get_obs()['target']
 
         ## loop through agents
-        for agent in agents:
+        for a, agent in enumerate(agents):
+            
+            ## reset episode (IDEALLY THIS WOULD HAPPEN OUTSIDE THE AGENT LOOP, SO THAT THE SAME START AND GOAL ARE USED FOR ALL AGENTS)
+            env_copy = agent_envs[a]
+            observation, info = env_copy.reset()
+            start = env_copy.get_obs()['agent']
+            current = start
+            goal = env_copy.get_obs()['target']
 
-            ## create inner loop copy of env
-            env_copy = copy.deepcopy(env)
+            ## initiate tree 
             tree = Tree(N)
             MCTS = MonteCarloTreeSearch(env=env_copy, tree=tree)
 
@@ -285,6 +297,7 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
                 assert ~np.array_equal(current,observation['agent'])
                 current = observation['agent']
                 steps += 1
+
 
                 ## prevent endless episode 
                 if steps >= 50:
@@ -336,6 +349,10 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
                     sim_out['actual_trajectory'].append(env_copy.a_traj)
                     sim_out['optimal_trajectory'].append(env_copy.o_traj)
                     sim_out['observations'].append(env_copy.obs)
+                    
+                    ## update the agent env
+                    agent_envs[a] = copy.deepcopy(env_copy)
+
                     end_episode = True
 
                 ## new root for the next search
