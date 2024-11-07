@@ -60,9 +60,12 @@ class MonteCarloTreeSearch():
         ## (BEGIN WITH COST OF CURRENT STATE?)
         # start = env_copy.get_obs()['agent']
         # total_cost += env_copy.costs[start[0], start[1]]
+        starting_cost = node.cost
+        total_cost += starting_cost
 
         if node.terminal:
-            return -node.cost
+            return 0
+            # return -node.cost
 
         ## rollout until trial is terminated 
         while True:
@@ -129,6 +132,7 @@ class MonteCarloTreeSearch():
             node = self.tree.root ## need some way of setting the current node to the current state
         t = 0
         while not node.terminal:
+            t+=1
             if self.tree.is_expandable(node):
                 # print('expanding ', node) ## if this is a node chosen by UCT, u should expand from the *state* node, not the *state-action* node??
                 return self.expand(node) 
@@ -145,6 +149,7 @@ class MonteCarloTreeSearch():
                     print('supposed to take action ', node.action, ' to ', node.state)
                     print('ended up moving from ',env_state_tmp,' to', state)
                 assert np.array_equal(node.state, state)
+                print(t)
 
                 # if np.all(state_tmp == state):
                 #     print('same state')
