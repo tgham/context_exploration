@@ -49,67 +49,36 @@ def make_env(N, params, metric, true_k, inf_k, render_mode, r_noise):
 ## Node class
 class Node:
 
-    def __init__(self, state, action, action_space, cost, terminal, N, prev_state=None):
-        # self.untried_actions = list(range(action_space))
+    def __init__(self, state, cost, terminated, action_space, N):
+        
+        ## state info
         self.state = state
-        self.total_simulation_cost  = 0
-        self.n_visits = 0
-        self.performance = 0
-        self.action = action
+        self.n_state_visits = 0
         self.cost = cost
-        self.terminal = terminal
-        self.identifier = str(uuid.uuid1())
-        # self.identifier = str(self.state) + ', '+str(self.action)
-        self.parent_identifier = None
-        self.children_identifiers = []
+        self.terminated = terminated
+        self.identifier = str(self.state)
+        self.parent_identifiers = []
+        # self.children_identifiers = []
         self.N = N
-        self.prev_state = prev_state
+
+        ## action leaves
+        self.action_leaves = {0: None, 1: None, 2: None, 3: None}
+        # for leaf in self.action_leaves.keys():
+        #     self.action_leaves[leaf] = Action_Node(next_state=None, cost=None, terminated=None) ## this is just a placeholder until proper expansion
 
         ## define valid actions
         self.untried_actions = list(range(action_space))
-        # row, col = self.state
-        # if row == self.N-1:
-        #     self.untried_actions.remove(0)
-        # if row == 0:
-        #     self.untried_actions.remove(2)
-        # if col == self.N-1:
-        #     self.untried_actions.remove(1)
-        # if col == 0:
-        #     self.untried_actions.remove(3)
-        
-        ## remove the action that takes P back to prev state
-        # if self.prev_state is not None:
-        #     prev_row, prev_col = self.prev_state
-        #     if row == prev_row:
-        #         if col < prev_col:
-        #             try:
-        #                 self.untried_actions.remove(1)
-        #             except:
-        #                 pass
-        #         else:
-        #             try:
-        #                 self.untried_actions.remove(3)
-        #             except:
-        #                 pass
-        #     if col == prev_col:
-        #         if row < prev_row:
-        #             try:
-        #                 self.untried_actions.remove(0)
-        #             except:
-        #                 pass
-        #         else:
-        #             try:
-        #                 self.untried_actions.remove(2)
-        #             except:
-        #                 pass
 
 
     def __str__(self):
-        return "{}: (action={}, visits={}, performance={:0.4f})".format(
+        action_leaves_msg = {action: leaf.performance if leaf is not None else None for action, leaf in self.action_leaves.items()}
+        return "state {}: (visits={}, cost={:0.4f}, terminated={})\n{})".format(
                                                   self.state,
-                                                  self.action,
-                                                  self.n_visits,
-                                                  self.performance)
+                                                  self.n_state_visits,
+                                                  self.cost,
+                                                  self.terminated,
+                                                  action_leaves_msg
+                                                  )
 
     ## select a random untried action
     def untried_action(self):
@@ -117,22 +86,26 @@ class Node:
         self.untried_actions.remove(action)
         return action
     
-# class State_Node:
-#     def __init__(self, state, cost, terminal, N, prev_state=None):
-#         # self.untried_actions = list(range(action_space))
-#         self.state = state
-#         self.total_simulation_cost  = 0
-#         self.n_visits = 0
-#         self.performance = 0
-#         self.action = action
-#         self.cost = cost
-#         self.terminal = terminal
-#         self.identifier = str(uuid.uuid1())
-#         # self.identifier = str(self.state) + ', '+str(self.action)
-#         self.parent_identifier = None
-#         self.children_identifiers = []
-#         self.N = N
-#         self.prev_state = prev_state
+class Action_Node:
+
+    def __init__(self, prev_state, action, next_state, next_cost, terminated):
+        self.prev_state = prev_state
+        self.action = action
+        self.total_simulation_cost = 0
+        self.performance = 0
+        self.n_action_visits = 0
+        self.next_state = next_state
+        self.next_cost = next_cost
+        self.terminated = terminated
+        self.identifier = str(self.prev_state) + str(self.action) + str(self.next_state)
+
+    def __str__(self):
+        return "prev_state{}: (action={}, next_state={}, visits={}, performance={:0.4f})".format(
+                                                  self.prev_state,
+                                                  self.action,
+                                                self.next_state,
+                                                  self.n_action_visits,
+                                                  self.performance)
 
 
 
@@ -147,7 +120,7 @@ class Tree:
 
     ## check if node is expandable
     def is_expandable(self, node):
-        if node.terminal:
+        if node.terminated:
             return False
         if len(node.untried_actions) > 0:
             return True
@@ -185,6 +158,29 @@ class Tree:
             self.nodes[parent.identifier].children_identifiers.append(node.identifier)
             self.nodes[node.identifier].parent_identifier=parent.identifier
 
+    def add_state_node(self, state, cost, terminated, action_space, parent=None):
+
+        ## check for existing state node
+        if str(state) in self.nodes:
+            # print(state,"already exists")
+            return self.nodes[str(state)]
+        
+        ## else, create a new state node
+        node = Node(state=state, cost=cost, terminated=terminated, action_space=action_space, N=self.N)
+        self.nodes.update({str(state): node})
+        
+        ## store parent-child relationships
+        if parent is None:
+            self.root = node
+            # self.nodes[str(state)].parent = None
+        else:
+            node.parent_identifiers.append(parent.identifier)
+            ## don't need to do children, since these are already in the aciotn_leaves
+
+        return node
+
+
+
     def children(self, node):
         children = []
         for identifier in self.nodes[node.identifier].children_identifiers:
@@ -219,6 +215,7 @@ class Tree:
                 tree_q_counts[node.state[0], node.state[1], child.action] += 1
                 queue.append(child)
         tree_q /= tree_q_counts
+
 
         ## or just standard saving??
         # tree_q = np.zeros((N, N, 4)) + np.nan

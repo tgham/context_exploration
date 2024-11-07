@@ -1,6 +1,6 @@
 import random
 from math import sqrt, log
-from utils import Node, Tree, make_env, argm
+from utils import Node, Action_Node, Tree, make_env, argm
 import copy
 import numpy as np
 from tqdm.auto import tqdm
@@ -10,10 +10,10 @@ class MonteCarloTreeSearch():
 
     def __init__(self, env, tree):
         self.env = env
-        # self.env.sim=True
         self.tree = tree
         self.action_space = self.env.action_space.n
         self.N = self.env.N
+        self.exploration_constant = 1.0/sqrt(2.0)
 
         ## visit counts??
         # self.n_state_visits = np.zeros((self.N, self.N))
@@ -25,25 +25,93 @@ class MonteCarloTreeSearch():
         ## (AND THE STARTING COST?)
         starting_cost = self.env.costs[state[0], state[1]]
 
-        self.tree.add_node(Node(state=state, action=None, action_space=self.action_space, cost=starting_cost, terminal=False, N=self.N))
-        # self.tree.add_node(Node(state=state, action=None, action_space=self.action_space, cost=0, terminal=False, N=self.N))
+        # self.tree.add_node(Node(state=state, cost=starting_cost, terminated=False, action_space=self.action_space, N=self.N))
+        # self.tree.add_node(Node(state=state, action=None, action_space=self.action_space, cost=0, terminated=False, N=self.N))
+        
+        ## add state node to the tree
+        self.tree.add_state_node(state=state, cost=starting_cost, terminated=False, action_space = self.action_space, parent=None)
 
+    
+    ## expand the action space of a node
     def expand(self, node):
+
+        ## create copy of env and set state
         env_copy = copy.deepcopy(self.env)
         env_copy.set_state(node.state)
         env_copy.set_sim(True)
+
+        ## take action and get new state
         action = node.untried_action()
         observation, cost, terminated, truncated, info = env_copy.step(action)
-        state=observation['agent']
-        if not terminated:
-            new_node = Node(state=state, action=action, action_space=self.action_space, cost=cost, terminal=terminated, N=self.N) 
-        else:
-            new_node = Node(state=state, action=action, action_space=self.action_space, cost=0, terminal=terminated, N=self.N)
-        self.tree.add_node(new_node, node)
-        # print('expanded from ', node, ' to ', new_node)
-        return new_node
+        next_state = observation['agent']
 
-    def rollout_policy(self, node):
+        ## update info for s-a leaf - i.e. the state-action pair, and the cost of the state that you subsequently reach
+        costs_tmp = np.array([cost, 0])
+        cost_tmp = costs_tmp[np.clip(terminated,0,1)] # i.e. cost is 0 if the episode is terminated
+        # action_leaf = Node(state=node.state, action=action, next_state = next_state, action_space=self.action_space, cost=cost_tmp, terminated=terminated, N=self.N) 
+        # self.tree.add_node(action_leaf, node)
+
+        node.action_leaves[action] = Action_Node(prev_state = node.state, action=action, next_state = next_state, next_cost=cost_tmp, terminated=terminated)
+
+        return node.action_leaves[action]
+    
+    ## take an action according to the tree policy, i.e. take the best UCT child and see where it takes you
+    def tree_policy(self, root = None):
+
+        ## copy env to simulate the tree search
+        env_copy = copy.deepcopy(self.env)
+        env_copy.set_sim(True)
+        if root is None:
+            node = self.tree.root ## need some way of setting the current node to the current state
+        t = 0
+
+        ## create a record of the nodes/leaves visited
+        self.tree_path = []
+        terminated=False
+        while not terminated:
+            t+=1
+
+            ## expansion step
+            if self.tree.is_expandable(node):
+                action_leaf = self.expand(node)
+                self.tree_path.append(tuple([node.state, action_leaf.action]))
+                # print('expanding ',node.state,' by taking action ',action_leaf.action,' to ',action_leaf.next_state)
+                return action_leaf
+                
+            ## selection step
+            else:
+                state_tmp = node.state
+                # env_state_tmp = env_copy.get_obs()['agent'] ## DEBUG LINE
+                action_leaf = self.best_child(node)
+                # print(node.state,'not expandable, so we choose action ',action_leaf.action,' to ',action_leaf.next_state)
+                self.tree_path.append(tuple([node.state, action_leaf.action]))
+                observation, cost, terminated, _, _ = env_copy.step(action_leaf.action)
+                next_state = observation['agent']
+
+                ## DEBUGBING 
+                # if not np.array_equal(action_leaf.next_state, next_state):
+                #     print('started in ', state_tmp)
+                #     print('supposed to take action ', action_leaf.action, ' to ', action_leaf.next_state)
+                #     print('ended up moving from ',env_state_tmp,' to', next_state)
+                # assert np.array_equal(action_leaf.next_state, next_state)
+
+                ## create next state node (if it doesn't already exist)
+                node = self.tree.add_state_node(next_state, action_leaf.next_cost, terminated, action_space = self.action_space, parent=action_leaf)
+                assert np.array_equal(node.state, action_leaf.next_state)
+
+            # if t > 10:
+            #     print(self.tree_path)
+            #     print(node)
+                # print(node)
+                # print(self.tree.is_expandable(node))
+            if t>100:
+                # print('selection taking too long')
+                terminated=True
+                
+
+        return action_leaf
+
+    def rollout_policy(self, action_leaf):
 
         ## init
         total_cost = 0
@@ -54,15 +122,20 @@ class MonteCarloTreeSearch():
         
         ## set the state from which the rollout is initiated
         env_copy = copy.deepcopy(self.env)
-        env_copy.set_state(node.state)
+        env_copy.set_state(action_leaf.next_state)
         env_copy.set_sim(True)
+        info = env_copy.get_obs()
+        target = info['target']
+        current = info['agent']
 
-        ## (BEGIN WITH COST OF CURRENT STATE?)
-        # start = env_copy.get_obs()['agent']
-        # total_cost += env_copy.costs[start[0], start[1]]
+        ## begin with the cost of the state that you have just reached (necessary, since otherwise the cost of this initial state is not included in the total cost)
+        starting_cost = action_leaf.next_cost
+        total_cost += starting_cost
 
-        if node.terminal:
-            return -node.cost
+        ## rolling out from goal location, 0 cost
+        if action_leaf.terminated:
+            return 0
+            # return -action_leaf.next_cost
 
         ## rollout until trial is terminated 
         while True:
@@ -72,7 +145,6 @@ class MonteCarloTreeSearch():
 
             ## or, greedy
             current = env_copy.get_obs()['agent']
-            target = env_copy.get_obs()['target']
             action = env_copy.greedy_policy(current, target, eps = 0.0)
 
             ## or, balanced greedy
@@ -80,10 +152,8 @@ class MonteCarloTreeSearch():
             # target = env_copy.get_obs()['target']
             # action = env_copy.balanced_policy(current, target, eps = 0.05, alpha = 0.1)
 
-            ## take action and get cost
+            ## take action
             _, cost, terminated, _, _ = env_copy.step(action)
-            total_cost += cost * discount_factor
-            discount_factor *= gamma
 
             ## prevent infinite rollout
             rolls += 1
@@ -95,6 +165,9 @@ class MonteCarloTreeSearch():
             if terminated:
                 return -total_cost
             
+            ## if not terminated, add cost to total cost (i.e. terminal state does not incur cost)
+            total_cost += cost * discount_factor
+            discount_factor *= gamma
             
             # ## IF YOU WANT THE COST OF THE FINAL STATE, THIS SHOULD COME EARLIER
             # total_cost += cost * discount_factor
@@ -102,77 +175,82 @@ class MonteCarloTreeSearch():
             
 
     ## calculate E-E value
-    def compute_UCT(self, parent, child, exploration_constant): # could turn this exploration constant into a param defined at init
+    def compute_UCT(self, node, action_leaf): 
         # exploitation_term = child.total_simulation_cost / child.n_visits
         # exploration_term = exploration_constant * sqrt(2 * log(parent.n_visits) / child.n_visits)
-        exploitation_term = child.performance
-        exploration_term = exploration_constant * sqrt(log(self.tree.n_state_visits[parent.state[0], parent.state[1]]) / child.n_visits)
+        exploitation_term = action_leaf.performance
+        exploration_term = self.exploration_constant * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
         return exploitation_term + exploration_term
 
     
     ## argmax based on UCT values? 
-    def best_child(self, node, exploration_constant):
-        children = self.tree.children(node)
-        UCTs = [self.compute_UCT(node, child, exploration_constant) for child in children]
+    def best_child(self, node):
+        # children = self.tree.children(node)
+        # UCTs = [self.compute_UCT(node, child, exploration_constant) for child in children]
+        # max_UCT = np.max(UCTs)
+        # max_idx = argm(UCTs, max_UCT)
+        # best_child = children[max_idx]
+        # assert self.compute_UCT(node, best_child, exploration_constant) == max_UCT
+        # return best_child
+
+        ## get action children
+        action_leaves = [node.action_leaves[a] for a in node.action_leaves.keys()]
+
+        ## remove action that takes you back to previous state in the tree
+        if len(self.tree_path) > 0:
+            prev_state = self.tree_path[-1][0]
+            action_leaves = [leaf for leaf in action_leaves if not np.array_equal(leaf.next_state, prev_state)]
+        
+        ## or, remove any actions that take you back to a state that has already been visited in the tree
+        # if len(self.tree_path) > 0:
+        #     # visited_states = {tuple(state) for state, _ in self.tree_path}
+        #     # action_leaves = [leaf for leaf in action_leaves if tuple(leaf.next_state) not in visited_states]
+
+        #     visited_states = np.array([self.tree_path[i][0] for i in range(len(self.tree_path))])
+        #     action_leaves_tmp = []
+        #     for leaf in action_leaves:
+        #         if all(not np.array_equal(leaf.next_state, state) for state in visited_states):
+        #             action_leaves_tmp.append(leaf)
+        #     action_leaves = action_leaves_tmp
+            
+        #     ## check if the agent has got stuck
+        #     if len(action_leaves_tmp) == 0:
+        #         print(visited_states, node)
+
+
+        
+
+        ## calculate UCT for each action leaf
+        UCTs = [self.compute_UCT(node, leaf) for leaf in action_leaves]
         max_UCT = np.max(UCTs)
         max_idx = argm(UCTs, max_UCT)
-        best_child = children[max_idx]
-        assert self.compute_UCT(node, best_child, exploration_constant) == max_UCT
-        # best_child = max(children, key=lambda child: self.compute_UCT(node, child, exploration_constant))
+        # print('UTCs for ',node.state,':',UCTs,', so we choose action ',max_idx)
+        best_child = action_leaves[max_idx]
+        assert self.compute_UCT(node, best_child) == max_UCT
         return best_child
-
-    ## take an action according to the tree policy, i.e. take the best UCT child and see where it takes you
-    def tree_policy(self, root = None):
-        env_copy = copy.deepcopy(self.env)
-        env_copy.set_sim(True)
-        if root is None:
-            node = self.tree.root ## need some way of setting the current node to the current state
-        t = 0
-        while not node.terminal:
-            if self.tree.is_expandable(node):
-                # print('expanding ', node) ## if this is a node chosen by UCT, u should expand from the *state* node, not the *state-action* node??
-                return self.expand(node) 
-                
-            else:
-                state_tmp = node.state
-                env_state_tmp = env_copy.get_obs()['agent']
-                # print('fully expanded: ', node)
-                node = self.best_child(node, exploration_constant=1.0/sqrt(2.0))
-                observation, cost, terminated, _, _ = env_copy.step(node.action)
-                state = observation['agent']
-                if not np.array_equal(node.state, state):
-                    print('started in ', state_tmp)
-                    print('supposed to take action ', node.action, ' to ', node.state)
-                    print('ended up moving from ',env_state_tmp,' to', state)
-                assert np.array_equal(node.state, state)
-
-                # if np.all(state_tmp == state):
-                #     print('same state')
-
-
-        return node
-
+        
     
     ## backup costs until you reach the root
-    def backward(self, node, cost):
-        while node:
-            # node.n_visits += 1
-            # self.n_state_visits[node.state[0], node.state[1]] += 1
-            # node.total_simulation_cost += cost
-            # node.performance = node.total_simulation_cost / node.n_visits
-            # node = self.tree.parent(node)
-            node.n_visits += 1
-            self.tree.n_state_visits[node.state[0], node.state[1]] += 1
-            node.performance = node.performance + (cost - node.performance) / node.n_visits
-            node = self.tree.parent(node)
+    def backward(self, cost):
 
+        ## loop through the tree path
+        for state, action in self.tree_path:
 
+            ## get the state node and action leaf
+            state_node = self.tree.nodes[str(state)]
+            action_leaf = state_node.action_leaves[action]
 
-    def forward(self):
-        self._forward(self.tree.root)
+            ## update counts and performance
+            state_node.n_state_visits += 1
+            action_leaf.n_action_visits += 1
+            action_leaf.total_simulation_cost += cost
+            action_leaf.performance = action_leaf.total_simulation_cost / action_leaf.n_action_visits
 
-    def _forward(self,node):
-        best_child = self.best_child(node, exploration_constant=0)
+    # def forward(self):
+    #     self._forward(self.tree.root)
+
+    # def _forward(self,node):
+    #     best_child = self.best_child(node)
         # print("****** {} ******".format(best_child.state))
 
         # for child in self.tree.children(best_child):
@@ -188,15 +266,16 @@ class MonteCarloTreeSearch():
 
         ## loop through trees
         for t in range(n_trees):
-            node = self.tree_policy()
-            simulated_cost = self.rollout_policy(node)
-            self.backward(node, simulated_cost)
+            action_leaf = self.tree_policy()
+            simulated_cost = self.rollout_policy(action_leaf)
+            self.backward(simulated_cost)
         
         ## get simulated LT costs of adjacent states
-        current_children = self.tree.children(self.tree.root)
+        # current_action_leaves = self.tree.children(self.tree.root)
+        current_action_leaves = self.tree.root.action_leaves
         MCTS_estimates = np.zeros(4)+np.nan
-        for child in current_children:
-            MCTS_estimates[child.action] = child.performance
+        for action in current_action_leaves.keys():
+            MCTS_estimates[action] = current_action_leaves[action].performance
 
         ## action selection
         if np.isnan(np.sum(MCTS_estimates)):
@@ -204,10 +283,13 @@ class MonteCarloTreeSearch():
         max_MCTS = np.nanmax(MCTS_estimates)
         action = argm(MCTS_estimates, max_MCTS)
         assert MCTS_estimates[action] == np.nanmax(MCTS_estimates)
+        print(self.tree.root.state, MCTS_estimates, action)
         ## check if this action takes the agent back to the previous state
 
         ## new root is the state that the agent has just reached
-        next_node = self.best_child(self.tree.root, exploration_constant=0)
+        # next_node = self.best_child(self.tree.root, exploration_constant=0)
+        next_state = self.tree.root.action_leaves[action].next_state
+        next_node = self.tree.nodes[str(next_state)]
         return action, next_node
 
 
@@ -256,11 +338,12 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
         for a, agent in enumerate(agents):
             
             ## reset episode (IDEALLY THIS WOULD HAPPEN OUTSIDE THE AGENT LOOP, SO THAT THE SAME START AND GOAL ARE USED FOR ALL AGENTS)
+            # env_copy = copy.deepcopy(agent_envs[a])
             env_copy = agent_envs[a]
-            observation, info = env_copy.reset()
-            start = env_copy.get_obs()['agent']
+            observation, _ = env_copy.reset()
+            start = observation['agent']
             current = start
-            goal = env_copy.get_obs()['target']
+            goal = observation['target']
 
             ## initiate tree 
             tree = Tree(N)
@@ -351,7 +434,11 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
                     sim_out['observations'].append(env_copy.obs)
                     
                     ## update the agent env
-                    agent_envs[a] = copy.deepcopy(env_copy)
+                    # agent_envs[a] = copy.deepcopy(env_copy)
+                    agent_envs[a] = env_copy
+                    # print(agent, len(agent_envs[a].obs))
+                    # print(agent, agent_envs[a].posterior_mean)
+                    # print(agent, env_copy.a_traj, env_copy.obs[:,1], env_copy.obs[:,2])
 
                     end_episode = True
 
