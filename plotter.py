@@ -108,6 +108,9 @@ def plot_action_tree(tree_q, start, goal):
     bottom_value_positions = [(j + 0.38, i + 0.8) for i in range(n_rows) for j in range(n_cols)]
     left_value_positions = [(j + 0.05, i + 0.5) for i in range(n_rows) for j in range(n_cols)]
 
+    ## determine the best action at each state 
+    best_actions = np.argmax(tree_q, axis=2)
+
     fig, ax = plt.subplots(figsize=(n_rows*4, n_rows*1.2))
     ax.set_ylim(n_rows, 0)
     tripcolor = quatromatrix(left, top, right, bottom, grid_size=(n_rows, n_cols), ax=ax,
@@ -121,15 +124,16 @@ def plot_action_tree(tree_q, start, goal):
     # Function to round to 2 significant figures
     round_to_sigfigs = lambda x: f"{x:.2g}"
 
-    # Plot values on the grid with 2 significant figures
+    # Plot values on the grid with 2 significant figures, with the best action in bold and italics
     for i, (xi, yi) in enumerate(top_value_positions):
-        plt.text(xi, yi, round_to_sigfigs(top.flatten()[i]), size=9, color="w")
+        plt.text(xi, yi, round_to_sigfigs(top.flatten()[i]), size=9, color="w", weight="bold" if best_actions.flatten()[i] == 2 else "normal", style="italic" if best_actions.flatten()[i] == 2 else "normal")
     for i, (xi, yi) in enumerate(right_value_positions):
-        plt.text(xi, yi, round_to_sigfigs(right.flatten()[i]), size=9, color="w")
+        plt.text(xi, yi, round_to_sigfigs(right.flatten()[i]), size=9, color="w", weight="bold" if best_actions.flatten()[i] == 1 else "normal", style="italic" if best_actions.flatten()[i] == 1 else "normal")
     for i, (xi, yi) in enumerate(left_value_positions):
-        plt.text(xi, yi, round_to_sigfigs(left.flatten()[i]), size=9, color="w")
+        plt.text(xi, yi, round_to_sigfigs(left.flatten()[i]), size=9, color="w", weight="bold" if best_actions.flatten()[i] == 3 else "normal", style="italic" if best_actions.flatten()[i] == 3 else "normal")
     for i, (xi, yi) in enumerate(bottom_value_positions):
-        plt.text(xi, yi, round_to_sigfigs(bottom.flatten()[i]), size=9, color="w")
+        plt.text(xi, yi, round_to_sigfigs(bottom.flatten()[i]), size=9, color="w", weight="bold" if best_actions.flatten()[i] == 0 else "normal", style="italic" if best_actions.flatten()[i] == 0 else "normal")
+
 
     ## set ticks as numbers 0-N
     ticks = np.linspace(0.5, n_rows-0.5, n_rows)
