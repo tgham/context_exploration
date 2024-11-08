@@ -349,8 +349,8 @@ class MountainEnv(gym.Env):
 
         ## return the predicted cost if simulating
         elif self.sim:
-            cost = predicted_cost
-            # cost = current_cost
+            # cost = predicted_cost
+            cost = current_cost
 
         # An episode is done iff the agent has reached the target
         if np.array_equal(self._agent_location, self._target_location):

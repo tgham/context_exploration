@@ -105,10 +105,11 @@ class Node:
 
 
     def __str__(self):
-        return "{}: (action={}, visits={}, performance={:0.4f})".format(
+        return "{}: (action={}, visits={}, cost={}, performance={:0.4f})".format(
                                                   self.state,
                                                   self.action,
                                                   self.n_visits,
+                                                  self.cost,
                                                   self.performance)
 
     ## select a random untried action
@@ -219,6 +220,11 @@ class Tree:
                 tree_q_counts[node.state[0], node.state[1], child.action] += 1
                 queue.append(child)
         tree_q /= tree_q_counts
+
+        ## (actually need to redo the performance of the root node)
+        for child in self.children(self.root):
+            tree_q[self.root.state[0], self.root.state[1], child.action] = child.performance
+            
 
         ## or just standard saving??
         # tree_q = np.zeros((N, N, 4)) + np.nan
