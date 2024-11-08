@@ -4,6 +4,7 @@ from utils import Node, Tree, make_env, argm
 import copy
 import numpy as np
 from tqdm.auto import tqdm
+import os
 
 
 class MonteCarloTreeSearch():
@@ -83,10 +84,10 @@ class MonteCarloTreeSearch():
             # target = env_copy.get_obs()['target']
             # action = env_copy.balanced_policy(current, target, eps = 0.05, alpha = 0.1)
 
-            ## take action and get cost
+            ## take action
             _, cost, terminated, _, _ = env_copy.step(action)
-            total_cost += cost * discount_factor
-            discount_factor *= gamma
+            # total_cost += cost * discount_factor
+            # discount_factor *= gamma
 
             ## prevent infinite rollout
             rolls += 1
@@ -94,9 +95,15 @@ class MonteCarloTreeSearch():
                 # print('exceeded max rolls')
                 terminated = True
 
-            ## check if terminated
+            ## if terminated return the cost
             if terminated:
                 return -total_cost
+            
+            ## if not, increment cost (NB: this happens after the termination check, because the cost of the terminal state is not included in the total cost)
+            total_cost += cost * discount_factor
+            discount_factor *= gamma
+            
+
             
             
             # ## IF YOU WANT THE COST OF THE FINAL STATE, THIS SHOULD COME EARLIER
@@ -120,7 +127,7 @@ class MonteCarloTreeSearch():
         max_UCT = np.max(UCTs)
         max_idx = argm(UCTs, max_UCT)
         best_child = children[max_idx]
-        assert self.compute_UCT(node, best_child, exploration_constant) == max_UCT
+        assert self.compute_UCT(node, best_child, exploration_constant) == max_UCT, 'UCT of best child not equal to max UCT'
         # best_child = max(children, key=lambda child: self.compute_UCT(node, child, exploration_constant))
         return best_child
 
@@ -131,6 +138,9 @@ class MonteCarloTreeSearch():
         if root is None:
             node = self.tree.root ## need some way of setting the current node to the current state
         t = 0
+        env_current_loc = env_copy.get_obs()['agent']
+        assert np.array_equal(node.state, env_current_loc), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, env_current_loc)
+        
         while not node.terminal:
             t+=1
             if self.tree.is_expandable(node):
@@ -140,20 +150,10 @@ class MonteCarloTreeSearch():
             else:
                 state_tmp = node.state
                 env_state_tmp = env_copy.get_obs()['agent']
-                # print('fully expanded: ', node)
                 node = self.best_child(node, exploration_constant=1.0/sqrt(2.0))
                 observation, cost, terminated, _, _ = env_copy.step(node.action)
                 state = observation['agent']
-                if not np.array_equal(node.state, state):
-                    print('started in ', state_tmp)
-                    print('supposed to take action ', node.action, ' to ', node.state)
-                    print('ended up moving from ',env_state_tmp,' to', state)
-                assert np.array_equal(node.state, state)
-                print(t)
-
-                # if np.all(state_tmp == state):
-                #     print('same state')
-
+                assert np.array_equal(node.state, state), 'error in tree policy step {}\n started in {}\n supposed to take action {} to {}\n ended up moving from {} to {}'.format(t, state_tmp, node.action, node.state, env_state_tmp, state)
 
         return node
 
@@ -204,23 +204,24 @@ class MonteCarloTreeSearch():
             MCTS_estimates[child.action] = child.performance
 
         ## action selection
-        if np.isnan(np.sum(MCTS_estimates)):
-            print(self.tree.root)
-        max_MCTS = np.nanmax(MCTS_estimates)
-        action = argm(MCTS_estimates, max_MCTS)
-        assert MCTS_estimates[action] == np.nanmax(MCTS_estimates)
-        ## check if this action takes the agent back to the previous state
+        # if np.isnan(np.sum(MCTS_estimates)):
+        #     print(self.tree.root)
+        # max_MCTS = np.nanmax(MCTS_estimates)
+        # action = argm(MCTS_estimates, max_MCTS)
+        # assert MCTS_estimates[action] == np.nanmax(MCTS_estimates)
 
         ## new root is the state that the agent has just reached
-        next_node = self.best_child(self.tree.root, exploration_constant=0)
-        return action, next_node
+        next_root = self.best_child(self.tree.root, exploration_constant=0)
+        action = next_root.action
+
+        return action, next_root
 
 
 
 
 
 ## parallel function for simulating many episodes within the same mountain env
-def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='known', r_noise=0.05, render_mode=None, n_episodes=50, agents = ['GP', 'MCTS'], n_trees=1000):
+def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='known', r_noise=0.05, render_mode=None, n_episodes=10, agents = ['GP', 'MCTS'], n_trees=1000):
     
     ## initiate dictionary to store the results
     sim_out = {
@@ -241,6 +242,11 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
         'RPE':[],
     }
     
+    ## set seed
+    seed=m
+    # seed=os.getpid()
+    np.random.seed(seed)
+    
     ## create base mountain environment
     env = make_env(N, None, metric, true_k, inf_k, render_mode=None, r_noise=r_noise)
 
@@ -248,7 +254,7 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
     agent_envs = [copy.deepcopy(env) for _ in agents]
 
     ## loop through episodes (i.e. different start and goal states for the same mountain)
-    print() # for some reason need this to get the pbar to appear
+    print(' ') # for some reason need this to get the pbar to appear
     for e in tqdm(range(n_episodes), desc='Mountain_'+str(m), position=m+1, leave=False):
 
         ## reset episode
@@ -261,6 +267,7 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
         for a, agent in enumerate(agents):
             
             ## reset episode (IDEALLY THIS WOULD HAPPEN OUTSIDE THE AGENT LOOP, SO THAT THE SAME START AND GOAL ARE USED FOR ALL AGENTS)
+            # env_copy = copy.deepcopy(agent_envs[a])
             env_copy = agent_envs[a]
             observation, info = env_copy.reset()
             start = env_copy.get_obs()['agent']
@@ -270,7 +277,6 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
             ## initiate tree 
             tree = Tree(N)
             MCTS = MonteCarloTreeSearch(env=env_copy, tree=tree)
-
         
             ## run episode until goal is reached
             end_episode = False
@@ -284,9 +290,8 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
                     env_copy.set_sim(True)
                     # tree = Tree()
                     # MCTS = MonteCarloTreeSearch(env=env_copy, tree=tree)
-                    assert MCTS.env.sim == True
-                    assert env_copy.sim==True
-                    action, next_node = MCTS.search(tree, n_trees)
+                    assert MCTS.env.sim == True, 'env not in sim mode'
+                    action, next_root = MCTS.search(tree, n_trees)
 
                 ## otherwise, plain balanced GP
                 elif agent == 'GP':
@@ -299,10 +304,12 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
                 env_copy.set_sim(False)
                 # print(current, goal, action)
                 observation, _, terminated, truncated, info = env_copy.step(action)
-                assert ~np.array_equal(current,observation['agent'])
                 current = observation['agent']
                 steps += 1
 
+                ## debugging of mountain 5
+                # if m==5 and agent=='MCTS':
+                #     print('current: ', current, env_copy.costs[current[0], current[1]], ' goal: ', goal, env_copy.costs[goal[0], goal[1]], ' action: ', action)
 
                 ## prevent endless episode 
                 if steps >= 50:
@@ -347,7 +354,7 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
                     sim_out['optimal_cost'].append(env_copy.optimal_cost)
                     if np.round(env_copy.optimal_cost,4) > np.round(env_copy.accrued_cost,4):
                         print(env_copy.optimal_cost, env_copy.accrued_cost)
-                    assert np.round(env_copy.optimal_cost,4) <= np.round(env_copy.accrued_cost,4)
+                    assert np.round(env_copy.optimal_cost,4) <= np.round(env_copy.accrued_cost,4), 'accrued cost higher than optimal cost'
                     sim_out['score'].append(env_copy.optimal_cost/env_copy.accrued_cost)
                     sim_out['n_steps'].append(steps)
                     sim_out['RPE'].append(np.mean(np.abs(env_copy.posterior_mean.reshape(N,N) - env_copy.costs)))
@@ -356,13 +363,15 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
                     sim_out['observations'].append(env_copy.obs)
                     
                     ## update the agent env
-                    agent_envs[a] = copy.deepcopy(env_copy)
+                    # agent_envs[a] = copy.deepcopy(env_copy)
+                    agent_envs[a] = env_copy
 
                     end_episode = True
 
                 ## new root for the next search
                 if agent == 'MCTS':
-                    tree.root = next_node
+                    tree.root = next_root
+                    assert np.array_equal(tree.root.state, current), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, tree.root.state, action)
 
 
-    return sim_out, env.costs
+    return sim_out, env_copy.costs
