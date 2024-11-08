@@ -150,7 +150,7 @@ class MonteCarloTreeSearch():
             else:
                 state_tmp = node.state
                 env_state_tmp = env_copy.get_obs()['agent']
-                node = self.best_child(node, exploration_constant=1.0/sqrt(2.0))
+                node = self.best_child(node, exploration_constant=2.0/sqrt(2.0))
                 observation, cost, terminated, _, _ = env_copy.step(node.action)
                 state = observation['agent']
                 assert np.array_equal(node.state, state), 'error in tree policy step {}\n started in {}\n supposed to take action {} to {}\n ended up moving from {} to {}'.format(t, state_tmp, node.action, node.state, env_state_tmp, state)

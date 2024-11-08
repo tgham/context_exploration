@@ -122,7 +122,8 @@ def plot_action_tree(tree_q, start, goal):
     fig.colorbar(tripcolor)
 
     # Function to round to 2 significant figures
-    round_to_sigfigs = lambda x: f"{x:.2g}"
+    # round_to_sigfigs = lambda x: f"{x:.2g}"
+    round_to_sigfigs = lambda x: f"{x:.2f}"
 
     # Plot values on the grid with 2 significant figures, with the best action in bold and italics
     for i, (xi, yi) in enumerate(top_value_positions):
@@ -174,6 +175,7 @@ def quatromatrix(left, bottom, right, top, grid_size, ax=None, triplotkw={}, tri
     C = np.c_[left.flatten(), bottom.flatten(), right.flatten(), top.flatten()].flatten()
 
     # Plotting using triplot and tripcolor
+
     triplot = ax.triplot(A[:, 0], A[:, 1], Tr, **triplotkw)
-    tripcolor = ax.tripcolor(A[:, 0], A[:, 1], Tr, facecolors=C, **tripcolorkw, vmin=-1, vmax=0)
+    tripcolor = ax.tripcolor(A[:, 0], A[:, 1], Tr, facecolors=C, **tripcolorkw)#, vmin=-1, vmax=0)
     return tripcolor
