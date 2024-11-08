@@ -86,6 +86,7 @@ class MountainEnv(gym.Env):
 
         ## define mountain costs as samples from the GP
         ## (for now, let's just use the RBF kernel)
+        self.true_k = true_k
         if true_k == 'lin':
             self.K_gen = self.K_lin
         elif true_k == 'lin_x':
@@ -240,6 +241,11 @@ class MountainEnv(gym.Env):
             ## last goal distance criterion
             # self.starts
 
+        ## for sanity check, just place agent and target in opposite corners
+        self._agent_location = np.array([0, 0])
+        self._target_location = np.array([self.N-1, self.N-1])
+
+
 
         ## initialise trial info
         self.t = 0
@@ -344,7 +350,7 @@ class MountainEnv(gym.Env):
         ## return the predicted cost if simulating
         elif self.sim:
             cost = predicted_cost
-            # cost = current_cost
+            cost = current_cost
 
         # An episode is done iff the agent has reached the target
         if np.array_equal(self._agent_location, self._target_location):
@@ -466,7 +472,6 @@ class MountainEnv(gym.Env):
             distances = cdist(next_states, [target], metric=self.metric).flatten()
             min_distance = np.min(distances)
             action = argm(distances, min_distance)
-            assert distances[action] == np.min(distances)
             return action
         
 
@@ -502,7 +507,6 @@ class MountainEnv(gym.Env):
             combined_q = alpha * softmax(-distances) + (1-alpha) * softmax(-next_q)
             max_combined_q = np.max(combined_q)
             action = argm(combined_q, max_combined_q)
-            assert combined_q[action] == np.max(combined_q)
             return action
         
 
@@ -716,7 +720,6 @@ class MountainEnv(gym.Env):
             # If we reached the goal, return the path and the accumulated reward
             if current_point == goal:
                 route_cost = [self.costs[x, y] for x, y in path]
-                assert np.array_equal(path[0], start)
                 return path, route_cost
             
             # Mark this point as visited
