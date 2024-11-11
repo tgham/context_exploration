@@ -16,9 +16,6 @@ class MonteCarloTreeSearch():
         self.action_space = self.env.action_space.n
         self.N = self.env.N
 
-        ## visit counts??
-        # self.n_state_visits = np.zeros((self.N, self.N))
-
         ## get initial state and goal 
         observation = self.env.get_obs()
         state = observation['agent']
@@ -57,6 +54,8 @@ class MonteCarloTreeSearch():
         env_copy = copy.deepcopy(self.env)
         env_copy.set_state(node.state)
         env_copy.set_sim(True)
+        target = env_copy.get_obs()['target']
+        observation = env_copy.get_obs()
 
         ## (BEGIN WITH COST OF CURRENT STATE?)
         # start = env_copy.get_obs()['agent']
@@ -65,8 +64,8 @@ class MonteCarloTreeSearch():
         total_cost += starting_cost
 
         if node.terminal:
-            return 0
-            # return -node.cost
+            # return 0
+            return -total_cost
 
         ## rollout until trial is terminated 
         while True:
@@ -75,8 +74,7 @@ class MonteCarloTreeSearch():
             # action = random.randint(0, self.action_space-1)
 
             ## or, greedy
-            current = env_copy.get_obs()['agent']
-            target = env_copy.get_obs()['target']
+            current = observation['agent']
             action = env_copy.greedy_policy(current, target, eps = 0.0)
 
             ## or, balanced greedy
@@ -85,7 +83,7 @@ class MonteCarloTreeSearch():
             # action = env_copy.balanced_policy(current, target, eps = 0.05, alpha = 0.1)
 
             ## take action
-            _, cost, terminated, _, _ = env_copy.step(action)
+            observation, cost, terminated, _, _ = env_copy.step(action)
             # total_cost += cost * discount_factor
             # discount_factor *= gamma
 
