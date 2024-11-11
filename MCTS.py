@@ -15,6 +15,7 @@ class MonteCarloTreeSearch():
         self.tree = tree
         self.action_space = self.env.action_space.n
         self.N = self.env.N
+        self.discount_factor = 1
 
         ## get initial state and goal 
         observation = self.env.get_obs()
@@ -34,7 +35,7 @@ class MonteCarloTreeSearch():
         observation, cost, terminated, truncated, info = env_copy.step(action)
         state=observation['agent']
         if not terminated:
-            new_node = Node(state=state, action=action, action_space=self.action_space, cost=cost, terminal=terminated, N=self.N) 
+            new_node = Node(state=state, action=action, action_space=self.action_space, cost=-cost, terminal=terminated, N=self.N) 
         else:
             new_node = Node(state=state, action=action, action_space=self.action_space, cost=0, terminal=terminated, N=self.N)
         self.tree.add_node(new_node, node)
@@ -62,10 +63,11 @@ class MonteCarloTreeSearch():
         # total_cost += env_copy.costs[start[0], start[1]]
         starting_cost = node.cost
         total_cost += starting_cost
+        # total_cost=0
 
         if node.terminal:
             # return 0
-            return -total_cost
+            return total_cost
 
         ## rollout until trial is terminated 
         while True:
@@ -136,38 +138,71 @@ class MonteCarloTreeSearch():
         if root is None:
             node = self.tree.root ## need some way of setting the current node to the current state
         t = 0
+        self.tree_cost = []
+        self.tree_cost.append(node.cost)
         env_current_loc = env_copy.get_obs()['agent']
         assert np.array_equal(node.state, env_current_loc), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, env_current_loc)
         
         while not node.terminal:
             t+=1
             if self.tree.is_expandable(node):
-                # print('expanding ', node) ## if this is a node chosen by UCT, u should expand from the *state* node, not the *state-action* node??
-                return self.expand(node) 
+                expanded_node = self.expand(node)
+                # tree_cost += expanded_node.cost
+                # self.tree_cost.append(expanded_node.cost) ## maybe don't need to do this??? because it's included in the rollout too?
+                return expanded_node
                 
             else:
                 state_tmp = node.state
                 env_state_tmp = env_copy.get_obs()['agent']
-                node = self.best_child(node, exploration_constant=2.0/sqrt(2.0))
+                node = self.best_child(node, exploration_constant=1.0/sqrt(2.0))
                 observation, cost, terminated, _, _ = env_copy.step(node.action)
                 state = observation['agent']
+                # tree_cost += node.cost
+                self.tree_cost.append(node.cost)
                 assert np.array_equal(node.state, state), 'error in tree policy step {}\n started in {}\n supposed to take action {} to {}\n ended up moving from {} to {}'.format(t, state_tmp, node.action, node.state, env_state_tmp, state)
 
         return node
 
     
     ## backup costs until you reach the root
-    def backward(self, node, cost):
+    def backward(self, node, sim_cost):
+        tree_len = len(self.tree_cost)
+        tree_depth = tree_len
+        # print(tree_len, tree_depth)
+        # print(tree_depth, node)
         while node:
+
             # node.n_visits += 1
             # self.n_state_visits[node.state[0], node.state[1]] += 1
             # node.total_simulation_cost += cost
             # node.performance = node.total_simulation_cost / node.n_visits
             # node = self.tree.parent(node)
+
+            ## discounted costs from current node to rollout node
+            tree_cost_tmp = 0
+            dist_to_rollout = tree_len - tree_depth
+
+            if tree_depth >=0:
+                for d in range(dist_to_rollout):
+                    tree_cost_tmp += self.tree_cost[d + tree_depth] * self.discount_factor**d
+            # for dist_to_rollout in range(tree_depth, tree_len):
+            #     tree_cost_tmp += self.tree_cost[dist_to_rollout] * self.discount_factor**dist_to_rollout
+
+            ## calculate cost of the rollout, discounted by the distance from the current node to the rollout node
+            sim_cost_tmp = sim_cost * self.discount_factor**dist_to_rollout ## i.e. cost of the rollout, discounted by the distance from the current node to the terminal node
+            backup_cost = sim_cost_tmp + tree_cost_tmp
+            
+            ## backup + update counts
             node.n_visits += 1
             self.tree.n_state_visits[node.state[0], node.state[1]] += 1
-            node.performance = node.performance + (cost - node.performance) / node.n_visits
+            node.performance = node.performance + (backup_cost - node.performance) / node.n_visits
             node = self.tree.parent(node)
+            tree_depth -= 1
+
+            # if node is None:
+            #     print(dist_to_rollout, tree_depth, tree_len)
+            # if tree_depth<0:
+            #     print(node)
 
 
 
@@ -192,8 +227,8 @@ class MonteCarloTreeSearch():
         ## loop through trees
         for t in range(n_trees):
             node = self.tree_policy()
-            simulated_cost = self.rollout_policy(node)
-            self.backward(node, simulated_cost)
+            sim_cost = self.rollout_policy(node)
+            self.backward(node, sim_cost)
         
         ## get simulated LT costs of adjacent states
         current_children = self.tree.children(self.tree.root)
