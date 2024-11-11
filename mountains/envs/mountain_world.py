@@ -136,8 +136,11 @@ class MountainEnv(gym.Env):
         )
 
         ## init trial info
-        self.starts = []
-        self.goals = []
+        # self.starts = []
+        # self.goals = []
+        self.starts = [[0, 0],              [0, self.N-1],    [self.N-1, 0],    [self.N-1, self.N-1]]
+        self.goals = [[self.N-1, self.N-1], [self.N-1, 0],    [0, self.N-1],    [0, 0]]
+        self.n_eps = 0
 
         # define actions, depending on metric
         self.metric = metric
@@ -210,7 +213,7 @@ class MountainEnv(gym.Env):
 
         ## sample start and goal locations
         dist = 0
-        min_dist = self.N*0.75
+        min_dist = self.N*0.85
         angle = 0
         angle_tolerance = 0.4
         angle_bounds = [45*(1+angle_tolerance), 45*(1-angle_tolerance)]
@@ -242,8 +245,11 @@ class MountainEnv(gym.Env):
             # self.starts
 
         ## for sanity check, just place agent and target in opposite corners
-        self._agent_location = np.array([0, 0])
-        self._target_location = np.array([self.N-1, self.N-1])
+        # self._agent_location = np.array([0, 0])
+        # self._target_location = np.array([self.N-1, self.N-1])
+        self._agent_location = np.array(self.starts[self.n_eps%4])
+        self._target_location = np.array(self.goals[self.n_eps%4])
+        self.n_eps += 1
 
 
 
@@ -349,8 +355,8 @@ class MountainEnv(gym.Env):
 
         ## return the predicted cost if simulating
         elif self.sim:
-            # cost = predicted_cost
-            cost = current_cost
+            cost = predicted_cost
+            # cost = current_cost
 
         # An episode is done iff the agent has reached the target
         if np.array_equal(self._agent_location, self._target_location):
