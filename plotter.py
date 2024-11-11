@@ -6,9 +6,9 @@ import seaborn as sns
 def plot_r(sampled_rewards, ax, title=None, cbar=False):
     # vmin = np.min(sampled_rewards)
     # vmax = np.max(sampled_rewards)
-    vmin = 0
-    vmax = 1
-    sns.heatmap(sampled_rewards, ax=ax, cbar=cbar, square=True, cmap='viridis', vmin=vmin, vmax=vmax,  cbar_kws={'ticks': [0, 1], 'label': 'Altitude', 'shrink': 0.7})
+    vmin = -1
+    vmax = 0
+    sns.heatmap(sampled_rewards, ax=ax, cbar=cbar, square=True, cmap='viridis_r', vmin=vmin, vmax=vmax,  cbar_kws={'ticks': [0, 1], 'label': 'Altitude', 'shrink': 0.7})
     # ax.imshow(sampled_rewards, extent=(0, self.N, 0, self.N), origin = 'upper')
     # ax.set_xticks(np.arange(0, self.N+1, 5))
     # ax.set_yticks(np.arange(0, self.N+1, 5))
@@ -19,7 +19,7 @@ def plot_r(sampled_rewards, ax, title=None, cbar=False):
     ax.set_title(title)
     # ax.set_title('Sampled Reward Distribution,\nkernel: {}'.format(self.kernel_type))
     if cbar:
-        ax.collections[0].colorbar.set_label('Altitude')
+        ax.collections[0].colorbar.set_label('Altitude') 
         # ax.collections[0].colorbar.set_label('Route cost')
     return ax
 

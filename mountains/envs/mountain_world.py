@@ -105,7 +105,7 @@ class MountainEnv(gym.Env):
             self.K_gen = self.K_periodic_y
         else: #default
             self.K_gen = self.K_rbf
-        self.costs = self.sample(self.K_gen)
+        self.costs = self.sample(self.K_gen) *-1
         self.cost_threshold = 1 
         self.r_noise = r_noise
         # self.sim = False
@@ -221,24 +221,24 @@ class MountainEnv(gym.Env):
         goal_val = 0
         start_val = 0
         min_val = 0.6
-        while (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (goal_val<min_val) or (start_val<min_val):
-            self._agent_location = self.np_random.integers(0, self.N, size=2, dtype=int)
-            self._target_location = self.np_random.integers(
-                0, self.N, size=2, dtype=int
-            )
+        # while (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (goal_val<min_val) or (start_val<min_val):
+        #     self._agent_location = self.np_random.integers(0, self.N, size=2, dtype=int)
+        #     self._target_location = self.np_random.integers(
+        #         0, self.N, size=2, dtype=int
+        #     )
 
-            ## distance criterion
-            dist = np.max(cdist([self._agent_location, self._target_location], [self._agent_location, self._target_location], metric='cityblock'))
+        #     ## distance criterion
+        #     dist = np.max(cdist([self._agent_location, self._target_location], [self._agent_location, self._target_location], metric='cityblock'))
 
-            ## angle criterion
-            row_or_col = np.sum(self._agent_location == self._target_location)
-            angle = node_angle(self._agent_location, self._target_location)
+        #     ## angle criterion
+        #     row_or_col = np.sum(self._agent_location == self._target_location)
+        #     angle = node_angle(self._agent_location, self._target_location)
 
-            ## value criterion
-            goal_val = self.costs[self._target_location[0], self._target_location[1]]
-            goal_val = 1
+        #     ## value criterion
+        #     goal_val = self.costs[self._target_location[0], self._target_location[1]]
+        #     goal_val = 1
 
-            start_val = self.costs[self._agent_location[0], self._agent_location[1]]
+        #     start_val = self.costs[self._agent_location[0], self._agent_location[1]]
             # start_val = 1
 
             ## last goal distance criterion
@@ -290,10 +290,12 @@ class MountainEnv(gym.Env):
         self.a_traj = [tuple(self._agent_location)]
 
         ## get the cost of the optimal trajectory, and use this to set the cost threshold
+        # self.costs *= -1
         self.o_traj, self.o_route_cost = self.optimal_trajectory()
         self.o_traj.pop(-1)
         self.o_traj.pop(0)
         self.optimal_cost = np.sum(self.o_route_cost) #np.sum(self.o_route_cost[1:]) # is a cost incurred in the first state??
+        # self.costs *= -1
         
         ## posterior inference over the whole environment
         self.posterior_mean, self.posterior_cov = self.inference_func(obs = self.obs, pred='all')
@@ -356,7 +358,7 @@ class MountainEnv(gym.Env):
         ## return the predicted cost if simulating
         elif self.sim:
             cost = predicted_cost
-            # cost = current_cost
+            cost = current_cost
 
         # An episode is done iff the agent has reached the target
         if np.array_equal(self._agent_location, self._target_location):
@@ -504,13 +506,17 @@ class MountainEnv(gym.Env):
             #     next_q = MCTS_estimates
             
             ## ensure post_mean is non-negative
-            if next_q.min() < 0:
-                next_q -= next_q.min()
+            # if next_q.min() < 0:
+            #     next_q -= next_q.min()
+
+            ## ensure post_mean is negative
+            if next_q.max() > 0:
+                next_q -= next_q.max()
 
             
             ## weight the distance to the target by the cost of the state
             distances = cdist(next_states, [target], metric=self.metric).flatten()
-            combined_q = alpha * softmax(-distances) + (1-alpha) * softmax(-next_q)
+            combined_q = alpha * softmax(-distances) + (1-alpha) * softmax(next_q)
             max_combined_q = np.max(combined_q)
             action = argm(combined_q, max_combined_q)
             return action
@@ -624,7 +630,7 @@ class MountainEnv(gym.Env):
         
         ## or if starting from nothing, just return the prior
         elif obs is None:
-            post_mean = np.zeros(len(pred_idx)) + 0.5
+            post_mean = np.zeros(len(pred_idx)) - 0.5
             post_cov = K_inf[pred_idx][:, pred_idx]
 
         
@@ -711,7 +717,7 @@ class MountainEnv(gym.Env):
         open_list = []
 
         ## weighted combination of g(n) (actual cost) and h(n) (heuristic for step count)
-        heapq.heappush(open_list, (0 + h_w* self.heuristic(start, goal), 0, start, []))
+        heapq.heappush(open_list, (-(h_w * self.heuristic(start, goal)), 0, start, []))
         closed_list = set()
 
         # Pop the node with the lowest total cost from the priority queue
@@ -738,8 +744,9 @@ class MountainEnv(gym.Env):
                     new_cost = current_cost + self.costs[neighbor]
                     
                     # Add the neighbor to the open list with its weighted total cost
-                    weighted_total_cost = (1-h_w) * new_cost + h_w*self.heuristic(neighbor, goal)
-                    heapq.heappush(open_list, (estimated_total_cost, new_cost, neighbor, path))
+                    # weighted_total_cost = (1 - h_w) * new_cost + h_w * self.heuristic(neighbor, goal)
+                    weighted_total_cost = -(new_cost + h_w * self.heuristic(neighbor, goal))
+                    heapq.heappush(open_list, (weighted_total_cost, new_cost, neighbor, path))
 
         
         # If there's no path found, return empty

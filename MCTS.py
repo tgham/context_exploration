@@ -35,7 +35,7 @@ class MonteCarloTreeSearch():
         observation, cost, terminated, truncated, info = env_copy.step(action)
         state=observation['agent']
         if not terminated:
-            new_node = Node(state=state, action=action, action_space=self.action_space, cost=-cost, terminal=terminated, N=self.N) 
+            new_node = Node(state=state, action=action, action_space=self.action_space, cost=cost, terminal=terminated, N=self.N) 
         else:
             new_node = Node(state=state, action=action, action_space=self.action_space, cost=0, terminal=terminated, N=self.N)
         self.tree.add_node(new_node, node)
@@ -97,7 +97,7 @@ class MonteCarloTreeSearch():
 
             ## if terminated return the cost
             if terminated:
-                return -total_cost
+                return total_cost
             
             ## if not, increment cost (NB: this happens after the termination check, because the cost of the terminal state is not included in the total cost)
             total_cost += cost * discount_factor
