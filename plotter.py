@@ -92,8 +92,15 @@ def plot_k_weights(k_weights, ax, title=None):
     ax.set_aspect(aspect=1.4)
 
 
+## function for calculating the best action in each state, ignoring nans
+def nanargmax(tree_q, axis):
+    argmax_indices = np.nanargmax(np.where(np.isnan(tree_q), -np.inf, tree_q), axis=axis)
+    all_nan_mask = np.isnan(tree_q).all(axis=axis)
+    argmax_indices = np.where(all_nan_mask, np.nan, argmax_indices)
+    return argmax_indices
+
 ## plot action tree
-def plot_action_tree(tree_q, start, goal, action_arrow = True, ax=None):
+def plot_action_tree(tree_q, start, goal, action_arrow = True, ax=None, title=None):
     n_rows, n_cols, _ = tree_q.shape
 
     # Extract the action values for each direction directly from tree_q
@@ -109,7 +116,8 @@ def plot_action_tree(tree_q, start, goal, action_arrow = True, ax=None):
     left_value_positions = [(j + 0.05, i + 0.5) for i in range(n_rows) for j in range(n_cols)]
 
     ## determine the best action at each state 
-    best_actions = np.argmax(tree_q, axis=2)
+    # best_actions = np.nanargmax(tree_q, axis=2)
+    best_actions = nanargmax(tree_q, axis=2)
 
     ## switch 0 and 2 to match the plot
     # best_actions = np.where(best_actions == 0, -1, best_actions)
@@ -190,6 +198,7 @@ def plot_action_tree(tree_q, start, goal, action_arrow = True, ax=None):
     # ax.set_yticks(ticks, labels)
     ax.set_xticks([])
     ax.set_yticks([])
+    ax.set_title(title)
 
     # Mark the start and goal positions with circles
     start_x, start_y = start
