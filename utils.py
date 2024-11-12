@@ -206,33 +206,14 @@ class Tree:
     ## calculate value of each S-A node
     def action_tree(self):
 
-        ## average over all nodes in the tree
-        tree_q = np.zeros((self.N, self.N, 4))
-        tree_q_counts = np.zeros((self.N, self.N, 4))
-        queue = deque([self.root])
-        while queue:
-            node = queue.popleft()
-            for child in self.children(node):
-                tree_q[node.state[0], node.state[1], child.action] += child.performance
-                tree_q_counts[node.state[0], node.state[1], child.action] += 1
-                queue.append(child)
-        tree_q /= tree_q_counts
-
-        ## (actually need to redo the performance of the root node)
-        # for child in self.children(self.root):
-        #     tree_q[self.root.state[0], self.root.state[1], child.action] = child.performance
-            
-
-        ## or just standard saving??
-        # tree_q = np.zeros((N, N, 4)) + np.nan
-        # tree_q_counts = np.zeros((N, N, 4))
-        # queue = deque([tree.root])
-        # while queue:
-        #     node = queue.popleft()
-        #     for child in tree.children(node):
-        #         tree_q[node.state[0], node.state[1], child.action] = child.performance
-        #         tree_q_counts[node.state[0], node.state[1], child.action] += 1
-        #         queue.append(child)
+        tree_q = np.zeros((self.N,self.N,4)) + np.nan
+        for sstate in self.nodes.keys():
+            state = self.nodes[sstate].state
+            for a in self.nodes[sstate].action_leaves.keys():
+                try:
+                    tree_q[state[0], state[1], a] = self.nodes[sstate].action_leaves[a].performance
+                except:
+                    pass
 
         return tree_q
     
