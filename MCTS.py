@@ -118,8 +118,12 @@ class MonteCarloTreeSearch():
                 node.n_state_visits += 1
 
             ## if the agent has reached a state that has already been visited, initiate a rollout from there
-            visited_states = np.array([self.tree_path[i][0] for i in range(len(self.tree_path))])
-            if any(np.array_equal(next_state, state) for state in visited_states):
+            # visited_states = np.array([self.tree_path[i][0] for i in range(len(self.tree_path))])
+            # if any(np.array_equal(next_state, state) for state in visited_states):
+            #     break
+
+            if t>50:
+                print('tree policy stuck')
                 break
 
         return action_leaf
@@ -160,13 +164,12 @@ class MonteCarloTreeSearch():
             # action = random.randint(0, self.action_space-1)
 
             ## or, greedy
-            current = observation['agent']
-            action = env_copy.greedy_policy(current, target, eps = 0.0)
+            # current = observation['agent']
+            # action = env_copy.greedy_policy(current, target, eps = 0.0)
 
-            ## or, balanced greedy
-            # current = env_copy.get_obs()['agent']
-            # target = env_copy.get_obs()['target']
-            # action = env_copy.balanced_policy(current, target, eps = 0.05, alpha = 0.1)
+            ## or, optimised rollout 
+            current = observation['agent']
+            action = env_copy.optimal_policy(current)
 
             ## take action
             observation, cost, terminated, _, _ = env_copy.step(action)
