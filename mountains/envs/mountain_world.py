@@ -313,6 +313,9 @@ class MountainEnv(gym.Env):
 
             self.render()
 
+        ## dynamic programming to get the optimal trajectory
+        self.value_iteration(true_costs=True)
+
         return observation, info
     
     ## custom function for manually setting the state (for MCTS?)
@@ -522,8 +525,21 @@ class MountainEnv(gym.Env):
             action = argm(combined_q, max_combined_q)
             return action
         
+    ## optimal policy, as given by the dynamic programming solution
+    def optimal_policy(self, current):
 
+        ## get adjacent states
+        next_states = np.clip(np.array([current + self._action_to_direction[i] for i in range(self.n_actions)]), 0, self.N-1)
+        next_states_idx = next_states[:, 0]*self.N + next_states[:, 1]
+    
+        ## choose action with highest Q-value
+        current_q = self.Q[current[0], current[1], :]
+        max_current_q = np.max(current_q)
+        action = argm(current_q, max_current_q)
 
+        return action
+        
+        
     
     
     #### GP inits
@@ -794,19 +810,24 @@ class MountainEnv(gym.Env):
         return obs
     
     ## dynamic programming
-    def value_iteration(self, max_iters = 1000, theta = 0.001, discount = 0.99):
+    def value_iteration(self, true_costs = True, max_iters = 1000, theta = 0.001, discount = 0.99):
         
         ## init tables
         self.V = np.zeros((self.N, self.N))
         self.A = np.zeros((self.N, self.N))
         self.Q = np.zeros((self.N, self.N, self.n_actions))
 
-        ## create copy of costs and set cost of goal to 0
-        costs = self.costs.copy()
+        ## determine whether to use true costs or inferred costs
+        if true_costs:
+            dp_costs = self.costs.copy()
+        else:
+            dp_costs = self.posterior_mean.reshape(self.N, self.N).copy()
+
+        ## set cost of goal to 0
         info = self.get_obs()
         start = info['agent']
         goal = info['target']
-        costs[goal[0], goal[1]] = 0
+        dp_costs[goal[0], goal[1]] = 0
 
         ## loop through states
         for i in range(max_iters):
@@ -819,7 +840,7 @@ class MountainEnv(gym.Env):
                     ## loop through actions and get the discounted value of each of the next states
                     for a in range(self.n_actions):
                         next_state = np.clip([x, y] + self._action_to_direction[a], 0, self.N-1)
-                        q[a] = costs[next_state[0], next_state[1]] + discount*self.V[next_state[0], next_state[1]]
+                        q[a] = dp_costs[next_state[0], next_state[1]] + discount*self.V[next_state[0], next_state[1]]
 
                         ## update the Q-table
                         self.Q[x, y, a] = q[a]
@@ -835,5 +856,3 @@ class MountainEnv(gym.Env):
             if delta < theta:
                 print('DP converged after {} iterations'.format(i))
                 break
-
-        return self.V, self.Q #, self.A
