@@ -11,7 +11,7 @@ from scipy.spatial.distance import cdist
 
 class MonteCarloTreeSearch():
 
-    def __init__(self, env, tree, exploration_constant=1.0/sqrt(2.0), discount_factor=1):
+    def __init__(self, env, tree, exploration_constant=2, discount_factor=0.95):
         self.env = env
         self.tree = tree
         self.action_space = self.env.action_space.n
@@ -371,7 +371,7 @@ class MonteCarloTreeSearch():
 
 
 ## parallel function for simulating many episodes within the same mountain env
-def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='known', r_noise=0.05, render_mode=None, n_episodes=10, agents = ['GP', 'MCTS'], n_trees=1000):
+def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='known', known_costs=True, r_noise=0.05, render_mode=None, n_episodes=10, agents = ['GP', 'MCTS'], n_trees=1000):
     
     ## initiate dictionary to store the results
     sim_out = {
@@ -398,7 +398,7 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
     np.random.seed(seed)
     
     ## create base mountain environment
-    env = make_env(N, None, metric, true_k, inf_k, render_mode=None, r_noise=r_noise)
+    env = make_env(N, None, metric, true_k, inf_k, known_costs, render_mode=None, r_noise=r_noise)
 
     ## copy env so that each agent makes its own observations 
     agent_envs = [copy.deepcopy(env) for _ in agents]

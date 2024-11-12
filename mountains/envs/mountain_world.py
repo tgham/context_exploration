@@ -15,6 +15,7 @@ import heapq
 from collections import defaultdict
 from IPython.display import display, clear_output
 from utils import *
+from scipy.stats import rankdata
 # from PIL import image
 
 
@@ -33,7 +34,7 @@ class Actions(Enum):
 class MountainEnv(gym.Env):
     # metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, N, params=None, metric = 'cityblock', true_k=None, inf_k='known', render_mode=None, r_noise=0.05,size=5):
+    def __init__(self, N, params=None, metric = 'cityblock', true_k=None, inf_k='known', known_costs = True, render_mode=None, r_noise=0.05,size=5):
         
         ### GP inits
 
@@ -108,7 +109,7 @@ class MountainEnv(gym.Env):
         self.costs = self.sample(self.K_gen) *-1
         self.cost_threshold = 1 
         self.r_noise = r_noise
-        # self.sim = False
+        self.known_costs = known_costs
 
         ## determine how inferences are made (i.e. with full knowledge of the kernel, or with a weighted combination of kernels)
         self.inf_k = inf_k
@@ -266,28 +267,29 @@ class MountainEnv(gym.Env):
         # self.obs = np.array([loc_idx, self._agent_location[0], self._agent_location[1], current_cost], ndmin=2)
 
         ## or, observations accumulate over trials, and agent observes starting position
-        loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
-        if not hasattr(self, 'obs') or self.obs is None:
-            self.obs = np.array([[loc_idx, self._agent_location[0], self._agent_location[1], current_cost]]) 
-        else:
-            # print(len(self.obs))
-            self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
-        self.obs_tmp = self.obs.copy()
-
-        ## or, observations accumulate over trials, but agent doesn't observe starting position
         # loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
         # if not hasattr(self, 'obs') or self.obs is None:
-        #     self.obs = None
-        #     self.obs_tmp = np.array([[loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+        #     self.obs = np.array([[loc_idx, self._agent_location[0], self._agent_location[1], current_cost]]) 
         # else:
+        #     # print(len(self.obs))
         #     self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
-        #     self.obs_tmp = self.obs.copy()
+        # self.obs_tmp = self.obs.copy()
+
+        ## or, observations accumulate over trials, but agent doesn't observe starting position
+        loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
+        if not hasattr(self, 'obs') or self.obs is None:
+            self.obs = None
+            self.obs_tmp = np.array([[loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+        else:
+            self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+            self.obs_tmp = self.obs.copy()
 
 
 
 
         ## initialise actual trajectory as list of tuples
         self.a_traj = [tuple(self._agent_location)]
+        self.action_scores = []
 
         ## get the cost of the optimal trajectory, and use this to set the cost threshold
         # self.costs *= -1
@@ -313,8 +315,13 @@ class MountainEnv(gym.Env):
 
             self.render()
 
-        ## dynamic programming to get the optimal trajectory
-        self.value_iteration(true_costs=True)
+        ## dynamic programming to get the true optimal trajectory, and the optimal trajectory given the agent's knowledge of the environment
+        self.V_true, self.Q_true = self.value_iteration(dp_costs=self.costs.copy())
+        if self.known_costs:
+            self.V_inf = self.V_true
+            self.Q_inf = self.Q_true
+        else:
+            self.V_inf, self.Q_inf = self.value_iteration(dp_costs=self.posterior_mean.reshape(self.N, self.N).copy())
 
         return observation, info
     
@@ -328,7 +335,12 @@ class MountainEnv(gym.Env):
 
     ## take a step in the environment
     def step(self, action):
-        # Map the action (element of {0,1,2,3}) to the direction we walk in
+        
+        ## first, get the ranking of the best actions to take under the *true* optimal policy, given the agent's current position
+        current_Q_vals = self.Q_true[self._agent_location[0], self._agent_location[1], :]
+        action_ranking = rankdata(current_Q_vals, method='max') - 1
+        
+        ## take the actual action 
         self.t += 1
         direction = self._action_to_direction[action] 
 
@@ -336,6 +348,10 @@ class MountainEnv(gym.Env):
         self._agent_location = np.clip(
             self._agent_location + direction, 0, self.N - 1
         )
+
+        ## get the score of the action just taken, given the ranking of the optimal actions
+        action_score = action_ranking[action] + 1
+        action_score /= self.n_actions
 
         ## get the predicted cost of the new state (for MCTS)
         predicted_cost = self.posterior_mean.reshape(self.N, self.N)[self._agent_location[0], self._agent_location[1]]
@@ -358,10 +374,15 @@ class MountainEnv(gym.Env):
             loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
             self.obs_tmp = np.vstack([self.obs_tmp, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
 
+            ## store info on optimality of the choice, given the agent's current position
+            self.action_scores.append(action_score)
+
         ## return the predicted cost if simulating
         elif self.sim:
-            # cost = predicted_cost
-            cost = current_cost
+            if self.known_costs:
+                cost = current_cost
+            else:
+                cost = predicted_cost
 
         # An episode is done iff the agent has reached the target
         if np.array_equal(self._agent_location, self._target_location):
@@ -379,6 +400,9 @@ class MountainEnv(gym.Env):
             ## sum of costs of route
             self.a_route_cost = [self.costs[x, y] for x, y in self.a_traj]
             self.actual_cost = np.sum(self.a_route_cost)
+
+            ## average action score
+            self.episode_score = np.mean(self.action_scores)
 
         else:
             self.terminated = False
@@ -533,7 +557,7 @@ class MountainEnv(gym.Env):
         next_states_idx = next_states[:, 0]*self.N + next_states[:, 1]
     
         ## choose action with highest Q-value
-        current_q = self.Q[current[0], current[1], :]
+        current_q = self.Q_inf[current[0], current[1], :]
         max_current_q = np.max(current_q)
         action = argm(current_q, max_current_q)
 
@@ -810,18 +834,18 @@ class MountainEnv(gym.Env):
         return obs
     
     ## dynamic programming
-    def value_iteration(self, true_costs = True, max_iters = 1000, theta = 0.001, discount = 0.99):
+    def value_iteration(self, dp_costs, max_iters = 1000, theta = 0.001, discount = 0.99):
         
         ## init tables
-        self.V = np.zeros((self.N, self.N))
-        self.A = np.zeros((self.N, self.N))
-        self.Q = np.zeros((self.N, self.N, self.n_actions))
+        V = np.zeros((self.N, self.N))
+        A = np.zeros((self.N, self.N))
+        Q = np.zeros((self.N, self.N, self.n_actions))
 
         ## determine whether to use true costs or inferred costs
-        if true_costs:
-            dp_costs = self.costs.copy()
-        else:
-            dp_costs = self.posterior_mean.reshape(self.N, self.N).copy()
+        # if self.known_costs:
+        #     dp_costs = self.costs.copy()
+        # else:
+        #     dp_costs = self.posterior_mean.reshape(self.N, self.N).copy()
 
         ## set cost of goal to 0
         info = self.get_obs()
@@ -834,25 +858,27 @@ class MountainEnv(gym.Env):
             delta = 0
             for x in range(self.N):
                 for y in range(self.N):
-                    v = self.V[x, y]
+                    v = V[x, y]
                     q = np.zeros(self.n_actions)
 
                     ## loop through actions and get the discounted value of each of the next states
                     for a in range(self.n_actions):
                         next_state = np.clip([x, y] + self._action_to_direction[a], 0, self.N-1)
-                        q[a] = dp_costs[next_state[0], next_state[1]] + discount*self.V[next_state[0], next_state[1]]
+                        q[a] = dp_costs[next_state[0], next_state[1]] + discount*V[next_state[0], next_state[1]]
 
                         ## update the Q-table
-                        self.Q[x, y, a] = q[a]
+                        Q[x, y, a] = q[a]
 
                     ## use the best action to update the value of the current state
-                    self.V[x, y] = np.max(q)
-                    self.A[x, y] = np.argmax(q)
+                    V[x, y] = np.max(q)
+                    A[x, y] = np.argmax(q)
 
 
                     ## check if converged
-                    delta = max(delta, np.abs(v - self.V[x, y]))
+                    delta = max(delta, np.abs(v - V[x, y]))
             
             if delta < theta:
-                print('DP converged after {} iterations'.format(i))
+                # print('DP converged after {} iterations'.format(i))
                 break
+
+        return V, Q
