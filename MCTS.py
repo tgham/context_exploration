@@ -122,8 +122,8 @@ class MonteCarloTreeSearch():
             # if any(np.array_equal(next_state, state) for state in visited_states):
             #     break
 
-            if t>50:
-                print('tree policy stuck')
+            if t>self.N**2:
+                # print('tree policy stuck')
                 break
 
         return action_leaf
@@ -338,8 +338,8 @@ class MonteCarloTreeSearch():
             action_leaf = self.tree_policy()
             sim_cost = self.rollout_policy(action_leaf)
             self.backward(sim_cost)
-            if len(self.tree.nodes) > 4*self.N**2:
-                print('tree size: ', len(self.tree.nodes))
+            if len(tree.nodes) > 4*self.N**2:
+                print('tree size: ', len(tree.nodes))
                 continue
         
         ## get simulated LT costs of adjacent states
@@ -350,15 +350,19 @@ class MonteCarloTreeSearch():
         #     MCTS_estimates[action] = current_action_leaves[action].performance
 
         ## action selection
-        # if np.isnan(np.sum(MCTS_estimates)):
-        #     print(self.tree.root)
-        # max_MCTS = np.nanmax(MCTS_estimates)
-        # action = argm(MCTS_estimates, max_MCTS)
-        # assert MCTS_estimates[action] == np.nanmax(MCTS_estimates)
-        ## new root is the state that the agent has just reached
-        action = self.best_child(self.tree.root).action
-        next_state = self.tree.root.action_leaves[action].next_state
-        next_root = self.tree.nodes[str(next_state)]
+        # action = self.best_child(tree.root).action
+        MCTS_estimates = np.zeros(4)+np.nan
+        for action in self.tree.root.action_leaves.keys():
+            MCTS_estimates[action] = self.tree.root.action_leaves[action].performance
+        if np.isnan(np.sum(MCTS_estimates)):
+            print(self.tree.root)
+        max_MCTS = np.nanmax(MCTS_estimates)
+        action = argm(MCTS_estimates, max_MCTS)
+        assert MCTS_estimates[action] == np.nanmax(MCTS_estimates)
+
+        ## set root for next search
+        next_state = tree.root.action_leaves[action].next_state
+        next_root = tree.nodes[str(next_state)]
 
         return action, next_root
 
@@ -420,9 +424,9 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
             current = start
             goal = env_copy.get_obs()['target']
 
-            ## initiate tree 
-            tree = Tree(N)
-            MCTS = MonteCarloTreeSearch(env=env_copy, tree=tree)
+            # ## initiate tree 
+            # tree = Tree(N)
+            # MCTS = MonteCarloTreeSearch(env=env_copy, tree=tree)
         
             ## run episode until goal is reached
             end_episode = False
@@ -430,6 +434,10 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
             steps = 0
 
             while not end_episode:
+
+                ## initiate tree (if resetting the tree for each move. otherwise, this should be outside the episode loop)
+                tree = Tree(N)
+                MCTS = MonteCarloTreeSearch(env=env_copy, tree=tree)
                 
                 ## init MCTS
                 if agent == 'MCTS':
@@ -498,10 +506,11 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
                     # sim_out['accrued_cost'].append(total_cost)
                     sim_out['accrued_cost'].append(env_copy.accrued_cost)
                     sim_out['optimal_cost'].append(env_copy.optimal_cost)
-                    if np.round(env_copy.optimal_cost,4) > np.round(env_copy.accrued_cost,4):
+                    if np.round(env_copy.optimal_cost,4) < np.round(env_copy.accrued_cost,4):
                         print(env_copy.optimal_cost, env_copy.accrued_cost)
-                    assert np.round(env_copy.optimal_cost,4) <= np.round(env_copy.accrued_cost,4), 'accrued cost higher than optimal cost'
-                    sim_out['score'].append(env_copy.optimal_cost/env_copy.accrued_cost)
+                    assert np.round(env_copy.optimal_cost,4) >= np.round(env_copy.accrued_cost,4), 'accrued cost higher than optimal cost'
+                    # sim_out['score'].append(env_copy.optimal_cost/env_copy.accrued_cost)
+                    sim_out['score'].append(env_copy.episode_score)
                     sim_out['n_steps'].append(steps)
                     sim_out['RPE'].append(np.mean(np.abs(env_copy.posterior_mean.reshape(N,N) - env_copy.costs)))
                     sim_out['actual_trajectory'].append(env_copy.a_traj)
