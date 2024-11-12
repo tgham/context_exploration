@@ -357,12 +357,13 @@ class MountainEnv(gym.Env):
 
         ## return the predicted cost if simulating
         elif self.sim:
-            cost = predicted_cost
+            # cost = predicted_cost
             cost = current_cost
 
         # An episode is done iff the agent has reached the target
         if np.array_equal(self._agent_location, self._target_location):
             self.terminated = True
+            cost=0 ## cost of final state is 0
         
             ## update observation array only once the episode is complete
             if not self.sim:
@@ -593,7 +594,7 @@ class MountainEnv(gym.Env):
         samples = np.random.multivariate_normal(mean, K).reshape(self.N, self.N)
 
         #normalise
-        lower, upper = 0, 1
+        lower, upper = 0.1, 0.9
         # lower+=0.01
         samples = lower + (upper - lower) * (samples - np.min(samples)) / (np.max(samples) - np.min(samples))
 
@@ -791,3 +792,48 @@ class MountainEnv(gym.Env):
         obs = np.column_stack([obs_idx, obs_coords, obs_rewards])
 
         return obs
+    
+    ## dynamic programming
+    def value_iteration(self, max_iters = 1000, theta = 0.001, discount = 0.99):
+        
+        ## init tables
+        self.V = np.zeros((self.N, self.N))
+        self.A = np.zeros((self.N, self.N))
+        self.Q = np.zeros((self.N, self.N, self.n_actions))
+
+        ## create copy of costs and set cost of goal to 0
+        costs = self.costs.copy()
+        info = self.get_obs()
+        start = info['agent']
+        goal = info['target']
+        costs[goal[0], goal[1]] = 0
+
+        ## loop through states
+        for i in range(max_iters):
+            delta = 0
+            for x in range(self.N):
+                for y in range(self.N):
+                    v = self.V[x, y]
+                    q = np.zeros(self.n_actions)
+
+                    ## loop through actions and get the discounted value of each of the next states
+                    for a in range(self.n_actions):
+                        next_state = np.clip([x, y] + self._action_to_direction[a], 0, self.N-1)
+                        q[a] = costs[next_state[0], next_state[1]] + discount*self.V[next_state[0], next_state[1]]
+
+                        ## update the Q-table
+                        self.Q[x, y, a] = q[a]
+
+                    ## use the best action to update the value of the current state
+                    self.V[x, y] = np.max(q)
+                    self.A[x, y] = np.argmax(q)
+
+
+                    ## check if converged
+                    delta = max(delta, np.abs(v - self.V[x, y]))
+            
+            if delta < theta:
+                print('DP converged after {} iterations'.format(i))
+                break
+
+        return self.V, self.Q #, self.A
