@@ -284,25 +284,28 @@ class MountainEnv(gym.Env):
             self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
             self.obs_tmp = self.obs.copy()
 
+        ## posterior inference over the whole environment
+        self.posterior_mean, self.posterior_cov = self.inference_func(obs = self.obs, pred='all')
+
+        ## dynamic programming to get the true optimal trajectory, and the optimal trajectory given the agent's knowledge of the environment
+        self.V_true, self.Q_true, self.A_true = self.value_iteration(dp_costs=self.costs.copy())
+        if self.known_costs:
+            self.V_inf = self.V_true
+            self.Q_inf = self.Q_true
+            self.A_inf = self.A_true
+        else:
+            self.V_inf, self.Q_inf, self.A_inf = self.value_iteration(dp_costs=self.posterior_mean.reshape(self.N, self.N).copy())
 
 
+        ## get the costs of this optimal trajectory
+        self.optimal_trajectory()
+        self.o_traj.pop(-1) ## delete first and last costs?
+        self.o_traj.pop(0)
 
         ## initialise actual trajectory as list of tuples
         self.a_traj = [tuple(self._agent_location)]
         self.action_scores = []
-
-        ## get the cost of the optimal trajectory, and use this to set the cost threshold
-        # self.costs *= -1
-        self.o_traj, self.o_route_cost = self.optimal_trajectory()
-        self.o_traj.pop(-1)
-        self.o_traj.pop(0)
-        self.optimal_cost = np.sum(self.o_route_cost) #np.sum(self.o_route_cost[1:]) # is a cost incurred in the first state??
-        # self.costs *= -1
         
-        ## posterior inference over the whole environment
-        self.posterior_mean, self.posterior_cov = self.inference_func(obs = self.obs, pred='all')
-        # print(self.posterior_mean, self.obs)
-        # print(len(self.obs_tmp))
 
         # if (self.render_mode == "human") or (self.render_mode == "MCTS"):
         if (self.render_mode == "human") or (self.render_mode == "MCTS"):
@@ -315,13 +318,7 @@ class MountainEnv(gym.Env):
 
             self.render()
 
-        ## dynamic programming to get the true optimal trajectory, and the optimal trajectory given the agent's knowledge of the environment
-        self.V_true, self.Q_true = self.value_iteration(dp_costs=self.costs.copy())
-        if self.known_costs:
-            self.V_inf = self.V_true
-            self.Q_inf = self.Q_true
-        else:
-            self.V_inf, self.Q_inf = self.value_iteration(dp_costs=self.posterior_mean.reshape(self.N, self.N).copy())
+        
 
         return observation, info
     
@@ -677,7 +674,8 @@ class MountainEnv(gym.Env):
         ## or if starting from nothing, just return the prior
         elif obs is None:
             post_mean = np.zeros(len(pred_idx)) - 0.5
-            post_cov = K_inf[pred_idx][:, pred_idx]
+            # post_cov = K_inf[pred_idx][:, pred_idx]
+            post_cov = np.zeros((len(pred_idx), len(pred_idx)))
 
         
         return post_mean, post_cov
@@ -696,23 +694,31 @@ class MountainEnv(gym.Env):
         ## imperfect memory of observations
         # obs = self.obs[-10:]
 
-        ## loop through possible kernels
-        for k_inf in self.all_Ks:
-            post_mean, post_cov = self.post_pred(k_inf, obs = obs, pred=pred_idx)
-            post_means.append(post_mean)
-            post_covs.append(post_cov)
+        if obs is not None:
 
-            ## calculate marginal likelihood of obs given this kernel
-            ll = self.likelihood(k_inf, self.obs)
-            lls.append(ll)
-        
-        ## weight each posterior prediction by the corresponding marginal likelihood
-        self.k_weights = softmax(lls)
-        post_mean = np.sum([self.k_weights[i] * post_means[i] for i in range(len(self.k_weights))], axis=0)
+            ## loop through possible kernels
+            for k_inf in self.all_Ks:
+                post_mean, post_cov = self.post_pred(k_inf, obs = obs, pred=pred_idx)
+                post_means.append(post_mean)
+                post_covs.append(post_cov)
 
-        ## weighted posterior covariance
-        # post_cov = np.sum([k_weights[i] * (post_covs[i] + (post_means[i] - post_mean) @ (post_means[i] - post_mean).T) for i in range(len(k_weights))], axis=0)
-        post_cov = np.sum([self.k_weights[i] * (post_covs[i] + np.outer(post_means[i] - post_mean, post_means[i] - post_mean)) for i in range(len(self.k_weights))], axis=0) ## need to check if this is correct
+                ## calculate marginal likelihood of obs given this kernel
+                ll = self.likelihood(k_inf, obs)
+                lls.append(ll)
+            
+            ## weight each posterior prediction by the corresponding marginal likelihood
+            self.k_weights = softmax(lls)
+            post_mean = np.sum([self.k_weights[i] * post_means[i] for i in range(len(self.k_weights))], axis=0)
+
+            ## weighted posterior covariance
+            # post_cov = np.sum([k_weights[i] * (post_covs[i] + (post_means[i] - post_mean) @ (post_means[i] - post_mean).T) for i in range(len(k_weights))], axis=0)
+            post_cov = np.sum([self.k_weights[i] * (post_covs[i] + np.outer(post_means[i] - post_mean, post_means[i] - post_mean)) for i in range(len(self.k_weights))], axis=0) ## need to check if this is correct
+
+        ## or if starting from nothing, just return the prior
+        elif obs is None:
+            post_mean = np.zeros(len(pred_idx)) - 0.5
+            # post_cov = self.K_inf[pred_idx][:, pred_idx]
+            post_cov = np.zeros((len(pred_idx), len(pred_idx)))
 
         return post_mean, post_cov
     
@@ -753,78 +759,26 @@ class MountainEnv(gym.Env):
     
 
 
-    ## calculate the optimal trajectory between the two points (i.e. the trajectory with the lowest cumulative cost)
-    def optimal_trajectory(self, h_w = 0):
-
-        # Initialize the open list (priority queue) and closed list (visited nodes)
-        start, goal = [self._agent_location, self._target_location]
-        start = tuple(map(int, start))
-        goal = tuple(map(int, goal))
-        open_list = []
-
-        ## weighted combination of g(n) (actual cost) and h(n) (heuristic for step count)
-        heapq.heappush(open_list, (-(h_w * self.heuristic(start, goal)), 0, start, []))
-        closed_list = set()
-
-        # Pop the node with the lowest total cost from the priority queue
-        while open_list:
-            estimated_total_cost, current_cost, current_point, path = heapq.heappop(open_list)
-            if current_point in closed_list:
-                continue
-            
-            # Add the current point to the path
-            path = path + [current_point]
-            
-            # If we reached the goal, return the path and the accumulated reward
-            if current_point == goal:
-                route_cost = [self.costs[x, y] for x, y in path]
-                return path, route_cost
-            
-            # Mark this point as visited
-            closed_list.add(current_point)
-            
-            # Explore neighbors
-            for neighbor in self.get_neighbors(current_point):
-                if neighbor not in closed_list:
-                    # Calculate new cost to reach this neighbor
-                    new_cost = current_cost + self.costs[neighbor]
-                    
-                    # Add the neighbor to the open list with its weighted total cost
-                    # weighted_total_cost = (1 - h_w) * new_cost + h_w * self.heuristic(neighbor, goal)
-                    weighted_total_cost = -(new_cost + h_w * self.heuristic(neighbor, goal))
-                    heapq.heappush(open_list, (weighted_total_cost, new_cost, neighbor, path))
-
-        
-        # If there's no path found, return empty
-        return [], []
-    
-    ## h(n), i.e. the estimated cost to reach the goal from the current point (although I think this is just taking into account distance rather than reward)
-    def heuristic(self, current, goal):
-        x1, y1 = current
-        x2, y2 = goal
-        if self.metric == 'chebyshev':
-            return max(abs(x2 - x1), abs(y2 - y1))
-        elif self.metric == 'cityblock':
-            return abs(x2 - x1) + abs(y2 - y1)
-        
-    ## get all possible neighbours for a given point in the grid
-    def get_neighbors(self, point):
-        x, y = point
-        neighbors = []
-        if self.metric == 'chebyshev':
-            for dx in [-1, 0, 1]:
-                for dy in [-1, 0, 1]:
-                    if dx == 0 and dy == 0:
-                        continue  # Skip the current point itself
-                    new_x, new_y = x + dx, y + dy
-                    if 0 <= new_x < self.N and 0 <= new_y < self.N:
-                        neighbors.append((new_x, new_y))
-        elif self.metric == 'cityblock':
-            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-                new_x, new_y = x + dx, y + dy
-                if 0 <= new_x < self.N and 0 <= new_y < self.N:
-                    neighbors.append((new_x, new_y))
-        return neighbors
+    ## calculate the optimal trajectory between the two points, as given by the true DP solution
+    def optimal_trajectory(self):
+        current = self._agent_location
+        goal = self._target_location
+        self.o_traj = [current]
+        self.o_traj_costs = [self.costs[current[0], current[1]]]
+        while np.array_equal(current, goal) == False:
+            i, j = current
+            action = self.A_true[i, j]
+            if action == 0:
+                current = np.clip((i + 1, j), 0, self.N-1)
+            elif action == 1:
+                current = np.clip((i, j + 1), 0, self.N-1)
+            elif action == 2:
+                current = np.clip((i - 1, j), 0, self.N-1)
+            elif action == 3:
+                current = np.clip((i, j - 1), 0, self.N-1)
+            self.o_traj.append(current)
+            self.o_traj_costs.append(self.costs[current[0], current[1]])
+        self.o_traj_total_cost = np.sum(self.o_traj_costs)
 
 
     ## generate random observations from current true GP kernel
@@ -886,4 +840,4 @@ class MountainEnv(gym.Env):
                 # print('DP converged after {} iterations'.format(i))
                 break
 
-        return V, Q
+        return V, Q, A
