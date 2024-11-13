@@ -260,29 +260,28 @@ class MountainEnv(gym.Env):
         observation = self.get_obs()
         current_cost = self.costs[self._agent_location[0], self._agent_location[1]] + np.random.normal(0, self.r_noise)
         info = self._get_info()
-        self.accrued_cost = current_cost # is the cost incurred in the first state?? if not, this is set to 0
 
         ## reset obs on each trial
         # loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
         # self.obs = np.array([loc_idx, self._agent_location[0], self._agent_location[1], current_cost], ndmin=2)
 
         ## or, observations accumulate over trials, and agent observes starting position
-        # loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
-        # if not hasattr(self, 'obs') or self.obs is None:
-        #     self.obs = np.array([[loc_idx, self._agent_location[0], self._agent_location[1], current_cost]]) 
-        # else:
-        #     # print(len(self.obs))
-        #     self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
-        # self.obs_tmp = self.obs.copy()
-
-        ## or, observations accumulate over trials, but agent doesn't observe starting position
         loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
         if not hasattr(self, 'obs') or self.obs is None:
-            self.obs = None
-            self.obs_tmp = np.array([[loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+            self.obs = np.array([[loc_idx, self._agent_location[0], self._agent_location[1], current_cost]]) 
         else:
+            # print(len(self.obs))
             self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
-            self.obs_tmp = self.obs.copy()
+        self.obs_tmp = self.obs.copy()
+
+        ## or, observations accumulate over trials, but agent doesn't observe starting position
+        # loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
+        # if not hasattr(self, 'obs') or self.obs is None:
+        #     self.obs = None
+        #     self.obs_tmp = np.array([[loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+        # else:
+        #     self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+        #     self.obs_tmp = self.obs.copy()
 
         ## posterior inference over the whole environment
         self.posterior_mean, self.posterior_cov = self.inference_func(obs = self.obs, pred='all')
@@ -360,24 +359,28 @@ class MountainEnv(gym.Env):
         
         ## get the observed cost of the current state
         current_cost = self.costs[self._agent_location[0], self._agent_location[1]] + np.random.normal(0, self.r_noise)
-        self.accrued_cost += current_cost
 
         ## return the real cost if not simulating
         if not self.sim:
             cost = current_cost
             
             ## update observation and trajectory arrays - i.e. agent observes along the way
-            # self.a_traj.append(tuple(self._agent_location))
-            # loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
-            # self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
-
-            ## temporarily store observations until the end of the trial
             self.a_traj.append(tuple(self._agent_location))
             loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
+            self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
             self.obs_tmp = np.vstack([self.obs_tmp, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+
+            ## or, temporarily store observations until the end of the trial
+            # self.a_traj.append(tuple(self._agent_location))
+            # loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
+            # self.obs_tmp = np.vstack([self.obs_tmp, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+
 
             ## store info on optimality of the choice, given the agent's current position
             self.action_scores.append(action_score)
+
+            ## calculate new posterior for next trial
+            self.posterior_mean, self.posterior_cov = self.inference_func(obs = self.obs, pred='all')
 
         ## return the predicted cost if simulating
         elif self.sim:
@@ -400,8 +403,8 @@ class MountainEnv(gym.Env):
                 self.a_traj.pop(-1)
 
             ## sum of costs of route
-            self.a_route_cost = [self.costs[x, y] for x, y in self.a_traj]
-            self.actual_cost = np.sum(self.a_route_cost)
+            self.a_traj_costs = [self.costs[x, y] for x, y in self.a_traj]
+            self.a_traj_total_cost = np.sum(self.a_traj_costs)
 
             ## average action score
             self.episode_score = np.mean(self.action_scores)
@@ -413,6 +416,7 @@ class MountainEnv(gym.Env):
         info = self._get_info()
         terminated = self.terminated
 
+
         if (self.render_mode == "human"):
             ## posterior prediction using known kernel
             # self.posterior_mean, self.posterior_cov = self.post_pred(self.K_inf, self.obs)
@@ -422,7 +426,6 @@ class MountainEnv(gym.Env):
 
             self.posterior_mean, self.posterior_cov = self.inference_func(obs = self.obs, pred='all')
             self.render()      
-
         truncated=False
         return observation, cost, terminated, truncated, info
 
