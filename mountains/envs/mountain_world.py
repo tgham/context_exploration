@@ -339,6 +339,14 @@ class MountainEnv(gym.Env):
         ## first, get the ranking of the best actions to take under the *true* optimal policy, given the agent's current position
         current_Q_vals = self.Q_true[self._agent_location[0], self._agent_location[1], :]
         action_ranking = rankdata(current_Q_vals, method='max') - 1
+
+        ## get the score of the action that will  actually be taken, given the ranking of the optimal actions
+        action_score = action_ranking[action] + 1
+        action_score /= self.n_actions
+
+        ## or, score the action based on the normalised Q-values of the available actions
+        norm_Q_vals = (current_Q_vals - np.min(current_Q_vals)) / (np.max(current_Q_vals) - np.min(current_Q_vals))
+        action_score = norm_Q_vals[action]
         
         ## take the actual action 
         self.t += 1
@@ -349,9 +357,6 @@ class MountainEnv(gym.Env):
             self._agent_location + direction, 0, self.N - 1
         )
 
-        ## get the score of the action just taken, given the ranking of the optimal actions
-        action_score = action_ranking[action] + 1
-        action_score /= self.n_actions
 
         ## get the predicted cost of the new state (for MCTS)
         predicted_cost = self.posterior_mean.reshape(self.N, self.N)[self._agent_location[0], self._agent_location[1]]
