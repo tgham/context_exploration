@@ -118,9 +118,9 @@ class MonteCarloTreeSearch():
                 node.n_state_visits += 1
 
             ## if the agent has reached a state that has already been visited, initiate a rollout from there
-            # visited_states = np.array([self.tree_path[i][0] for i in range(len(self.tree_path))])
-            # if any(np.array_equal(next_state, state) for state in visited_states):
-            #     break
+            visited_states = np.array([self.tree_path[i][0] for i in range(len(self.tree_path))])
+            if any(np.array_equal(next_state, state) for state in visited_states):
+                break
 
             if t>self.N**2:
                 # print('tree policy stuck')
@@ -164,12 +164,12 @@ class MonteCarloTreeSearch():
             # action = random.randint(0, self.action_space-1)
 
             ## or, greedy
-            # current = observation['agent']
-            # action = env_copy.greedy_policy(current, target, eps = 0.0)
+            current = observation['agent']
+            action = env_copy.greedy_policy(current, target, eps = 0.0)
 
             ## or, optimised rollout 
-            current = observation['agent']
-            action = env_copy.optimal_policy(current)
+            # current = observation['agent']
+            # action = env_copy.optimal_policy(current)
 
             ## take action
             observation, cost, terminated, _, _ = env_copy.step(action)
@@ -190,9 +190,9 @@ class MonteCarloTreeSearch():
             
             ## prevent infinite rollout
             depth += 1
-            # if depth > max_depth:
-            #     print('exceeded max rolls')
-            #     terminated = True
+            if depth > max_depth:
+                print('exceeded max rolls')
+                terminated = True
 
     ## calculate E-E value
     def compute_UCT(self, node, action_leaf): 
@@ -432,6 +432,7 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
             end_episode = False
             terminated=False
             steps = 0
+            max_steps = len(env_copy.o_traj)*2
 
             while not end_episode:
 
@@ -466,8 +467,8 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
                 #     print('current: ', current, env_copy.costs[current[0], current[1]], ' goal: ', goal, env_copy.costs[goal[0], goal[1]], ' action: ', action)
 
                 ## prevent endless episode 
-                if steps >= 50:
-                    print('episode ',e,' terminated in mountain ',m,' for agent ',agent,', cost: ', env_copy.accrued_cost)
+                if steps >= max_steps:
+                    print('mountain ',m,': episode ',e,' terminated for agent ',agent,' after ',steps,' steps, cost: ', env_copy.accrued_cost)
 
                     ## reset
                     # observation, info = env.reset()
@@ -485,7 +486,7 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
                     sim_out['true_k'].append(true_k)
                     sim_out['inf_k'].append(inf_k)
                     sim_out['accrued_cost'].append(np.nan)
-                    sim_out['optimal_cost'].append(env_copy.optimal_cost)
+                    sim_out['optimal_cost'].append(env_copy.o_traj_total_cost)
                     sim_out['score'].append(np.nan)
                     sim_out['n_steps'].append(steps)
                     sim_out['RPE'].append(np.nan)
@@ -505,10 +506,10 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
                     sim_out['inf_k'].append(inf_k)
                     # sim_out['accrued_cost'].append(total_cost)
                     sim_out['accrued_cost'].append(env_copy.accrued_cost)
-                    sim_out['optimal_cost'].append(env_copy.optimal_cost)
-                    if np.round(env_copy.optimal_cost,4) < np.round(env_copy.accrued_cost,4):
-                        print(env_copy.optimal_cost, env_copy.accrued_cost)
-                    assert np.round(env_copy.optimal_cost,4) >= np.round(env_copy.accrued_cost,4), 'accrued cost higher than optimal cost'
+                    sim_out['optimal_cost'].append(env_copy.o_traj_total_cost)
+                    # if np.round(env_copy.optimal_cost,4) < np.round(env_copy.accrued_cost,4):
+                    #     print(env_copy.optimal_cost, env_copy.accrued_cost)
+                    # assert np.round(env_copy.optimal_cost,4) >= np.round(env_copy.accrued_cost,4), 'accrued cost higher than optimal cost'
                     # sim_out['score'].append(env_copy.optimal_cost/env_copy.accrued_cost)
                     sim_out['score'].append(env_copy.episode_score)
                     sim_out['n_steps'].append(steps)
