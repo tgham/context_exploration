@@ -55,7 +55,7 @@ class MountainEnv(gym.Env):
             self.period = self.N/5
             self.periodic_length_scale = self.N/2
             self.periodic_theta = np.pi/3
-            self.expl_beta = 0.2
+            self.expl_beta = 0.1
         else:
             self.c = params[0]
             self.scale = params[1]
@@ -66,7 +66,7 @@ class MountainEnv(gym.Env):
             self.period = params[6]
             self.periodic_theta = params[7]
 
-
+        self.min_cost, self.max_cost = -0.9, -0.1
 
         ## initialise the kernels
         self.K_lin = self.linear()
@@ -267,22 +267,22 @@ class MountainEnv(gym.Env):
         # self.obs = np.array([loc_idx, self._agent_location[0], self._agent_location[1], current_cost], ndmin=2)
 
         ## or, observations accumulate over trials, and agent observes starting position
-        # loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
-        # if not hasattr(self, 'obs') or self.obs is None:
-        #     self.obs = np.array([[loc_idx, self._agent_location[0], self._agent_location[1], current_cost]]) 
-        # else:
-        #     # print(len(self.obs))
-        #     self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
-        # self.obs_tmp = self.obs.copy()
-
-        ## or, observations accumulate over trials, but agent doesn't observe starting position
         loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
         if not hasattr(self, 'obs') or self.obs is None:
-            self.obs = None
-            self.obs_tmp = np.array([[loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+            self.obs = np.array([[loc_idx, self._agent_location[0], self._agent_location[1], current_cost]]) 
         else:
+            # print(len(self.obs))
             self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
-            self.obs_tmp = self.obs.copy()
+        self.obs_tmp = self.obs.copy()
+
+        ## or, observations accumulate over trials, but agent doesn't observe starting position
+        # loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
+        # if not hasattr(self, 'obs') or self.obs is None:
+        #     self.obs = None
+        #     self.obs_tmp = np.array([[loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+        # else:
+        #     self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+        #     self.obs_tmp = self.obs.copy()
 
         ## posterior inference over the whole environment
         self.posterior_mean, self.posterior_var = self.inference_func(obs = self.obs, pred='all')
@@ -294,7 +294,9 @@ class MountainEnv(gym.Env):
             self.Q_inf = self.Q_true
             self.A_inf = self.A_true
         else:
-            self.V_inf, self.Q_inf, self.A_inf = self.value_iteration(dp_costs=self.posterior_mean.reshape(self.N, self.N).copy())
+            dp_costs = self.posterior_mean.reshape(self.N, self.N).copy()
+            dp_costs += self.expl_beta * np.sqrt(self.posterior_var.reshape(self.N, self.N)) #UCB
+            self.V_inf, self.Q_inf, self.A_inf = self.value_iteration(dp_costs=dp_costs)
 
 
         ## get the costs of this optimal trajectory
@@ -391,12 +393,15 @@ class MountainEnv(gym.Env):
             if self.known_costs:
                 cost = current_cost
             else:
-                cost = predicted_cost + self.expl_beta * np.sqrt(var_cost) 
+                cost = predicted_cost 
+                cost += self.expl_beta * np.sqrt(var_cost) #UCB
+                
 
         # An episode is done iff the agent has reached the target
         if np.array_equal(self._agent_location, self._target_location):
             self.terminated = True
             cost=0 ## cost of final state is 0
+            cost = self.expl_beta * np.sqrt(var_cost)
         
             ## update observation array only once the episode is complete
             if not self.sim:
@@ -535,7 +540,7 @@ class MountainEnv(gym.Env):
             next_q = self.posterior_mean.reshape(self.N, self.N)[next_states[:, 0], next_states[:, 1]]
             next_var = self.posterior_var.reshape(self.N, self.N)[next_states[:, 0], next_states[:, 1]]
             next_q = next_q + self.expl_beta * np.sqrt(next_var)
-            
+
             ## ensure post_mean is negative
             if next_q.max() > 0:
                 next_q -= next_q.max()
@@ -633,9 +638,10 @@ class MountainEnv(gym.Env):
         samples = np.random.multivariate_normal(mean, K).reshape(self.N, self.N)
 
         #normalise
-        lower, upper = 0.1, 0.9
+        min_cost = -self.min_cost
+        max_cost = -self.max_cost
         # lower+=0.01
-        samples = lower + (upper - lower) * (samples - np.min(samples)) / (np.max(samples) - np.min(samples))
+        samples = min_cost + (max_cost - min_cost) * (samples - np.min(samples)) / (np.max(samples) - np.min(samples))
 
         # make all samples non-negative
         samples += np.abs(np.min(samples))
@@ -667,7 +673,8 @@ class MountainEnv(gym.Env):
             # Posterior mean calculation
             post_mean = K_pred @ inv_K @ obs_rewards
             # post_var = K_inf[pred_idx][:, pred_idx] - K_pred @ inv_K @ K_pred.T
-            post_var = K_inf[pred_idx][:, pred_idx] - K_pred @ inv_K @ K_pred.T
+            post_cov = K_inf[pred_idx][:, pred_idx] - K_pred @ inv_K @ K_pred.T
+            post_var = np.diag(post_cov)
 
         
         ## or if starting from nothing, just return the prior
@@ -677,7 +684,10 @@ class MountainEnv(gym.Env):
             # post_var = np.zeros((len(pred_idx), len(pred_idx)))
             post_var = np.zeros(len(pred_idx))
 
-        
+        ## normalise post_mean between the (known) min and max costs
+        post_mean = self.min_cost + (self.max_cost - self.min_cost) * (post_mean - np.min(post_mean)) / (np.max(post_mean) - np.min(post_mean))
+
+
         return post_mean, post_var
     
 
