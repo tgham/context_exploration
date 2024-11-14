@@ -55,6 +55,7 @@ class MountainEnv(gym.Env):
             self.period = self.N/5
             self.periodic_length_scale = self.N/2
             self.periodic_theta = np.pi/3
+            self.expl_beta = 0.2
         else:
             self.c = params[0]
             self.scale = params[1]
@@ -266,25 +267,25 @@ class MountainEnv(gym.Env):
         # self.obs = np.array([loc_idx, self._agent_location[0], self._agent_location[1], current_cost], ndmin=2)
 
         ## or, observations accumulate over trials, and agent observes starting position
-        loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
-        if not hasattr(self, 'obs') or self.obs is None:
-            self.obs = np.array([[loc_idx, self._agent_location[0], self._agent_location[1], current_cost]]) 
-        else:
-            # print(len(self.obs))
-            self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
-        self.obs_tmp = self.obs.copy()
-
-        ## or, observations accumulate over trials, but agent doesn't observe starting position
         # loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
         # if not hasattr(self, 'obs') or self.obs is None:
-        #     self.obs = None
-        #     self.obs_tmp = np.array([[loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+        #     self.obs = np.array([[loc_idx, self._agent_location[0], self._agent_location[1], current_cost]]) 
         # else:
+        #     # print(len(self.obs))
         #     self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
-        #     self.obs_tmp = self.obs.copy()
+        # self.obs_tmp = self.obs.copy()
+
+        ## or, observations accumulate over trials, but agent doesn't observe starting position
+        loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
+        if not hasattr(self, 'obs') or self.obs is None:
+            self.obs = None
+            self.obs_tmp = np.array([[loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+        else:
+            self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+            self.obs_tmp = self.obs.copy()
 
         ## posterior inference over the whole environment
-        self.posterior_mean, self.posterior_cov = self.inference_func(obs = self.obs, pred='all')
+        self.posterior_mean, self.posterior_var = self.inference_func(obs = self.obs, pred='all')
 
         ## dynamic programming to get the true optimal trajectory, and the optimal trajectory given the agent's knowledge of the environment
         self.V_true, self.Q_true, self.A_true = self.value_iteration(dp_costs=self.costs.copy())
@@ -310,7 +311,7 @@ class MountainEnv(gym.Env):
         if (self.render_mode == "human") or (self.render_mode == "MCTS"):
 
             ## posterior prediction using known kernel
-            # self.posterior_mean, self.posterior_cov = self.post_pred(self.K_inf, self.obs)
+            # self.posterior_mean, self.posterior_var = self.post_pred(self.K_inf, self.obs)
 
             ## posterior prediction using weighted kernel
             # self.posterior_mean = self.weighted_post_pred()
@@ -355,7 +356,10 @@ class MountainEnv(gym.Env):
 
 
         ## get the predicted cost of the new state (for MCTS)
-        predicted_cost = self.posterior_mean.reshape(self.N, self.N)[self._agent_location[0], self._agent_location[1]]
+        predicted_cost = self.posterior_mean[self._agent_location[0]*self.N + self._agent_location[1]]
+        var_cost = self.posterior_var[self._agent_location[0]*self.N + self._agent_location[1]]
+        # predicted_cost = self.posterior_mean.reshape(self.N, self.N)[self._agent_location[0], self._agent_location[1]]
+        # var_cost = self.posterior_var.reshape(self.N, self.N)[self._agent_location[0], self._agent_location[1]]
         
         ## get the observed cost of the current state
         current_cost = self.costs[self._agent_location[0], self._agent_location[1]] + np.random.normal(0, self.r_noise)
@@ -365,29 +369,29 @@ class MountainEnv(gym.Env):
             cost = current_cost
             
             ## update observation and trajectory arrays - i.e. agent observes along the way
-            self.a_traj.append(tuple(self._agent_location))
-            loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
-            self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
-            self.obs_tmp = np.vstack([self.obs_tmp, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
-
-            ## or, temporarily store observations until the end of the trial
             # self.a_traj.append(tuple(self._agent_location))
             # loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
+            # self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
             # self.obs_tmp = np.vstack([self.obs_tmp, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+            
+            ## calculate new posterior for next trial
+            # self.posterior_mean, self.posterior_var = self.inference_func(obs = self.obs, pred='all')
 
+            ## or, temporarily store observations until the end of the trial (no need to calculate posterior at each step, since there are no new observations)
+            self.a_traj.append(tuple(self._agent_location))
+            loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
+            self.obs_tmp = np.vstack([self.obs_tmp, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
 
             ## store info on optimality of the choice, given the agent's current position
             self.action_scores.append(action_score)
 
-            ## calculate new posterior for next trial
-            self.posterior_mean, self.posterior_cov = self.inference_func(obs = self.obs, pred='all')
 
         ## return the predicted cost if simulating
         elif self.sim:
             if self.known_costs:
                 cost = current_cost
             else:
-                cost = predicted_cost
+                cost = predicted_cost + self.expl_beta * np.sqrt(var_cost) 
 
         # An episode is done iff the agent has reached the target
         if np.array_equal(self._agent_location, self._target_location):
@@ -419,12 +423,12 @@ class MountainEnv(gym.Env):
 
         if (self.render_mode == "human"):
             ## posterior prediction using known kernel
-            # self.posterior_mean, self.posterior_cov = self.post_pred(self.K_inf, self.obs)
+            # self.posterior_mean, self.posterior_var = self.post_pred(self.K_inf, self.obs)
 
             ## posterior prediction using weighted kernel
             # self.posterior_mean = self.weighted_post_pred()
 
-            self.posterior_mean, self.posterior_cov = self.inference_func(obs = self.obs, pred='all')
+            self.posterior_mean, self.posterior_var = self.inference_func(obs = self.obs, pred='all')
             self.render()      
         truncated=False
         return observation, cost, terminated, truncated, info
@@ -432,7 +436,7 @@ class MountainEnv(gym.Env):
     ## rendering funcs
     def render(self):
 
-        self.posterior_mean, self.posterior_cov = self.inference_func(obs = self.obs, pred='all')
+        self.posterior_mean, self.posterior_var = self.inference_func(obs = self.obs, pred='all')
         
         # Clear the current output
         clear_output(wait=True)
@@ -517,7 +521,7 @@ class MountainEnv(gym.Env):
         
 
     ## greedy wrt/ both distance to target and cost, i.e. some combination of the two
-    def balanced_policy(self, current, target, eps=0, alpha=0.5, MCTS = False):
+    def balanced_policy(self, current, target, eps=0, alpha=0.5):
         if np.random.rand() < eps:
             return self.random_policy()
         else:
@@ -527,21 +531,11 @@ class MountainEnv(gym.Env):
             next_states = np.clip(np.array([current + self._action_to_direction[i] for i in range(self.n_actions)]), 0, self.N-1)
             next_states_idx = next_states[:, 0]*self.N + next_states[:, 1]
             
-            ## myopic
-            # if not MCTS:
-            # next_q, next_cov = self.inference_func(obs = self.obs, pred=next_states_idx)
+            ## myopic UCB
             next_q = self.posterior_mean.reshape(self.N, self.N)[next_states[:, 0], next_states[:, 1]]
-            # next_q = [self.posterior_mean.reshape(self.N, self.N)[next_states[i, 0], next_states[i, 1]] for i in range(len(next_states))]
-            # self.posterior_mean.reshape(self.N, self.N)[self._agent_location[0], self._agent_location[1]]
-
-            ## estimates provided by MCTS
-            # elif MCTS:
-            #     next_q = MCTS_estimates
+            next_var = self.posterior_var.reshape(self.N, self.N)[next_states[:, 0], next_states[:, 1]]
+            next_q = next_q + self.expl_beta * np.sqrt(next_var)
             
-            ## ensure post_mean is non-negative
-            # if next_q.min() < 0:
-            #     next_q -= next_q.min()
-
             ## ensure post_mean is negative
             if next_q.max() > 0:
                 next_q -= next_q.max()
@@ -672,16 +666,19 @@ class MountainEnv(gym.Env):
             
             # Posterior mean calculation
             post_mean = K_pred @ inv_K @ obs_rewards
-            post_cov = K_inf[pred_idx][:, pred_idx] - K_pred @ inv_K @ K_pred.T
+            # post_var = K_inf[pred_idx][:, pred_idx] - K_pred @ inv_K @ K_pred.T
+            post_var = K_inf[pred_idx][:, pred_idx] - K_pred @ inv_K @ K_pred.T
+
         
         ## or if starting from nothing, just return the prior
         elif obs is None:
             post_mean = np.zeros(len(pred_idx)) - 0.5
-            # post_cov = K_inf[pred_idx][:, pred_idx]
-            post_cov = np.zeros((len(pred_idx), len(pred_idx)))
+            # post_var = K_inf[pred_idx][:, pred_idx]
+            # post_var = np.zeros((len(pred_idx), len(pred_idx)))
+            post_var = np.zeros(len(pred_idx))
 
         
-        return post_mean, post_cov
+        return post_mean, post_var
     
 
     ## posterior prediction weighted by the likelihood of the observations under each kernel
@@ -691,7 +688,7 @@ class MountainEnv(gym.Env):
         else:
             pred_idx = pred    
         post_means = []
-        post_covs = []
+        post_vars = []
         lls = []
         
         ## imperfect memory of observations
@@ -701,9 +698,9 @@ class MountainEnv(gym.Env):
 
             ## loop through possible kernels
             for k_inf in self.all_Ks:
-                post_mean, post_cov = self.post_pred(k_inf, obs = obs, pred=pred_idx)
+                post_mean, post_var = self.post_pred(k_inf, obs = obs, pred=pred_idx)
                 post_means.append(post_mean)
-                post_covs.append(post_cov)
+                post_vars.append(post_var)
 
                 ## calculate marginal likelihood of obs given this kernel
                 ll = self.likelihood(k_inf, obs)
@@ -714,16 +711,16 @@ class MountainEnv(gym.Env):
             post_mean = np.sum([self.k_weights[i] * post_means[i] for i in range(len(self.k_weights))], axis=0)
 
             ## weighted posterior covariance
-            # post_cov = np.sum([k_weights[i] * (post_covs[i] + (post_means[i] - post_mean) @ (post_means[i] - post_mean).T) for i in range(len(k_weights))], axis=0)
-            post_cov = np.sum([self.k_weights[i] * (post_covs[i] + np.outer(post_means[i] - post_mean, post_means[i] - post_mean)) for i in range(len(self.k_weights))], axis=0) ## need to check if this is correct
+            # post_var = np.sum([k_weights[i] * (post_vars[i] + (post_means[i] - post_mean) @ (post_means[i] - post_mean).T) for i in range(len(k_weights))], axis=0)
+            post_var = np.sum([self.k_weights[i] * (post_vars[i] + np.outer(post_means[i] - post_mean, post_means[i] - post_mean)) for i in range(len(self.k_weights))], axis=0) ## need to check if this is correct
 
         ## or if starting from nothing, just return the prior
         elif obs is None:
             post_mean = np.zeros(len(pred_idx)) - 0.5
-            # post_cov = self.K_inf[pred_idx][:, pred_idx]
-            post_cov = np.zeros((len(pred_idx), len(pred_idx)))
+            # post_var = self.K_inf[pred_idx][:, pred_idx]
+            post_var = np.zeros(len(pred_idx))
 
-        return post_mean, post_cov
+        return post_mean, post_var
     
 
     ## check that kernel is PSD and symmetric
