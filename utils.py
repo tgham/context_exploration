@@ -61,15 +61,26 @@ class Node:
         # self.children_identifiers = []
         self.N = N
 
+
+        ## define valid actions
+        self.untried_actions = list(range(action_space))
+        # row, col = self.state
+        # if row == self.N-1:
+        #     self.untried_actions.remove(0)
+        # if row == 0:
+        #     self.untried_actions.remove(2)
+        # if col == self.N-1:
+        #     self.untried_actions.remove(1)
+        # if col == 0:
+        #     self.untried_actions.remove(3)
+
         ## action leaves
-        self.action_leaves = {0: None, 1: None, 2: None, 3: None}
+        self.action_leaves = {a: None for a in self.untried_actions}
+        # self.action_leaves = {0: None, 1: None, 2: None, 3: None}
         # for action in range(action_space):
         #     self.action_leaves[action] = Action_Node(prev_state=self.state, action=action, next_state=None, next_cost=None, terminated=None) 
         # for leaf in self.action_leaves.keys():
         #     self.action_leaves[leaf] = Action_Node(next_state=None, cost=None, terminated=None) ## this is just a placeholder until proper expansion
-
-        ## define valid actions
-        self.untried_actions = list(range(action_space))
 
 
     def __str__(self):
