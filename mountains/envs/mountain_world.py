@@ -55,7 +55,7 @@ class MountainEnv(gym.Env):
             self.period = self.N/5
             self.periodic_length_scale = self.N/2
             self.periodic_theta = np.pi/3
-            self.expl_beta = 0.1
+            self.expl_beta = 0.05
         else:
             self.c = params[0]
             self.scale = params[1]
@@ -214,15 +214,15 @@ class MountainEnv(gym.Env):
 
 
         ## sample start and goal locations
-        dist = 0
-        min_dist = self.N*0.85
-        angle = 0
-        angle_tolerance = 0.4
-        angle_bounds = [45*(1+angle_tolerance), 45*(1-angle_tolerance)]
-        row_or_col = 1
-        goal_val = 0
-        start_val = 0
-        min_val = 0.6
+        # dist = 0
+        # min_dist = self.N*0.85
+        # angle = 0
+        # angle_tolerance = 0.4
+        # angle_bounds = [45*(1+angle_tolerance), 45*(1-angle_tolerance)]
+        # row_or_col = 1
+        # goal_val = 0
+        # start_val = 0
+        # min_val = 0.6
         # while (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (goal_val<min_val) or (start_val<min_val):
         #     self._agent_location = self.np_random.integers(0, self.N, size=2, dtype=int)
         #     self._target_location = self.np_random.integers(
@@ -241,14 +241,12 @@ class MountainEnv(gym.Env):
         #     goal_val = 1
 
         #     start_val = self.costs[self._agent_location[0], self._agent_location[1]]
-            # start_val = 1
+        #     start_val = 1
 
             ## last goal distance criterion
             # self.starts
 
         ## for sanity check, just place agent and target in opposite corners
-        # self._agent_location = np.array([0, 0])
-        # self._target_location = np.array([self.N-1, self.N-1])
         self._agent_location = np.array(self.starts[self.n_eps%4])
         self._target_location = np.array(self.goals[self.n_eps%4])
         self.n_eps += 1
@@ -301,8 +299,6 @@ class MountainEnv(gym.Env):
 
         ## get the costs of this optimal trajectory
         self.optimal_trajectory()
-        self.o_traj.pop(-1) ## delete first and last costs?
-        self.o_traj.pop(0)
 
         ## initialise actual trajectory as list of tuples
         self.a_traj = [tuple(self._agent_location)]
@@ -411,12 +407,13 @@ class MountainEnv(gym.Env):
                 self.a_traj.pop(0)
                 self.a_traj.pop(-1)
 
-            ## sum of costs of route
-            self.a_traj_costs = [self.costs[x, y] for x, y in self.a_traj]
-            self.a_traj_total_cost = np.sum(self.a_traj_costs)
+                ## sum of costs of route
+                self.a_traj_costs = [self.costs[x, y] for x, y in self.a_traj]
+                self.a_traj_total_cost = np.sum(self.a_traj_costs)
 
-            ## average action score
-            self.episode_score = np.mean(self.action_scores)
+                ## scores for the trial
+                self.action_score = np.mean(self.action_scores)
+                self.cost_ratio = self.o_traj_total_cost / self.a_traj_total_cost
 
         else:
             self.terminated = False
@@ -461,7 +458,7 @@ class MountainEnv(gym.Env):
         
         # Plot the full reward distribution, and the posterior distribution
         # title = 't={}\naccrued cost: {}\nthreshold: {}'.format(self.t, np.round(self.accrued_cost,2), np.round(self.cost_threshold,2))
-        title = 't={}, (sub-)optimality: {}%'.format(self.t, np.round(100*self.accrued_cost/self.optimal_cost))
+        # title = 't={}, (sub-)optimality: {}%'.format(self.t, np.round(100*self.accrued_cost/self.optimal_cost))
         title = ''
         plot_r(self.costs, self.axs[0])
         plot_r(self.posterior_mean.reshape(self.N, self.N), self.axs[1], title=title)
@@ -650,6 +647,7 @@ class MountainEnv(gym.Env):
 
     ## use GP regression to predict posterior distribution of rewards, given these observations,based on the currently inferred kernel
     def post_pred(self, K_inf, obs, pred='all', sigma=0.01):
+        sigma = self.r_noise
         if isinstance(pred, str):
             pred_idx = np.arange(self.N**2)
         else:
@@ -788,6 +786,14 @@ class MountainEnv(gym.Env):
                 current = np.clip((i, j - 1), 0, self.N-1)
             self.o_traj.append(current)
             self.o_traj_costs.append(self.costs[current[0], current[1]])
+
+        ## pop the first and last costs
+        self.o_traj.pop(-1)
+        self.o_traj.pop(0)
+        self.o_traj_costs.pop(-1)
+        self.o_traj_costs.pop(0)
+
+        ## sum
         self.o_traj_total_cost = np.sum(self.o_traj_costs)
 
 
