@@ -35,21 +35,19 @@ class MonteCarloTreeSearch():
 
     ## expand the action space of a node
     def expand(self, node):
+
         ## create copy of env and set state
         env_copy = copy.deepcopy(self.env)
         env_copy.set_state(node.state)
+        assert env_copy.sim, 'env is not in sim mode'
         env_copy.set_sim(True)
+
         ## take action and get new state
         action = node.untried_action()
         observation, cost, terminated, truncated, info = env_copy.step(action)
         next_state = observation['agent']
 
-        ## update info for s-a leaf - i.e. the state-action pair, and the cost of the state that you subsequently reach
-        # costs_tmp = np.array([cost, 0])
-        # cost_tmp = costs_tmp[np.clip(terminated,0,1)] # i.e. cost is 0 if the episode is terminated
-        # action_leaf = Node(state=node.state, action=action, next_state = next_state, action_space=self.action_space, cost=cost_tmp, terminated=terminated, N=self.N) 
-        # self.tree.add_node(action_leaf, node)
-        
+        ## update info for s-a leaf - i.e. the state-action pair, and the cost of the state that you subsequently reach        
         node.action_leaves[action] = Action_Node(prev_state = node.state, action=action, next_state = next_state, next_cost=cost, terminated=terminated)
         # node.action_leaves[action].performance = cost
         node.action_leaves[action].performance = 0
@@ -377,7 +375,8 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
         'inf_k': [],
         'actual_cost': [],
         'optimal_cost': [],
-        'score': [],
+        'action_score': [],
+        'cost_ratio': [],
         'n_steps': [],
         'actual_trajectory': [],
         'optimal_trajectory': [],
@@ -387,7 +386,7 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
     
     ## set seed
     seed=m
-    # seed=os.getpid()
+    seed=os.getpid()
     np.random.seed(seed)
     
     ## create base mountain environment
@@ -480,7 +479,8 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
                     sim_out['inf_k'].append(inf_k)
                     sim_out['actual_cost'].append(np.nan)
                     sim_out['optimal_cost'].append(env_copy.o_traj_total_cost)
-                    sim_out['score'].append(np.nan)
+                    sim_out['action_score'].append(np.nan)
+                    sim_out['cost_ratio'].append(np.nan)
                     sim_out['n_steps'].append(steps)
                     sim_out['RPE'].append(np.nan)
                     sim_out['actual_trajectory'].append(env_copy.a_traj)
@@ -502,8 +502,9 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
                     # if np.round(env_copy.optimal_cost,4) < np.round(env_copy.accrued_cost,4):
                     #     print(env_copy.optimal_cost, env_copy.accrued_cost)
                     # assert np.round(env_copy.optimal_cost,4) >= np.round(env_copy.accrued_cost,4), 'accrued cost higher than optimal cost'
-                    # sim_out['score'].append(env_copy.optimal_cost/env_copy.accrued_cost)
-                    sim_out['score'].append(env_copy.episode_score)
+                    # sim_out['action_score'].append(env_copy.optimal_cost/env_copy.accrued_cost)
+                    sim_out['action_score'].append(env_copy.action_score)
+                    sim_out['cost_ratio'].append(env_copy.cost_ratio)
                     sim_out['n_steps'].append(steps)
                     sim_out['RPE'].append(np.mean(np.abs(env_copy.posterior_mean.reshape(N,N) - env_copy.costs)))
                     sim_out['actual_trajectory'].append(env_copy.a_traj)
