@@ -126,14 +126,14 @@ class MountainEnv(gym.Env):
         ## sizes
         self.window_size = 512
 
-        # Observations are dictionaries with the agent's and the target's location.
+        # Observations are dictionaries with the agent's and the goal's location.
         # Each location is encoded as an element of {0, ..., `size`}^2,
         # i.e. MultiDiscrete([size, size]).
         size = 5
         self.observation_space = spaces.Dict(
             {
                 "agent": spaces.Box(0, size - 1, shape=(2,), dtype=int),
-                "target": spaces.Box(0, size - 1, shape=(2,), dtype=int),
+                "goal": spaces.Box(0, size - 1, shape=(2,), dtype=int),
             }
         )
 
@@ -199,13 +199,27 @@ class MountainEnv(gym.Env):
 
     ## get info from current state
     def get_obs(self):
-        return {"agent": self._agent_location, "target": self._target_location}
+        return {"agent": self._agent_location, "goal": self._goal_location}
     def _get_info(self):
         return {
             "distance": np.linalg.norm(
-                self._agent_location - self._target_location, ord=1
+                self._agent_location - self._goal_location, ord=1
             )
         }
+    # def get_current(self):
+    #     return self._agent_location.copy()
+    # def get_goal(self):
+    #     return self._goal_location.copy()
+
+    @property
+    def current(self):
+        return self._agent_location
+    
+    @property
+    def goal(self):
+        return self._goal_location
+    
+
 
     ## reset the environment
     def reset(self, seed=None, options=None):
@@ -225,19 +239,19 @@ class MountainEnv(gym.Env):
         # min_val = 0.6
         # while (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (goal_val<min_val) or (start_val<min_val):
         #     self._agent_location = self.np_random.integers(0, self.N, size=2, dtype=int)
-        #     self._target_location = self.np_random.integers(
+        #     self._goal_location = self.np_random.integers(
         #         0, self.N, size=2, dtype=int
         #     )
 
         #     ## distance criterion
-        #     dist = np.max(cdist([self._agent_location, self._target_location], [self._agent_location, self._target_location], metric='cityblock'))
+        #     dist = np.max(cdist([self._agent_location, self._goal_location], [self._agent_location, self._goal_location], metric='cityblock'))
 
         #     ## angle criterion
-        #     row_or_col = np.sum(self._agent_location == self._target_location)
-        #     angle = node_angle(self._agent_location, self._target_location)
+        #     row_or_col = np.sum(self._agent_location == self._goal_location)
+        #     angle = node_angle(self._agent_location, self._goal_location)
 
         #     ## value criterion
-        #     goal_val = self.costs[self._target_location[0], self._target_location[1]]
+        #     goal_val = self.costs[self._goal_location[0], self._goal_location[1]]
         #     goal_val = 1
 
         #     start_val = self.costs[self._agent_location[0], self._agent_location[1]]
@@ -246,15 +260,14 @@ class MountainEnv(gym.Env):
             ## last goal distance criterion
             # self.starts
 
-        ## for sanity check, just place agent and target in opposite corners
+        ## for sanity check, just place agent and goal in opposite corners
         self._agent_location = np.array(self.starts[self.n_eps%4])
-        self._target_location = np.array(self.goals[self.n_eps%4])
+        self._goal_location = np.array(self.goals[self.n_eps%4])
         self.n_eps += 1
 
 
 
         ## initialise trial info
-        self.t = 0
         self.terminated = False
         observation = self.get_obs()
         current_cost = self.costs[self._agent_location[0], self._agent_location[1]] + np.random.normal(0, self.r_noise)
@@ -344,7 +357,6 @@ class MountainEnv(gym.Env):
         action_score = norm_Q_vals[action]
         
         ## take the actual action 
-        self.t += 1
         direction = self._action_to_direction[action] 
 
         ## move to the new state
@@ -393,8 +405,8 @@ class MountainEnv(gym.Env):
                 cost += self.expl_beta * np.sqrt(var_cost) #UCB
                 
 
-        # An episode is done iff the agent has reached the target
-        if np.array_equal(self._agent_location, self._target_location):
+        # An episode is done iff the agent has reached the goal
+        if np.array_equal(self._agent_location, self._goal_location):
             self.terminated = True
             cost=0 ## cost of final state is 0
             cost = self.expl_beta * np.sqrt(var_cost)
@@ -417,7 +429,6 @@ class MountainEnv(gym.Env):
 
         else:
             self.terminated = False
-            reward = 0
         observation = self.get_obs()
         info = self._get_info()
         terminated = self.terminated
@@ -473,9 +484,9 @@ class MountainEnv(gym.Env):
         plot_traj([self.o_traj, self.a_traj], self.axs[0])
         plot_traj([self.o_traj, self.a_traj], self.axs[1])
         
-        # Plot the agent and target positions
-        plot_state(self._agent_location, self._target_location, self.axs[0], title = "True mountain surface: \n"+title)
-        plot_state(self._agent_location, self._target_location, self.axs[1], title = "Posterior mountain surface: \n"+title)
+        # Plot the agent and goal positions
+        plot_state(self._agent_location, self._goal_location, self.axs[0], title = "True mountain surface: \n"+title)
+        plot_state(self._agent_location, self._goal_location, self.axs[1], title = "Posterior mountain surface: \n"+title)
         
         
         # Adjust the layout to prevent overlapping
@@ -506,24 +517,24 @@ class MountainEnv(gym.Env):
     def random_policy(self):
         return self.action_space.sample()
     
-    ## greedy wrt/ distance to target
-    def greedy_policy(self, current, target, eps=0):
+    ## greedy wrt/ distance to goal
+    def greedy_policy(self, current, goal, eps=0):
         if np.random.rand() < eps:
             return self.random_policy()
         else:
-            # distances = cdist([current], [target], metric=self.metric).flatten()
+            # distances = cdist([current], [goal], metric=self.metric).flatten()
             ## get adjacent states
             next_states = np.clip(np.array([current + self._action_to_direction[i] for i in range(self.n_actions)]), 0, self.N-1)
             
-            ## choose whichever one is closest to the target
-            distances = cdist(next_states, [target], metric=self.metric).flatten()
+            ## choose whichever one is closest to the goal
+            distances = cdist(next_states, [goal], metric=self.metric).flatten()
             min_distance = np.min(distances)
             action = argm(distances, min_distance)
             return action
         
 
-    ## greedy wrt/ both distance to target and cost, i.e. some combination of the two
-    def balanced_policy(self, current, target, eps=0, alpha=0.5):
+    ## greedy wrt/ both distance to goal and cost, i.e. some combination of the two
+    def balanced_policy(self, current, goal, eps=0, alpha=0.5):
         if np.random.rand() < eps:
             return self.random_policy()
         else:
@@ -543,8 +554,8 @@ class MountainEnv(gym.Env):
                 next_q -= next_q.max()
 
             
-            ## weight the distance to the target by the cost of the state
-            distances = cdist(next_states, [target], metric=self.metric).flatten()
+            ## weight the distance to the goal by the cost of the state
+            distances = cdist(next_states, [goal], metric=self.metric).flatten()
             combined_q = alpha * softmax(-distances) + (1-alpha) * softmax(next_q)
             max_combined_q = np.max(combined_q)
             action = argm(combined_q, max_combined_q)
@@ -770,7 +781,7 @@ class MountainEnv(gym.Env):
     ## calculate the optimal trajectory between the two points, as given by the true DP solution
     def optimal_trajectory(self):
         current = self._agent_location
-        goal = self._target_location
+        goal = self._goal_location
         self.o_traj = [current]
         self.o_traj_costs = [self.costs[current[0], current[1]]]
         while np.array_equal(current, goal) == False:
@@ -825,7 +836,7 @@ class MountainEnv(gym.Env):
         ## set cost of goal to 0
         info = self.get_obs()
         start = info['agent']
-        goal = info['target']
+        goal = info['goal']
         dp_costs[goal[0], goal[1]] = 0
 
         ## loop through states
