@@ -49,6 +49,8 @@ def make_env(N, params, metric, true_k, inf_k, known_costs, render_mode, r_noise
 ## Node class
 class Node:
 
+    # __slots__ = ['state', 'n_state_visits', 'cost', 'terminated', 'identifier', 'parent_identifiers', 'N', 'untried_actions', 'action_leaves']
+
     def __init__(self, state, cost, terminated, action_space, N):
         
         ## state info
@@ -64,23 +66,18 @@ class Node:
 
         ## define valid actions
         self.untried_actions = list(range(action_space))
-        # row, col = self.state
-        # if row == self.N-1:
-        #     self.untried_actions.remove(0)
-        # if row == 0:
-        #     self.untried_actions.remove(2)
-        # if col == self.N-1:
-        #     self.untried_actions.remove(1)
-        # if col == 0:
-        #     self.untried_actions.remove(3)
+        row, col = self.state
+        if row == self.N-1:
+            self.untried_actions.remove(0)
+        if row == 0:
+            self.untried_actions.remove(2)
+        if col == self.N-1:
+            self.untried_actions.remove(1)
+        if col == 0:
+            self.untried_actions.remove(3)
 
         ## action leaves
         self.action_leaves = {a: None for a in self.untried_actions}
-        # self.action_leaves = {0: None, 1: None, 2: None, 3: None}
-        # for action in range(action_space):
-        #     self.action_leaves[action] = Action_Node(prev_state=self.state, action=action, next_state=None, next_cost=None, terminated=None) 
-        # for leaf in self.action_leaves.keys():
-        #     self.action_leaves[leaf] = Action_Node(next_state=None, cost=None, terminated=None) ## this is just a placeholder until proper expansion
 
 
     def __str__(self):
@@ -176,16 +173,52 @@ class Tree:
     ## calculate value of each S-A node
     def action_tree(self):
 
-        tree_q = np.zeros((self.N,self.N,4)) + np.nan
+        self.tree_q = np.zeros((self.N,self.N,4)) + np.nan
         for sstate in self.nodes.keys():
             state = self.nodes[sstate].state
             for a in self.nodes[sstate].action_leaves.keys():
                 try:
-                    tree_q[state[0], state[1], a] = self.nodes[sstate].action_leaves[a].performance
+                    self.tree_q[state[0], state[1], a] = self.nodes[sstate].action_leaves[a].performance
                 except:
                     pass
 
-        return tree_q
+    
+    ## calculate the best trajectory for any two points, given the tree
+    def best_traj(self, start, goal):
+
+        ## get the best action at each state
+        best_actions = nanargmax(self.tree_q, axis=2)
+
+        ## get the best trajectory from start to goal
+        current = start
+        traj_states = [current]
+        traj_actions = []
+        stuck = False
+        while not np.array_equal(current, goal) and not stuck:
+            i, j = current
+            action = best_actions[i,j]
+            action = int(action)
+            traj_actions.append(action)
+            if action==0:
+                current = np.clip((i + 1, j), 0, self.N-1)
+            elif action == 1:
+                current = np.clip((i, j + 1), 0, self.N-1)
+            elif action == 2:
+                current = np.clip((i - 1, j), 0, self.N-1)
+            elif action == 3:
+                current = np.clip((i, j - 1), 0, self.N-1)
+            traj_states.append(current)
+
+            ## check if the current state is already in the path
+            for s in traj_states[:-1]:
+                if np.array_equal(s, current):
+                    stuck = True
+            assert not stuck, 'stuck in loop; MCTS failed to find a path'
+        
+        return traj_states, traj_actions
+                    
+
+
     
     
 
@@ -195,3 +228,9 @@ class Tree:
 def argm(x, extreme_val):
     indices = np.where(x == extreme_val)[0]
     return np.random.choice(indices)
+
+## calculate the angle between two nodes
+def node_angle(a,b):
+    rad = np.arctan2(b[1]-a[1], b[0]-a[0])
+    ang = np.abs(np.degrees(rad))
+    return ang
