@@ -15,7 +15,8 @@ import heapq
 from collections import defaultdict
 from IPython.display import display, clear_output
 from utils import *
-from scipy.stats import rankdata
+from scipy.stats import rankdata, truncnorm
+
 # from PIL import image
 
 
@@ -49,8 +50,8 @@ class MountainEnv(gym.Env):
         if params is None:
             self.c = 1
             self.scale = 1.0
-            # self.theta = 0
-            self.theta = np.pi/3
+            self.theta = 0
+            # self.theta = np.pi/3
             self.sigma_f = 1.0
             self.length_scale = self.N/5
             self.length_scale = 1
@@ -231,7 +232,7 @@ class MountainEnv(gym.Env):
 
         ## sample start and goal locations
         dist = 0
-        min_dist = self.N*0.75
+        min_dist = self.N*0.8
         angle = 0
         angle_tolerance = 0.5
         angle_bounds = [45*(1+angle_tolerance), 45*(1-angle_tolerance)]
@@ -663,6 +664,35 @@ class MountainEnv(gym.Env):
         # make all samples non-negative
         samples += np.abs(np.min(samples))
         return samples
+
+    def sample_trunc(self, post_mean, post_cov):
+            # def sample_posterior_bounded(post_mean, post_var, num_samples=1000, lower_bound=-0.9, upper_bound=-0.1):
+        """
+        Sample from Gaussian posterior distribution with bounded costs
+        
+        Args:
+            post_mean (np.array): Posterior mean 
+            post_var (np.array): Posterior variance
+            num_samples (int): Number of samples to draw
+            lower_bound (float): Minimum allowed cost
+            upper_bound (float): Maximum allowed cost
+        
+        Returns:
+            np.array: Bounded samples from posterior distribution
+        """
+        lower_bound = -0.9
+        upper_bound = -0.1
+        post_var = np.diag(post_cov)
+        # Truncated normal distribution sampling
+        samples = scipy.stats.truncnorm.rvs(
+            (lower_bound - post_mean) / np.sqrt(post_var),
+            (upper_bound - post_mean) / np.sqrt(post_var),
+            loc=post_mean, 
+            scale=np.sqrt(post_var), 
+            size=len(post_mean))
+        return samples
+
+
     
 
     ## use GP regression to predict posterior distribution of rewards, given these observations,based on the currently inferred kernel
@@ -711,6 +741,9 @@ class MountainEnv(gym.Env):
         ## revert back to prior mean
         post_mean -= 0.5
 
+        ## sample!
+        # samples = np.random.multivariate_normal(post_mean, post_cov)
+        # samples = self.sample_trunc(post_mean, post_cov)
 
         return post_mean, post_var
     
