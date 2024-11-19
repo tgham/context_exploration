@@ -665,8 +665,11 @@ class MountainEnv(gym.Env):
             pred_idx = pred
 
         if obs is not None:
+
+            ## centre around 0 
             obs_idx = obs[:, 0].astype(int)
-            obs_rewards = obs[:, 3]
+            obs_rewards = obs[:, 3].copy()
+            obs_rewards += 0.5 
             # obs_idx = self.obs[:, 0].astype(int)
             # obs_rewards = self.obs[:, 3]
             
@@ -694,7 +697,10 @@ class MountainEnv(gym.Env):
             post_var = np.zeros(len(pred_idx))
 
         ## normalise post_mean between the (known) min and max costs
-        post_mean = self.min_cost + (self.max_cost - self.min_cost) * (post_mean - np.min(post_mean)) / (np.max(post_mean) - np.min(post_mean))
+        # post_mean = self.min_cost + (self.max_cost - self.min_cost) * (post_mean - np.min(post_mean)) / (np.max(post_mean) - np.min(post_mean))
+
+        ## revert back to prior mean
+        post_mean -= 0.5
 
 
         return post_mean, post_var
