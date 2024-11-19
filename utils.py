@@ -212,10 +212,8 @@ class Tree:
             ## check if the current state is already in the path
             for s in traj_states[:-1]:
                 if np.array_equal(s, current):
-                    traj_states = None
-                    traj_actions = None
                     stuck = True
-            # assert not stuck, 'stuck in loop; MCTS failed to find a path' ## next step: in search method, if stuck, then run MCTS again
+                    
         
         return traj_states, traj_actions
                     
