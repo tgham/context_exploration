@@ -49,9 +49,11 @@ class MountainEnv(gym.Env):
         if params is None:
             self.c = 1
             self.scale = 1.0
-            self.theta = 0
+            # self.theta = 0
+            self.theta = np.pi/3
             self.sigma_f = 1.0
             self.length_scale = self.N/5
+            self.length_scale = 1
             self.period = self.N/5
             self.periodic_length_scale = self.N/2
             self.periodic_theta = np.pi/3
@@ -182,7 +184,7 @@ class MountainEnv(gym.Env):
         #     self.sim = False
         # elif self.render_mode == "MCTS":
         #     self.sim = True
-        # self.sim = False
+        self.sim = False
 
         """
         If human-rendering is used, `self.window` will be a reference
@@ -228,42 +230,49 @@ class MountainEnv(gym.Env):
 
 
         ## sample start and goal locations
-        # dist = 0
-        # min_dist = self.N*0.85
-        # angle = 0
-        # angle_tolerance = 0.4
-        # angle_bounds = [45*(1+angle_tolerance), 45*(1-angle_tolerance)]
-        # row_or_col = 1
-        # goal_val = 0
-        # start_val = 0
-        # min_val = 0.6
-        # while (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (goal_val<min_val) or (start_val<min_val):
-        #     self._agent_location = self.np_random.integers(0, self.N, size=2, dtype=int)
-        #     self._goal_location = self.np_random.integers(
-        #         0, self.N, size=2, dtype=int
-        #     )
+        dist = 0
+        min_dist = self.N*0.75
+        angle = 0
+        angle_tolerance = 0.5
+        angle_bounds = [45*(1+angle_tolerance), 45*(1-angle_tolerance)]
+        row_or_col = 1
+        goal_val = 0
+        start_val = 0
+        min_val = 0.6
+        t = 0
+        while (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]): #or (goal_val<min_val) or (start_val<min_val):
+            self._agent_location = self.np_random.integers(0, self.N, size=2, dtype=int)
+            self._goal_location = self.np_random.integers(
+                0, self.N, size=2, dtype=int
+            )
 
-        #     ## distance criterion
-        #     dist = np.max(cdist([self._agent_location, self._goal_location], [self._agent_location, self._goal_location], metric='cityblock'))
+            ## distance criterion
+            dist = np.max(cdist([self._agent_location, self._goal_location], [self._agent_location, self._goal_location], metric='cityblock'))
 
-        #     ## angle criterion
-        #     row_or_col = np.sum(self._agent_location == self._goal_location)
-        #     angle = node_angle(self._agent_location, self._goal_location)
+            ## same row/col criterion
+            row_or_col = np.sum(self._agent_location == self._goal_location)
 
-        #     ## value criterion
-        #     goal_val = self.costs[self._goal_location[0], self._goal_location[1]]
-        #     goal_val = 1
+            ## angle criterion
+            angle = node_angle(self._agent_location, self._goal_location)
 
-        #     start_val = self.costs[self._agent_location[0], self._agent_location[1]]
-        #     start_val = 1
+            ## value criterion
+            goal_val = self.costs[self._goal_location[0], self._goal_location[1]]
+            goal_val = 1
 
-            ## last goal distance criterion
+            start_val = self.costs[self._agent_location[0], self._agent_location[1]]
+            start_val = 1
+            t+=1
+
+            if t>10:
+                print('cant find start and end', dist, angle)
+
+            # last goal distance criterion
             # self.starts
 
         ## for sanity check, just place agent and goal in opposite corners
-        self._agent_location = np.array(self.starts[self.n_eps%4])
-        self._goal_location = np.array(self.goals[self.n_eps%4])
-        self.n_eps += 1
+        # self._agent_location = np.array(self.starts[self.n_eps%4])
+        # self._goal_location = np.array(self.goals[self.n_eps%4])
+        # self.n_eps += 1
 
 
 
@@ -416,8 +425,8 @@ class MountainEnv(gym.Env):
                 self.obs = self.obs_tmp.copy()
 
                 ## (REMOVE COST OF FIRST AND FINAL STATE??)
-                self.a_traj.pop(0)
-                self.a_traj.pop(-1)
+                # self.a_traj.pop(0)
+                # self.a_traj.pop(-1)
 
                 ## sum of costs of route
                 self.a_traj_costs = [self.costs[x, y] for x, y in self.a_traj]
@@ -691,7 +700,7 @@ class MountainEnv(gym.Env):
         
         ## or if starting from nothing, just return the prior
         elif obs is None:
-            post_mean = np.zeros(len(pred_idx)) - 0.5
+            post_mean = np.zeros(len(pred_idx))
             # post_var = K_inf[pred_idx][:, pred_idx]
             # post_var = np.zeros((len(pred_idx), len(pred_idx)))
             post_var = np.zeros(len(pred_idx))
@@ -805,10 +814,10 @@ class MountainEnv(gym.Env):
             self.o_traj_costs.append(self.costs[current[0], current[1]])
 
         ## pop the first and last costs
-        self.o_traj.pop(-1)
-        self.o_traj.pop(0)
-        self.o_traj_costs.pop(-1)
-        self.o_traj_costs.pop(0)
+        # self.o_traj.pop(-1)
+        # self.o_traj.pop(0)
+        # self.o_traj_costs.pop(-1)
+        # self.o_traj_costs.pop(0)
 
         ## sum
         self.o_traj_total_cost = np.sum(self.o_traj_costs)
