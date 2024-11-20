@@ -309,7 +309,6 @@ class MountainEnv(gym.Env):
 
         ## posterior inference over the whole environment
         self.posterior_mean, self.posterior_cov, self.posterior_var = self.inference_func(obs = self.obs, pred='all')
-        print('posterior inf done')
 
         ## dynamic programming to get the true optimal trajectory, and the optimal trajectory given the agent's knowledge of the environment
         dp_costs = self.costs.copy()
@@ -325,11 +324,8 @@ class MountainEnv(gym.Env):
             # dp_costs += self.expl_beta * np.sqrt(self.posterior_var.reshape(self.N, self.N)) #UCB
             self.V_inf, self.Q_inf, self.A_inf = self.value_iteration(dp_costs=dp_costs)
 
-        print('dp done')
-
         ## get the costs of this optimal trajectory
         self.optimal_trajectory()
-        print('optimal traj done')
 
         ## initialise actual trajectory as list of tuples
         self.a_traj = [tuple(self._agent_location)]
@@ -654,14 +650,13 @@ class MountainEnv(gym.Env):
 
 
     ## sample from the GP
-    def sample(self, K, mean=None):
+    def sample(self, K):
 
         ## check kernel is valid
         self.k_check(K)
 
         # sample
-        if mean is None:
-            mean = np.zeros(self.N**2)
+        mean = np.zeros(self.N**2)
         samples = np.random.multivariate_normal(mean, K).reshape(self.N, self.N)
 
         #normalise
@@ -677,12 +672,20 @@ class MountainEnv(gym.Env):
         ## check kernel is valid
         self.k_check(post_cov)
 
-        ## generate samples
+
+        ## generate samples (np)
         samples = np.random.multivariate_normal(post_mean, post_cov).reshape(self.N, self.N)
 
+        # Try using Cholesky for more efficient sampling
+
+        ## standard normalisation
+        # samples = self.min_cost + (self.max_cost - self.min_cost) * (samples - np.min(samples)) / (np.max(samples) - np.min(samples))
+
         ## sigmoid norm
-        # samples = -0.9 + 0.8 / (1 + np.exp(-samples))
-        samples = self.min_cost + (self.max_cost - self.min_cost) / (1 + np.exp(-samples))
+        # samples = self.min_cost + (self.max_cost - self.min_cost) / (1 + np.exp(-samples))
+
+        ## clipping
+        samples = np.clip(samples, self.min_cost, self.max_cost)
 
         return samples
 
@@ -702,8 +705,7 @@ class MountainEnv(gym.Env):
             obs_idx = obs[:, 0].astype(int)
             obs_rewards = obs[:, 3].copy()
             obs_rewards += 0.5 
-            # obs_idx = self.obs[:, 0].astype(int)
-            # obs_rewards = self.obs[:, 3]
+            # obs_rewards /=10
             
             # Covariance matrix of the already observed points
             K_obs = K_inf[obs_idx][:, obs_idx]
@@ -712,7 +714,9 @@ class MountainEnv(gym.Env):
             K_pred = K_inf[pred_idx][:, obs_idx]
             
             # inversion covariance matrix
-            inv_K = np.linalg.inv(K_obs + sigma**2 * np.eye(len(obs_idx)))
+            # inv_K = np.linalg.inv(K_obs + sigma**2 * np.eye(len(obs_idx)))
+            inv_K = np.linalg.solve(K_obs + sigma**2 * np.eye(len(obs_idx)), np.eye(len(obs_idx)))
+
             
             # Posterior mean calculation
             post_mean = K_pred @ inv_K @ obs_rewards
@@ -723,19 +727,17 @@ class MountainEnv(gym.Env):
         
         ## or if starting from nothing, just return the prior
         elif obs is None:
-            post_mean = np.zeros(len(pred_idx))
-            # post_var = K_inf[pred_idx][:, pred_idx]
-            # post_var = np.zeros((len(pred_idx), len(pred_idx)))
-            post_var = np.zeros(len(pred_idx))
+            post_mean = np.zeros(len(pred_idx))  # Zero prior mean
+            post_cov = K_inf[pred_idx][:, pred_idx]  # Full prior covariance
+            post_var = np.diag(post_cov)
+
 
 
         ## revert back to prior mean
         post_mean -= 0.5
 
         ## sample from posterior?
-        # samples = np.random.multivariate_normal(post_mean, post_cov)
-        # post_mean = self.sample_trunc(post_mean, post_cov)
-        # post_mean = self.sample(post_cov, post_mean).reshape(self.N ** 2)
+        # post_mean = self.sample_post(post_mean, post_cov).reshape(self.N ** 2)
 
         return post_mean, post_cov, post_var
     
