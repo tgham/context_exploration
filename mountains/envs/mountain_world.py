@@ -16,6 +16,8 @@ from collections import defaultdict
 from IPython.display import display, clear_output
 from utils import *
 from scipy.stats import rankdata, truncnorm
+from scipy.linalg import cholesky
+
 
 # from PIL import image
 
@@ -49,7 +51,7 @@ class MountainEnv(gym.Env):
         ## set the kernel parameters
         if params is None:
             self.c = 1
-            self.scale = 1.0
+            self.scale = 1
             self.theta = 0
             # self.theta = np.pi/3
             self.sigma_f = 1.0
@@ -58,7 +60,7 @@ class MountainEnv(gym.Env):
             self.period = self.N/5
             self.periodic_length_scale = self.N/2
             self.periodic_theta = np.pi/3
-            self.expl_beta = 0.05
+            self.expl_beta = 0.0
         else:
             self.c = params[0]
             self.scale = params[1]
@@ -110,7 +112,7 @@ class MountainEnv(gym.Env):
             self.K_gen = self.K_periodic_y
         else: #default
             self.K_gen = self.K_rbf
-        self.costs = self.sample(self.K_gen) *-1
+        self.costs = self.sample(self.K_gen) 
         self.cost_threshold = 1 
         self.r_noise = r_noise
         self.known_costs = known_costs
@@ -264,8 +266,8 @@ class MountainEnv(gym.Env):
             start_val = 1
             t+=1
 
-            if t>10:
-                print('cant find start and end', dist, angle)
+            # if t>10:
+            #     print('cant find start and end', dist, angle, t)
 
             # last goal distance criterion
             # self.starts
@@ -306,9 +308,12 @@ class MountainEnv(gym.Env):
         #     self.obs_tmp = self.obs.copy()
 
         ## posterior inference over the whole environment
-        self.posterior_mean, self.posterior_var = self.inference_func(obs = self.obs, pred='all')
+        self.posterior_mean, self.posterior_cov, self.posterior_var = self.inference_func(obs = self.obs, pred='all')
+        print('posterior inf done')
 
         ## dynamic programming to get the true optimal trajectory, and the optimal trajectory given the agent's knowledge of the environment
+        dp_costs = self.costs.copy()
+        dp_costs[self._goal_location[0], self._goal_location[1]] = 0
         self.V_true, self.Q_true, self.A_true = self.value_iteration(dp_costs=self.costs.copy())
         if self.known_costs:
             self.V_inf = self.V_true
@@ -316,12 +321,15 @@ class MountainEnv(gym.Env):
             self.A_inf = self.A_true
         else:
             dp_costs = self.posterior_mean.reshape(self.N, self.N).copy()
-            dp_costs += self.expl_beta * np.sqrt(self.posterior_var.reshape(self.N, self.N)) #UCB
+            dp_costs[self._goal_location[0], self._goal_location[1]] = 0
+            # dp_costs += self.expl_beta * np.sqrt(self.posterior_var.reshape(self.N, self.N)) #UCB
             self.V_inf, self.Q_inf, self.A_inf = self.value_iteration(dp_costs=dp_costs)
 
+        print('dp done')
 
         ## get the costs of this optimal trajectory
         self.optimal_trajectory()
+        print('optimal traj done')
 
         ## initialise actual trajectory as list of tuples
         self.a_traj = [tuple(self._agent_location)]
@@ -451,7 +459,7 @@ class MountainEnv(gym.Env):
             ## posterior prediction using weighted kernel
             # self.posterior_mean = self.weighted_post_pred()
 
-            self.posterior_mean, self.posterior_var = self.inference_func(obs = self.obs, pred='all')
+            self.posterior_mean, self.posterior_cov, self.posterior_var = self.inference_func(obs = self.obs, pred='all')
             self.render()      
         truncated=False
         return observation, cost, terminated, truncated, info
@@ -459,7 +467,7 @@ class MountainEnv(gym.Env):
     ## rendering funcs
     def render(self):
 
-        self.posterior_mean, self.posterior_var = self.inference_func(obs = self.obs, pred='all')
+        self.posterior_mean,self.posterior_cov,  self.posterior_var = self.inference_func(obs = self.obs, pred='all')
         
         # Clear the current output
         clear_output(wait=True)
@@ -646,52 +654,37 @@ class MountainEnv(gym.Env):
 
 
     ## sample from the GP
-    def sample(self, K):
+    def sample(self, K, mean=None):
 
         ## check kernel is valid
         self.k_check(K)
 
         # sample
-        mean = np.zeros(self.N**2)
+        if mean is None:
+            mean = np.zeros(self.N**2)
         samples = np.random.multivariate_normal(mean, K).reshape(self.N, self.N)
 
         #normalise
-        min_cost = -self.min_cost
-        max_cost = -self.max_cost
-        # lower+=0.01
+        min_cost = self.min_cost
+        max_cost = self.max_cost
         samples = min_cost + (max_cost - min_cost) * (samples - np.min(samples)) / (np.max(samples) - np.min(samples))
 
-        # make all samples non-negative
-        samples += np.abs(np.min(samples))
         return samples
+    
+    ## sample from posterior
+    def sample_post(self, post_mean, post_cov):
 
-    def sample_trunc(self, post_mean, post_cov):
-            # def sample_posterior_bounded(post_mean, post_var, num_samples=1000, lower_bound=-0.9, upper_bound=-0.1):
-        """
-        Sample from Gaussian posterior distribution with bounded costs
-        
-        Args:
-            post_mean (np.array): Posterior mean 
-            post_var (np.array): Posterior variance
-            num_samples (int): Number of samples to draw
-            lower_bound (float): Minimum allowed cost
-            upper_bound (float): Maximum allowed cost
-        
-        Returns:
-            np.array: Bounded samples from posterior distribution
-        """
-        lower_bound = -0.9
-        upper_bound = -0.1
-        post_var = np.diag(post_cov)
-        # Truncated normal distribution sampling
-        samples = scipy.stats.truncnorm.rvs(
-            (lower_bound - post_mean) / np.sqrt(post_var),
-            (upper_bound - post_mean) / np.sqrt(post_var),
-            loc=post_mean, 
-            scale=np.sqrt(post_var), 
-            size=len(post_mean))
+        ## check kernel is valid
+        self.k_check(post_cov)
+
+        ## generate samples
+        samples = np.random.multivariate_normal(post_mean, post_cov).reshape(self.N, self.N)
+
+        ## sigmoid norm
+        # samples = -0.9 + 0.8 / (1 + np.exp(-samples))
+        samples = self.min_cost + (self.max_cost - self.min_cost) / (1 + np.exp(-samples))
+
         return samples
-
 
     
 
@@ -735,17 +728,16 @@ class MountainEnv(gym.Env):
             # post_var = np.zeros((len(pred_idx), len(pred_idx)))
             post_var = np.zeros(len(pred_idx))
 
-        ## normalise post_mean between the (known) min and max costs
-        # post_mean = self.min_cost + (self.max_cost - self.min_cost) * (post_mean - np.min(post_mean)) / (np.max(post_mean) - np.min(post_mean))
 
         ## revert back to prior mean
         post_mean -= 0.5
 
-        ## sample!
+        ## sample from posterior?
         # samples = np.random.multivariate_normal(post_mean, post_cov)
-        # samples = self.sample_trunc(post_mean, post_cov)
+        # post_mean = self.sample_trunc(post_mean, post_cov)
+        # post_mean = self.sample(post_cov, post_mean).reshape(self.N ** 2)
 
-        return post_mean, post_var
+        return post_mean, post_cov, post_var
     
 
     ## posterior prediction weighted by the likelihood of the observations under each kernel
@@ -830,30 +822,36 @@ class MountainEnv(gym.Env):
     def optimal_trajectory(self):
         current = self._agent_location
         goal = self._goal_location
-        self.o_traj = [current]
+        self.o_traj = [tuple(current)]
         self.o_traj_costs = [self.costs[current[0], current[1]]]
-        while np.array_equal(current, goal) == False:
+        
+        visited = set()
+        while not np.array_equal(current, goal):
             i, j = current
-            action = self.A_true[i, j]
-            if action == 0:
-                current = np.clip((i + 1, j), 0, self.N-1)
-            elif action == 1:
-                current = np.clip((i, j + 1), 0, self.N-1)
-            elif action == 2:
-                current = np.clip((i - 1, j), 0, self.N-1)
-            elif action == 3:
-                current = np.clip((i, j - 1), 0, self.N-1)
-            self.o_traj.append(current)
+            action = int(self.A_true[i, j])  # Ensure action index is int
+            visited.add(tuple(current))
+            
+            # Take action and update current state
+            if action == 0:  # Down
+                current = np.clip((i + 1, j), 0, self.N - 1)
+            elif action == 1:  # Right
+                current = np.clip((i, j + 1), 0, self.N - 1)
+            elif action == 2:  # Up
+                current = np.clip((i - 1, j), 0, self.N - 1)
+            elif action == 3:  # Left
+                current = np.clip((i, j - 1), 0, self.N - 1)
+            
+            if tuple(current) in visited:
+                print(f"Cycle detected at state {current}. Exiting to prevent infinite loop.")
+                break
+            
+            # Update trajectory
+            self.o_traj.append(tuple(current))
             self.o_traj_costs.append(self.costs[current[0], current[1]])
-
-        ## pop the first and last costs
-        # self.o_traj.pop(-1)
-        # self.o_traj.pop(0)
-        # self.o_traj_costs.pop(-1)
-        # self.o_traj_costs.pop(0)
-
-        ## sum
+        
+        # Compute total cost
         self.o_traj_total_cost = np.sum(self.o_traj_costs)
+
 
 
     ## generate random observations from current true GP kernel
@@ -868,7 +866,7 @@ class MountainEnv(gym.Env):
         return obs
     
     ## dynamic programming
-    def value_iteration(self, dp_costs, max_iters = 1000, theta = 0.001, discount = 0.99):
+    def value_iteration(self, dp_costs, max_iters = 1000, theta = 0.0001, discount = 0.99):
         
         ## init tables
         V = np.zeros((self.N, self.N))
@@ -892,21 +890,37 @@ class MountainEnv(gym.Env):
             delta = 0
             for x in range(self.N):
                 for y in range(self.N):
+                    
+                    ## (make sure the goal state has value 0)
+                    if (x, y) == tuple(goal):
+                        # V[x, y] = 0
+                        continue
+
                     v = V[x, y]
                     q = np.zeros(self.n_actions)
 
                     ## loop through actions and get the discounted value of each of the next states
                     for a in range(self.n_actions):
-                        next_state = np.clip([x, y] + self._action_to_direction[a], 0, self.N-1)
-                        q[a] = dp_costs[next_state[0], next_state[1]] + discount*V[next_state[0], next_state[1]]
+
+                        ## allow wall moves
+                        # next_state = np.clip([x, y] + self._action_to_direction[a], 0, self.N-1)
+                        # q[a] = dp_costs[next_state[0], next_state[1]] + discount*V[next_state[0], next_state[1]]
+
+                        ## or, don't allow wall moves
+                        next_state = [x, y] + self._action_to_direction[a]
+                        if (next_state[0] >= 0) and (next_state[0] < self.N) and (next_state[1] >= 0) and (next_state[1] < self.N):
+                            q[a] = dp_costs[next_state[0], next_state[1]] + discount*V[next_state[0], next_state[1]]
+                        else:
+                            q[a] = np.nan
 
                         ## update the Q-table
                         Q[x, y, a] = q[a]
 
                     ## use the best action to update the value of the current state
-                    V[x, y] = np.max(q)
-                    A[x, y] = np.argmax(q)
+                    V[x, y] = np.nanmax(q)
 
+                    # A[x, y] = np.argmax(q)
+                    A[x, y] = argm(q, np.nanmax(q))
 
                     ## check if converged
                     delta = max(delta, np.abs(v - V[x, y]))
@@ -914,5 +928,8 @@ class MountainEnv(gym.Env):
             if delta < theta:
                 # print('DP converged after {} iterations'.format(i))
                 break
+
+            if i == max_iters-1:
+                print('DP did not converge after {} iterations'.format(i))
 
         return V, Q, A
