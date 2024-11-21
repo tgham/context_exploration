@@ -374,6 +374,9 @@ class MonteCarloTreeSearch():
         ## loop through trees
         for t in range(n_trees):
 
+            if progress:
+                pbar.update(1)
+                
             ## root sampling of new posterior
             self.env.root_sample(certainty_equivalent=False) 
             
@@ -399,8 +402,6 @@ class MonteCarloTreeSearch():
             sim_costs = [initial_sim_cost, mean_subseq_sim_cost]
             self.backward(sim_costs)
 
-            if progress:
-                pbar.update(1)
 
         
         ## action selection
@@ -527,14 +528,15 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
                 elif agent == 'MCTS':
                     non_stuck_route=False
                     search_attempts = 0
+                    
+                    
+                    ## init MCTS
+                    tree = Tree(N)
+                    MCTS = MonteCarloTreeSearch(env=env_copy, tree=tree)
+                    assert MCTS.env.sim == True, 'env not in sim mode'
                     while not non_stuck_route:
-
-                        ## init MCTS
-                        tree = Tree(N)
-                        MCTS = MonteCarloTreeSearch(env=env_copy, tree=tree)
-                        assert MCTS.env.sim == True, 'env not in sim mode'
                         search_attempts += 1
-                        
+
 
                         ## search
                         n_futures = 1
@@ -562,15 +564,15 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
                             print('mountain {}, episode {}: MCTS failed to find a path on search attempt {}'.format(m, e, search_attempts))
                             # print(traj_states)
 
-                            ## execute the path anyway?
-                            env_copy.set_sim(False)
-                            for state, action in zip(traj_states, traj_actions):
-                                assert np.array_equal(state, current), 'error in trajectory execution\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, state, action)
-                                observation, _, terminated, truncated, info = env_copy.step(action)
-                                current = observation['agent']
-                                steps += 1
-                            MCTS.tree.root = MCTS.tree.nodes[str(current)]
-                            env_copy.set_sim(True)
+                            # ## execute the path anyway?
+                            # env_copy.set_sim(False)
+                            # for state, action in zip(traj_states, traj_actions):
+                            #     assert np.array_equal(state, current), 'error in trajectory execution\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, state, action)
+                            #     observation, _, terminated, truncated, info = env_copy.step(action)
+                            #     current = observation['agent']
+                            #     steps += 1
+                            # MCTS.tree.root = MCTS.tree.nodes[str(current)]
+                            # env_copy.set_sim(True)
 
 
                             ## give up if too many searches
