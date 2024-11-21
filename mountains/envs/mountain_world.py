@@ -361,7 +361,7 @@ class MountainEnv(gym.Env):
         action_score /= self.n_actions
 
         ## or, score the action based on the normalised Q-values of the available actions
-        norm_Q_vals = (current_Q_vals - np.min(current_Q_vals)) / (np.max(current_Q_vals) - np.min(current_Q_vals))
+        norm_Q_vals = (current_Q_vals - np.nanmin(current_Q_vals)) / (np.nanmax(current_Q_vals) - np.nanmin(current_Q_vals))
         action_score = norm_Q_vals[action]
         
         ## take the actual action 
@@ -412,7 +412,7 @@ class MountainEnv(gym.Env):
                 cost += self.expl_beta * np.sqrt(var_cost) #UCB
 
             ## still need to store obs_tmp along the way for subsequent posterior inference
-            self.a_traj.append(tuple(self._agent_location))
+            # self.a_traj.append(tuple(self._agent_location))
             loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
             self.obs_tmp = np.vstack([self.obs_tmp, [loc_idx, self._agent_location[0], self._agent_location[1], cost]])
                 
@@ -436,7 +436,7 @@ class MountainEnv(gym.Env):
                 self.a_traj_total_cost = np.sum(self.a_traj_costs)
 
                 ## scores for the trial
-                self.action_score = np.mean(self.action_scores)
+                self.action_score = np.nanmean(self.action_scores)
                 self.cost_ratio = self.o_traj_total_cost / self.a_traj_total_cost
 
         else:
