@@ -17,6 +17,7 @@ from IPython.display import display, clear_output
 from utils import *
 from scipy.stats import rankdata, truncnorm
 from scipy.linalg import cholesky
+from minimax_tilting_sampler import TruncatedMVN
 
 
 # from PIL import image
@@ -89,6 +90,8 @@ class MountainEnv(gym.Env):
             # self.K_periodic_y
             ]
         self.k_weights = np.zeros(len(self.all_Ks))
+        self.r_noise = r_noise
+
         
 
         ## define mountain costs as samples from the GP
@@ -112,9 +115,9 @@ class MountainEnv(gym.Env):
             self.K_gen = self.K_periodic_y
         else: #default
             self.K_gen = self.K_rbf
-        self.costs = self.sample(self.K_gen) 
+        mean = np.zeros(self.N**2) - 0.5
+        self.costs = self.sample(mean, self.K_gen) 
         self.cost_threshold = 1 
-        self.r_noise = r_noise
         self.known_costs = known_costs
 
         ## determine how inferences are made (i.e. with full knowledge of the kernel, or with a weighted combination of kernels)
@@ -282,21 +285,22 @@ class MountainEnv(gym.Env):
         ## initialise trial info
         self.terminated = False
         observation = self.get_obs()
-        current_cost = self.costs[self._agent_location[0], self._agent_location[1]] + np.random.normal(0, self.r_noise)
         info = self._get_info()
+        current_cost = self.costs[self._agent_location[0], self._agent_location[1]] + np.random.normal(0, self.r_noise)
 
         ## reset obs on each trial
         # loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
         # self.obs = np.array([loc_idx, self._agent_location[0], self._agent_location[1], current_cost], ndmin=2)
 
         ## or, observations accumulate over trials, and agent observes starting position
-        loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
-        if not hasattr(self, 'obs') or self.obs is None:
-            self.obs = np.array([[loc_idx, self._agent_location[0], self._agent_location[1], current_cost]]) 
-        else:
-            # print(len(self.obs))
-            self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
-        self.obs_tmp = self.obs.copy()
+        if not self.sim:
+            loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
+            if not hasattr(self, 'obs') or self.obs is None:
+                self.obs = np.array([[loc_idx, self._agent_location[0], self._agent_location[1], current_cost]]) 
+            else:
+                # print(len(self.obs))
+                self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+            self.obs_tmp = self.obs.copy()
 
         ## or, observations accumulate over trials, but agent doesn't observe starting position
         # loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
@@ -304,25 +308,26 @@ class MountainEnv(gym.Env):
         #     self.obs = None
         #     self.obs_tmp = np.array([[loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
         # else:
-        #     self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+        #####     self.obs = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
         #     self.obs_tmp = self.obs.copy()
 
-        ## posterior inference over the whole environment
+        ## or, if simulating some unknown future environment, the observations are given by the previous tree, so we trivially have obs already
+        elif self.sim:
+            loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
+            self.obs_tmp = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+
+
+
+        ## calculate posterior mean 
         self.posterior_mean, self.posterior_cov, self.posterior_var = self.inference_func(obs = self.obs, pred='all')
 
-        ## dynamic programming to get the true optimal trajectory, and the optimal trajectory given the agent's knowledge of the environment
+        ## sample from posterior
+        self.root_sample(certainty_equivalent=False)
+
+        ## dynamic programming to get the true optimal trajectory
         dp_costs = self.costs.copy()
         dp_costs[self._goal_location[0], self._goal_location[1]] = 0
-        self.V_true, self.Q_true, self.A_true = self.value_iteration(dp_costs=self.costs.copy())
-        if self.known_costs:
-            self.V_inf = self.V_true
-            self.Q_inf = self.Q_true
-            self.A_inf = self.A_true
-        else:
-            dp_costs = self.posterior_mean.reshape(self.N, self.N).copy()
-            dp_costs[self._goal_location[0], self._goal_location[1]] = 0
-            # dp_costs += self.expl_beta * np.sqrt(self.posterior_var.reshape(self.N, self.N)) #UCB
-            self.V_inf, self.Q_inf, self.A_inf = self.value_iteration(dp_costs=dp_costs)
+        self.V_true, self.Q_true, self.A_true = self.value_iteration(dp_costs=dp_costs)
 
         ## get the costs of this optimal trajectory
         self.optimal_trajectory()
@@ -331,28 +336,17 @@ class MountainEnv(gym.Env):
         self.a_traj = [tuple(self._agent_location)]
         self.action_scores = []
         
-
-        # if (self.render_mode == "human") or (self.render_mode == "MCTS"):
-        if (self.render_mode == "human") or (self.render_mode == "MCTS"):
-
-            ## posterior prediction using known kernel
-            # self.posterior_mean, self.posterior_var = self.post_pred(self.K_inf, self.obs)
-
-            ## posterior prediction using weighted kernel
-            # self.posterior_mean = self.weighted_post_pred()
-
-            self.render()
-
-        
-
         return observation, info
     
-    ## custom function for manually setting the state (for MCTS?)
+    ## custom functions for manually editing the env
     def set_state(self, state):
         self._agent_location = state
-
     def set_sim(self, sim):
         self.sim = sim
+    def set_obs(self, obs):
+        self.obs = obs
+    def flush_obs(self): ## necessary for MCTS
+        self.obs_tmp = self.obs.copy()
 
 
     ## take a step in the environment
@@ -380,10 +374,9 @@ class MountainEnv(gym.Env):
 
 
         ## get the predicted cost of the new state (for MCTS)
-        predicted_cost = self.posterior_mean[self._agent_location[0]*self.N + self._agent_location[1]]
+        # predicted_cost = self.posterior_mean[self._agent_location[0]*self.N + self._agent_location[1]]
+        predicted_cost = self.posterior_sample[self._agent_location[0]*self.N + self._agent_location[1]]
         var_cost = self.posterior_var[self._agent_location[0]*self.N + self._agent_location[1]]
-        # predicted_cost = self.posterior_mean.reshape(self.N, self.N)[self._agent_location[0], self._agent_location[1]]
-        # var_cost = self.posterior_var.reshape(self.N, self.N)[self._agent_location[0], self._agent_location[1]]
         
         ## get the observed cost of the current state
         current_cost = self.costs[self._agent_location[0], self._agent_location[1]] + np.random.normal(0, self.r_noise)
@@ -404,7 +397,7 @@ class MountainEnv(gym.Env):
             ## or, temporarily store observations until the end of the trial (no need to calculate posterior at each step, since there are no new observations)
             self.a_traj.append(tuple(self._agent_location))
             loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
-            self.obs_tmp = np.vstack([self.obs_tmp, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
+            self.obs_tmp = np.vstack([self.obs_tmp, [loc_idx, self._agent_location[0], self._agent_location[1], cost]])
 
             ## store info on optimality of the choice, given the agent's current position
             self.action_scores.append(action_score)
@@ -416,14 +409,19 @@ class MountainEnv(gym.Env):
                 cost = current_cost
             else:
                 cost = predicted_cost 
-                cost += self.expl_beta * np.sqrt(var_cost) #UCB
+                # cost += self.expl_beta * np.sqrt(var_cost) #UCB
+
+            ## still need to store obs_tmp along the way for subsequent posterior inference
+            self.a_traj.append(tuple(self._agent_location))
+            loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
+            self.obs_tmp = np.vstack([self.obs_tmp, [loc_idx, self._agent_location[0], self._agent_location[1], cost]])
                 
 
         # An episode is done iff the agent has reached the goal
         if np.array_equal(self._agent_location, self._goal_location):
             self.terminated = True
             cost=0 ## cost of final state is 0
-            cost = self.expl_beta * np.sqrt(var_cost)
+            # cost = self.expl_beta * np.sqrt(var_cost)
         
             ## update observation array only once the episode is complete
             if not self.sim:
@@ -561,7 +559,7 @@ class MountainEnv(gym.Env):
             ## myopic UCB
             next_q = self.posterior_mean.reshape(self.N, self.N)[next_states[:, 0], next_states[:, 1]]
             next_var = self.posterior_var.reshape(self.N, self.N)[next_states[:, 0], next_states[:, 1]]
-            next_q = next_q + self.expl_beta * np.sqrt(next_var)
+            # next_q = next_q + self.expl_beta * np.sqrt(next_var)
 
             ## ensure post_mean is negative
             if next_q.max() > 0:
@@ -575,16 +573,19 @@ class MountainEnv(gym.Env):
             action = argm(combined_q, max_combined_q)
             return action
         
-    ## optimal policy, as given by the dynamic programming solution
-    def optimal_policy(self, current):
+    ## optimal policy, as given by the dynamic programming Q vals
+    def optimal_policy(self, current, Q=None):
+
+        if Q is None:
+            Q = self.Q_inf
 
         ## get adjacent states
         next_states = np.clip(np.array([current + self._action_to_direction[i] for i in range(self.n_actions)]), 0, self.N-1)
         next_states_idx = next_states[:, 0]*self.N + next_states[:, 1]
     
         ## choose action with highest Q-value
-        current_q = self.Q_inf[current[0], current[1], :]
-        max_current_q = np.max(current_q)
+        current_q = Q[current[0], current[1], :]
+        max_current_q = np.nanmax(current_q)
         action = argm(current_q, max_current_q)
 
         return action
@@ -650,44 +651,76 @@ class MountainEnv(gym.Env):
 
 
     ## sample from the GP
-    def sample(self, K):
+    def sample(self, mean, K):
 
         ## check kernel is valid
         self.k_check(K)
 
         # sample
-        mean = np.zeros(self.N**2)
-        samples = np.random.multivariate_normal(mean, K).reshape(self.N, self.N)
+        # if mean is None:
+        #     mean = np.zeros(self.N**2)
+        # mean = np.zeros(self.N**2)
+        # samples = np.random.multivariate_normal(mean, K).reshape(self.N, self.N)
 
         #normalise
-        min_cost = self.min_cost
-        max_cost = self.max_cost
-        samples = min_cost + (max_cost - min_cost) * (samples - np.min(samples)) / (np.max(samples) - np.min(samples))
+        # min_cost = self.min_cost
+        # max_cost = self.max_cost
+        # samples = min_cost + (max_cost - min_cost) * (samples - np.min(samples)) / (np.max(samples) - np.min(samples))
+
+
+        ## or truncated
+        lb = np.zeros(self.N**2) + self.min_cost
+        ub = np.zeros(self.N**2) + self.max_cost
+        # K_tmp = K + 1e-5 * np.eye(self.N**2)
+        K_tmp = K + self.r_noise**2 * np.eye(self.N**2)
+        tmvn = TruncatedMVN(mean, K_tmp, lb, ub)
+        samples = tmvn.sample(1)
+        samples = samples.reshape(self.N, self.N)
 
         return samples
     
     ## sample from posterior
-    def sample_post(self, post_mean, post_cov):
+    # def sample_post(self, post_mean, post_cov):
 
-        ## check kernel is valid
-        self.k_check(post_cov)
+    #     ## check kernel is valid
+    #     self.k_check(post_cov)
 
 
-        ## generate samples (np)
-        samples = np.random.multivariate_normal(post_mean, post_cov).reshape(self.N, self.N)
+    #     ## generate samples (np)
+    #     samples = np.random.multivariate_normal(post_mean, post_cov).reshape(self.N, self.N)
 
-        # Try using Cholesky for more efficient sampling
+    #     ## standard normalisation
+    #     # samples = self.min_cost + (self.max_cost - self.min_cost) * (samples - np.min(samples)) / (np.max(samples) - np.min(samples))
 
-        ## standard normalisation
-        # samples = self.min_cost + (self.max_cost - self.min_cost) * (samples - np.min(samples)) / (np.max(samples) - np.min(samples))
+    #     ## sigmoid norm
+    #     # samples = self.min_cost + (self.max_cost - self.min_cost) / (1 + np.exp(-samples))
 
-        ## sigmoid norm
-        # samples = self.min_cost + (self.max_cost - self.min_cost) / (1 + np.exp(-samples))
+    #     ## clipping
+    #     # samples = np.clip(samples, self.min_cost, self.max_cost)
 
-        ## clipping
-        samples = np.clip(samples, self.min_cost, self.max_cost)
+    #     return samples
 
-        return samples
+    ## sample from posterior and re-compute Q-vals etc..
+    def root_sample(self, certainty_equivalent=False):
+
+        ## sample from posterior
+        self.posterior_sample = self.sample(self.posterior_mean, self.posterior_cov).flatten()
+        assert np.all(self.posterior_sample < 0), 'post sample is not all negative: {}'.format(self.posterior_sample)
+
+        ## dynamic programming to get the optimal Q-vals given the agent's knowledge of the environment
+        if certainty_equivalent:
+            dp_costs = self.posterior_mean.reshape(self.N, self.N).copy()
+        else:
+            dp_costs = self.posterior_sample.reshape(self.N, self.N).copy()
+        dp_costs[self._goal_location[0], self._goal_location[1]] = 0
+        # dp_costs += self.expl_beta * np.sqrt(self.posterior_var.reshape(self.N, self.N)) #UCB
+
+        if self.known_costs:
+            self.V_inf = self.V_true
+            self.Q_inf = self.Q_true
+            self.A_inf = self.A_true
+        else:
+            self.V_inf, self.Q_inf, self.A_inf = self.value_iteration(dp_costs=dp_costs)
 
     
 
@@ -736,8 +769,8 @@ class MountainEnv(gym.Env):
         ## revert back to prior mean
         post_mean -= 0.5
 
-        ## sample from posterior?
-        # post_mean = self.sample_post(post_mean, post_cov).reshape(self.N ** 2)
+        ## check if post mean is all negative
+        # assert np.all(post_mean < 0), 'post mean is not all negative: {}'.format(post_mean)
 
         return post_mean, post_cov, post_var
     
@@ -822,7 +855,8 @@ class MountainEnv(gym.Env):
 
     ## calculate the optimal trajectory between the two points, as given by the true DP solution
     def optimal_trajectory(self):
-        current = self._agent_location
+        start = self._agent_location
+        current = start.copy()
         goal = self._goal_location
         self.o_traj = [tuple(current)]
         self.o_traj_costs = [self.costs[current[0], current[1]]]
@@ -844,7 +878,8 @@ class MountainEnv(gym.Env):
                 current = np.clip((i, j - 1), 0, self.N - 1)
             
             if tuple(current) in visited:
-                print(f"Cycle detected at state {current}. Exiting to prevent infinite loop.")
+                print(f"Cycle detected from {start} to {goal} at state {current}. Exiting to prevent infinite loop.")
+                print(self.A_true)
                 break
             
             # Update trajectory
@@ -933,5 +968,7 @@ class MountainEnv(gym.Env):
 
             if i == max_iters-1:
                 print('DP did not converge after {} iterations'.format(i))
+
+        ## need to check if this has lead to a valid policy
 
         return V, Q, A
