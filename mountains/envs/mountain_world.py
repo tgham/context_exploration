@@ -55,13 +55,13 @@ class MountainEnv(gym.Env):
             self.scale = 1
             self.theta = 0
             # self.theta = np.pi/3
-            self.sigma_f = 1.0
-            self.length_scale = self.N/5
+            self.sigma_f = 2
+            # self.length_scale = self.N/5
             self.length_scale = 1
             self.period = self.N/5
             self.periodic_length_scale = self.N/2
             self.periodic_theta = np.pi/3
-            self.expl_beta = 0.0
+            self.expl_beta = 0.
         else:
             self.c = params[0]
             self.scale = params[1]
@@ -237,7 +237,7 @@ class MountainEnv(gym.Env):
 
         ## sample start and goal locations
         dist = 0
-        min_dist = self.N*0.8
+        min_dist = self.N*0.75
         angle = 0
         angle_tolerance = 0.5
         angle_bounds = [45*(1+angle_tolerance), 45*(1-angle_tolerance)]
@@ -286,7 +286,7 @@ class MountainEnv(gym.Env):
         self.terminated = False
         observation = self.get_obs()
         info = self._get_info()
-        current_cost = self.costs[self._agent_location[0], self._agent_location[1]] + np.random.normal(0, self.r_noise)
+        current_cost = self.costs[self._agent_location[0], self._agent_location[1]] #+ np.random.normal(0, self.r_noise)
 
         ## reset obs on each trial
         # loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
@@ -379,7 +379,7 @@ class MountainEnv(gym.Env):
         var_cost = self.posterior_var[self._agent_location[0]*self.N + self._agent_location[1]]
         
         ## get the observed cost of the current state
-        current_cost = self.costs[self._agent_location[0], self._agent_location[1]] + np.random.normal(0, self.r_noise)
+        current_cost = self.costs[self._agent_location[0], self._agent_location[1]] #+ np.random.normal(0, self.r_noise)
 
         ## return the real cost if not simulating
         if not self.sim:
@@ -409,7 +409,7 @@ class MountainEnv(gym.Env):
                 cost = current_cost
             else:
                 cost = predicted_cost 
-                # cost += self.expl_beta * np.sqrt(var_cost) #UCB
+                cost += self.expl_beta * np.sqrt(var_cost) #UCB
 
             ## still need to store obs_tmp along the way for subsequent posterior inference
             self.a_traj.append(tuple(self._agent_location))
@@ -421,7 +421,7 @@ class MountainEnv(gym.Env):
         if np.array_equal(self._agent_location, self._goal_location):
             self.terminated = True
             cost=0 ## cost of final state is 0
-            # cost = self.expl_beta * np.sqrt(var_cost)
+            cost = self.expl_beta * np.sqrt(var_cost)
         
             ## update observation array only once the episode is complete
             if not self.sim:
@@ -444,84 +444,10 @@ class MountainEnv(gym.Env):
         observation = self.get_obs()
         info = self._get_info()
         terminated = self.terminated
-
-
-        if (self.render_mode == "human"):
-            ## posterior prediction using known kernel
-            # self.posterior_mean, self.posterior_var = self.post_pred(self.K_inf, self.obs)
-
-            ## posterior prediction using weighted kernel
-            # self.posterior_mean = self.weighted_post_pred()
-
-            self.posterior_mean, self.posterior_cov, self.posterior_var = self.inference_func(obs = self.obs, pred='all')
-            self.render()      
         truncated=False
         return observation, cost, terminated, truncated, info
 
-    ## rendering funcs
-    def render(self):
 
-        self.posterior_mean,self.posterior_cov,  self.posterior_var = self.inference_func(obs = self.obs, pred='all')
-        
-        # Clear the current output
-        clear_output(wait=True)
-        
-        # Check if we already have a figure, if not create one
-        if not hasattr(self, 'fig') or not plt.fignum_exists(self.fig.number):
-            # self.fig, self.axs = plt.subplots(1, 2, figsize=(7.5, 15))
-            if self.inf_k == 'known':
-                self.fig, self.axs = plt.subplots(1, 2, figsize=(7.5, 15))
-            elif self.inf_k == 'weighted':
-                self.fig, self.axs = plt.subplots(1, 3, figsize=(15, 15))
-
-        else:
-            # Clear the existing axes
-            for ax in self.axs:
-                ax.clear()
-        
-        # Plot the full reward distribution, and the posterior distribution
-        # title = 't={}\naccrued cost: {}\nthreshold: {}'.format(self.t, np.round(self.accrued_cost,2), np.round(self.cost_threshold,2))
-        # title = 't={}, (sub-)optimality: {}%'.format(self.t, np.round(100*self.accrued_cost/self.optimal_cost))
-        title = ''
-        plot_r(self.costs, self.axs[0])
-        plot_r(self.posterior_mean.reshape(self.N, self.N), self.axs[1], title=title)
-
-        ## plot the kernel weights
-        if self.inf_k == 'weighted':
-            plot_k_weights(self.k_weights, self.axs[2], title='Kernel weights')
-
-
-
-        ## plot the optimal trajectory and trajectory so far
-        plot_traj([self.o_traj, self.a_traj], self.axs[0])
-        plot_traj([self.o_traj, self.a_traj], self.axs[1])
-        
-        # Plot the agent and goal positions
-        plot_state(self._agent_location, self._goal_location, self.axs[0], title = "True mountain surface: \n"+title)
-        plot_state(self._agent_location, self._goal_location, self.axs[1], title = "Posterior mountain surface: \n"+title)
-        
-        
-        # Adjust the layout to prevent overlapping
-        plt.tight_layout()
-        
-        # Display the plot
-        display(self.fig)
-        
-        # Instead of closing the figure, we'll just clear the current display
-        clear_output(wait=True)
-        
-        # # Add a small delay to allow the plot to update
-        if self.terminated:
-            # print(self.msg)
-            plt.pause(2)
-        else:
-            plt.pause(0.4)
-
-
-    def close(self):
-        if self.window is not None:
-            pygame.display.quit()
-            pygame.quit()
 
     ### define some policies
 
@@ -679,41 +605,21 @@ class MountainEnv(gym.Env):
 
         return samples
     
-    ## sample from posterior
-    # def sample_post(self, post_mean, post_cov):
-
-    #     ## check kernel is valid
-    #     self.k_check(post_cov)
-
-
-    #     ## generate samples (np)
-    #     samples = np.random.multivariate_normal(post_mean, post_cov).reshape(self.N, self.N)
-
-    #     ## standard normalisation
-    #     # samples = self.min_cost + (self.max_cost - self.min_cost) * (samples - np.min(samples)) / (np.max(samples) - np.min(samples))
-
-    #     ## sigmoid norm
-    #     # samples = self.min_cost + (self.max_cost - self.min_cost) / (1 + np.exp(-samples))
-
-    #     ## clipping
-    #     # samples = np.clip(samples, self.min_cost, self.max_cost)
-
-    #     return samples
 
     ## sample from posterior and re-compute Q-vals etc..
     def root_sample(self, certainty_equivalent=False):
 
         ## sample from posterior
         self.posterior_sample = self.sample(self.posterior_mean, self.posterior_cov).flatten()
-        assert np.all(self.posterior_sample < 0), 'post sample is not all negative: {}'.format(self.posterior_sample)
+        # assert np.all(self.posterior_sample < 0), 'post sample is not all negative: {}'.format(self.posterior_sample)
 
         ## dynamic programming to get the optimal Q-vals given the agent's knowledge of the environment
         if certainty_equivalent:
             dp_costs = self.posterior_mean.reshape(self.N, self.N).copy()
+            # dp_costs += self.expl_beta * np.sqrt(self.posterior_var.reshape(self.N, self.N)) #UCB
         else:
             dp_costs = self.posterior_sample.reshape(self.N, self.N).copy()
         dp_costs[self._goal_location[0], self._goal_location[1]] = 0
-        # dp_costs += self.expl_beta * np.sqrt(self.posterior_var.reshape(self.N, self.N)) #UCB
 
         if self.known_costs:
             self.V_inf = self.V_true
@@ -769,7 +675,8 @@ class MountainEnv(gym.Env):
         ## revert back to prior mean
         post_mean -= 0.5
 
-        ## check if post mean is all negative
+        ## check for any non-negativity
+        assert np.all((obs_rewards-0.5)<0), 'obs is not all negative: {}'.format(self.obs)
         # assert np.all(post_mean < 0), 'post mean is not all negative: {}'.format(post_mean)
 
         return post_mean, post_cov, post_var
@@ -917,10 +824,11 @@ class MountainEnv(gym.Env):
         #     dp_costs = self.posterior_mean.reshape(self.N, self.N).copy()
 
         ## set cost of goal to 0
-        info = self.get_obs()
-        start = info['agent']
-        goal = info['goal']
+        start = self._agent_location.copy()
+        goal = self._goal_location.copy()
         dp_costs[goal[0], goal[1]] = 0
+
+        assert np.all(dp_costs <= 0), 'costs are not all negative: {}'.format(dp_costs)
 
         ## loop through states
         for i in range(max_iters):
