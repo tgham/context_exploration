@@ -104,7 +104,7 @@ class MonteCarloTreeSearch():
                 ## save tree obs for subsequent rollouts
                 self.tree_obs = self.env.obs_tmp.copy()
                 self.env.flush_obs()
-                assert len(self.tree_obs) == 1+len(self.tree_path), 'tree obs and path lengths do not match, {} vs {}'.format(len(self.tree_obs), len(self.tree_path))
+                assert len(self.tree_obs) == len(self.env.obs)+len(self.tree_path), 'tree obs and path lengths do not match\n tree obs: {}, env.obs: {}, tree path: {}'.format(len(self.tree_obs), len(self.env.obs),len(self.tree_path))
 
 
                 return action_leaf
@@ -148,7 +148,7 @@ class MonteCarloTreeSearch():
         ## save tree obs for subsequent rollouts
         self.tree_obs = self.env.obs_tmp.copy()
         self.env.flush_obs()
-        assert len(self.tree_obs) == 1+len(self.tree_path), 'tree obs and path lengths do not match, {} vs {}'.format(len(self.tree_obs), len(self.tree_path))
+        assert len(self.tree_obs) == len(self.env.obs)+len(self.tree_path), 'tree obs and path lengths do not match\n tree obs: {}, env.obs: {}, tree path: {}'.format(len(self.tree_obs), len(self.env.obs),len(self.tree_path))
 
         return action_leaf
 
@@ -162,6 +162,7 @@ class MonteCarloTreeSearch():
 
         ## get the agent's current location and goal
         actual_state = self.env.current
+        actual_goal = self.env.goal
         assert self.env.sim, 'env is not in sim mode'
         
         ## set the state from which the rollout is initiated
@@ -199,6 +200,22 @@ class MonteCarloTreeSearch():
             start = env_copy.current
             goal = env_copy.goal
 
+            ## debugging plot
+            # if len(self.tree_obs)>5:
+            #     fig, axs = plt.subplots(1, 3, figsize=(10,5))
+
+            #     ## plot original posterior mean
+            #     plot_r(self.env.posterior_sample.reshape(self.N,self.N), ax = axs[0], title='original posterior sample')
+
+            #     ## plot real start, goal and tree obs
+            #     plot_r(env_copy.posterior_mean.reshape(self.N,self.N), ax = axs[1], title='new posterior mean')
+            #     for i in range(len(self.tree_obs)):
+            #         axs[1].scatter(self.tree_obs[i][2]+0.5, self.tree_obs[i][1]+0.5, c='white', s=50)
+            #     axs[1].scatter(actual_state[1]+0.5, actual_state[0]+0.5, c='red', s=50)
+            #     axs[1].scatter(actual_goal[1]+0.5, actual_goal[0]+0.5, c='b', s=50)
+            #     plot_action_tree(env_copy.Q_inf, env_copy.get_obs()['agent'], env_copy.get_obs()['goal'], ax = axs[2], title='DP_inf')
+                # plot_r(env_copy.V_inf, ax = axs[2], title='V')
+
 
         observation = env_copy.get_obs()
 
@@ -214,7 +231,7 @@ class MonteCarloTreeSearch():
                 fig, axs = plt.subplots(1, 3, figsize=(15,5))
                 # plot_r(env_copy.posterior_mean.reshape(self.N,self.N), ax=axs[0], title = 'posterior mean')
                 sns.heatmap(env_copy.posterior_mean.reshape(self.N,self.N), ax=axs[0], cbar=False, annot=True, fmt='.2f')
-                plot_action_tree(env_copy.Q_inf, env_copy.get_obs()['agent'], env_copy.get_obs()['goal'], ax=axs[1], title = 'DP_inf')
+                plot_action_tree(env_copy.Q_inf, start, goal, ax=axs[1], title = 'DP_inf')
                 plot_r(env_copy.V_inf, ax=axs[2], title = 'V')
 
                 ## raise error
@@ -335,7 +352,7 @@ class MonteCarloTreeSearch():
             backup_cost = first_sim_cost + discounted_tree_cost
 
             ## calculate cost of all future rollouts, discounted by some meta-discount factor?
-            meta_discount = 1.5
+            meta_discount = 0.95
             for s in range(1, len(sim_costs)):
                 total_sim_cost += sim_costs[s] * meta_discount**s
 
@@ -351,11 +368,19 @@ class MonteCarloTreeSearch():
         if progress:
             pbar = tqdm(total=n_trees, desc='MCTS search', position=0, leave=False)
 
+        ## root sampling of new posterior
+        # self.env.root_sample(certainty_equivalent=True)
+
         ## loop through trees
         for t in range(n_trees):
 
             ## root sampling of new posterior
-            self.env.root_sample(certainty_equivalent=True)
+            self.env.root_sample(certainty_equivalent=False) 
+            
+            ## debugging plot
+            # plt.figure()
+            # # plot_r(self.env.posterior_sample.reshape(self.N,self.N), ax = plt.subplot(), title='posterior sample')
+            # plot_action_tree(self.env.Q_inf, self.env.get_obs()['agent'], self.env.get_obs()['goal'], ax = plt.subplot(), title='DP_inf')
 
             ## selection, expansion, simulation
             # sim_costs = []
@@ -448,6 +473,7 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
             # env_copy = copy.deepcopy(agent_envs[a])
             env_copy = agent_envs[a]
             _, _ = env_copy.reset()
+            env_copy.set_sim(True)
             start = env_copy.current
             current = start
             goal = env_copy.goal
@@ -512,7 +538,7 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
 
                         ## search
                         n_futures = 1
-                        action, next_root = MCTS.search(n_trees, n_futures)
+                        action, next_root = MCTS.search(n_trees, n_futures, progress=True)
 
                         ## get the trajectory from the tree
                         MCTS.tree.action_tree()
