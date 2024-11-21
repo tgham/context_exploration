@@ -7,6 +7,7 @@ from tqdm.auto import tqdm
 import os
 from scipy.spatial.distance import cdist
 
+from plotter import *
 
 
 class MonteCarloTreeSearch():
@@ -100,6 +101,12 @@ class MonteCarloTreeSearch():
                 ## revert env
                 self.env.set_state(actual_state)
 
+                ## save tree obs for subsequent rollouts
+                self.tree_obs = self.env.obs_tmp.copy()
+                self.env.flush_obs()
+                assert len(self.tree_obs) == 1+len(self.tree_path), 'tree obs and path lengths do not match, {} vs {}'.format(len(self.tree_obs), len(self.tree_path))
+
+
                 return action_leaf
                 
             ## selection step
@@ -138,42 +145,62 @@ class MonteCarloTreeSearch():
         ## revert env
         self.env.set_state(actual_state)
 
+        ## save tree obs for subsequent rollouts
+        self.tree_obs = self.env.obs_tmp.copy()
+        self.env.flush_obs()
+        assert len(self.tree_obs) == 1+len(self.tree_path), 'tree obs and path lengths do not match, {} vs {}'.format(len(self.tree_obs), len(self.tree_path))
+
         return action_leaf
 
 
-    def rollout_policy(self, action_leaf):
+    def rollout_policy(self, action_leaf, real_rollout = True):
 
         ## init
         total_cost = 0
-        max_depth = 1000
+        max_depth = 100
         depth = 0
 
-        ## get the agent's current location
+        ## get the agent's current location and goal
         actual_state = self.env.current
         assert self.env.sim, 'env is not in sim mode'
         
         ## set the state from which the rollout is initiated
-        # env_copy = copy.deepcopy(self.env)
-        # env_copy.set_state(action_leaf.next_state)
-        # env_copy.set_sim(True)
-        self.env.set_state(action_leaf.next_state)
-        observation = self.env.get_obs()
-        goal = observation['goal']
+        # self.env.set_state(action_leaf.next_state)
+        # observation = self.env.get_obs()
+        
+        ## or, make a copy
+        env_copy = copy.deepcopy(self.env)
 
-        ## (BEGIN WITH COST OF CURRENT STATE?)
-        # start = env_copy.get_obs()['agent']
-        # total_cost += env_copy.costs[start[0], start[1]]
-        starting_cost = action_leaf.next_cost
-        total_cost += starting_cost
+        ## standard rollout if this is the first S-G pair
+        if real_rollout:
+            env_copy.set_state(action_leaf.next_state)
+            
+            ## begin with cost of current state
+            starting_cost = action_leaf.next_cost
+            total_cost += starting_cost
 
-        ## rolling out from goal location
-        if action_leaf.terminated:
-            # assert total_cost==0 and action_leaf.next_cost==0, 'terminated action leaf has non-zero cost'
+            ## rolling out from goal location, can just end here
+            if action_leaf.terminated:
 
-            ## revert env
-            self.env.set_state(actual_state)
+                ## revert env
+                # self.env.set_state(actual_state)
 
-            return total_cost
+                return total_cost
+
+        ## or, rollout for some new imagined S-G pair
+        else:
+
+            ## inherit obs from tree so far
+            env_copy.set_obs(self.tree_obs)
+
+            ## imagine new start and goal locations
+            seed = random.randint(0, 1000)
+            _,_ = env_copy.reset(seed=seed)
+            start = env_copy.current
+            goal = env_copy.goal
+
+
+        observation = env_copy.get_obs()
 
         ## rollout until trial is terminated 
         while True:
@@ -181,27 +208,41 @@ class MonteCarloTreeSearch():
             ## prevent infinite rollout
             depth += 1
             if depth > max_depth:
-                print('exceeded max rolls')
+                # print('exceeded max rolls in {} rollout'.format(['imagined', 'real'][real_rollout]))
+
+                # print(env_copy.V_inf)
+                fig, axs = plt.subplots(1, 3, figsize=(15,5))
+                # plot_r(env_copy.posterior_mean.reshape(self.N,self.N), ax=axs[0], title = 'posterior mean')
+                sns.heatmap(env_copy.posterior_mean.reshape(self.N,self.N), ax=axs[0], cbar=False, annot=True, fmt='.2f')
+                plot_action_tree(env_copy.Q_inf, env_copy.get_obs()['agent'], env_copy.get_obs()['goal'], ax=axs[1], title = 'DP_inf')
+                plot_r(env_copy.V_inf, ax=axs[2], title = 'V')
+
+                ## raise error
+                raise ValueError('exceeded max rolls in {} rollout, start: {}, goal: {}'.format(['imagined', 'real'][real_rollout], start, goal))
 
                 ## revert env
-                self.env.set_state(actual_state)
+                # self.env.set_state(actual_state)
+                # print(env_copy.V_inf)
                 terminated = True
+                return total_cost
 
             ## uniform random
             # action = random.randint(0, self.action_space-1)
 
             ## or, greedy
-            current = observation['agent']
-            action = self.env.greedy_policy(current, goal, eps = 0.0)
+            # current = observation['agent']
+            # action = self.env.greedy_policy(current, goal, eps = 0.0)
+            # action = env_copy.greedy_policy(current, env_copy.goal, eps = 0.0)
 
             ## or, optimised rollout 
-            # current = observation['agent']
-            # action = env_copy.optimal_policy(current)
+            current = observation['agent']
+            # action = self.env.optimal_policy(current, self.env.Q_inf)
+            action = env_copy.optimal_policy(current, env_copy.Q_inf)
+
 
             ## take action
-            observation, cost, terminated, _, _ = self.env.step(action)
-            # total_cost += cost * discount_factor
-            # discount_factor *= gamma
+            observation, cost, terminated, _, _ = env_copy.step(action)
+            # observation, cost, terminated, _, _ = self.env.step(action)
 
             ## increment cost
             total_cost += cost * self.discount_factor**depth
@@ -210,16 +251,9 @@ class MonteCarloTreeSearch():
             if terminated:
                 
                 ## revert env
-                self.env.set_state(actual_state)
-
+                # self.env.set_state(actual_state)
                 return total_cost
             
-            ## if not, increment cost (NB: this happens after the termination check, because the cost of the terminal state is not included in the total cost)
-            # total_cost += cost * self.discount_factor**depth
-            
-            # ## IF YOU WANT THE COST OF THE FINAL STATE, THIS SHOULD COME EARLIER
-            # total_cost += cost * discount_factor
-            # discount_factor *= gamma
         
 
     ## calculate E-E value
@@ -274,7 +308,7 @@ class MonteCarloTreeSearch():
         return best_child
     
     ## backup costs until you reach the root
-    def backward(self, sim_cost):
+    def backward(self, sim_costs):
         tree_len = len(self.tree_costs)
 
         ## calculate discount factors
@@ -296,8 +330,14 @@ class MonteCarloTreeSearch():
             discounted_tree_cost = np.dot(self.tree_costs[depth:depth + dist_to_rollout], discount_factors[:dist_to_rollout])
 
             ## calculate cost of the rollout, discounted by the distance from the current node to the rollout node
-            sim_cost_tmp = sim_cost * self.discount_factor**dist_to_rollout
-            backup_cost = sim_cost_tmp + discounted_tree_cost
+            total_sim_cost = 0
+            first_sim_cost = sim_costs[0] * self.discount_factor**dist_to_rollout
+            backup_cost = first_sim_cost + discounted_tree_cost
+
+            ## calculate cost of all future rollouts, discounted by some meta-discount factor?
+            meta_discount = 1.5
+            for s in range(1, len(sim_costs)):
+                total_sim_cost += sim_costs[s] * meta_discount**s
 
             ## backup + update counts
             # action_leaf.n_action_visits += 1
@@ -306,13 +346,37 @@ class MonteCarloTreeSearch():
 
 
     ## tree search --> action loop
-    def search(self, n_trees=1000):
+    def search(self, n_trees=1000, n_futures=1, progress=False):
+
+        if progress:
+            pbar = tqdm(total=n_trees, desc='MCTS search', position=0, leave=False)
 
         ## loop through trees
         for t in range(n_trees):
+
+            ## root sampling of new posterior
+            self.env.root_sample(certainty_equivalent=True)
+
+            ## selection, expansion, simulation
+            # sim_costs = []
             action_leaf = self.tree_policy()
-            sim_cost = self.rollout_policy(action_leaf)
-            self.backward(sim_cost)
+            initial_sim_cost = self.rollout_policy(action_leaf, real_rollout=True)
+            # sim_costs.append(initial_sim_cost)
+
+            ## loop through future imagined episodes
+            subseq_sim_costs = []
+            for n in range(n_futures):
+                sim_cost2 = self.rollout_policy(action_leaf, real_rollout=False)
+                subseq_sim_costs.append(sim_cost2)
+            
+            ##backup
+            mean_subseq_sim_cost = np.mean(subseq_sim_costs)
+            sim_costs = [initial_sim_cost, mean_subseq_sim_cost]
+            self.backward(sim_costs)
+
+            if progress:
+                pbar.update(1)
+
         
         ## action selection
         MCTS_estimates = np.full(4, np.nan)
@@ -435,19 +499,20 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
 
                 ## or if doing offline planning, search and then execute entire trajectory
                 elif agent == 'MCTS':
-
-                    ## init MCTS
                     non_stuck_route=False
                     search_attempts = 0
                     while not non_stuck_route:
-                        env_copy.set_sim(True)
+
+                        ## init MCTS
                         tree = Tree(N)
                         MCTS = MonteCarloTreeSearch(env=env_copy, tree=tree)
                         assert MCTS.env.sim == True, 'env not in sim mode'
                         search_attempts += 1
                         
+
                         ## search
-                        action, next_root = MCTS.search(n_trees)
+                        n_futures = 1
+                        action, next_root = MCTS.search(n_trees, n_futures)
 
                         ## get the trajectory from the tree
                         MCTS.tree.action_tree()
