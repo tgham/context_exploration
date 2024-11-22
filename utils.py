@@ -24,7 +24,7 @@ from minimax_tilting_sampler import TruncatedMVN
 
 
 ## create a mountain environment
-def make_env(N, params, metric, true_k, r_noise):
+def make_env(N, true_k, kernel_params, metric, r_noise):
 
     ## register env
     
@@ -41,7 +41,7 @@ def make_env(N, params, metric, true_k, r_noise):
         kwargs={"size": N},
     )
     
-    env = gym.make("mountains/MountainEnv-v0", N=N, params=params, metric=metric, true_k=true_k, r_noise=r_noise)
+    env = gym.make("mountains/MountainEnv-v0", N=N, true_k=true_k, kernel_params=kernel_params, metric=metric, r_noise=r_noise)
     return env
 
 
