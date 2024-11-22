@@ -1,0 +1,189 @@
+from enum import Enum
+import gymnasium as gym
+from gymnasium import spaces
+import pygame
+import numpy as np
+from plotter import *
+import matplotlib.pyplot as plt
+from matplotlib import animation
+import seaborn as sns
+import scipy
+from scipy.spatial.distance import cdist
+from scipy.special import softmax
+import warnings
+import heapq
+from collections import defaultdict
+from IPython.display import display, clear_output
+from utils import *
+from scipy.stats import rankdata, truncnorm
+from scipy.linalg import cholesky
+from minimax_tilting_sampler import TruncatedMVN
+import torch
+import gpytorch
+
+
+class GPAgent:
+
+    def __init__(self, K_inf = None, metric='cityblock',r_noise=0.05):
+
+        self.metric = metric
+        self.K_inf = K_inf
+        self.N = int(np.sqrt(len(K_inf)))
+        self.r_noise = r_noise
+
+    
+    ### interactions with the environment
+
+    ## function for receiving info from env
+    def get_env_info(self, env):
+        self.obs = env.obs.copy()
+        self.current = env.current
+        self.goal = env.goal
+
+    ##
+                     
+
+    ## root sampling reset
+    def root_sample(self, obs, certainty_equivalent = False):
+
+        ## calculate posterior mean 
+        self.posterior_mean, self.posterior_cov, self.posterior_var = self.post_pred(K_inf = self.K_inf, obs=self.obs, pred = 'all')
+
+        ## sample from posterior
+        self.posterior_sample = sample(self.posterior_mean, self.posterior_cov).flatten()
+
+        ## dynamic programming to get optimal Q-values, given the agent's knowledge of the environment
+        if certainty_equivalent:
+            dp_costs = self.posterior_mean.reshape(self.N, self.N).copy()
+            # dp_costs += self.expl_beta * np.sqrt(self.posterior_var.reshape(self.N, self.N)) #UCB
+        else:
+            dp_costs = self.posterior_sample.reshape(self.N, self.N).copy()
+        dp_costs[self.goal[0], self.goal[1]] = 0
+        self.V_inf, self.Q_inf, self.A_inf = value_iteration(dp_costs, self.goal)
+
+
+    ## posterior prediction
+    def post_pred(self, K_inf, obs, pred='all', sigma=0.01):
+        sigma = self.r_noise
+        if isinstance(pred, str):
+            pred_idx = np.arange(self.N**2)
+        else:
+            pred_idx = pred
+
+        if obs is not None:
+
+            ## centre around 0 
+            obs_idx = obs[:, 0].astype(int)
+            obs_rewards = obs[:, 3].copy()
+            obs_rewards += 0.5 
+            
+            # Covariance matrix of the already observed points
+            K_obs = K_inf[obs_idx][:, obs_idx]
+            
+            # Covariance matrix between input points (i.e. points to be predicted) and observed points
+            K_pred = K_inf[pred_idx][:, obs_idx]
+            
+            # inversion covariance matrix
+            # inv_K = np.linalg.inv(K_obs + sigma**2 * np.eye(len(obs_idx)))
+            inv_K = np.linalg.solve(K_obs + sigma**2 * np.eye(len(obs_idx)), np.eye(len(obs_idx)))
+
+            
+            # Posterior mean calculation
+            post_mean = K_pred @ inv_K @ obs_rewards
+            # post_var = K_inf[pred_idx][:, pred_idx] - K_pred @ inv_K @ K_pred.T
+            post_cov = K_inf[pred_idx][:, pred_idx] - K_pred @ inv_K @ K_pred.T
+            post_var = np.diag(post_cov)
+
+        
+        ## or if starting from nothing, just return the prior
+        elif obs is None:
+            post_mean = np.zeros(len(pred_idx))  # Zero prior mean
+            post_cov = K_inf[pred_idx][:, pred_idx]  # Full prior covariance
+            post_var = np.diag(post_cov)
+
+
+
+        ## revert back to prior mean
+        post_mean -= 0.5
+
+        ## check for any non-negativity
+        assert np.all((obs_rewards-0.5)<0), 'obs is not all negative: {}'.format(self.obs)
+        # assert np.all(post_mean < 0), 'post mean is not all negative: {}'.format(post_mean)
+
+        return post_mean, post_cov, post_var
+    
+    ## posterior prediction weighted by the likelihood of the observations under each kernel
+    def weighted_post_pred(self, obs, pred='all'):
+        if isinstance(pred, str):
+            pred_idx = np.arange(self.N**2)
+        else:
+            pred_idx = pred    
+        post_means = []
+        post_vars = []
+        lls = []
+        
+        ## imperfect memory of observations
+        # obs = self.obs[-10:]
+
+        if obs is not None:
+
+            ## loop through possible kernels
+            for k_inf in self.all_Ks:
+                post_mean, post_var = self.post_pred(k_inf, obs = obs, pred=pred_idx)
+                post_means.append(post_mean)
+                post_vars.append(post_var)
+
+                ## calculate marginal likelihood of obs given this kernel
+                ll = self.likelihood(k_inf, obs)
+                lls.append(ll)
+            
+            ## weight each posterior prediction by the corresponding marginal likelihood
+            self.k_weights = softmax(lls)
+            post_mean = np.sum([self.k_weights[i] * post_means[i] for i in range(len(self.k_weights))], axis=0)
+
+            ## weighted posterior covariance
+            # post_var = np.sum([k_weights[i] * (post_vars[i] + (post_means[i] - post_mean) @ (post_means[i] - post_mean).T) for i in range(len(k_weights))], axis=0)
+            post_var = np.sum([self.k_weights[i] * (post_vars[i] + np.outer(post_means[i] - post_mean, post_means[i] - post_mean)) for i in range(len(self.k_weights))], axis=0) ## need to check if this is correct
+
+        ## or if starting from nothing, just return the prior
+        elif obs is None:
+            post_mean = np.zeros(len(pred_idx)) - 0.5
+            # post_var = self.K_inf[pred_idx][:, pred_idx]
+            post_var = np.zeros(len(pred_idx))
+
+        return post_mean, post_var
+    
+    ## compute log marginal likelihood of set of observations, given the inference kernel
+    def likelihood(self, K_inf, obs, sigma=0.01):
+        n_obs = len(obs)
+        obs_idx = obs[:, 0].astype(int) #i.e. x
+        obs_rewards = obs[:, 3] #i.e. y
+        K_tmp = K_inf[obs_idx][:,obs_idx] 
+        K_tmp = K_tmp + ((sigma**2) * np.eye(n_obs))
+        self.k_check(K_tmp)
+        
+        ## cholesky decomp
+        L = scipy.linalg.cholesky(K_tmp, lower=True, check_finite=False)
+        alpha = scipy.linalg.cho_solve((L, True), obs_rewards, check_finite=False)
+
+        ## calculate log likelihood terms
+        log_det = np.sum(np.log(np.diag(L))) 
+        quad_form = 0.5 * (obs_rewards@alpha)
+        norm_term = 0.5 * n_obs * np.log(2*np.pi)
+        ll = -quad_form - log_det - norm_term
+
+        return ll
+    
+    ## generate random observations from current true GP kernel
+    def gen_obs(self, samples, n_obs):
+        obs_idx = np.random.randint(0, self.N**2, size=n_obs)
+
+        ## map these observations to the grid and get the reward values
+        obs_coords = np.column_stack(np.unravel_index(obs_idx, (self.N, self.N)))
+        obs_rewards = samples[obs_coords[:, 0], obs_coords[:, 1]]
+        obs = np.column_stack([obs_idx, obs_coords, obs_rewards])
+
+        return obs
+
+
+## policies...
