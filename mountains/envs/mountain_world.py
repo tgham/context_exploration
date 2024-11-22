@@ -18,7 +18,7 @@ from utils import *
 from scipy.stats import rankdata, truncnorm
 from scipy.linalg import cholesky
 from minimax_tilting_sampler import TruncatedMVN
-from base_kernels import BaseKernels
+from base_kernels import *
 
 
 # from PIL import image
@@ -38,7 +38,7 @@ class Actions(Enum):
 
 class MountainEnv(gym.Env):
 
-    def __init__(self, N, params=None, metric = 'cityblock', true_k=None, r_noise=0.05,size=5):
+    def __init__(self, N, true_k=None, kernel_params=None, metric = 'cityblock', r_noise=0.05,size=5):
         
         ### GP inits
 
@@ -50,41 +50,39 @@ class MountainEnv(gym.Env):
         self.locations = np.column_stack([X.ravel(), Y.ravel()])
 
         ## initialise the kernels
-        kernel_set = BaseKernels(self.locations, params)
-        self.K_lin = kernel_set.linear()
-        self.K_lin_x = kernel_set.linear_1D(0)
-        self.K_lin_y = kernel_set.linear_1D(1)
-        self.K_rbf = kernel_set.rbf()
-        self.K_rbf_x = kernel_set.rbf_1D(0)
-        self.K_rbf_y = kernel_set.rbf_1D(1)
-        self.K_periodic_x = kernel_set.periodic(0)
-        self.K_periodic_y = kernel_set.periodic(1)
-        self.all_Ks = [
-            # self.K_lin, self.K_lin_x, self.K_lin_y, 
-            self.K_rbf, self.K_rbf_x, self.K_rbf_y, 
-            self.K_periodic_x, 
-            # self.K_periodic_y
-            ]
-        self.k_weights = np.zeros(len(self.all_Ks))
+        kernel_set = BaseKernels(self.locations)
+
+        if kernel_params is None:
+            kernel_params = {
+                'c': 1,
+                'scale': 1,
+                'theta': np.pi,
+                'sigma_f': 2,
+                'length_scale': 0.5,
+                'periodic_length_scale': N/2,
+                'period': N/5,
+                'periodic_theta': np.pi/3
+            }
+        
         self.true_k = true_k
         if true_k == 'lin':
-            self.K_gen = self.K_lin
+            self.K_gen = kernel_set.linear(kernel_params['c'])
         elif true_k == 'lin_x':
-            self.K_gen = self.K_lin_x
+            self.K_gen = kernel_set.linear_1D(0, theta=kernel_params['theta'], scale=kernel_params['scale'], c=kernel_params['c'])
         elif true_k == 'lin_y':
-            self.K_gen = self.K_lin_y
+            self.K_gen = kernel_set.linear_1D(1, theta=kernel_params['theta'], scale=kernel_params['scale'], c=kernel_params['c'])
         elif true_k == 'rbf':
-            self.K_gen = self.K_rbf
+            self.K_gen = kernel_set.rbf(sigma_f=kernel_params['sigma_f'], length_scale=kernel_params['length_scale'])
         elif true_k == 'rbf_x':
-            self.K_gen = self.K_rbf_x
+            self.K_gen = kernel_set.rbf_1D(0, theta=kernel_params['theta'], sigma_f=kernel_params['sigma_f'], length_scale=kernel_params['length_scale'])
         elif true_k == 'rbf_y':
-            self.K_gen = self.K_rbf_y
+            self.K_gen = kernel_set.rbf_1D(1, theta=kernel_params['theta'], sigma_f=kernel_params['sigma_f'], length_scale=kernel_params['length_scale'])
         elif true_k == 'periodic_x':
-            self.K_gen = self.K_periodic_x
+            self.K_gen = kernel_set.periodic(0, sigma_f=kernel_params['sigma_f'], period=kernel_params['period'], periodic_length_scale=kernel_params['periodic_length_scale'], periodic_theta=kernel_params['periodic_theta'])
         elif true_k == 'periodic_y':
-            self.K_gen = self.K_periodic_y
+            self.K_gen = kernel_set.periodic(1, sigma_f=kernel_params['sigma_f'], period=kernel_params['period'], periodic_length_scale=kernel_params['periodic_length_scale'], periodic_theta=kernel_params['periodic_theta'])
         else: #default
-            self.K_gen = self.K_rbf
+            self.K_gen = kernel_set.rbf(length_scale=kernel_params['length_scale'], sigma_f=kernel_params['sigma_f'])
 
         ## generate true costs
         self.r_noise = r_noise
