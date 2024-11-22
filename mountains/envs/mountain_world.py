@@ -37,9 +37,8 @@ class Actions(Enum):
 
 
 class MountainEnv(gym.Env):
-    # metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, N, params=None, metric = 'cityblock', true_k=None, render_mode=None, r_noise=0.05,size=5):
+    def __init__(self, N, params=None, metric = 'cityblock', true_k=None, r_noise=0.05,size=5):
         
         ### GP inits
 
@@ -389,78 +388,7 @@ class MountainEnv(gym.Env):
         info = self._get_info()
         terminated = self.terminated
         truncated=False
-        return observation, cost, terminated, truncated, info
-
-
-
-    ### define some policies
-
-    ## random
-    def random_policy(self):
-        return self.action_space.sample()
-    
-    ## greedy wrt/ distance to goal
-    def greedy_policy(self, current, goal, eps=0):
-        if np.random.rand() < eps:
-            return self.random_policy()
-        else:
-            # distances = cdist([current], [goal], metric=self.metric).flatten()
-            ## get adjacent states
-            next_states = np.clip(np.array([current + self._action_to_direction[i] for i in range(self.n_actions)]), 0, self.N-1)
-            
-            ## choose whichever one is closest to the goal
-            distances = cdist(next_states, [goal], metric=self.metric).flatten()
-            min_distance = np.min(distances)
-            action = argm(distances, min_distance)
-            return action
-        
-
-    ## greedy wrt/ both distance to goal and cost, i.e. some combination of the two
-    def balanced_policy(self, current, goal, eps=0, alpha=0.5):
-        if np.random.rand() < eps:
-            return self.random_policy()
-        else:
-
-            
-            ## get adjacent states
-            next_states = np.clip(np.array([current + self._action_to_direction[i] for i in range(self.n_actions)]), 0, self.N-1)
-            next_states_idx = next_states[:, 0]*self.N + next_states[:, 1]
-            
-            ## myopic UCB
-            next_q = self.posterior_mean.reshape(self.N, self.N)[next_states[:, 0], next_states[:, 1]]
-            next_var = self.posterior_var.reshape(self.N, self.N)[next_states[:, 0], next_states[:, 1]]
-            # next_q = next_q + self.expl_beta * np.sqrt(next_var)
-
-            ## ensure post_mean is negative
-            if next_q.max() > 0:
-                next_q -= next_q.max()
-
-            
-            ## weight the distance to the goal by the cost of the state
-            distances = cdist(next_states, [goal], metric=self.metric).flatten()
-            combined_q = alpha * softmax(-distances) + (1-alpha) * softmax(next_q)
-            max_combined_q = np.max(combined_q)
-            action = argm(combined_q, max_combined_q)
-            return action
-        
-    ## optimal policy, as given by the dynamic programming Q vals
-    def optimal_policy(self, current, Q=None):
-
-        if Q is None:
-            Q = self.Q_inf
-
-        ## get adjacent states
-        next_states = np.clip(np.array([current + self._action_to_direction[i] for i in range(self.n_actions)]), 0, self.N-1)
-        next_states_idx = next_states[:, 0]*self.N + next_states[:, 1]
-    
-        ## choose action with highest Q-value
-        current_q = Q[current[0], current[1], :]
-        max_current_q = np.nanmax(current_q)
-        action = argm(current_q, max_current_q)
-
-        return action
-        
-    
+        return observation, cost, terminated, truncated, info    
 
 
     ## calculate the optimal trajectory between the two points, as given by the true DP solution
