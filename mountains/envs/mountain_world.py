@@ -18,6 +18,7 @@ from utils import *
 from scipy.stats import rankdata, truncnorm
 from scipy.linalg import cholesky
 from minimax_tilting_sampler import TruncatedMVN
+from base_kernels import BaseKernels
 
 
 # from PIL import image
@@ -38,7 +39,7 @@ class Actions(Enum):
 class MountainEnv(gym.Env):
     # metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, N, params=None, metric = 'cityblock', true_k=None, inf_k='known', known_costs = True, render_mode=None, r_noise=0.05,size=5):
+    def __init__(self, N, params=None, metric = 'cityblock', true_k=None, render_mode=None, r_noise=0.05,size=5):
         
         ### GP inits
 
@@ -49,40 +50,16 @@ class MountainEnv(gym.Env):
         X,Y = np.meshgrid(x,y)
         self.locations = np.column_stack([X.ravel(), Y.ravel()])
 
-        ## set the kernel parameters
-        if params is None:
-            self.c = 1
-            self.scale = 1
-            self.theta = 0
-            # self.theta = np.pi/3
-            self.sigma_f = 2
-            # self.length_scale = self.N/5
-            self.length_scale = 1
-            self.period = self.N/5
-            self.periodic_length_scale = self.N/2
-            self.periodic_theta = np.pi/3
-            self.expl_beta = 0.
-        else:
-            self.c = params[0]
-            self.scale = params[1]
-            self.theta = params[2]
-            self.sigma_f = params[3]
-            self.length_scale = params[4]
-            self.periodic_length_scale = params[5]
-            self.period = params[6]
-            self.periodic_theta = params[7]
-
-        self.min_cost, self.max_cost = -0.9, -0.1
-
         ## initialise the kernels
-        self.K_lin = self.linear()
-        self.K_lin_x = self.linear_1D(0)
-        self.K_lin_y = self.linear_1D(1)
-        self.K_rbf = self.rbf()
-        self.K_rbf_x = self.rbf_1D(0)
-        self.K_rbf_y = self.rbf_1D(1)
-        self.K_periodic_x = self.periodic(0)
-        self.K_periodic_y = self.periodic(1)
+        kernel_set = BaseKernels(self.locations, params)
+        self.K_lin = kernel_set.linear()
+        self.K_lin_x = kernel_set.linear_1D(0)
+        self.K_lin_y = kernel_set.linear_1D(1)
+        self.K_rbf = kernel_set.rbf()
+        self.K_rbf_x = kernel_set.rbf_1D(0)
+        self.K_rbf_y = kernel_set.rbf_1D(1)
+        self.K_periodic_x = kernel_set.periodic(0)
+        self.K_periodic_y = kernel_set.periodic(1)
         self.all_Ks = [
             # self.K_lin, self.K_lin_x, self.K_lin_y, 
             self.K_rbf, self.K_rbf_x, self.K_rbf_y, 
@@ -90,12 +67,6 @@ class MountainEnv(gym.Env):
             # self.K_periodic_y
             ]
         self.k_weights = np.zeros(len(self.all_Ks))
-        self.r_noise = r_noise
-
-        
-
-        ## define mountain costs as samples from the GP
-        ## (for now, let's just use the RBF kernel)
         self.true_k = true_k
         if true_k == 'lin':
             self.K_gen = self.K_lin
@@ -115,18 +86,12 @@ class MountainEnv(gym.Env):
             self.K_gen = self.K_periodic_y
         else: #default
             self.K_gen = self.K_rbf
-        mean = np.zeros(self.N**2) - 0.5
-        self.costs = self.sample(mean, self.K_gen) 
-        self.cost_threshold = 1 
-        self.known_costs = known_costs
 
-        ## determine how inferences are made (i.e. with full knowledge of the kernel, or with a weighted combination of kernels)
-        self.inf_k = inf_k
-        if inf_k == 'known':
-            self.K_inf = self.K_gen
-            self.inference_func = lambda obs, pred: self.post_pred(K_inf = self.K_inf, obs=obs, pred = pred)
-        elif inf_k == 'weighted':
-            self.inference_func = lambda obs, pred: self.weighted_post_pred(obs = obs, pred = pred)
+        ## generate true costs
+        self.r_noise = r_noise
+        self.min_cost, self.max_cost = -0.9, -0.1
+        mean = np.zeros(self.N**2) - 0.5
+        self.costs = sample(mean, self.K_gen, self.r_noise, self.min_cost, self.max_cost) 
 
         
         ### gym inits
@@ -184,24 +149,7 @@ class MountainEnv(gym.Env):
             }
             self.n_actions = 8
 
-        # assert render_mode is None or render_mode in self.metadata["render_modes"]
-        self.render_mode = render_mode
-        # if self.render_mode == "human":
-        #     self.sim = False
-        # elif self.render_mode == "MCTS":
-        #     self.sim = True
         self.sim = False
-
-        """
-        If human-rendering is used, `self.window` will be a reference
-        to the window that we draw to. `self.clock` will be a clock that is used
-        to ensure that the environment is rendered at the correct framerate in
-        human-mode. They will remain `None` until human-mode is used for the
-        first time.
-        """
-        self.window = None
-        self.clock = None
-
 
     ### RL env inits
 
@@ -317,17 +265,9 @@ class MountainEnv(gym.Env):
             self.obs_tmp = np.vstack([self.obs, [loc_idx, self._agent_location[0], self._agent_location[1], current_cost]])
 
 
-
-        ## calculate posterior mean 
-        self.posterior_mean, self.posterior_cov, self.posterior_var = self.inference_func(obs = self.obs, pred='all')
-
-        ## sample from posterior
-        self.root_sample(certainty_equivalent=False)
-
         ## dynamic programming to get the true optimal trajectory
         dp_costs = self.costs.copy()
-        dp_costs[self._goal_location[0], self._goal_location[1]] = 0
-        self.V_true, self.Q_true, self.A_true = self.value_iteration(dp_costs=dp_costs)
+        self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=self._goal_location)
 
         ## get the costs of this optimal trajectory
         self.optimal_trajectory()
@@ -348,6 +288,12 @@ class MountainEnv(gym.Env):
     def flush_obs(self): ## necessary for MCTS
         self.obs_tmp = self.obs.copy()
 
+    ## functions for receiving info from the GP Agent
+    def receive_predictions(self, predicted_costs):
+        # self.posterior_mean = posterior_mean
+        # self.posterior_cov = posterior_cov
+        # self.posterior_var = posterior_var
+        self.predicted_costs = predicted_costs.reshape(self.N, self.N)
 
     ## take a step in the environment
     def step(self, action):
@@ -373,12 +319,12 @@ class MountainEnv(gym.Env):
         )
 
 
-        ## get the predicted cost of the new state (for MCTS)
-        # predicted_cost = self.posterior_mean[self._agent_location[0]*self.N + self._agent_location[1]]
-        predicted_cost = self.posterior_sample[self._agent_location[0]*self.N + self._agent_location[1]]
-        var_cost = self.posterior_var[self._agent_location[0]*self.N + self._agent_location[1]]
+        ## get the predicted cost of the new state
+        # predicted_cost = self.predicted_costs[self._agent_location[0]*self.N + self._agent_location[1]]
+        predicted_cost = self.predicted_costs[self._agent_location[0], self._agent_location[1]]
+        # var_cost = self.posterior_var[self._agent_location[0]*self.N + self._agent_location[1]]
         
-        ## get the observed cost of the current state
+        ## get the actual cost of the current state
         current_cost = self.costs[self._agent_location[0], self._agent_location[1]] #+ np.random.normal(0, self.r_noise)
 
         ## return the real cost if not simulating
@@ -405,11 +351,9 @@ class MountainEnv(gym.Env):
 
         ## return the predicted cost if simulating
         elif self.sim:
-            if self.known_costs:
-                cost = current_cost
-            else:
-                cost = predicted_cost 
-                cost += self.expl_beta * np.sqrt(var_cost) #UCB
+            # cost = current_cost
+            cost = predicted_cost 
+            # cost += self.expl_beta * np.sqrt(var_cost) #UCB
 
             ## still need to store obs_tmp along the way for subsequent posterior inference
             # self.a_traj.append(tuple(self._agent_location))
@@ -421,7 +365,7 @@ class MountainEnv(gym.Env):
         if np.array_equal(self._agent_location, self._goal_location):
             self.terminated = True
             cost=0 ## cost of final state is 0
-            cost = self.expl_beta * np.sqrt(var_cost)
+            # cost = self.expl_beta * np.sqrt(var_cost)
         
             ## update observation array only once the episode is complete
             if not self.sim:
@@ -516,247 +460,6 @@ class MountainEnv(gym.Env):
 
         return action
         
-        
-    
-    
-    #### GP inits
-
-    ### define the kernels
-
-    ## linear kernels
-    
-    # linear kernel over x,y, i.e. similarity as a function of the distance from the origin (0,0)
-    def linear(self):
-        dists = np.sqrt(self.locations[:, 0]**2 + self.locations[:, 1]**2)
-        K = np.outer(dists, dists) + self.c
-        return K
-    
-    # linear kernel over x-distance (0) or y-distance (1), i.e. similarity as a function of the distance from (0,:) or (:,0), where the basis vectors are determined by the angle theta (in radians)    
-    def linear_1D(self, dim = 0):
-
-        # define basis vectors
-        rotation = np.array([[np.cos(self.theta), -np.sin(self.theta)], [np.sin(self.theta), np.cos(self.theta)]])
-        rotated_locations = np.dot(self.locations, rotation)
-        # dists = np.subtract.outer(rotated_locations[:, dim], rotated_locations[:, dim])
-
-        # calculate distances
-        dists = rotated_locations[:,dim] * self.scale**2
-        K = np.outer(dists, dists) + self.c
-        return K
-
-    
-
-    ## RBFs 
-
-    # RBF kernel over x,y (i.e. Euclidean distance)
-    def rbf(self):
-        dists = cdist(self.locations, self.locations, metric='euclidean')
-        K = self.sigma_f**2 * np.exp(-0.5 * (dists / self.length_scale)**2)
-        return K
-
-    # RBF kernel over just x-distance or y-distance
-    def rbf_1D(self, dim=0):
-
-        # define basis vectors
-        rotation = np.array([[np.cos(self.theta), -np.sin(self.theta)], [np.sin(self.theta), np.cos(self.theta)]])
-        rotated_locations = np.dot(self.locations, rotation)
-
-        # calculate distances
-        dists = np.subtract.outer(rotated_locations[:, dim], rotated_locations[:, dim])
-        K = self.sigma_f**2 * np.exp(-0.5 * (dists / self.length_scale)**2)
-        return K
-    
-
-    ## periodic kernel
-    def periodic(self, dim=0):
-        rotation = np.array([[np.cos(self.periodic_theta), -np.sin(self.periodic_theta)], [np.sin(self.periodic_theta), np.cos(self.periodic_theta)]])
-        rotated_locations = np.dot(self.locations, rotation)
-        dists = np.subtract.outer(rotated_locations[:, dim], rotated_locations[:, dim])
-        K = self.sigma_f**2 * np.exp(-2 * np.sin(np.pi * dists / self.period)**2 / self.periodic_length_scale**2)
-        return K
-
-
-    ## sample from the GP
-    def sample(self, mean, K):
-
-        ## check kernel is valid
-        self.k_check(K)
-
-        # sample
-        # if mean is None:
-        #     mean = np.zeros(self.N**2)
-        # mean = np.zeros(self.N**2)
-        # samples = np.random.multivariate_normal(mean, K).reshape(self.N, self.N)
-
-        #normalise
-        # min_cost = self.min_cost
-        # max_cost = self.max_cost
-        # samples = min_cost + (max_cost - min_cost) * (samples - np.min(samples)) / (np.max(samples) - np.min(samples))
-
-
-        ## or truncated
-        lb = np.zeros(self.N**2) + self.min_cost
-        ub = np.zeros(self.N**2) + self.max_cost
-        # K_tmp = K + 1e-5 * np.eye(self.N**2)
-        K_tmp = K + self.r_noise**2 * np.eye(self.N**2)
-        tmvn = TruncatedMVN(mean, K_tmp, lb, ub)
-        samples = tmvn.sample(1)
-        samples = samples.reshape(self.N, self.N)
-
-        return samples
-    
-
-    ## sample from posterior and re-compute Q-vals etc..
-    def root_sample(self, certainty_equivalent=False):
-
-        ## sample from posterior
-        self.posterior_sample = self.sample(self.posterior_mean, self.posterior_cov).flatten()
-        # assert np.all(self.posterior_sample < 0), 'post sample is not all negative: {}'.format(self.posterior_sample)
-
-        ## dynamic programming to get the optimal Q-vals given the agent's knowledge of the environment
-        if certainty_equivalent:
-            dp_costs = self.posterior_mean.reshape(self.N, self.N).copy()
-            # dp_costs += self.expl_beta * np.sqrt(self.posterior_var.reshape(self.N, self.N)) #UCB
-        else:
-            dp_costs = self.posterior_sample.reshape(self.N, self.N).copy()
-        dp_costs[self._goal_location[0], self._goal_location[1]] = 0
-
-        if self.known_costs:
-            self.V_inf = self.V_true
-            self.Q_inf = self.Q_true
-            self.A_inf = self.A_true
-        else:
-            self.V_inf, self.Q_inf, self.A_inf = self.value_iteration(dp_costs=dp_costs)
-
-    
-
-    ## use GP regression to predict posterior distribution of rewards, given these observations,based on the currently inferred kernel
-    def post_pred(self, K_inf, obs, pred='all', sigma=0.01):
-        sigma = self.r_noise
-        if isinstance(pred, str):
-            pred_idx = np.arange(self.N**2)
-        else:
-            pred_idx = pred
-
-        if obs is not None:
-
-            ## centre around 0 
-            obs_idx = obs[:, 0].astype(int)
-            obs_rewards = obs[:, 3].copy()
-            obs_rewards += 0.5 
-            # obs_rewards /=10
-            
-            # Covariance matrix of the already observed points
-            K_obs = K_inf[obs_idx][:, obs_idx]
-            
-            # Covariance matrix between input points (i.e. points to be predicted) and observed points
-            K_pred = K_inf[pred_idx][:, obs_idx]
-            
-            # inversion covariance matrix
-            # inv_K = np.linalg.inv(K_obs + sigma**2 * np.eye(len(obs_idx)))
-            inv_K = np.linalg.solve(K_obs + sigma**2 * np.eye(len(obs_idx)), np.eye(len(obs_idx)))
-
-            
-            # Posterior mean calculation
-            post_mean = K_pred @ inv_K @ obs_rewards
-            # post_var = K_inf[pred_idx][:, pred_idx] - K_pred @ inv_K @ K_pred.T
-            post_cov = K_inf[pred_idx][:, pred_idx] - K_pred @ inv_K @ K_pred.T
-            post_var = np.diag(post_cov)
-
-        
-        ## or if starting from nothing, just return the prior
-        elif obs is None:
-            post_mean = np.zeros(len(pred_idx))  # Zero prior mean
-            post_cov = K_inf[pred_idx][:, pred_idx]  # Full prior covariance
-            post_var = np.diag(post_cov)
-
-
-
-        ## revert back to prior mean
-        post_mean -= 0.5
-
-        ## check for any non-negativity
-        assert np.all((obs_rewards-0.5)<0), 'obs is not all negative: {}'.format(self.obs)
-        # assert np.all(post_mean < 0), 'post mean is not all negative: {}'.format(post_mean)
-
-        return post_mean, post_cov, post_var
-    
-
-    ## posterior prediction weighted by the likelihood of the observations under each kernel
-    def weighted_post_pred(self, obs, pred='all'):
-        if isinstance(pred, str):
-            pred_idx = np.arange(self.N**2)
-        else:
-            pred_idx = pred    
-        post_means = []
-        post_vars = []
-        lls = []
-        
-        ## imperfect memory of observations
-        # obs = self.obs[-10:]
-
-        if obs is not None:
-
-            ## loop through possible kernels
-            for k_inf in self.all_Ks:
-                post_mean, post_var = self.post_pred(k_inf, obs = obs, pred=pred_idx)
-                post_means.append(post_mean)
-                post_vars.append(post_var)
-
-                ## calculate marginal likelihood of obs given this kernel
-                ll = self.likelihood(k_inf, obs)
-                lls.append(ll)
-            
-            ## weight each posterior prediction by the corresponding marginal likelihood
-            self.k_weights = softmax(lls)
-            post_mean = np.sum([self.k_weights[i] * post_means[i] for i in range(len(self.k_weights))], axis=0)
-
-            ## weighted posterior covariance
-            # post_var = np.sum([k_weights[i] * (post_vars[i] + (post_means[i] - post_mean) @ (post_means[i] - post_mean).T) for i in range(len(k_weights))], axis=0)
-            post_var = np.sum([self.k_weights[i] * (post_vars[i] + np.outer(post_means[i] - post_mean, post_means[i] - post_mean)) for i in range(len(self.k_weights))], axis=0) ## need to check if this is correct
-
-        ## or if starting from nothing, just return the prior
-        elif obs is None:
-            post_mean = np.zeros(len(pred_idx)) - 0.5
-            # post_var = self.K_inf[pred_idx][:, pred_idx]
-            post_var = np.zeros(len(pred_idx))
-
-        return post_mean, post_var
-    
-
-    ## check that kernel is PSD and symmetric
-    def k_check(self, K):
-        symm = np.allclose(K,K.T)
-        if not symm:
-            warnings.warn("Kernel matrix is not symmetric.", UserWarning)
-        
-        eigenvalues = np.linalg.eigvals(K)
-        psd = np.all(eigenvalues >= -1e-10)
-        if not psd:
-            warnings.warn("Kernel matrix is not positive semi-definite.", UserWarning)
-
-        return np.any([not symm, not psd])
-    
-    ## compute log marginal likelihood of set of observations, given the inference kernel
-    def likelihood(self, K_inf, obs, sigma=0.01):
-        n_obs = len(obs)
-        obs_idx = obs[:, 0].astype(int) #i.e. x
-        obs_rewards = obs[:, 3] #i.e. y
-        K_tmp = K_inf[obs_idx][:,obs_idx] 
-        K_tmp = K_tmp + ((sigma**2) * np.eye(n_obs))
-        self.k_check(K_tmp)
-        
-        ## cholesky decomp
-        L = scipy.linalg.cholesky(K_tmp, lower=True, check_finite=False)
-        alpha = scipy.linalg.cho_solve((L, True), obs_rewards, check_finite=False)
-
-        ## calculate log likelihood terms
-        log_det = np.sum(np.log(np.diag(L))) 
-        quad_form = 0.5 * (obs_rewards@alpha)
-        norm_term = 0.5 * n_obs * np.log(2*np.pi)
-        ll = -quad_form - log_det - norm_term
-
-        return ll
     
 
 
@@ -795,88 +498,3 @@ class MountainEnv(gym.Env):
         
         # Compute total cost
         self.o_traj_total_cost = np.sum(self.o_traj_costs)
-
-
-
-    ## generate random observations from current true GP kernel
-    def gen_obs(self, samples, n_obs):
-        obs_idx = np.random.randint(0, self.N**2, size=n_obs)
-
-        ## map these observations to the grid and get the reward values
-        obs_coords = np.column_stack(np.unravel_index(obs_idx, (self.N, self.N)))
-        obs_rewards = samples[obs_coords[:, 0], obs_coords[:, 1]]
-        obs = np.column_stack([obs_idx, obs_coords, obs_rewards])
-
-        return obs
-    
-    ## dynamic programming
-    def value_iteration(self, dp_costs, max_iters = 1000, theta = 0.0001, discount = 0.99):
-        
-        ## init tables
-        V = np.zeros((self.N, self.N))
-        A = np.zeros((self.N, self.N))
-        Q = np.zeros((self.N, self.N, self.n_actions))
-
-        ## determine whether to use true costs or inferred costs
-        # if self.known_costs:
-        #     dp_costs = self.costs.copy()
-        # else:
-        #     dp_costs = self.posterior_mean.reshape(self.N, self.N).copy()
-
-        ## set cost of goal to 0
-        start = self._agent_location.copy()
-        goal = self._goal_location.copy()
-        dp_costs[goal[0], goal[1]] = 0
-
-        assert np.all(dp_costs <= 0), 'costs are not all negative: {}'.format(dp_costs)
-
-        ## loop through states
-        for i in range(max_iters):
-            delta = 0
-            for x in range(self.N):
-                for y in range(self.N):
-                    
-                    ## (make sure the goal state has value 0)
-                    if (x, y) == tuple(goal):
-                        # V[x, y] = 0
-                        continue
-
-                    v = V[x, y]
-                    q = np.zeros(self.n_actions)
-
-                    ## loop through actions and get the discounted value of each of the next states
-                    for a in range(self.n_actions):
-
-                        ## allow wall moves
-                        # next_state = np.clip([x, y] + self._action_to_direction[a], 0, self.N-1)
-                        # q[a] = dp_costs[next_state[0], next_state[1]] + discount*V[next_state[0], next_state[1]]
-
-                        ## or, don't allow wall moves
-                        next_state = [x, y] + self._action_to_direction[a]
-                        if (next_state[0] >= 0) and (next_state[0] < self.N) and (next_state[1] >= 0) and (next_state[1] < self.N):
-                            q[a] = dp_costs[next_state[0], next_state[1]] + discount*V[next_state[0], next_state[1]]
-                        else:
-                            q[a] = np.nan
-
-                        ## update the Q-table
-                        Q[x, y, a] = q[a]
-
-                    ## use the best action to update the value of the current state
-                    V[x, y] = np.nanmax(q)
-
-                    # A[x, y] = np.argmax(q)
-                    A[x, y] = argm(q, np.nanmax(q))
-
-                    ## check if converged
-                    delta = max(delta, np.abs(v - V[x, y]))
-            
-            if delta < theta:
-                # print('DP converged after {} iterations'.format(i))
-                break
-
-            if i == max_iters-1:
-                print('DP did not converge after {} iterations'.format(i))
-
-        ## need to check if this has lead to a valid policy
-
-        return V, Q, A
