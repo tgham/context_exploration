@@ -20,36 +20,93 @@ from scipy.linalg import cholesky
 from minimax_tilting_sampler import TruncatedMVN
 import torch
 import gpytorch
+from base_kernels import *
+
+
 
 
 class GPAgent:
 
-    def __init__(self, K_inf = None, metric='cityblock',r_noise=0.05):
+    def __init__(self, N, K_inf, metric='cityblock',r_noise=0.05):
 
         self.metric = metric
-        self.K_inf = K_inf
-        self.N = int(np.sqrt(len(K_inf)))
+        # self.K_inf = K_inf
+        # self.N = int(np.sqrt(len(K_inf)))
+        self.N = N
         self.n_actions = 4
         self.r_noise = r_noise
         self.action_to_direction = {0: np.array([0, 1]), 1: np.array([0, -1]), 2: np.array([1, 0]), 3: np.array([-1, 0])}
+        
+        ## define grid of kernel parameters and their weights
+        n_param_vals = 10
+        lb = 0
+        ub = np.pi 
+        ub -= (ub-lb)/(n_param_vals)
+        self.kernel_params = np.linspace(lb, ub, n_param_vals)
+        self.kernel_weights = np.ones(n_param_vals) / n_param_vals
+        # self.kernel_params = {
+        #     'theta': np.linspace(0, np.pi, n_param_vals),
+        # }
+        
 
+        ## if using a known kernel
+        if K_inf is not None:
+            self.K_inf = K_inf
+
+        ## else, sample a kernel
+        else:
+            self.init_kernels()
+            self.K_inf = self.sample_k()
+
+    ## initialise kernel set
+    def init_kernels(self):
+
+        ## init kernel set
+        x = np.arange(self.N)
+        y = np.arange(self.N)
+        X,Y = np.meshgrid(x,y)
+        locations = np.column_stack([X.ravel(), Y.ravel()])
+        kernel_set = BaseKernels(locations)
+
+        ## create kernel for each parameter in grid
+        self.all_Ks = []
+        for theta in self.kernel_params:
+            K_inf = kernel_set.rbf_1D(dim=0, theta=theta, sigma_f=2, length_scale=0.5)
+            self.all_Ks.append(K_inf)
+        self.all_Ks = np.array(self.all_Ks)
+    
+    ## sample kernel
+    def sample_k(self):
+        K_idx = np.random.choice(np.arange(len(self.all_Ks)), p=self.kernel_weights)
+        K_inf = self.all_Ks[K_idx]
+        return K_inf
+    
+    ## kernel weight update
+    def update_k_weights(self, obs):
+        lls = []
+        for k_inf in self.all_Ks:
+            ll = self.likelihood(k_inf, obs)
+            lls.append(ll)
+        self.k_weights = softmax(lls)
+        return self.k_weights
+    
+    
     
     ### interactions with the environment
 
     ## function for receiving info from env
     def get_env_info(self, env):
+        self.N = env.N
         self.obs = env.obs.copy()
         self.current = env.current
         self.goal = env.goal
-
-    ##
                      
 
-    ## root sampling reset
-    def root_sample(self, obs, certainty_equivalent = False):
+    ## root sampling of surface
+    def root_sample(self, obs, K_inf, certainty_equivalent = False):
 
         ## calculate posterior mean 
-        self.posterior_mean, self.posterior_cov, self.posterior_var = self.post_pred(K_inf = self.K_inf, obs=self.obs, pred = 'all')
+        self.posterior_mean, self.posterior_cov, self.posterior_var = self.post_pred(K_inf = K_inf, obs=self.obs, pred = 'all')
 
         ## sample from posterior
         self.posterior_sample = sample(self.posterior_mean, self.posterior_cov).flatten()
