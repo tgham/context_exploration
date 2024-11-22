@@ -92,6 +92,8 @@ class MountainEnv(gym.Env):
         mean = np.zeros(self.N**2) - 0.5
         self.costs = sample(mean, self.K_gen, self.r_noise, self.min_cost, self.max_cost) 
 
+        ## normalise costs bt min_cost and max_cost??
+        self.costs = self.min_cost + (self.max_cost - self.min_cost) * (self.costs - np.min(self.costs)) / (np.max(self.costs) - np.min(self.costs))
         
         ### gym inits
 
@@ -191,9 +193,9 @@ class MountainEnv(gym.Env):
         row_or_col = 1
         goal_val = 0
         start_val = 0
-        min_val = 0.6
+        min_val = -0.2
         t = 0
-        while (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]): #or (goal_val<min_val) or (start_val<min_val):
+        while (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (goal_val>min_val) or (start_val>min_val):
             self._agent_location = self.np_random.integers(0, self.N, size=2, dtype=int)
             self._goal_location = self.np_random.integers(
                 0, self.N, size=2, dtype=int
@@ -208,12 +210,11 @@ class MountainEnv(gym.Env):
             ## angle criterion
             angle = node_angle(self._agent_location, self._goal_location)
 
-            ## value criterion
+            ## value criterion - i.e. what cost should the start and goal states have
             goal_val = self.costs[self._goal_location[0], self._goal_location[1]]
-            goal_val = 1
+            goal_val = -1
 
             start_val = self.costs[self._agent_location[0], self._agent_location[1]]
-            start_val = 1
             t+=1
 
             # if t>10:
@@ -226,8 +227,6 @@ class MountainEnv(gym.Env):
         # self._agent_location = np.array(self.starts[self.n_eps%4])
         # self._goal_location = np.array(self.goals[self.n_eps%4])
         # self.n_eps += 1
-
-
 
         ## initialise trial info
         self.terminated = False
@@ -265,15 +264,16 @@ class MountainEnv(gym.Env):
 
 
         ## dynamic programming to get the true optimal trajectory
-        dp_costs = self.costs.copy()
-        self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=self._goal_location)
+        if not self.sim:
+            dp_costs = self.costs.copy()
+            self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=self._goal_location)
 
-        ## get the costs of this optimal trajectory
-        self.optimal_trajectory()
+            ## get the costs of this optimal trajectory
+            self.optimal_trajectory()
 
-        ## initialise actual trajectory as list of tuples
-        self.a_traj = [tuple(self._agent_location)]
-        self.action_scores = []
+            ## initialise actual trajectory as list of tuples
+            self.a_traj = [tuple(self._agent_location)]
+            self.action_scores = []
         
         return observation, info
     
@@ -303,7 +303,7 @@ class MountainEnv(gym.Env):
 
         ## get the score of the action that will  actually be taken, given the ranking of the optimal actions
         action_score = action_ranking[action] + 1
-        action_score /= self.n_actions
+        action_score /= self.n_actions ## may be more suitable to divide by len(actions) in case of wall states
 
         ## or, score the action based on the normalised Q-values of the available actions
         norm_Q_vals = (current_Q_vals - np.nanmin(current_Q_vals)) / (np.nanmax(current_Q_vals) - np.nanmin(current_Q_vals))
