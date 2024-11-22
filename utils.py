@@ -18,12 +18,13 @@ from IPython.display import display, clear_output
 import uuid
 import random
 from collections import deque
+from minimax_tilting_sampler import TruncatedMVN
 # from MCTS import MonteCarloTreeSearch
 
 
 
 ## create a mountain environment
-def make_env(N, params, metric, true_k, inf_k, known_costs, render_mode, r_noise):
+def make_env(N, params, metric, true_k,render_mode, r_noise):
 
     ## register env
     
@@ -40,7 +41,7 @@ def make_env(N, params, metric, true_k, inf_k, known_costs, render_mode, r_noise
         kwargs={"size": N},
     )
     
-    env = gym.make("mountains/MountainEnv-v0", N=N, params=params, metric=metric, true_k=true_k, inf_k=inf_k, known_costs=known_costs, render_mode=render_mode, r_noise=r_noise)
+    env = gym.make("mountains/MountainEnv-v0", N=N, params=params, metric=metric, true_k=true_k, render_mode=render_mode, r_noise=r_noise)
     return env
 
 
@@ -234,3 +235,122 @@ def node_angle(a,b):
     rad = np.arctan2(b[1]-a[1], b[0]-a[0])
     ang = np.abs(np.degrees(rad))
     return ang
+
+## value iteration
+def value_iteration(dp_costs, goal, max_iters = 1000, theta = 0.0001, discount = 0.99):
+
+    N = len(dp_costs)
+    n_actions = 4
+
+    ## init actions
+    action_directions = np.array([[1, 0], [0, 1], [-1, 0], [0, -1]])
+    
+    ## init tables
+    V = np.zeros((N, N))
+    A = np.zeros((N, N))
+    Q = np.zeros((N, N, n_actions))
+
+    ## determine whether to use true costs or inferred costs
+    # if self.known_costs:
+    #     dp_costs = self.costs.copy()
+    # else:
+    #     dp_costs = self.posterior_mean.reshape(self.N, self.N).copy()
+
+    ## set cost of goal to 0
+    dp_costs[goal[0], goal[1]] = 0
+
+    assert np.all(dp_costs <= 0), 'costs are not all negative: {}'.format(dp_costs)
+
+    ## loop through states
+    for i in range(max_iters):
+        delta = 0
+        for x in range(N):
+            for y in range(N):
+                
+                ## (make sure the goal state has value 0)
+                if (x, y) == tuple(goal):
+                    # V[x, y] = 0
+                    continue
+
+                v = V[x, y]
+                q = np.zeros(n_actions)
+
+                ## loop through actions and get the discounted value of each of the next states
+                for a in range(n_actions):
+
+                    ## allow wall moves
+                    # next_state = np.clip([x, y] + self._action_to_direction[a], 0, self.N-1)
+                    # q[a] = dp_costs[next_state[0], next_state[1]] + discount*V[next_state[0], next_state[1]]
+
+                    ## or, don't allow wall moves
+                    next_state = [x, y] + action_directions[a]
+                    if (next_state[0] >= 0) and (next_state[0] < N) and (next_state[1] >= 0) and (next_state[1] < N):
+                        q[a] = dp_costs[next_state[0], next_state[1]] + discount*V[next_state[0], next_state[1]]
+                    else:
+                        q[a] = np.nan
+
+                    ## update the Q-table
+                    Q[x, y, a] = q[a]
+
+                ## use the best action to update the value of the current state
+                V[x, y] = np.nanmax(q)
+
+                # A[x, y] = np.argmax(q)
+                A[x, y] = argm(q, np.nanmax(q))
+
+                ## check if converged
+                delta = max(delta, np.abs(v - V[x, y]))
+        
+        if delta < theta:
+            # print('DP converged after {} iterations'.format(i))
+            break
+
+        if i == max_iters-1:
+            print('DP did not converge after {} iterations'.format(i))
+
+    ## need to check if this has lead to a valid policy
+
+    return V, Q, A
+
+## sample from the GP
+def sample(mean, K, sigma=0.01, min_cost=-0.9, max_cost=-0.1):
+
+    N = int(np.sqrt(len(mean)))
+
+    ## check kernel is valid
+    k_check(K)
+
+    # sample
+    # if mean is None:
+    #     mean = np.zeros(self.N**2)
+    # mean = np.zeros(self.N**2)
+    # samples = np.random.multivariate_normal(mean, K).reshape(self.N, self.N)
+
+    #normalise
+    # min_cost = self.min_cost
+    # max_cost = self.max_cost
+    # samples = min_cost + (max_cost - min_cost) * (samples - np.min(samples)) / (np.max(samples) - np.min(samples))
+
+
+    ## or truncated
+    lb = np.zeros(N**2) + min_cost
+    ub = np.zeros(N**2) + max_cost
+    K_tmp = K + sigma**2 * np.eye(N**2)
+    tmvn = TruncatedMVN(mean, K_tmp, lb, ub)
+    samples = tmvn.sample(1)
+    samples = samples.reshape(N, N)
+
+    return samples
+
+## check that kernel is PSD and symmetric
+def k_check(K):
+    symm = np.allclose(K,K.T)
+    if not symm:
+        warnings.warn("Kernel matrix is not symmetric.", UserWarning)
+    
+    eigenvalues = np.linalg.eigvals(K)
+    psd = np.all(eigenvalues >= -1e-10)
+    if not psd:
+        warnings.warn("Kernel matrix is not positive semi-definite.", UserWarning)
+
+    return np.any([not symm, not psd])
