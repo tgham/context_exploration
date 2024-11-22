@@ -369,7 +369,7 @@ class MonteCarloTreeSearch():
     def search(self, n_trees=1000, n_futures=1, progress=False):
 
         if progress:
-            pbar = tqdm(total=n_trees, desc='MCTS search', position=0, leave=False)
+            pbar = tqdm(total=n_trees, desc='MCTS search', position=0, leave=False, miniters=25, ascii=True, bar_format="{l_bar}{bar}")
 
         ## root sampling of new posterior
         # self.GP.root_sample(certainty_equivalent=True)
@@ -380,8 +380,11 @@ class MonteCarloTreeSearch():
             if progress:
                 pbar.update(1)
                 
+            ## root sampling of new kernel
+            K_inf = self.GP.sample_k()
+            
             ## root sampling of new posterior
-            self.GP.root_sample(self.env.obs, self.GP.K_inf, certainty_equivalent=False)
+            self.GP.root_sample(self.env.obs, K_inf, certainty_equivalent=False)
             self.env.receive_predictions(self.GP.posterior_sample)
             
             ## debugging plot
@@ -405,6 +408,9 @@ class MonteCarloTreeSearch():
             mean_subseq_sim_cost = np.mean(subseq_sim_costs)
             sim_costs = [initial_sim_cost, mean_subseq_sim_cost]
             self.backward(sim_costs)
+
+        if progress:
+            pbar.close()
 
 
         
@@ -448,7 +454,8 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, r_noise=0
         'RPE':[],
         'search_attempts': [],
         'posterior_mean': [],
-        'action_tree': []
+        'action_tree': [],
+        'theta_MLE': []
     }
     
     ## set seed
@@ -462,6 +469,11 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, r_noise=0
 
     ## copy env so that each agent makes its own observations 
     agent_envs = [copy.deepcopy(env) for _ in agents]
+
+    ## initialise the GP-MCTS agent
+    # K_inf = env.K_gen.copy()
+    K_inf = None
+    GP = GPAgent(N, K_inf, env.metric, r_noise)
 
     ## loop through episodes (i.e. different start and goal states for the same mountain)
     print(' ') # for some reason need this to get the pbar to appear
@@ -485,12 +497,20 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, r_noise=0
             current = start
             goal = env_copy.goal
 
-            ## initiate the GP-MCTS
+            ## GP-MCTS agent receives info from env
             if agent =='MCTS':
                 # K_inf = env_copy.K_gen.copy()
-                K_inf = None
-                GP = GPAgent(N, K_inf, env.metric, r_noise)
+                # K_inf = None
+                # GP = GPAgent(N, K_inf, env.metric, r_noise)
                 GP.get_env_info(env_copy)
+
+                ## also updates its kernel weights, given its observations
+                GP.update_k_weights(env_copy.obs)
+                best_k_idx = np.argmax(GP.k_weights)
+                best_theta = GP.k_params[int(best_k_idx)]
+                # print('n_obs = ',len(env_copy.obs))
+                # print('k_weights = ', np.round(GP.k_weights,2))
+                # print('best guess for theta: {}/np.pi'.format(best_theta/np.pi))
 
             # ## initiate tree 
             # if agent == 'MCTS':
@@ -629,6 +649,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, r_noise=0
                     sim_out['search_attempts'].append(search_attempts)
                     sim_out['posterior_mean'].append(np.nan)
                     sim_out['action_tree'].append(MCTS.tree.action_tree())
+                    sim_out['theta_MLE'].append(best_theta)
 
                     end_episode = True
 
@@ -656,6 +677,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, r_noise=0
                     sim_out['search_attempts'].append(search_attempts)
                     sim_out['posterior_mean'].append(GP.posterior_mean)
                     sim_out['action_tree'].append(MCTS.tree.action_tree())
+                    sim_out['theta_MLE'].append(best_theta)
                     
                     ## update the agent env
                     # agent_envs[a] = copy.deepcopy(env_copy)
