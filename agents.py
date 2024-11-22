@@ -42,9 +42,9 @@ class GPAgent:
         lb = 0
         ub = np.pi 
         ub -= (ub-lb)/(n_param_vals)
-        self.kernel_params = np.linspace(lb, ub, n_param_vals)
-        self.kernel_weights = np.ones(n_param_vals) / n_param_vals
-        # self.kernel_params = {
+        self.k_params = np.linspace(lb, ub, n_param_vals)
+        self.k_weights = np.ones(n_param_vals) / n_param_vals
+        # self.k_params = {
         #     'theta': np.linspace(0, np.pi, n_param_vals),
         # }
         
@@ -70,14 +70,14 @@ class GPAgent:
 
         ## create kernel for each parameter in grid
         self.all_Ks = []
-        for theta in self.kernel_params:
+        for theta in self.k_params:
             K_inf = kernel_set.rbf_1D(dim=0, theta=theta, sigma_f=2, length_scale=0.5)
             self.all_Ks.append(K_inf)
         self.all_Ks = np.array(self.all_Ks)
     
     ## sample kernel
     def sample_k(self):
-        K_idx = np.random.choice(np.arange(len(self.all_Ks)), p=self.kernel_weights)
+        K_idx = np.random.choice(np.arange(len(self.all_Ks)), p=self.k_weights)
         K_inf = self.all_Ks[K_idx]
         return K_inf
     
@@ -88,7 +88,10 @@ class GPAgent:
             ll = self.likelihood(k_inf, obs)
             lls.append(ll)
         self.k_weights = softmax(lls)
-        return self.k_weights
+
+        ## get MLE param value
+        # best_idx = self.k_weights
+        # self.best_theta = self.k_params[best_idx]
     
     
     
@@ -214,12 +217,13 @@ class GPAgent:
     
     ## compute log marginal likelihood of set of observations, given the inference kernel
     def likelihood(self, K_inf, obs, sigma=0.01):
+        sigma = self.r_noise
         n_obs = len(obs)
         obs_idx = obs[:, 0].astype(int) #i.e. x
         obs_rewards = obs[:, 3] #i.e. y
         K_tmp = K_inf[obs_idx][:,obs_idx] 
         K_tmp = K_tmp + ((sigma**2) * np.eye(n_obs))
-        self.k_check(K_tmp)
+        k_check(K_tmp)
         
         ## cholesky decomp
         L = scipy.linalg.cholesky(K_tmp, lower=True, check_finite=False)
