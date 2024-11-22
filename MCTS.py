@@ -8,12 +8,14 @@ import os
 from scipy.spatial.distance import cdist
 
 from plotter import *
+from agents import GPAgent
 
 
 class MonteCarloTreeSearch():
 
-    def __init__(self, env, tree, exploration_constant=2, discount_factor=0.95):
+    def __init__(self, env, GP, tree, exploration_constant=2, discount_factor=0.95):
         self.env = env
+        self.GP = GP
         self.tree = tree
         self.action_space = self.env.action_space.n
         self.N = self.env.N
@@ -106,7 +108,6 @@ class MonteCarloTreeSearch():
                 self.env.flush_obs()
                 assert len(self.tree_obs) == len(self.env.obs)+len(self.tree_path), 'tree obs and path lengths do not match\n tree obs: {}, env.obs: {}, tree path: {}'.format(len(self.tree_obs), len(self.env.obs),len(self.tree_path))
 
-
                 return action_leaf
                 
             ## selection step
@@ -171,6 +172,7 @@ class MonteCarloTreeSearch():
         
         ## or, make a copy
         env_copy = copy.deepcopy(self.env)
+        GP_copy = copy.deepcopy(self.GP) ## this is done so that the GP doesn't change its state. could of course just feed env back into it at end of rollout
 
         ## standard rollout if this is the first S-G pair
         if real_rollout:
@@ -191,14 +193,16 @@ class MonteCarloTreeSearch():
         ## or, rollout for some new imagined S-G pair
         else:
 
-            ## inherit obs from tree so far
-            env_copy.set_obs(self.tree_obs)
 
             ## imagine new start and goal locations
             seed = random.randint(0, 1000)
             _,_ = env_copy.reset(seed=seed)
             start = env_copy.current
             goal = env_copy.goal
+
+            ## inherit obs from tree so far and sample new posterior
+            GP_copy.get_env_info(env_copy)
+            GP_copy.root_sample(self.tree_obs, certainty_equivalent=False)
 
             ## debugging plot
             # if len(self.tree_obs)>5:
@@ -230,9 +234,9 @@ class MonteCarloTreeSearch():
                 # print(env_copy.V_inf)
                 fig, axs = plt.subplots(1, 3, figsize=(15,5))
                 # plot_r(env_copy.posterior_mean.reshape(self.N,self.N), ax=axs[0], title = 'posterior mean')
-                sns.heatmap(env_copy.posterior_mean.reshape(self.N,self.N), ax=axs[0], cbar=False, annot=True, fmt='.2f')
-                plot_action_tree(env_copy.Q_inf, start, goal, ax=axs[1], title = 'DP_inf')
-                plot_r(env_copy.V_inf, ax=axs[2], title = 'V')
+                sns.heatmap(GP_copy.posterior_sample.reshape(self.N,self.N), ax=axs[0], cbar=False, annot=True, fmt='.2f')
+                plot_action_tree(GP_copy.Q_inf, start, goal, ax=axs[1], title = 'DP_inf')
+                plot_r(GP_copy.V_inf, ax=axs[2], title = 'V')
 
                 ## raise error
                 raise ValueError('exceeded max rolls in {} rollout, start: {}, goal: {}'.format(['imagined', 'real'][real_rollout], start, goal))
@@ -254,8 +258,7 @@ class MonteCarloTreeSearch():
             ## or, optimised rollout 
             current = observation['agent']
             # action = self.env.optimal_policy(current, self.env.Q_inf)
-            action = env_copy.optimal_policy(current, env_copy.Q_inf)
-
+            action = GP_copy.optimal_policy(current, GP_copy.Q_inf)
 
             ## take action
             observation, cost, terminated, _, _ = env_copy.step(action)
@@ -369,7 +372,7 @@ class MonteCarloTreeSearch():
             pbar = tqdm(total=n_trees, desc='MCTS search', position=0, leave=False)
 
         ## root sampling of new posterior
-        # self.env.root_sample(certainty_equivalent=True)
+        # self.GP.root_sample(certainty_equivalent=True)
 
         ## loop through trees
         for t in range(n_trees):
@@ -378,7 +381,8 @@ class MonteCarloTreeSearch():
                 pbar.update(1)
                 
             ## root sampling of new posterior
-            self.env.root_sample(certainty_equivalent=False) 
+            self.GP.root_sample(self.env.obs, certainty_equivalent=False)
+            self.env.receive_predictions(self.GP.posterior_sample)
             
             ## debugging plot
             # plt.figure()
@@ -423,7 +427,7 @@ class MonteCarloTreeSearch():
 
 
 ## parallel function for simulating many episodes within the same mountain env
-def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='known', known_costs=True, r_noise=0.05, render_mode=None, n_episodes=10, agents = ['GP', 'MCTS'], n_trees=1000):
+def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, r_noise=0.05, n_episodes=10, agents = ['GP', 'MCTS'], n_trees=1000):
     
     ## initiate dictionary to store the results
     sim_out = {
@@ -433,7 +437,6 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
         'start': [],
         'goal': [],
         'true_k': [],
-        'inf_k': [],
         'actual_cost': [],
         'optimal_cost': [],
         'action_score': [],
@@ -443,7 +446,8 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
         'optimal_trajectory': [],
         'observations': [],
         'RPE':[],
-        'search_attempts': []
+        'search_attempts': [],
+        'posterior_mean': []
     }
     
     ## set seed
@@ -452,7 +456,7 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
     np.random.seed(seed)
     
     ## create base mountain environment
-    env = make_env(N, None, metric, true_k, inf_k, known_costs, render_mode=None, r_noise=r_noise)
+    env = make_env(N, None, metric, true_k, r_noise=r_noise)
 
     ## copy env so that each agent makes its own observations 
     agent_envs = [copy.deepcopy(env) for _ in agents]
@@ -478,6 +482,12 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
             start = env_copy.current
             current = start
             goal = env_copy.goal
+
+            ## initiate the GP-MCTS
+            if agent =='MCTS':
+                K_inf = env_copy.K_gen.copy()
+                GP = GPAgent(K_inf, env.metric, r_noise)
+                GP.get_env_info(env_copy)
 
             # ## initiate tree 
             # if agent == 'MCTS':
@@ -532,7 +542,7 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
                     
                     ## init MCTS
                     tree = Tree(N)
-                    MCTS = MonteCarloTreeSearch(env=env_copy, tree=tree)
+                    MCTS = MonteCarloTreeSearch(env=env_copy, GP=GP, tree=tree)
                     assert MCTS.env.sim == True, 'env not in sim mode'
                     while not non_stuck_route:
                         search_attempts += 1
@@ -604,7 +614,6 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
                     sim_out['start'].append(start)
                     sim_out['goal'].append(goal)
                     sim_out['true_k'].append(true_k)
-                    sim_out['inf_k'].append(inf_k)
                     sim_out['actual_cost'].append(np.nan)
                     sim_out['optimal_cost'].append(env_copy.o_traj_total_cost)
                     sim_out['action_score'].append(np.nan)
@@ -615,6 +624,7 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
                     sim_out['optimal_trajectory'].append(env_copy.o_traj)
                     sim_out['observations'].append(env_copy.obs)
                     sim_out['search_attempts'].append(search_attempts)
+                    sim_out['posterior_mean'].append(np.nan)
                     end_episode = True
 
                 ## save data and end the episode
@@ -625,7 +635,6 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
                     sim_out['start'].append(start)
                     sim_out['goal'].append(goal)
                     sim_out['true_k'].append(true_k)
-                    sim_out['inf_k'].append(inf_k)
                     sim_out['actual_cost'].append(env_copy.a_traj_total_cost)
                     sim_out['optimal_cost'].append(env_copy.o_traj_total_cost)
                     # if np.round(env_copy.optimal_cost,4) < np.round(env_copy.accrued_cost,4):
@@ -635,11 +644,12 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
                     sim_out['action_score'].append(env_copy.action_score)
                     sim_out['cost_ratio'].append(env_copy.cost_ratio)
                     sim_out['n_steps'].append(steps)
-                    sim_out['RPE'].append(np.mean(np.abs(env_copy.posterior_mean.reshape(N,N) - env_copy.costs)))
+                    sim_out['RPE'].append(np.mean(np.abs(GP.posterior_mean.reshape(N,N) - env_copy.costs)))
                     sim_out['actual_trajectory'].append(env_copy.a_traj)
                     sim_out['optimal_trajectory'].append(env_copy.o_traj)
                     sim_out['observations'].append(env_copy.obs)
                     sim_out['search_attempts'].append(search_attempts)
+                    sim_out['posterior_mean'].append(GP.posterior_mean)
                     
                     ## update the agent env
                     # agent_envs[a] = copy.deepcopy(env_copy)
@@ -648,4 +658,4 @@ def parallel_agent(m, N, params=None, metric='cityblock', true_k=None, inf_k='kn
                     end_episode = True
 
 
-    return sim_out #, env_copy.costs
+    return sim_out, env_copy.costs
