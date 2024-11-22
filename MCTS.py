@@ -202,7 +202,7 @@ class MonteCarloTreeSearch():
 
             ## inherit obs from tree so far and sample new posterior
             GP_copy.get_env_info(env_copy)
-            GP_copy.root_sample(self.tree_obs, certainty_equivalent=False)
+            GP_copy.root_sample(self.tree_obs, GP_copy.K_inf, certainty_equivalent=False)
 
             ## debugging plot
             # if len(self.tree_obs)>5:
@@ -381,7 +381,7 @@ class MonteCarloTreeSearch():
                 pbar.update(1)
                 
             ## root sampling of new posterior
-            self.GP.root_sample(self.env.obs, certainty_equivalent=False)
+            self.GP.root_sample(self.env.obs, self.GP.K_inf, certainty_equivalent=False)
             self.env.receive_predictions(self.GP.posterior_sample)
             
             ## debugging plot
@@ -447,7 +447,8 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, r_noise=0
         'observations': [],
         'RPE':[],
         'search_attempts': [],
-        'posterior_mean': []
+        'posterior_mean': [],
+        'action_tree': []
     }
     
     ## set seed
@@ -456,7 +457,8 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, r_noise=0
     np.random.seed(seed)
     
     ## create base mountain environment
-    env = make_env(N, None, metric, true_k, r_noise=r_noise)
+    kernel_params = params
+    env = make_env(N, true_k, kernel_params, metric, r_noise=r_noise)
 
     ## copy env so that each agent makes its own observations 
     agent_envs = [copy.deepcopy(env) for _ in agents]
@@ -485,8 +487,9 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, r_noise=0
 
             ## initiate the GP-MCTS
             if agent =='MCTS':
-                K_inf = env_copy.K_gen.copy()
-                GP = GPAgent(K_inf, env.metric, r_noise)
+                # K_inf = env_copy.K_gen.copy()
+                K_inf = None
+                GP = GPAgent(N, K_inf, env.metric, r_noise)
                 GP.get_env_info(env_copy)
 
             # ## initiate tree 
@@ -625,6 +628,8 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, r_noise=0
                     sim_out['observations'].append(env_copy.obs)
                     sim_out['search_attempts'].append(search_attempts)
                     sim_out['posterior_mean'].append(np.nan)
+                    sim_out['action_tree'].append(MCTS.tree.action_tree())
+
                     end_episode = True
 
                 ## save data and end the episode
@@ -650,6 +655,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, r_noise=0
                     sim_out['observations'].append(env_copy.obs)
                     sim_out['search_attempts'].append(search_attempts)
                     sim_out['posterior_mean'].append(GP.posterior_mean)
+                    sim_out['action_tree'].append(MCTS.tree.action_tree())
                     
                     ## update the agent env
                     # agent_envs[a] = copy.deepcopy(env_copy)
