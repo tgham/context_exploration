@@ -27,14 +27,14 @@ from base_kernels import *
 
 class GPAgent:
 
-    def __init__(self, N, K_inf, metric='cityblock',r_noise=0.05):
+    def __init__(self, N, K_inf, metric='cityblock',inf_noise=0.05):
 
         self.metric = metric
         # self.K_inf = K_inf
         # self.N = int(np.sqrt(len(K_inf)))
         self.N = N
         self.n_actions = 4
-        self.r_noise = r_noise
+        self.inf_noise = inf_noise
         self.action_to_direction = {0: np.array([0, 1]), 1: np.array([0, -1]), 2: np.array([1, 0]), 3: np.array([-1, 0])}
         
         ## define grid of kernel parameters and their weights
@@ -78,6 +78,7 @@ class GPAgent:
     ## sample kernel
     def sample_k(self):
         K_idx = np.random.choice(np.arange(len(self.all_Ks)), p=self.k_weights)
+        self.current_theta = self.k_params[K_idx]
         K_inf = self.all_Ks[K_idx]
         return K_inf
     
@@ -106,13 +107,16 @@ class GPAgent:
                      
 
     ## root sampling of surface
-    def root_sample(self, obs, K_inf, certainty_equivalent = False):
+    def root_sample(self, obs, K_inf):
 
         ## calculate posterior mean 
         self.posterior_mean, self.posterior_cov, self.posterior_var = self.post_pred(K_inf = K_inf, obs=self.obs, pred = 'all')
 
         ## sample from posterior
         self.posterior_sample = sample(self.posterior_mean, self.posterior_cov).flatten()
+
+    ## dynamic programming
+    def dp(self, certainty_equivalent = False):
 
         ## dynamic programming to get optimal Q-values, given the agent's knowledge of the environment
         if certainty_equivalent:
@@ -125,8 +129,8 @@ class GPAgent:
 
 
     ## posterior prediction
-    def post_pred(self, K_inf, obs, pred='all', sigma=0.01):
-        sigma = self.r_noise
+    def post_pred(self, K_inf, obs, pred='all', sigma=0.001):
+        # sigma = self.inf_noise
         if isinstance(pred, str):
             pred_idx = np.arange(self.N**2)
         else:
@@ -136,22 +140,30 @@ class GPAgent:
 
             ## centre around 0 
             obs_idx = obs[:, 0].astype(int)
-            obs_rewards = obs[:, 3].copy()
-            obs_rewards += 0.5 
+            obs_costs = obs[:, 3].copy()
+            centring = 0.5
+            # centring = np.mean(obs_costs)
+            obs_costs += centring
+            # obs_costs += 0.5
+            assert np.all(obs_costs < 0.5), f"Adjusted observations out of bounds: {obs_costs}"
+
+
             
             # Covariance matrix of the already observed points
             K_obs = K_inf[obs_idx][:, obs_idx]
+
             
             # Covariance matrix between input points (i.e. points to be predicted) and observed points
             K_pred = K_inf[pred_idx][:, obs_idx]
             
             # inversion covariance matrix
             # inv_K = np.linalg.inv(K_obs + sigma**2 * np.eye(len(obs_idx)))
+            sigma = max(0.001, 0.01 * np.max(np.diag(K_obs)))  # Regularization parameter
             inv_K = np.linalg.solve(K_obs + sigma**2 * np.eye(len(obs_idx)), np.eye(len(obs_idx)))
 
             
             # Posterior mean calculation
-            post_mean = K_pred @ inv_K @ obs_rewards
+            post_mean = K_pred @ inv_K @ obs_costs
             # post_var = K_inf[pred_idx][:, pred_idx] - K_pred @ inv_K @ K_pred.T
             post_cov = K_inf[pred_idx][:, pred_idx] - K_pred @ inv_K @ K_pred.T
             post_var = np.diag(post_cov)
@@ -163,14 +175,30 @@ class GPAgent:
             post_cov = K_inf[pred_idx][:, pred_idx]  # Full prior covariance
             post_var = np.diag(post_cov)
 
-
-
         ## revert back to prior mean
         post_mean -= 0.5
+        # post_mean -= centring
 
         ## check for any non-negativity
-        assert np.all((obs_rewards-0.5)<0), 'obs is not all negative: {}'.format(self.obs)
-        # assert np.all(post_mean < 0), 'post mean is not all negative: {}'.format(post_mean)
+        # assert np.all((obs_costs-0.5)<0), 'obs is not all negative: {}'.format(self.obs)
+        # if np.any(post_mean >= 0):
+        #     # print(f"Positive posterior mean detected: obs_costs: {obs_costs-0.5}, post_mean: {post_mean}")
+        #     plot_r(post_mean.reshape(self.N,self.N), ax=plt.subplot(), title='post mean')
+
+        #     ## plot obs 
+        #     plot_obs(obs, ax=plt.subplot(), text=True)
+
+        #     ## plot kernel
+        #     plt.figure()
+        #     plot_kernel(K_inf, ax=plt.subplot(), title='K_inf')
+        #     plt.figure()
+        #     sample_tmp = sample(np.zeros(self.N**2), K_inf).reshape(self.N, self.N)
+        #     plot_r(sample_tmp, ax=plt.subplot(), title='sample')
+
+        ## clipping (cheap fix)
+        post_mean = np.clip(post_mean, -0.9, -0.1)
+
+        assert np.all(post_mean < 0), 'post mean is not all negative: \n{}'.format(post_mean.reshape(self.N, self.N))
 
         return post_mean, post_cov, post_var
     
@@ -217,21 +245,21 @@ class GPAgent:
     
     ## compute log marginal likelihood of set of observations, given the inference kernel
     def likelihood(self, K_inf, obs, sigma=0.01):
-        sigma = self.r_noise
+        # sigma = self.inf_noise
         n_obs = len(obs)
         obs_idx = obs[:, 0].astype(int) #i.e. x
-        obs_rewards = obs[:, 3] #i.e. y
+        obs_costs = obs[:, 3] #i.e. y
         K_tmp = K_inf[obs_idx][:,obs_idx] 
         K_tmp = K_tmp + ((sigma**2) * np.eye(n_obs))
         k_check(K_tmp)
         
         ## cholesky decomp
         L = scipy.linalg.cholesky(K_tmp, lower=True, check_finite=False)
-        alpha = scipy.linalg.cho_solve((L, True), obs_rewards, check_finite=False)
+        alpha = scipy.linalg.cho_solve((L, True), obs_costs, check_finite=False)
 
         ## calculate log likelihood terms
         log_det = np.sum(np.log(np.diag(L))) 
-        quad_form = 0.5 * (obs_rewards@alpha)
+        quad_form = 0.5 * (obs_costs@alpha)
         norm_term = 0.5 * n_obs * np.log(2*np.pi)
         ll = -quad_form - log_det - norm_term
 
@@ -243,8 +271,8 @@ class GPAgent:
 
         ## map these observations to the grid and get the reward values
         obs_coords = np.column_stack(np.unravel_index(obs_idx, (self.N, self.N)))
-        obs_rewards = samples[obs_coords[:, 0], obs_coords[:, 1]]
-        obs = np.column_stack([obs_idx, obs_coords, obs_rewards])
+        obs_costs = samples[obs_coords[:, 0], obs_coords[:, 1]]
+        obs = np.column_stack([obs_idx, obs_coords, obs_costs])
 
         return obs
 
