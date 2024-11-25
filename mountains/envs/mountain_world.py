@@ -38,7 +38,7 @@ class Actions(Enum):
 
 class MountainEnv(gym.Env):
 
-    def __init__(self, N, true_k=None, kernel_params=None, metric = 'cityblock', r_noise=0.05,size=5):
+    def __init__(self, N, true_k=None, kernel_params=None, metric = 'cityblock', obs_noise=0.05,size=5):
         
         ### GP inits
 
@@ -57,8 +57,8 @@ class MountainEnv(gym.Env):
                 'c': 1,
                 'scale': 1,
                 'theta': np.pi,
-                'sigma_f': 2,
-                'length_scale': 0.5,
+                'sigma_f': 0.5,
+                'length_scale': 1,
                 'periodic_length_scale': N/2,
                 'period': N/5,
                 'periodic_theta': np.pi/3
@@ -85,13 +85,14 @@ class MountainEnv(gym.Env):
             self.K_gen = kernel_set.rbf(length_scale=kernel_params['length_scale'], sigma_f=kernel_params['sigma_f'])
 
         ## generate true costs
-        self.r_noise = r_noise
+        self.obs_noise = obs_noise
         self.min_cost, self.max_cost = -0.9, -0.1
-        mean = np.zeros(self.N**2) - 0.5
-        self.costs = sample(mean, self.K_gen, self.r_noise, self.min_cost, self.max_cost) 
+        # mean = np.zeros(self.N**2) - 0.5
+        mean=None
+        self.costs = sample(mean, self.K_gen, None, self.min_cost, self.max_cost) 
 
         ## normalise costs bt min_cost and max_cost??
-        self.costs = self.min_cost + (self.max_cost - self.min_cost) * (self.costs - np.min(self.costs)) / (np.max(self.costs) - np.min(self.costs))
+        # self.costs = self.min_cost + (self.max_cost - self.min_cost) * (self.costs - np.min(self.costs)) / (np.max(self.costs) - np.min(self.costs))
         
         ### gym inits
 
@@ -184,9 +185,9 @@ class MountainEnv(gym.Env):
 
         ## sample start and goal locations
         dist = 0
-        min_dist = self.N*0.75
+        min_dist = self.N*0.7
         angle = 0
-        angle_tolerance = 0.5
+        angle_tolerance = 0.8
         angle_bounds = [45*(1+angle_tolerance), 45*(1-angle_tolerance)]
         row_or_col = 1
         goal_val = 0
@@ -230,7 +231,7 @@ class MountainEnv(gym.Env):
         self.terminated = False
         observation = self.get_obs()
         info = self._get_info()
-        current_cost = self.costs[self._agent_location[0], self._agent_location[1]] #+ np.random.normal(0, self.r_noise)
+        current_cost = self.costs[self._agent_location[0], self._agent_location[1]] #+ np.random.normal(0, self.obs_noise)
 
         ## reset obs on each trial
         # loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
@@ -322,7 +323,8 @@ class MountainEnv(gym.Env):
         # var_cost = self.posterior_var[self._agent_location[0]*self.N + self._agent_location[1]]
         
         ## get the actual cost of the current state
-        current_cost = self.costs[self._agent_location[0], self._agent_location[1]] #+ np.random.normal(0, self.r_noise)
+        current_cost = self.costs[self._agent_location[0], self._agent_location[1]] # + np.random.normal(0, self.obs_noise)
+
 
         ## return the real cost if not simulating
         if not self.sim:
@@ -367,10 +369,6 @@ class MountainEnv(gym.Env):
             ## update observation array only once the episode is complete
             if not self.sim:
                 self.obs = self.obs_tmp.copy()
-
-                ## (REMOVE COST OF FIRST AND FINAL STATE??)
-                # self.a_traj.pop(0)
-                # self.a_traj.pop(-1)
 
                 ## sum of costs of route
                 self.a_traj_costs = [self.costs[x, y] for x, y in self.a_traj]
