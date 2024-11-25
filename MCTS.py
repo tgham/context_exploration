@@ -176,6 +176,7 @@ class MonteCarloTreeSearch():
 
         ## standard rollout if this is the first S-G pair
         if real_rollout:
+            start = action_leaf.next_state
             env_copy.set_state(action_leaf.next_state)
             
             ## begin with cost of current state
@@ -204,7 +205,8 @@ class MonteCarloTreeSearch():
                     fig, axs = plt.subplots(1, 3, figsize=(15,5))
                     # plot_r(env_copy.posterior_mean.reshape(self.N,self.N), ax=axs[0], title = 'posterior mean')
                     sns.heatmap(GP_copy.posterior_sample.reshape(self.N,self.N), ax=axs[0], cbar=False, annot=True, fmt='.2f')
-                    plot_action_tree(GP_copy.Q_inf, start, goal, ax=axs[1], title = 'DP_inf')
+                    axs[0].set_title('posterior sample')
+                    plot_action_tree(GP_copy.Q_inf, start, actual_goal, ax=axs[1], title = 'DP_inf')
                     plot_r(GP_copy.V_inf, ax=axs[2], title = 'V')
 
                     ## raise error
@@ -393,13 +395,16 @@ class MonteCarloTreeSearch():
         ## root sampling of new posterior
         # self.GP.root_sample(certainty_equivalent=True)
 
+        ## root sampling of new kernel
+        # K_inf = self.GP.sample_k()
+        
         ## loop through trees
         for t in range(n_trees):
 
             if progress:
                 pbar.update(1)
                 
-            ## root sampling of new kernel
+            # ## root sampling of new kernel
             K_inf = self.GP.sample_k()
             
             ## root sampling of new posterior
@@ -448,7 +453,7 @@ class MonteCarloTreeSearch():
 
 
 ## parallel function for simulating many episodes within the same mountain env
-def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, r_noise=0.05, n_episodes=10, agents = ['GP', 'MCTS'], n_trees=1000, n_futures=1, exploration_constant=2, discount_factor=0.95):
+def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise=0.05, inf_noise = 0.1, n_episodes=10, agents = ['GP', 'MCTS'], n_trees=1000, n_futures=1, exploration_constant=2, discount_factor=0.95):
     
     ## initiate dictionary to store the results
     sim_out = {
@@ -480,7 +485,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, r_noise=0
     
     ## create base mountain environment
     kernel_params = params
-    env = make_env(N, true_k, kernel_params, metric, r_noise=r_noise)
+    env = make_env(N, true_k, kernel_params, metric, obs_noise=obs_noise)
 
     ## copy env so that each agent makes its own observations 
     agent_envs = [copy.deepcopy(env) for _ in agents]
@@ -488,7 +493,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, r_noise=0
     ## initialise the GP-MCTS agent
     # K_inf = env.K_gen.copy()
     K_inf = None
-    GP = GPAgent(N, K_inf, env.metric, r_noise)
+    GP = GPAgent(N, K_inf, env.metric, inf_noise)
 
     ## loop through episodes (i.e. different start and goal states for the same mountain)
     print(' ') # for some reason need this to get the pbar to appear
@@ -516,7 +521,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, r_noise=0
             if agent =='MCTS':
                 # K_inf = env_copy.K_gen.copy()
                 # K_inf = None
-                # GP = GPAgent(N, K_inf, env.metric, r_noise)
+                # GP = GPAgent(N, K_inf, env.metric, inf_noise)
                 GP.get_env_info(env_copy)
 
                 ## also updates its kernel weights, given its observations
@@ -610,7 +615,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, r_noise=0
                         ## if stuck, repeat the search
                         else:
                             print('mountain {}, episode {}: MCTS failed to find a path on search attempt {}'.format(m, e, search_attempts))
-                            # print(traj_states)
+                            ## plot the tree???
 
                             # ## execute the path anyway?
                             # env_copy.set_sim(False)
