@@ -57,7 +57,7 @@ class MountainEnv(gym.Env):
                 'c': 1,
                 'scale': 1,
                 'theta': np.pi,
-                'sigma_f': 0.5,
+                'sigma_f': 1,
                 'length_scale': 1,
                 'periodic_length_scale': N/2,
                 'period': N/5,
@@ -87,12 +87,12 @@ class MountainEnv(gym.Env):
         ## generate true costs
         self.obs_noise = obs_noise
         self.min_cost, self.max_cost = -0.9, -0.1
-        # mean = np.zeros(self.N**2) - 0.5
-        mean=None
-        self.costs = sample(mean, self.K_gen, None, self.min_cost, self.max_cost) 
+        mean = np.zeros(self.N**2) - 0.5
+        # mean=None
+        self.costs = sample(mean, self.K_gen, None, self.min_cost, self.max_cost)  #+ np.random.normal(0, self.obs_noise, (self.N, self.N))
 
         ## normalise costs bt min_cost and max_cost??
-        # self.costs = self.min_cost + (self.max_cost - self.min_cost) * (self.costs - np.min(self.costs)) / (np.max(self.costs) - np.min(self.costs))
+        self.costs = self.min_cost + (self.max_cost - self.min_cost) * (self.costs - np.min(self.costs)) / (np.max(self.costs) - np.min(self.costs))
         
         ### gym inits
 
@@ -194,7 +194,9 @@ class MountainEnv(gym.Env):
         start_val = 0
         min_val = -0.2
         t = 0
-        while (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (goal_val>min_val) or (start_val>min_val):
+        worth_it = False
+        route_optimality_tolerance = 0.5
+        while (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (goal_val>min_val) or (start_val>min_val) or (not worth_it):
             self._agent_location = self.np_random.integers(0, self.N, size=2, dtype=int)
             self._goal_location = self.np_random.integers(
                 0, self.N, size=2, dtype=int
@@ -212,12 +214,25 @@ class MountainEnv(gym.Env):
             ## value criterion - i.e. what cost should the start and goal states have
             goal_val = self.costs[self._goal_location[0], self._goal_location[1]]
             goal_val = -1
-
             start_val = self.costs[self._agent_location[0], self._agent_location[1]]
-            t+=1
 
-            # if t>10:
-            #     print('cant find start and end', dist, angle, t)
+            ### comparison of optimal vs manhattan routes
+            dp_costs = self.costs.copy()
+            self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=self._goal_location)
+            self.optimal_trajectory()
+
+            ## by length
+            # n_steps_opt = len(self.o_traj)-1
+            # worth_it = n_steps_opt > dist
+
+            ## or, by cost (i.e. vs manhattan vertical-first or horizontal-first)
+            manhattan_costs = self.manhattan_trajectory(self._agent_location, self._goal_location)
+            worth_it = (self.o_traj_total_cost/manhattan_costs[0]) < route_optimality_tolerance or (self.o_traj_total_cost/manhattan_costs[1]) < route_optimality_tolerance
+
+
+            t+=1
+            if t>100:
+                raise ValueError('cant find start and end')
 
             # last goal distance criterion
             # self.starts
@@ -263,12 +278,12 @@ class MountainEnv(gym.Env):
 
 
         ## dynamic programming to get the true optimal trajectory
-        if not self.sim:
-            dp_costs = self.costs.copy()
-            self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=self._goal_location)
+        # if not self.sim:
+        #     dp_costs = self.costs.copy()
+        #     self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=self._goal_location)
 
-            ## get the costs of this optimal trajectory
-            self.optimal_trajectory()
+        #     ## get the costs of this optimal trajectory
+        #     self.optimal_trajectory()
 
             ## initialise actual trajectory as list of tuples
             self.a_traj = [tuple(self._agent_location)]
@@ -422,3 +437,47 @@ class MountainEnv(gym.Env):
         
         # Compute total cost
         self.o_traj_total_cost = np.sum(self.o_traj_costs)
+
+
+    ## calculate the cost of the simplest manhattan paths
+    def manhattan_trajectory(self, start, goal):
+        x1, y1 = start
+        x2, y2 = goal
+        
+        ## horizontal-first trajectory (i.e. move in x direction first)
+        horizontal_trajectory = [start]
+        while x1 != x2:
+            if x2 > x1:
+                x1 += 1  # Move right
+            else:
+                x1 -= 1  # Move left
+            horizontal_trajectory.append((x1, y1))
+        while y1 != y2:
+            if y2 > y1:
+                y1 += 1  # Move up
+            else:
+                y1 -= 1  # Move down
+            horizontal_trajectory.append((x1, y1))
+        
+        ## vertical-first trajectory (i.e. move in y direction first)
+        x1, y1 = start
+        vertical_trajectory = [start]
+        while y1 != y2:
+            if y2 > y1:
+                y1 += 1
+            else:
+                y1 -= 1
+            vertical_trajectory.append((x1, y1))
+        while x1 != x2:
+            if x2 > x1:
+                x1 += 1
+            else:
+                x1 -= 1
+            vertical_trajectory.append((x1, y1))
+
+        ## calculate the costs of these trajectories
+        horizontal_trajectory_costs = [self.costs[x, y] for x, y in horizontal_trajectory]
+        vertical_trajectory_costs = [self.costs[x, y] for x, y in vertical_trajectory]
+        manhattan_costs = [np.sum(horizontal_trajectory_costs), np.sum(vertical_trajectory_costs)]
+
+        return manhattan_costs
