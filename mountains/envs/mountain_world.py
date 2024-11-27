@@ -97,10 +97,12 @@ class MountainEnv(gym.Env):
 
         ### initialise farm
         self.min_cost, self.max_cost = -0.9, -0.1
-        alpha = 0.5
-        beta = 0.5
-        self.row_p = np.random.beta(alpha, beta, self.N)
-        self.col_q = np.random.beta(alpha, beta, self.N)
+        self.alpha1 = 0.5
+        self.beta1 = 0.5
+        self.alpha2 = 2
+        self.beta2 = 1
+        self.row_p = np.random.beta(self.alpha1,self.beta1, self.N)
+        self.col_q = np.random.beta(self.alpha2, self.beta2, self.N)
         # self.col_q = np.ones(self.N)
         self.p_costs = np.outer(self.row_p, self.col_q)
         self.costs = np.array([self.min_cost if r<self.p_costs.flatten()[ri] else self.max_cost for ri, r in enumerate(np.random.randn(self.N**2))]).reshape(self.N, self.N)
@@ -228,7 +230,8 @@ class MountainEnv(gym.Env):
             start_val = self.costs[self._agent_location[0], self._agent_location[1]]
 
             ### comparison of optimal vs manhattan routes
-            dp_costs = self.costs.copy()
+            dp_costs = self.p_costs*self.min_cost + (1-self.p_costs)*self.max_cost
+            dp_costs[self._goal_location[0], self._goal_location[1]] = 0
             self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=self._goal_location)
             self.optimal_trajectory()
 
@@ -237,10 +240,9 @@ class MountainEnv(gym.Env):
             # worth_it = n_steps_opt > dist
 
             ## or, by cost (i.e. vs manhattan vertical-first or horizontal-first)
-            manhattan_costs = self.manhattan_trajectory(self._agent_location, self._goal_location)
-            worth_it = (self.o_traj_total_cost/manhattan_costs[0]) < route_optimality_tolerance or (self.o_traj_total_cost/manhattan_costs[1]) < route_optimality_tolerance
-
-
+            # manhattan_costs = self.manhattan_trajectory(self._agent_location, self._goal_location)
+            # worth_it = (self.o_traj_total_cost/manhattan_costs[0]) < route_optimality_tolerance or (self.o_traj_total_cost/manhattan_costs[1]) < route_optimality_tolerance
+            worth_it = True
             t+=1
             if t>100:
                 raise ValueError('cant find start and end')
@@ -257,7 +259,8 @@ class MountainEnv(gym.Env):
         self.terminated = False
         observation = self.get_obs()
         info = self._get_info()
-        current_cost = self.costs[self._agent_location[0], self._agent_location[1]] #+ np.random.normal(0, self.obs_noise)
+        # current_cost = self.costs[self._agent_location[0], self._agent_location[1]] #+ np.random.normal(0, self.obs_noise)
+        current_cost = self.get_cost(self._agent_location)
 
         ## reset obs on each trial
         # loc_idx = self._agent_location[0]*self.N + self._agent_location[1]
@@ -312,7 +315,11 @@ class MountainEnv(gym.Env):
     def flush_obs(self): ## necessary for MCTS
         self.obs_tmp = self.obs.copy()
 
-    ## functions for receiving info from the GP Agent
+    ## get cost, given p(cost)
+    def get_cost(self, state):
+        return self.min_cost if np.random.randn() < self.p_costs[state[0], state[1]] else self.max_cost
+    
+    ## functions for receiving predictions from the agent
     def receive_predictions(self, predicted_costs):
         # self.posterior_mean = posterior_mean
         # self.posterior_cov = posterior_cov
@@ -349,7 +356,9 @@ class MountainEnv(gym.Env):
         # var_cost = self.posterior_var[self._agent_location[0]*self.N + self._agent_location[1]]
         
         ## get the actual cost of the current state
-        current_cost = self.costs[self._agent_location[0], self._agent_location[1]] # + np.random.normal(0, self.obs_noise)
+        # current_cost = self.costs[self._agent_location[0], self._agent_location[1]] # + np.random.normal(0, self.obs_noise)
+        current_cost = self.get_cost(self._agent_location)
+
 
 
         ## return the real cost if not simulating
@@ -492,3 +501,8 @@ class MountainEnv(gym.Env):
         manhattan_costs = [np.sum(horizontal_trajectory_costs), np.sum(vertical_trajectory_costs)]
 
         return manhattan_costs
+    
+    ## get cost, given p(cost)
+    def get_cost(self, state):
+        return self.min_cost if np.random.randn() < self.p_costs[state[0], state[1]] else self.max_cost
+
