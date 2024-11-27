@@ -33,13 +33,13 @@ class BaseKernels:
     ## RBFs 
 
     # RBF kernel over x,y (i.e. Euclidean distance)
-    def rbf(self, sigma_f=2, length_scale=0.5):
+    def rbf(self, sigma_f=1, length_scale=0.5):
         dists = cdist(self.locations, self.locations, metric='euclidean')
         K = sigma_f**2 * np.exp(-0.5 * (dists / length_scale)**2)
         return K
 
     # RBF kernel over just x-distance or y-distance
-    def rbf_1D(self, dim=0, theta=0, sigma_f=2, length_scale=0.5):
+    def rbf_1D(self, dim=0, theta=0, sigma_f=1, length_scale=0.5):
 
         # define basis vectors
         rotation = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
@@ -52,7 +52,7 @@ class BaseKernels:
 
 
     ## periodic kernel
-    def periodic(self, dim=0, sigma_f=2, period=1, periodic_length_scale=0.5, periodic_theta=np.pi/3):
+    def periodic(self, dim=0, sigma_f=1, period=1, periodic_length_scale=0.5, periodic_theta=np.pi/3):
         rotation = np.array([[np.cos(periodic_theta), -np.sin(periodic_theta)], [np.sin(periodic_theta), np.cos(periodic_theta)]])
         rotated_locations = np.dot(self.locations, rotation)
         dists = np.subtract.outer(rotated_locations[:, dim], rotated_locations[:, dim])

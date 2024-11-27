@@ -27,7 +27,7 @@ from base_kernels import *
 
 class GPAgent:
 
-    def __init__(self, N, K_inf, metric='cityblock',inf_noise=0.05):
+    def __init__(self, N, K_inf, metric='cityblock',inf_noise=0.01):
 
         self.metric = metric
         # self.K_inf = K_inf
@@ -129,7 +129,7 @@ class GPAgent:
 
 
     ## posterior prediction
-    def post_pred(self, K_inf, obs, pred='all', sigma=0.001):
+    def post_pred(self, K_inf, obs, pred='all', sigma=0.01):
         # sigma = self.inf_noise
         if isinstance(pred, str):
             pred_idx = np.arange(self.N**2)
@@ -158,7 +158,6 @@ class GPAgent:
             
             # inversion covariance matrix
             # inv_K = np.linalg.inv(K_obs + sigma**2 * np.eye(len(obs_idx)))
-            sigma = max(0.001, 0.01 * np.max(np.diag(K_obs)))  # Regularization parameter
             inv_K = np.linalg.solve(K_obs + sigma**2 * np.eye(len(obs_idx)), np.eye(len(obs_idx)))
 
             

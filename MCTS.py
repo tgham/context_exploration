@@ -453,7 +453,7 @@ class MonteCarloTreeSearch():
 
 
 ## parallel function for simulating many episodes within the same mountain env
-def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise=0.05, inf_noise = 0.1, n_episodes=10, agents = ['GP', 'MCTS'], n_trees=1000, n_futures=1, exploration_constant=2, discount_factor=0.95):
+def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise=0.01, inf_noise = 0.01, n_episodes=10, agents = ['GP', 'MCTS'], n_trees=1000, n_futures=1, exploration_constant=2, discount_factor=0.95):
     
     ## initiate dictionary to store the results
     sim_out = {
