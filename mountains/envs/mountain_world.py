@@ -50,49 +50,60 @@ class MountainEnv(gym.Env):
         self.locations = np.column_stack([X.ravel(), Y.ravel()])
 
         ## initialise the kernels
-        kernel_set = BaseKernels(self.locations)
+        # kernel_set = BaseKernels(self.locations)
 
-        if kernel_params is None:
-            kernel_params = {
-                'c': 1,
-                'scale': 1,
-                'theta': np.pi,
-                'sigma_f': 1,
-                'length_scale': 1,
-                'periodic_length_scale': N/2,
-                'period': N/5,
-                'periodic_theta': np.pi/3
-            }
+        # if kernel_params is None:
+        #     kernel_params = {
+        #         'c': 1,
+        #         'scale': 1,
+        #         'theta': np.pi,
+        #         'sigma_f': 1,
+        #         'length_scale': 1,
+        #         'periodic_length_scale': N/2,
+        #         'period': N/5,
+        #         'periodic_theta': np.pi/3
+        #     }
         
-        self.true_k = true_k
-        if true_k == 'lin':
-            self.K_gen = kernel_set.linear(kernel_params['c'])
-        elif true_k == 'lin_x':
-            self.K_gen = kernel_set.linear_1D(0, theta=kernel_params['theta'], scale=kernel_params['scale'], c=kernel_params['c'])
-        elif true_k == 'lin_y':
-            self.K_gen = kernel_set.linear_1D(1, theta=kernel_params['theta'], scale=kernel_params['scale'], c=kernel_params['c'])
-        elif true_k == 'rbf':
-            self.K_gen = kernel_set.rbf(sigma_f=kernel_params['sigma_f'], length_scale=kernel_params['length_scale'])
-        elif true_k == 'rbf_x':
-            self.K_gen = kernel_set.rbf_1D(0, theta=kernel_params['theta'], sigma_f=kernel_params['sigma_f'], length_scale=kernel_params['length_scale'])
-        elif true_k == 'rbf_y':
-            self.K_gen = kernel_set.rbf_1D(1, theta=kernel_params['theta'], sigma_f=kernel_params['sigma_f'], length_scale=kernel_params['length_scale'])
-        elif true_k == 'periodic_x':
-            self.K_gen = kernel_set.periodic(0, sigma_f=kernel_params['sigma_f'], period=kernel_params['period'], periodic_length_scale=kernel_params['periodic_length_scale'], periodic_theta=kernel_params['periodic_theta'])
-        elif true_k == 'periodic_y':
-            self.K_gen = kernel_set.periodic(1, sigma_f=kernel_params['sigma_f'], period=kernel_params['period'], periodic_length_scale=kernel_params['periodic_length_scale'], periodic_theta=kernel_params['periodic_theta'])
-        else: #default
-            self.K_gen = kernel_set.rbf(length_scale=kernel_params['length_scale'], sigma_f=kernel_params['sigma_f'])
+        # self.true_k = true_k
+        # if true_k == 'lin':
+        #     self.K_gen = kernel_set.linear(kernel_params['c'])
+        # elif true_k == 'lin_x':
+        #     self.K_gen = kernel_set.linear_1D(0, theta=kernel_params['theta'], scale=kernel_params['scale'], c=kernel_params['c'])
+        # elif true_k == 'lin_y':
+        #     self.K_gen = kernel_set.linear_1D(1, theta=kernel_params['theta'], scale=kernel_params['scale'], c=kernel_params['c'])
+        # elif true_k == 'rbf':
+        #     self.K_gen = kernel_set.rbf(sigma_f=kernel_params['sigma_f'], length_scale=kernel_params['length_scale'])
+        # elif true_k == 'rbf_x':
+        #     self.K_gen = kernel_set.rbf_1D(0, theta=kernel_params['theta'], sigma_f=kernel_params['sigma_f'], length_scale=kernel_params['length_scale'])
+        # elif true_k == 'rbf_y':
+        #     self.K_gen = kernel_set.rbf_1D(1, theta=kernel_params['theta'], sigma_f=kernel_params['sigma_f'], length_scale=kernel_params['length_scale'])
+        # elif true_k == 'periodic_x':
+        #     self.K_gen = kernel_set.periodic(0, sigma_f=kernel_params['sigma_f'], period=kernel_params['period'], periodic_length_scale=kernel_params['periodic_length_scale'], periodic_theta=kernel_params['periodic_theta'])
+        # elif true_k == 'periodic_y':
+        #     self.K_gen = kernel_set.periodic(1, sigma_f=kernel_params['sigma_f'], period=kernel_params['period'], periodic_length_scale=kernel_params['periodic_length_scale'], periodic_theta=kernel_params['periodic_theta'])
+        # else: #default
+        #     self.K_gen = kernel_set.rbf(length_scale=kernel_params['length_scale'], sigma_f=kernel_params['sigma_f'])
 
-        ## generate true costs
-        self.obs_noise = obs_noise
+        # ## generate true costs
+        # self.obs_noise = obs_noise
+        # self.min_cost, self.max_cost = -0.9, -0.1
+        # mean = np.zeros(self.N**2) - 0.5
+        # # mean=None
+        # self.costs = sample(mean, self.K_gen, None, self.min_cost, self.max_cost)  #+ np.random.normal(0, self.obs_noise, (self.N, self.N))
+
+        # ## normalise costs bt min_cost and max_cost??
+        # self.costs = self.min_cost + (self.max_cost - self.min_cost) * (self.costs - np.min(self.costs)) / (np.max(self.costs) - np.min(self.costs))
+
+
+        ### initialise farm
         self.min_cost, self.max_cost = -0.9, -0.1
-        mean = np.zeros(self.N**2) - 0.5
-        # mean=None
-        self.costs = sample(mean, self.K_gen, None, self.min_cost, self.max_cost)  #+ np.random.normal(0, self.obs_noise, (self.N, self.N))
-
-        ## normalise costs bt min_cost and max_cost??
-        self.costs = self.min_cost + (self.max_cost - self.min_cost) * (self.costs - np.min(self.costs)) / (np.max(self.costs) - np.min(self.costs))
+        alpha = 0.5
+        beta = 0.5
+        self.row_p = np.random.beta(alpha, beta, self.N)
+        self.col_q = np.random.beta(alpha, beta, self.N)
+        # self.col_q = np.ones(self.N)
+        self.p_costs = np.outer(self.row_p, self.col_q)
+        self.costs = np.array([self.min_cost if r<self.p_costs.flatten()[ri] else self.max_cost for ri, r in enumerate(np.random.randn(self.N**2))]).reshape(self.N, self.N)
         
         ### gym inits
 
