@@ -348,3 +348,56 @@ class GPAgent:
         action = argm(current_q, max_current_q)
 
         return action
+    
+
+### farmer model?
+class Farmer:
+
+    def __init__(self, N, metric='cityblock'):
+
+        self.metric = metric
+        self.N = N
+        self.n_actions = 4
+        self.action_to_direction = {0: np.array([0, 1]), 1: np.array([0, -1]), 2: np.array([1, 0]), 3: np.array([-1, 0])}
+
+    ### interactions with the environment
+
+    ## function for receiving info from env
+    def get_env_info(self, env):
+        self.N = env.N
+        self.obs = env.obs.copy()
+        self.current = env.current
+        self.goal = env.goal
+        self.min_cost = env.min_cost
+        self.max_cost = env.max_cost
+        self.alpha1 = env.alpha1
+        self.alpha2 = env.alpha2
+        self.beta1 = env.beta1
+        self.beta2 = env.beta2
+
+    ## root sampling of surface
+    def root_sample(self, obs=None):
+
+        ## if obs empty, just return prior
+        if obs is None:
+            self.posterior_p = np.random.beta(self.alpha1, self.beta1, size=self.N)
+            self.posterior_q = np.random.beta(self.alpha2, self.beta2, size=self.N)
+            self.posterior_p_cost = np.outer(self.posterior_p, self.posterior_q)
+
+        ## otherwise, MCMC!
+        else:
+            self.MCMC(obs)
+
+
+    ## dynamic programming
+    def dp(self, expected_cost=False):
+
+        ## use expected cost of each state
+        if expected_cost:
+            dp_costs = self.posterior_p_cost*self.min_cost + (1-self.posterior_p_cost)*self.max_cost
+
+        ## or, sample costs using p and q probabilities 
+        else:
+            dp_costs = np.array([self.min_cost if np.random.rand() < self.posterior_p[i] else self.max_cost for i in range(self.N)]).reshape(self.N, self.N)
+        dp_costs[self.goal[0], self.goal[1]] = 0
+        self.V_inf, self.Q_inf, self.A_inf = value_iteration(dp_costs, self.goal)
