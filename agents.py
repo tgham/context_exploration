@@ -21,6 +21,7 @@ from minimax_tilting_sampler import TruncatedMVN
 import torch
 import gpytorch
 from base_kernels import *
+from samplers import GridSampler
 
 
 
@@ -370,23 +371,25 @@ class Farmer:
         self.goal = env.goal
         self.min_cost = env.min_cost
         self.max_cost = env.max_cost
-        self.alpha1 = env.alpha1
-        self.alpha2 = env.alpha2
-        self.beta1 = env.beta1
-        self.beta2 = env.beta2
+        self.alpha_row = env.alpha_row
+        self.alpha_col = env.alpha_col
+        self.beta_row = env.beta_row
+        self.beta_col = env.beta_col
 
     ## root sampling of surface
     def root_sample(self, obs=None):
 
         ## if obs empty, just return prior
-        if obs is None:
-            self.posterior_p = np.random.beta(self.alpha1, self.beta1, size=self.N)
-            self.posterior_q = np.random.beta(self.alpha2, self.beta2, size=self.N)
-            self.posterior_p_cost = np.outer(self.posterior_p, self.posterior_q)
+        # if obs is None:
+        #     self.posterior_p = np.random.beta(self.alpha_row, self.beta_row, size=self.N)
+        #     self.posterior_q = np.random.beta(self.alpha_col, self.beta_col, size=self.N)
+        #     self.posterior_p_cost = np.outer(self.posterior_p, self.posterior_q)
 
-        ## otherwise, MCMC!
-        else:
-            self.MCMC(obs)
+        ## otherwise, MH!
+        # else:
+        sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, obs, N=self.N)
+        self.posterior_p, self.posterior_q = sampler.sample(n_iter = 1000)
+        self.posterior_p_cost = np.outer(self.posterior_p, self.posterior_q)
 
 
     ## dynamic programming

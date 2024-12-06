@@ -97,12 +97,12 @@ class MountainEnv(gym.Env):
 
         ### initialise farm
         self.min_cost, self.max_cost = -0.9, -0.1
-        self.alpha1 = 0.5
-        self.beta1 = 0.5
-        self.alpha2 = 2
-        self.beta2 = 1
-        self.row_p = np.random.beta(self.alpha1,self.beta1, self.N)
-        self.col_q = np.random.beta(self.alpha2, self.beta2, self.N)
+        self.alpha_row = 0.5
+        self.beta_row = 0.5
+        self.alpha_col = 0.5
+        self.beta_col = 0.5
+        self.row_p = np.random.beta(self.alpha_row,self.beta_row, self.N)
+        self.col_q = np.random.beta(self.alpha_col, self.beta_col, self.N)
         # self.col_q = np.ones(self.N)
         self.p_costs = np.outer(self.row_p, self.col_q)
         self.costs = np.array([self.min_cost if r<self.p_costs.flatten()[ri] else self.max_cost for ri, r in enumerate(np.random.randn(self.N**2))]).reshape(self.N, self.N)
