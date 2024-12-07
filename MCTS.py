@@ -8,14 +8,14 @@ import os
 from scipy.spatial.distance import cdist
 
 from plotter import *
-from agents import GPAgent
+from agents import GPAgent, Farmer
 
 
 class MonteCarloTreeSearch():
 
-    def __init__(self, env, GP, tree, exploration_constant=2, discount_factor=0.95):
+    def __init__(self, env, agent, tree, exploration_constant=2, discount_factor=0.95):
         self.env = env
-        self.GP = GP
+        self.agent = agent
         self.tree = tree
         self.action_space = self.env.action_space.n
         self.N = self.env.N
@@ -172,7 +172,7 @@ class MonteCarloTreeSearch():
         
         ## or, make a copy
         env_copy = copy.deepcopy(self.env)
-        GP_copy = copy.deepcopy(self.GP) ## this is done so that the GP doesn't change its state. could of course just feed env back into it at end of rollout
+        agent_copy = copy.deepcopy(self.agent) ## this is done so that the GP doesn't change its state. could of course just feed env back into it at end of rollout
 
         ## standard rollout if this is the first S-G pair
         if real_rollout:
@@ -204,10 +204,10 @@ class MonteCarloTreeSearch():
                     # print(env_copy.V_inf)
                     fig, axs = plt.subplots(1, 3, figsize=(15,5))
                     # plot_r(env_copy.posterior_mean.reshape(self.N,self.N), ax=axs[0], title = 'posterior mean')
-                    sns.heatmap(GP_copy.posterior_sample.reshape(self.N,self.N), ax=axs[0], cbar=False, annot=True, fmt='.2f')
+                    sns.heatmap(agent_copy.posterior_sample.reshape(self.N,self.N), ax=axs[0], cbar=False, annot=True, fmt='.2f')
                     axs[0].set_title('posterior sample')
-                    plot_action_tree(GP_copy.Q_inf, start, actual_goal, ax=axs[1], title = 'DP_inf')
-                    plot_r(GP_copy.V_inf, ax=axs[2], title = 'V')
+                    plot_action_tree(agent_copy.Q_inf, start, actual_goal, ax=axs[1], title = 'DP_inf')
+                    plot_r(agent_copy.V_inf, ax=axs[2], title = 'V')
 
                     ## raise error
                     raise ValueError('exceeded max rolls in {} rollout, start: {}, goal: {}'.format(['imagined', 'real'][real_rollout], start, goal))
@@ -219,7 +219,7 @@ class MonteCarloTreeSearch():
 
                 ## or, optimised rollout 
                 current = observation['agent']
-                action = GP_copy.optimal_policy(current, GP_copy.Q_inf)
+                action = agent_copy.optimal_policy(current, agent_copy.Q_inf)
 
                 ## take action
                 observation, cost, terminated, _, _ = env_copy.step(action)
@@ -235,8 +235,9 @@ class MonteCarloTreeSearch():
         else:
 
             ## inherit obs from tree so far and sample new posterior
-            GP_copy.get_env_info(env_copy)
-            GP_copy.root_sample(self.tree_obs, GP_copy.K_inf)
+            agent_copy.get_env_info(env_copy)
+            # GP_copy.root_sample(self.tree_obs, GP_copy.K_inf)
+            agent_copy.root_sample(self.tree_obs)
 
             ## loop through new start-end pairs
             future_total_costs = []
@@ -251,10 +252,10 @@ class MonteCarloTreeSearch():
                 start = env_copy.current
                 goal = env_copy.goal
                 observation = env_copy.get_obs()
-                GP_copy.get_env_info(env_copy)
+                agent_copy.get_env_info(env_copy)
 
                 ## get DP Q-values for the new start and goal under the current posterior
-                GP_copy.dp(certainty_equivalent=False)
+                agent_copy.dp()
 
                 ## rollout until trial is terminated 
                 while True:
@@ -267,9 +268,9 @@ class MonteCarloTreeSearch():
                         # print(env_copy.V_inf)
                         fig, axs = plt.subplots(1, 3, figsize=(15,5))
                         # plot_r(env_copy.posterior_mean.reshape(self.N,self.N), ax=axs[0], title = 'posterior mean')
-                        sns.heatmap(GP_copy.posterior_sample.reshape(self.N,self.N), ax=axs[0], cbar=False, annot=True, fmt='.2f')
-                        plot_action_tree(GP_copy.Q_inf, start, goal, ax=axs[1], title = 'DP_inf')
-                        plot_r(GP_copy.V_inf, ax=axs[2], title = 'V')
+                        sns.heatmap(agent_copy.posterior_sample.reshape(self.N,self.N), ax=axs[0], cbar=False, annot=True, fmt='.2f')
+                        plot_action_tree(agent_copy.Q_inf, start, goal, ax=axs[1], title = 'DP_inf')
+                        plot_r(agent_copy.V_inf, ax=axs[2], title = 'V')
 
                         ## raise error
                         raise ValueError('exceeded max rolls in {} rollout, start: {}, goal: {}'.format(['imagined', 'real'][real_rollout], start, goal))
@@ -277,7 +278,7 @@ class MonteCarloTreeSearch():
 
                     ## optimised rollout 
                     current = observation['agent']
-                    action = GP_copy.optimal_policy(current, GP_copy.Q_inf)
+                    action = agent_copy.optimal_policy(current, agent_copy.Q_inf)
 
                     ## take action
                     observation, cost, terminated, _, _ = env_copy.step(action)
@@ -405,12 +406,13 @@ class MonteCarloTreeSearch():
                 pbar.update(1)
                 
             # ## root sampling of new kernel
-            K_inf = self.GP.sample_k()
+            # K_inf = self.GP.sample_k()
             
             ## root sampling of new posterior
-            self.GP.root_sample(self.env.obs, K_inf)
-            self.GP.dp(certainty_equivalent=False)
-            self.env.receive_predictions(self.GP.posterior_sample)
+            # self.GP.root_sample(self.env.obs, K_inf)
+            self.agent.root_sample(self.env.obs)
+            self.agent.dp()
+            self.env.receive_predictions(self.agent.posterior_p_cost)
             
             ## debugging plot
             # plt.figure()
@@ -492,8 +494,11 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise
 
     ## initialise the GP-MCTS agent
     # K_inf = env.K_gen.copy()
-    K_inf = None
-    GP = GPAgent(N, K_inf, env.metric, inf_noise)
+    # K_inf = None
+    # GP = GPAgent(N, K_inf, env.metric, inf_noise)
+
+    ## initialise farmer
+    farmer = Farmer(N)
 
     ## loop through episodes (i.e. different start and goal states for the same mountain)
     print(' ') # for some reason need this to get the pbar to appear
@@ -522,15 +527,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise
                 # K_inf = env_copy.K_gen.copy()
                 # K_inf = None
                 # GP = GPAgent(N, K_inf, env.metric, inf_noise)
-                GP.get_env_info(env_copy)
-
-                ## also updates its kernel weights, given its observations
-                GP.update_k_weights(env_copy.obs)
-                best_k_idx = np.argmax(GP.k_weights)
-                best_theta = GP.k_params[int(best_k_idx)]
-                # print('n_obs = ',len(env_copy.obs))
-                # print('k_weights = ', np.round(GP.k_weights,2))
-                # print('best guess for theta: {}/np.pi'.format(best_theta/np.pi))
+                farmer.get_env_info(env_copy)
 
             # ## initiate tree 
             # if agent == 'MCTS':
