@@ -1,6 +1,6 @@
 import random
 from math import sqrt, log
-from utils import Node, Action_Node, Tree, make_env, argm
+from utils import Node, Action_Node, Tree, make_env, argm, data_keys
 import copy
 import numpy as np
 from tqdm.auto import tqdm
@@ -391,7 +391,7 @@ class MonteCarloTreeSearch():
     def search(self, n_trees=1000, n_futures=1, progress=False):
 
         if progress:
-            pbar = tqdm(total=n_trees, desc='MCTS search', position=0, leave=False, miniters=100, ascii=True, bar_format="{l_bar}{bar}")
+            pbar = tqdm(total=n_trees, desc='MCTS search', position=0, leave=False, miniters=10, ascii=True, bar_format="{l_bar}{bar}")
 
         ## root sampling of new posterior
         # self.GP.root_sample(certainty_equivalent=True)
@@ -455,30 +455,33 @@ class MonteCarloTreeSearch():
 
 
 ## parallel function for simulating many episodes within the same mountain env
-def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise=0.01, inf_noise = 0.01, n_episodes=10, agents = ['GP', 'MCTS'], n_trees=1000, n_futures=1, exploration_constant=2, discount_factor=0.95):
+def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise=0.01, inf_noise = 0.01, n_episodes=10, agents = ['GP', 'GP-MCTS', 'farmer'], n_trees=1000, n_futures=1, exploration_constant=2, discount_factor=0.95):
     
     ## initiate dictionary to store the results
-    sim_out = {
-        'agent': [],
-        'episode': [],
-        'mountain': [],
-        'start': [],
-        'goal': [],
-        'true_k': [],
-        'actual_cost': [],
-        'optimal_cost': [],
-        'action_score': [],
-        'cost_ratio': [],
-        'n_steps': [],
-        'actual_trajectory': [],
-        'optimal_trajectory': [],
-        'observations': [],
-        'RPE':[],
-        'search_attempts': [],
-        'posterior_mean': [],
-        'action_tree': [],
-        'theta_MLE': []
-    }
+    # sim_out = {
+    #     'agent': [],
+    #     'episode': [],
+    #     'mountain': [],
+    #     'start': [],
+    #     'goal': [],
+    #     'true_k': [],
+    #     'actual_cost': [],
+    #     'optimal_cost': [],
+    #     'action_score': [],
+    #     'cost_ratio': [],
+    #     'n_steps': [],
+    #     'actual_trajectory': [],
+    #     'optimal_trajectory': [],
+    #     'observations': [],
+    #     'RPE':[],
+    #     'search_attempts': [],
+    #     'posterior_mean': [],
+    #     'action_tree': [],
+    #     'theta_MLE': []
+    # }
+    sim_out = {}
+    for key in data_keys:
+        sim_out[key]=[]
     
     ## set seed
     seed=m
@@ -511,7 +514,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise
         # goal = env.get_obs()['goal']
 
         ## loop through agents
-        for a, agent in enumerate(agents):
+        for a, ag in enumerate(agents):
             
             ## reset episode (IDEALLY THIS WOULD HAPPEN OUTSIDE THE AGENT LOOP, SO THAT THE SAME START AND GOAL ARE USED FOR ALL AGENTS)
             # env_copy = copy.deepcopy(agent_envs[a])
@@ -523,11 +526,13 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise
             goal = env_copy.goal
 
             ## GP-MCTS agent receives info from env
-            if agent =='MCTS':
+            if ag =='GP-MCTS':
                 # K_inf = env_copy.K_gen.copy()
                 # K_inf = None
-                # GP = GPAgent(N, K_inf, env.metric, inf_noise)
-                farmer.get_env_info(env_copy)
+                agent = GP
+            elif ag == 'farmer':
+                agent = farmer
+            agent.get_env_info(env_copy)
 
             # ## initiate tree 
             # if agent == 'MCTS':
@@ -546,7 +551,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise
                 
 
                 ## plain balanced GP
-                if agent == 'GP':
+                if ag == 'GP':
                     eps = 0.05
                     alpha = 0.4
                     action = env_copy.balanced_policy(current, goal, eps, alpha)
@@ -575,14 +580,15 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise
                 
 
                 ## or if doing offline planning, search and then execute entire trajectory
-                elif agent == 'MCTS':
+                # elif agent == 'GP-MCTS':
+                else:
                     non_stuck_route=False
                     search_attempts = 0
                     
                     
                     ## init MCTS
                     tree = Tree(N)
-                    MCTS = MonteCarloTreeSearch(env=env_copy, GP=GP, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
+                    MCTS = MonteCarloTreeSearch(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
                     assert MCTS.env.sim == True, 'env not in sim mode'
                     while not non_stuck_route:
                         search_attempts += 1
@@ -640,7 +646,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise
                     early_terminate = True
 
                 if early_terminate:
-                    print('mountain ',m,': episode ',e,' terminated for agent ',agent,' after ',steps,' steps, cost: ', env_copy.a_traj_total_cost)
+                    print('mountain ',m,': episode ',e,' terminated for agent ',ag,' after ',steps,' steps, cost: ', env_copy.a_traj_total_cost)
 
                     ## reset
                     # observation, info = env.reset()
@@ -655,31 +661,32 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise
                     sim_out['mountain'].append(m)
                     sim_out['start'].append(start)
                     sim_out['goal'].append(goal)
-                    sim_out['true_k'].append(true_k)
                     sim_out['actual_cost'].append(np.nan)
                     sim_out['optimal_cost'].append(env_copy.o_traj_total_cost)
                     sim_out['action_score'].append(np.nan)
                     sim_out['cost_ratio'].append(np.nan)
                     sim_out['n_steps'].append(steps)
-                    sim_out['RPE'].append(np.nan)
                     sim_out['actual_trajectory'].append(env_copy.a_traj)
                     sim_out['optimal_trajectory'].append(env_copy.o_traj)
                     sim_out['observations'].append(env_copy.obs)
                     sim_out['search_attempts'].append(search_attempts)
-                    sim_out['posterior_mean'].append(np.nan)
                     sim_out['action_tree'].append(MCTS.tree.action_tree())
-                    sim_out['theta_MLE'].append(best_theta)
+                    
+                    ## GP-specific
+                    # sim_out['true_k'].append(true_k)
+                    # sim_out['RPE'].append(np.nan)
+                    # sim_out['posterior_mean'].append(np.nan)
+                    # sim_out['theta_MLE'].append(best_theta)
 
                     end_episode = True
 
                 ## save data and end the episode
                 elif terminated:
-                    sim_out['agent'].append(agent)
+                    sim_out['agent'].append(ag)
                     sim_out['episode'].append(e)
                     sim_out['mountain'].append(m)
                     sim_out['start'].append(start)
                     sim_out['goal'].append(goal)
-                    sim_out['true_k'].append(true_k)
                     sim_out['actual_cost'].append(env_copy.a_traj_total_cost)
                     sim_out['optimal_cost'].append(env_copy.o_traj_total_cost)
                     # if np.round(env_copy.optimal_cost,4) < np.round(env_copy.accrued_cost,4):
@@ -689,14 +696,17 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise
                     sim_out['action_score'].append(env_copy.action_score)
                     sim_out['cost_ratio'].append(env_copy.cost_ratio)
                     sim_out['n_steps'].append(steps)
-                    sim_out['RPE'].append(np.mean(np.abs(GP.posterior_mean.reshape(N,N) - env_copy.costs)))
                     sim_out['actual_trajectory'].append(env_copy.a_traj)
                     sim_out['optimal_trajectory'].append(env_copy.o_traj)
                     sim_out['observations'].append(env_copy.obs)
                     sim_out['search_attempts'].append(search_attempts)
-                    sim_out['posterior_mean'].append(GP.posterior_mean)
                     sim_out['action_tree'].append(MCTS.tree.action_tree())
-                    sim_out['theta_MLE'].append(best_theta)
+                    
+                    ## GP-specific
+                    # sim_out['true_k'].append(true_k)
+                    # sim_out['RPE'].append(np.mean(np.abs(GP.posterior_mean.reshape(N,N) - env_copy.costs)))
+                    # sim_out['posterior_mean'].append(GP.posterior_mean)
+                    # sim_out['theta_MLE'].append(best_theta)
                     
                     ## update the agent env
                     # agent_envs[a] = copy.deepcopy(env_copy)
@@ -705,4 +715,4 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise
                     end_episode = True
 
 
-    return sim_out, env_copy.costs
+    return sim_out,env_copy.p_costs# env_copy.costs
