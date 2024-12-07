@@ -140,8 +140,8 @@ class GPAgent:
         if obs is not None:
 
             ## centre around 0 
-            obs_idx = obs[:, 0].astype(int)
-            obs_costs = obs[:, 3].copy()
+            obs_idx = obs[:,0]* self.N + obs[:,1]
+            obs_costs = obs[:, 2].copy()
             centring = 0.5
             # centring = np.mean(obs_costs)
             obs_costs += centring
@@ -247,8 +247,8 @@ class GPAgent:
     def likelihood(self, K_inf, obs, sigma=0.01):
         # sigma = self.inf_noise
         n_obs = len(obs)
-        obs_idx = obs[:, 0].astype(int) #i.e. x
-        obs_costs = obs[:, 3] #i.e. y
+        obs_idx = obs[:,0]* self.N + obs[:,1]
+        obs_costs = obs[:, 2] #i.e. y
         K_tmp = K_inf[obs_idx][:,obs_idx] 
         K_tmp = K_tmp + ((sigma**2) * np.eye(n_obs))
         k_check(K_tmp)
@@ -366,11 +366,11 @@ class Farmer:
     ## function for receiving info from env
     def get_env_info(self, env):
         self.N = env.N
-        self.obs = env.obs.copy()
+        self.obs = env.obs
         self.current = env.current
         self.goal = env.goal
-        self.min_cost = env.min_cost
-        self.max_cost = env.max_cost
+        self.high_cost = env.high_cost
+        self.low_cost = env.low_cost
         self.alpha_row = env.alpha_row
         self.alpha_col = env.alpha_col
         self.beta_row = env.beta_row
@@ -388,19 +388,36 @@ class Farmer:
         ## otherwise, MH!
         # else:
         sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, obs, N=self.N)
-        self.posterior_p, self.posterior_q = sampler.sample(n_iter = 1000)
+        self.posterior_p, self.posterior_q = sampler.sample(n_iter = 100)
         self.posterior_p_cost = np.outer(self.posterior_p, self.posterior_q)
 
 
     ## dynamic programming
-    def dp(self, expected_cost=False):
+    def dp(self, expected_cost=True):
 
         ## use expected cost of each state
         if expected_cost:
-            dp_costs = self.posterior_p_cost*self.min_cost + (1-self.posterior_p_cost)*self.max_cost
+            dp_costs = self.posterior_p_cost*self.high_cost + (1-self.posterior_p_cost)*self.low_cost
 
         ## or, sample costs using p and q probabilities 
         else:
-            dp_costs = np.array([self.min_cost if np.random.rand() < self.posterior_p[i] else self.max_cost for i in range(self.N)]).reshape(self.N, self.N)
+            dp_costs = np.array([self.high_cost if np.random.rand() < self.posterior_p[i] else self.low_cost for i in range(self.N)]).reshape(self.N, self.N)
         dp_costs[self.goal[0], self.goal[1]] = 0
         self.V_inf, self.Q_inf, self.A_inf = value_iteration(dp_costs, self.goal)
+
+    ## optimal policy, as given by the dynamic programming Q vals
+    def optimal_policy(self, current, Q=None):
+
+        if Q is None:
+            Q = self.Q_inf
+
+        ## get adjacent states
+        next_states = np.clip(np.array([current + self.action_to_direction[i] for i in range(self.n_actions)]), 0, self.N-1)
+        next_states_idx = next_states[:, 0]*self.N + next_states[:, 1]
+    
+        ## choose action with highest Q-value
+        current_q = Q[current[0], current[1], :]
+        max_current_q = np.nanmax(current_q)
+        action = argm(current_q, max_current_q)
+
+        return action
