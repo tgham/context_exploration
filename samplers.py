@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.stats import beta
+import scipy
 
 class GridSampler:
     def __init__(self, alpha_row, beta_row, alpha_col, beta_col, obs, N=10):
@@ -21,8 +21,8 @@ class GridSampler:
         if self.obs is None:
             self.obs = np.array([])
         self.N = N
-        self.min_cost = -0.9
-        self.max_cost = -0.1
+        self.high_cost = -0.9
+        self.low_cost = -0.1
 
         # Initialize row and column probabilities for the entire grid
         self.row_probs = np.random.beta(self.alpha_row, self.beta_row, size=self.N)
@@ -31,23 +31,21 @@ class GridSampler:
     def proposal_params(self, index, is_row):
         """
         Calculate the Beta parameters for the proposal distribution.
-
-        Parameters:
-        - index: The row or column index.
-        - is_row: Boolean indicating whether to compute for a row (True) or column (False).
-
-        Returns:
-        - Tuple (alpha_proposal, beta_proposal).
         """
         # Separate observed costs for the row or column
-        rel_obs = [
-            cost for (_, i, j,cost) in self.obs if (i == index and is_row) or (j == index and not is_row)
-        ]
+        if is_row:
+            rel_obs = [(i, j, cost) for (_, i, j, cost) in self.obs if i == index]
+            prior_mean_failure = self.beta_col / (self.alpha_col + self.beta_col)
+        else:
+            rel_obs = [(i, j, cost) for (_, i, j, cost) in self.obs if j == index]
+            prior_mean_failure = self.beta_row / (self.alpha_row + self.beta_row)
 
         # Count occurrences of each cost
-        m = sum(-cost for cost in rel_obs if cost == self.min_cost)  # Weighted count for high-cost observations
-        n = sum(-cost for cost in rel_obs if cost == self.max_cost)  # Weighted count for low-cost observations
+        m = sum(-cost for cost in rel_obs if cost == self.high_cost)  # Weighted count for high-cost observations
+        # n = sum(-cost for cost in rel_obs if cost == self.low_cost)  # Weighted count for low-cost observations
+        n = (1- prior_mean_failure) * sum(-cost for cost in rel_obs if cost == self.low_cost)  # Weighted count for low-cost observations
 
+    
         # Update Beta parameters based on observed data
         if is_row:
             alpha_prop = self.alpha_row + m
@@ -64,23 +62,34 @@ class GridSampler:
         """
         return np.random.beta(alpha, beta)
 
-    def likelihood_ratio(self, proposed_prob, current_prob, obs):
-        """
-        Calculate the likelihood ratio of the proposed and current probabilities.
-
-        Parameters:
-        - proposed_prob: The proposed probability for the row or column.
-        - current_prob: The current probability for the row or column.
-        - obs: The relevant observations for this row or column.
-
-        Returns:
-        - Likelihood ratio (float).
-        """
+    def compute_likelihood(self, row_prob, col_prob, obs):
+        """Compute likelihood for a set of observations"""
         likelihood = 1.0
-        for (i, j,cost) in obs:
-            prob = proposed_prob
-            likelihood *= np.exp(-cost * prob)  # Costs (-0.9 or -0.1) weighted by probability
-        return likelihood / max(1e-8, np.exp(-sum(cost * current_prob for (_, _, cost) in obs)))
+        for (i, j, cost) in obs:
+            p = row_prob * col_prob
+            if cost == self.high_cost:
+                likelihood *= p
+            else:  # low cost
+                likelihood *= (1 - p)
+            # likelihood *= p**(-np.round(cost)) * (1-p)**(np.round(cost))
+        return likelihood
+    
+    def compute_acceptance_ratio(self, proposed_prob, current_prob, other_probs, obs, is_row, alpha, beta):
+        """Compute the full acceptance ratio including proposal distributions"""
+        # Compute likelihoods
+        if is_row:
+            proposed_likes = [self.compute_likelihood(proposed_prob, q, obs) for q in other_probs]
+            current_likes = [self.compute_likelihood(current_prob, q, obs) for q in other_probs]
+        else:
+            proposed_likes = [self.compute_likelihood(p, proposed_prob, obs) for p in other_probs]
+            current_likes = [self.compute_likelihood(p, current_prob, obs) for p in other_probs]
+        
+        # Proposal densities
+        forward_density = scipy.stats.beta.pdf(proposed_prob, alpha, beta)
+        backward_density = scipy.stats.beta.pdf(current_prob, alpha, beta)
+        
+        # Full ratio
+        return (np.prod(proposed_likes) * backward_density) / (np.prod(current_likes) * forward_density)
 
     def update(self):
         """
@@ -94,24 +103,34 @@ class GridSampler:
 
             # Relevant observations for this row
             row_obs = [(i, j,cost) for (_, i_, j, cost) in self.obs if i_ == i]
-            likelihood_ratio = self.likelihood_ratio(proposed_prob, current_prob, row_obs)
 
-            # Accept or reject the proposal
-            if np.random.rand() < min(1, likelihood_ratio):
+            # Compute acceptance ratio
+            ratio = self.compute_acceptance_ratio(
+                proposed_prob, current_prob, self.col_probs, row_obs,
+                is_row=True, alpha=alpha, beta=beta
+            )
+            
+            # Accept or reject
+            if np.random.random() < min(1, ratio):
                 self.row_probs[i] = proposed_prob
 
-        # Update all column probabilities
+        # Update column probabilities
         for j in range(self.N):
             current_prob = self.col_probs[j]
             alpha, beta = self.proposal_params(j, is_row=False)
-            proposed_prob = self.propose(alpha, beta)
-
-            # Relevant observations for this column
-            col_obs = [(i, j,cost) for (_, i, j_, cost) in self.obs if j_ == j]
-            likelihood_ratio = self.likelihood_ratio(proposed_prob, current_prob, col_obs)
-
-            # Accept or reject the proposal
-            if np.random.rand() < min(1, likelihood_ratio):
+            proposed_prob = np.random.beta(alpha, beta)
+            
+            # Get relevant observations
+            col_obs = [(i, j, cost) for (_, i, j_, cost) in self.obs if j_ == j]
+            
+            # Compute acceptance ratio
+            ratio = self.compute_acceptance_ratio(
+                proposed_prob, current_prob, self.row_probs, col_obs,
+                is_row=False, alpha=alpha, beta=beta
+            )
+            
+            # Accept or reject
+            if np.random.random() < min(1, ratio):
                 self.col_probs[j] = proposed_prob
 
     def sample(self, n_iter=1000):
