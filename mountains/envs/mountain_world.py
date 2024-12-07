@@ -279,13 +279,17 @@ class MountainEnv(gym.Env):
         #     if not hasattr(self, 'obs') or self.obs is None:
         #         self.obs = np.array([])
         #         self.obs_tmp = np.array([[self._agent_location[0], self._agent_location[1], current_cost]])
+        #         self.obs_start_tmp = self.obs_tmp.copy()
         #     else:
         #     ####     self.obs = np.vstack([self.obs, [self._agent_location[0], self._agent_location[1], current_cost]])
         #         self.obs_tmp = self.obs.copy()
+        #         self.obs_tmp = np.vstack([self.obs_tmp, [self._agent_location[0], self._agent_location[1], current_cost]])
+        #         self.obs_start_tmp = self.obs_tmp.copy()
 
         ## or, if simulating some unknown future environment, the observations are given by the previous tree, so we trivially have obs already
         elif self.sim:
             self.obs_tmp = np.vstack([self.obs, [self._agent_location[0], self._agent_location[1], current_cost]])
+            self.obs_start_tmp = self.obs_tmp.copy()
 
 
         ## dynamic programming to get the true optimal trajectory
@@ -296,7 +300,8 @@ class MountainEnv(gym.Env):
         #     ## get the costs of this optimal trajectory
         #     self.optimal_trajectory()
 
-            ## initialise actual trajectory as list of tuples
+        ## initialise actual trajectory as list of tuples
+        if not self.sim:
             self.a_traj = [tuple(self._agent_location)]
             self.action_scores = []
         
@@ -311,6 +316,8 @@ class MountainEnv(gym.Env):
         self.obs = obs
     def flush_obs(self): ## necessary for MCTS
         self.obs_tmp = self.obs.copy()
+        if len(self.obs_tmp)==0:
+            self.obs_tmp = self.obs_start_tmp.copy()
 
     ## get cost, given p(cost)
     def get_cost(self, state):
