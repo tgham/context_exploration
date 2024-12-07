@@ -314,7 +314,7 @@ def value_iteration(dp_costs, goal, max_iters = 1000, theta = 0.0001, discount =
     return V, Q, A
 
 ## sample from the GP
-def sample(mean, K, sigma=0.01, min_cost=-0.9, max_cost=-0.1):
+def sample(mean, K, sigma=0.01, high_cost=-0.9, low_cost=-0.1):
     if sigma is None:
         sigma = 0.01 #i.e. just to add to the diagonal of the kernel matrix
 
@@ -330,14 +330,14 @@ def sample(mean, K, sigma=0.01, min_cost=-0.9, max_cost=-0.1):
     # samples = np.random.multivariate_normal(mean, K).reshape(self.N, self.N)
 
     #normalise
-    # min_cost = self.min_cost
-    # max_cost = self.max_cost
-    # samples = min_cost + (max_cost - min_cost) * (samples - np.min(samples)) / (np.max(samples) - np.min(samples))
+    # high_cost = self.high_cost
+    # low_cost = self.low_cost
+    # samples = high_cost + (low_cost - high_cost) * (samples - np.min(samples)) / (np.max(samples) - np.min(samples))
 
 
     ## or truncated
-    lb = np.zeros(N**2) + min_cost
-    ub = np.zeros(N**2) + max_cost
+    lb = np.zeros(N**2) + high_cost
+    ub = np.zeros(N**2) + low_cost
     K_tmp = K + sigma**2 * np.eye(N**2)
     tmvn = TruncatedMVN(mean, K_tmp, lb, ub)
     samples = tmvn.sample(1)
@@ -357,3 +357,29 @@ def k_check(K):
         warnings.warn("Kernel matrix is not positive semi-definite.", UserWarning)
 
     return np.any([not symm, not psd])
+
+
+## data-saving/dict stuff
+data_keys = [
+    'agent',
+    'mountain',
+    'episode',
+    'start',
+    'goal',
+    'actual_cost',
+    'optimal_cost',
+    'action_score',
+    'cost_ratio',
+    'n_steps',
+    'actual_trajectory',
+    'optimal_trajectory',
+    'observations',
+    'search_attempts',
+    'action_tree',
+
+    ## GP-specific
+    # 'true_k',
+    # 'RPE',
+    # 'posterior_mean',
+    # 'theta_MLE',
+]
