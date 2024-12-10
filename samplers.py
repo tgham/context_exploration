@@ -54,8 +54,14 @@ class GridSampler:
         )
 
         # Count occurrences of each cost
-        m = np.sum([cost == self.high_cost for (_, _, cost) in rel_obs])
-        n = prior_mean_failure * np.sum([cost == self.low_cost for (_, _, cost) in rel_obs])
+        # m = np.sum([cost == self.high_cost for (_, _, cost) in rel_obs])
+        # n = prior_mean_failure * np.sum([cost == self.low_cost for (_, _, cost) in rel_obs])
+        m = np.sum([cost == self.low_cost for (_, _, cost) in rel_obs])
+        n = prior_mean_failure * np.sum([cost == self.high_cost for (_, _, cost) in rel_obs])
+        # m = prior_mean_failure * np.sum([cost == self.low_cost for (_, _, cost) in rel_obs])
+        # n = np.sum([cost == self.high_cost for (_, _, cost) in rel_obs])
+        # m = prior_mean_failure * np.sum([cost == self.high_cost for (_, _, cost) in rel_obs])
+        # n = np.sum([cost == self.low_cost for (_, _, cost) in rel_obs])
     
         # Update Beta parameters based on observed data
         alpha_prop = self.alpha_row + m if is_row else self.alpha_col + m
@@ -82,8 +88,8 @@ class GridSampler:
                 raise ValueError("Observation does not match row or column.")
             rel_cost = o[2]
             prob_tmp = rel_p * rel_q
-            likelihood *= prob_tmp**(rel_cost == self.high_cost) * (1 - prob_tmp)**(rel_cost == self.low_cost)
-            # likelihood *= prob_tmp**(rel_cost == self.low_cost) * (1 - prob_tmp)**(rel_cost == self.high_cost)
+            # likelihood *= prob_tmp**(rel_cost == self.high_cost) * (1 - prob_tmp)**(rel_cost == self.low_cost)
+            likelihood *= prob_tmp**(rel_cost == self.low_cost) * (1 - prob_tmp)**(rel_cost == self.high_cost)
         return likelihood
 
     def update(self):
