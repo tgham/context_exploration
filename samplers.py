@@ -54,8 +54,8 @@ class GridSampler:
         )
 
         # Count occurrences of each cost
-        m = sum(-cost for (_, _, cost) in rel_obs if cost == self.high_cost)
-        n = prior_mean_failure * sum(-cost for (_, _, cost) in rel_obs if cost == self.low_cost)
+        m = np.sum([cost == self.high_cost for (_, _, cost) in rel_obs])
+        n = prior_mean_failure * np.sum([cost == self.low_cost for (_, _, cost) in rel_obs])
     
         # Update Beta parameters based on observed data
         alpha_prop = self.alpha_row + m if is_row else self.alpha_col + m
@@ -83,6 +83,7 @@ class GridSampler:
             rel_cost = o[2]
             prob_tmp = rel_p * rel_q
             likelihood *= prob_tmp**(rel_cost == self.high_cost) * (1 - prob_tmp)**(rel_cost == self.low_cost)
+            # likelihood *= prob_tmp**(rel_cost == self.low_cost) * (1 - prob_tmp)**(rel_cost == self.high_cost)
         return likelihood
 
     def update(self):
@@ -111,6 +112,8 @@ class GridSampler:
         ## calculate prior * transition prob terms
         prior_num = proposed_p**m1 * (1 - proposed_p)**n1 * proposed_q**m2 * (1 - proposed_q)**n2
         prior_den = current_p**m1 * (1 - current_p)**n1 * current_q**m2 * (1 - current_q)**n2
+        # prior_num = current_p**m1 * (1 - current_p)**n1 * current_q**m2 * (1 - current_q)**n2
+        # prior_den = proposed_p**m1 * (1 - proposed_p)**n1 * proposed_q**m2 * (1 - proposed_q)**n2
 
         ## calculate acceptance ratio
         epsilon = 1e-10
@@ -120,7 +123,7 @@ class GridSampler:
             self.col_probs[sampled_j] = proposed_q
 
 
-    def sample(self, n_iter=1000):
+    def sample(self, n_iter=10000):
         """Run the sampler for a specified number of iterations."""
         for _ in range(n_iter):
             self.update()
