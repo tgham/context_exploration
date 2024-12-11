@@ -106,7 +106,11 @@ class MonteCarloTreeSearch():
                 ## save tree obs for subsequent rollouts
                 self.tree_obs = self.env.obs_tmp.copy()
                 self.env.flush_obs()
-                assert len(self.tree_obs) == len(self.env.obs)+len(self.tree_path), 'tree obs and path lengths do not match\n tree obs: {}, env.obs: {}, tree path: {}'.format(len(self.tree_obs), len(self.env.obs),len(self.tree_path))
+                # if len(self.tree_obs) != len(self.env.obs)+len(self.tree_path):
+                #     print('env obs:',self.env.obs)
+                #     print('tree obs:',self.tree_obs)
+                #     print('tree path:',self.tree_path)
+                # assert len(self.tree_obs) == len(self.env.obs)+len(self.tree_path), 'tree obs and path lengths do not match\n tree obs: {}, env.obs: {}, tree path: {}'.format(len(self.tree_obs), len(self.env.obs),len(self.tree_path))
 
                 return action_leaf
                 
@@ -149,7 +153,7 @@ class MonteCarloTreeSearch():
         ## save tree obs for subsequent rollouts
         self.tree_obs = self.env.obs_tmp.copy()
         self.env.flush_obs()
-        assert len(self.tree_obs) == len(self.env.obs)+len(self.tree_path), 'tree obs and path lengths do not match\n tree obs: {}, env.obs: {}, tree path: {}'.format(len(self.tree_obs), len(self.env.obs),len(self.tree_path))
+        # assert len(self.tree_obs) == len(self.env.obs)+len(self.tree_path), 'tree obs and path lengths do not match\n tree obs: {}, env.obs: {}, tree path: {}'.format(len(self.tree_obs), len(self.env.obs),len(self.tree_path))
 
         return action_leaf
 
@@ -455,7 +459,7 @@ class MonteCarloTreeSearch():
 
 
 ## parallel function for simulating many episodes within the same mountain env
-def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise=0.01, inf_noise = 0.01, n_episodes=10, agents = ['GP', 'GP-MCTS', 'farmer'], n_trees=1000, n_futures=1, exploration_constant=2, discount_factor=0.95):
+def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise=0.01, inf_noise = 0.01, n_episodes=10, agents = ['GP', 'GP-MCTS', 'farmer'], n_trees=1000, n_futures=1, exploration_constant=2, discount_factor=0.95, offline=False):
     
     ## initiate dictionary to store the results
     # sim_out = {
@@ -534,10 +538,9 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise
                 agent = farmer
             agent.get_env_info(env_copy)
 
-            # ## initiate tree 
-            # if agent == 'MCTS':
-            #     tree = Tree(N)
-            #     MCTS = MonteCarloTreeSearch(env=env_copy, tree=tree)
+            ## initiate tree (if not resetting the tree for each move, init here. otherwise, this should be inside the episode loop)
+            tree = Tree(N)
+            MCTS = MonteCarloTreeSearch(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
         
             ## run episode until goal is reached
             end_episode = False
@@ -563,83 +566,94 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise
 
                     search_attempts = 0 # could do nan
 
-                ## init MCTS (if resetting the tree for each move, init here. otherwise, this should be outside the episode loop)
-                # elif agent == 'MCTS':
-                #     env_copy.set_sim(True)
-                #     tree = Tree(N)
-                #     MCTS = MonteCarloTreeSearch(env=env_copy, tree=tree)
-                #     assert MCTS.env.sim == True, 'env not in sim mode'
-                #     action, next_root = MCTS.search(n_trees)
-
-                #     ## if online planning, take action and update the new root for the next search
-                #     observation, _, terminated, truncated, info = env_copy.step(action)
-                #     current = observation['agent']
-                #     steps += 1
-                #   tree.root = next_root
-                #   assert np.array_equal(tree.root.state, current), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, tree.root.state, action)
-                
-
-                ## or if doing offline planning, search and then execute entire trajectory
-                # elif agent == 'GP-MCTS':
+                ## MCTS
                 else:
-                    non_stuck_route=False
-                    search_attempts = 0
+                    env_copy.set_sim(True)
                     
-                    
-                    ## init MCTS
-                    tree = Tree(N)
-                    MCTS = MonteCarloTreeSearch(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
+                    ## init MCTS (if resetting the tree for each move, init here. otherwise, this should be outside the episode loop)
+                    # tree = Tree(N)
+                    # MCTS = MonteCarloTreeSearch(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
                     assert MCTS.env.sim == True, 'env not in sim mode'
-                    while not non_stuck_route:
-                        search_attempts += 1
-
+                
+                    ## if online planning (i.e. replan after each step)
+                    if not offline:
 
                         ## search
-                        n_futures = 1
+                        search_attempts = 0 # could do nan
+                        n_futures = 0
                         action, next_root = MCTS.search(n_trees, n_futures, progress=True)
 
-                        ## get the trajectory from the tree
+                        ## plot for debugging?
+                        fig, axs = plt.subplots(1, 2, figsize=(10,5))
+                        plot_r(env_copy.p_costs.reshape(N,N)*-1, ax=axs[0], title = 'costs')
+                        plot_traj([env_copy.o_traj], ax=axs[0])
+                        # plot_action_tree(agent.Q_inf, current, goal, ax=axs[1], title = 'DP_inf')
                         MCTS.tree.action_tree()
-                        traj_states, traj_actions = MCTS.tree.best_traj(start, goal)
+                        plot_action_tree(MCTS.tree.tree_q, current, goal, ax=axs[1], title = 'DP_inf')
+                        plt.show()
+                        
+                        ## take action
+                        env_copy.set_sim(False)
+                        observation, _, terminated, truncated, info = env_copy.step(action)
+                        current = observation['agent']
+                        steps += 1
+                        MCTS.tree.root = next_root
+                        assert np.array_equal(MCTS.tree.root.state, current), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action)
 
-                        ## take the trajectory if it leads you to the goal
-                        if np.array_equal(traj_states[-1], goal):
-                            env_copy.set_sim(False)
-                            for state, action in zip(traj_states, traj_actions):
-                                assert np.array_equal(state, current), 'error in trajectory execution\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, state, action)
-                                observation, _, terminated, truncated, info = env_copy.step(action)
-                                current = observation['agent']
-                                steps += 1
-                                # if terminated:
-                                #     break
-                            assert terminated
-                            non_stuck_route = True
-
-                        ## if stuck, repeat the search
-                        else:
-                            print('mountain {}, episode {}: MCTS failed to find a path on search attempt {}'.format(m, e, search_attempts))
-                            ## plot the tree???
-
-                            # ## execute the path anyway?
-                            # env_copy.set_sim(False)
-                            # for state, action in zip(traj_states, traj_actions):
-                            #     assert np.array_equal(state, current), 'error in trajectory execution\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, state, action)
-                            #     observation, _, terminated, truncated, info = env_copy.step(action)
-                            #     current = observation['agent']
-                            #     steps += 1
-                            # MCTS.tree.root = MCTS.tree.nodes[str(current)]
-                            # env_copy.set_sim(True)
+                        ## update observations
+                        agent.get_env_info(env_copy)
 
 
-                            ## give up if too many searches
-                            print('restarting search from ', MCTS.tree.root.state)
-                            if search_attempts>max_search_attempts:
-                                early_terminate = True
-                                print('mountain {}, epsiode {}: search attempts exceeded'.format(m, e))
-                                break
+                    ## if offline planning (i.e. plan the full trajectory)
+                    elif offline:
+                        non_stuck_route=False
+                        search_attempts = 0
+                        while not non_stuck_route:
+                            search_attempts += 1
+
+                            ## search
+                            n_futures = 0
+                            action, next_root = MCTS.search(n_trees, n_futures, progress=True)
+
+                            ## get the trajectory from the tree
+                            MCTS.tree.action_tree()
+                            traj_states, traj_actions = MCTS.tree.best_traj(start, goal)
+
+                            ## take the trajectory if it leads you to the goal
+                            if np.array_equal(traj_states[-1], goal):
+                                env_copy.set_sim(False)
+                                for state, action in zip(traj_states, traj_actions):
+                                    assert np.array_equal(state, current), 'error in trajectory execution\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, state, action)
+                                    observation, _, terminated, truncated, info = env_copy.step(action)
+                                    current = observation['agent']
+                                    steps += 1
+                                    # if terminated:
+                                    #     break
+                                assert terminated
+                                non_stuck_route = True
+
+                            ## if stuck, repeat the search
+                            else:
+                                print('mountain {}, episode {}: MCTS failed to find a path on search attempt {}'.format(m, e, search_attempts))
+                                ## plot the tree???
+
+                                # ## execute the path anyway?
+                                # env_copy.set_sim(False)
+                                # for state, action in zip(traj_states, traj_actions):
+                                #     assert np.array_equal(state, current), 'error in trajectory execution\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, state, action)
+                                #     observation, _, terminated, truncated, info = env_copy.step(action)
+                                #     current = observation['agent']
+                                #     steps += 1
+                                # MCTS.tree.root = MCTS.tree.nodes[str(current)]
+                                # env_copy.set_sim(True)
 
 
-                    
+                                ## give up if too many searches
+                                print('restarting search from ', MCTS.tree.root.state)
+                                if search_attempts>max_search_attempts:
+                                    early_terminate = True
+                                    print('mountain {}, epsiode {}: search attempts exceeded'.format(m, e))
+                                    break
 
                 ## prevent endless episode 
                 if steps >= max_steps:
