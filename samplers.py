@@ -135,14 +135,14 @@ class GridSampler:
         # prior_den = current_p**m1 * (1 - current_p)**n1 * current_q**m2 * (1 - current_q)**n2
         # prior_num = current_p**m1 * (1 - current_p)**n1 * current_q**m2 * (1 - current_q)**n2
         # prior_den = proposed_p**m1 * (1 - proposed_p)**n1 * proposed_q**m2 * (1 - proposed_q)**n2
-        prior_num = (m1 * np.log(proposed_p) + n1 * np.log(1 - proposed_p) + 
-                    m2 * np.log(proposed_q) + n2 * np.log(1 - proposed_q))
-        prior_den = (m1 * np.log(current_p) + n1 * np.log(1 - current_p) + 
-                        m2 * np.log(current_q) + n2 * np.log(1 - current_q))
-        # prior_num = (m1 * np.log(current_p) + n1 * np.log(1 - current_p) + 
-        #             m2 * np.log(current_q) + n2 * np.log(1 - current_q))
-        # prior_den = (m1 * np.log(proposed_p) + n1 * np.log(1 - proposed_p) + 
-        #                 m2 * np.log(proposed_q) + n2 * np.log(1 - proposed_q))
+        # prior_num = (m1 * np.log(proposed_p) + n1 * np.log(1 - proposed_p) + 
+        #             m2 * np.log(proposed_q) + n2 * np.log(1 - proposed_q))
+        # prior_den = (m1 * np.log(current_p) + n1 * np.log(1 - current_p) + 
+        #                 m2 * np.log(current_q) + n2 * np.log(1 - current_q))
+        prior_num = (self.alpha_row * np.log(proposed_p) + self.beta_row * np.log(1 - proposed_p) + 
+                    self.alpha_col * np.log(proposed_q) + self.beta_col * np.log(1 - proposed_q))
+        prior_den = (self.alpha_row * np.log(current_p) + self.beta_row * np.log(1 - current_p) +
+                    self.alpha_col * np.log(current_q) + self.beta_col * np.log(1 - current_q))
 
         ## calculate acceptance ratio
         epsilon = 1e-10
@@ -150,7 +150,6 @@ class GridSampler:
         
         log_acceptance_ratio = (likelihood_num - likelihood_den) + (prior_num - prior_den)
         acceptance_ratio = np.exp(log_acceptance_ratio)
-        self.a_rs.append(min(1,acceptance_ratio))
 
         # print('likelihood_num:', likelihood_num)
         # print('likelihood_den:', likelihood_den)
@@ -220,7 +219,6 @@ class GridSampler:
         # Calculate log acceptance ratio
         log_acceptance_ratio = (likelihood_num - likelihood_den) + (prior_num - prior_den)
         acceptance_ratio = np.exp(log_acceptance_ratio)
-        self.a_rs.append(min(1, acceptance_ratio))
 
         # Accept or reject all proposals together
         if np.random.random() < min(1, acceptance_ratio):
@@ -240,13 +238,18 @@ class GridSampler:
         return log_likelihood
     
 
-    def sample(self, n_iter=100):
+    def lazy_sample(self, n_iter=100):
         self.n_accepted = 0
-        self.a_rs = []
         """Run the sampler for a specified number of iterations."""
         for _ in range(n_iter):
-            # self.update()
+            self.update()
+        # print(f"Acceptance rate (lazy): {self.n_accepted / n_iter}")
+        return self.row_probs, self.col_probs
+    
+    def sample(self, n_iter=100):
+        self.n_accepted = 0
+        """Run the sampler for a specified number of iterations."""
+        for _ in range(n_iter):
             self.update_full()
         # print(f"Acceptance rate: {self.n_accepted / n_iter}")
-        # print(f"Mean acceptance ratio: {np.mean(self.a_rs)}")
         return self.row_probs, self.col_probs
