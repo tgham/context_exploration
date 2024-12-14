@@ -242,15 +242,16 @@ class MonteCarloTreeSearch():
         else:
 
             ## inherit obs from tree so far and sample new posterior
-            agent_copy.get_env_info(env_copy)
+            # agent_copy.get_env_info(env_copy)
             # GP_copy.root_sample(self.tree_obs, GP_copy.K_inf)
-            agent_copy.root_sample(self.tree_obs)
+            # agent_copy.root_sample(self.tree_obs)
 
             ## loop through new start-end pairs
             future_total_costs = []
             for f in range(n_futures):
 
                 # depth = 0
+                depth_tmp = self.depth
                 total_cost = 0
 
                 ## imagine new start and goal locations
@@ -268,8 +269,8 @@ class MonteCarloTreeSearch():
                 while True:
 
                     ## prevent infinite rollout
-                    self.depth += 1
-                    if self.depth > max_depth:
+                    depth_tmp += 1
+                    if depth_tmp > max_depth:
                         # print('exceeded max rolls in {} rollout'.format(['imagined', 'real'][real_rollout]))
 
                         # print(env_copy.V_inf)
@@ -291,7 +292,7 @@ class MonteCarloTreeSearch():
                     observation, cost, terminated, _, _ = env_copy.step(action)
 
                     ## increment cost
-                    total_cost += cost * self.discount_factor**self.depth
+                    total_cost += cost * self.discount_factor**depth_tmp
 
                     ## if terminated, append cost
                     if terminated:
@@ -394,10 +395,10 @@ class MonteCarloTreeSearch():
 
 
     ## tree search --> action loop
-    def search(self, n_trees=1000, n_futures=1, progress=False):
+    def search(self, n_sims=1000, n_futures=1, progress=False):
 
         if progress:
-            pbar = tqdm(total=n_trees, desc='MCTS search', position=0, leave=False, miniters=10, ascii=True, bar_format="{l_bar}{bar}")
+            pbar = tqdm(total=n_sims, desc='MCTS search', position=0, leave=False, miniters=10, ascii=True, bar_format="{l_bar}{bar}")
 
         ## root sampling of new posterior
         # self.GP.root_sample(certainty_equivalent=True)
@@ -407,9 +408,30 @@ class MonteCarloTreeSearch():
 
         ## save posterior samples for debugging
         all_posterior_p_costs = []
+
+        ## precommit to future S-G pairs
+        future_breadth = 5
+        future_depth = 1
+        future_SGs = np.zeros((future_breadth, future_depth, 2,2))
+        for b in range(future_breadth):
+            for d in range(future_depth):
+                start, goal = self.env.sample_SG()
+                future_SGs[b,d,0] = start
+                future_SGs[b,d,1] = goal
+
+        ## create copy of envs for each future S-G pair
+        # future_envs = [copy.deepcopy(self.env) for _ in range(future_breadth)]
+        # for f in range(future_breadth):
+        #     future_envs[f].set_sim(True)
+        #     seed = random.randint(0,1000)
+        #     future_envs[f].reset(seed=seed, start_goal=[future_SGs[f,0,0], future_SGs[f,0,1]])
         
-        ## loop through trees
-        for t in range(n_trees):
+        # ## create some future trees
+        # future_trees = [Tree(self.N) for _ in range(future_breadth)]
+        # future_MCTSs = [MonteCarloTreeSearch(env=env, agent=self.agent, tree=tree, exploration_constant=self.exploration_constant, discount_factor=self.discount_factor) for env, tree in zip(future_envs, future_trees)]
+        
+        ## loop through simulations
+        for t in range(n_sims):
 
             if progress:
                 pbar.update(1)
@@ -424,14 +446,12 @@ class MonteCarloTreeSearch():
             self.env.receive_predictions(self.agent.posterior_p_cost)
             all_posterior_p_costs.append(self.agent.posterior_p_cost)
 
-            
             ## debugging plot
             # plt.figure()
             # # plot_r(self.env.posterior_sample.reshape(self.N,self.N), ax = plt.subplot(), title='posterior sample')
             # plot_action_tree(self.env.Q_inf, self.env.get_obs()['agent'], self.env.get_obs()['goal'], ax = plt.subplot(), title='DP_inf')
 
             ## selection, expansion, simulation
-            # sim_costs = []
             action_leaf = self.tree_policy()
             initial_sim_cost = self.rollout_policy(action_leaf, real_rollout=True)
 
@@ -468,30 +488,9 @@ class MonteCarloTreeSearch():
 
 
 ## parallel function for simulating many episodes within the same mountain env
-def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise=0.01, inf_noise = 0.01, n_episodes=10, agents = ['GP', 'GP-MCTS', 'farmer'], n_trees=1000, n_futures=1, exploration_constant=2, discount_factor=0.95, offline=False):
+def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise=0.01, inf_noise = 0.01, n_episodes=10, agents = ['GP', 'GP-MCTS', 'farmer'], n_sims=1000, n_futures=0, exploration_constant=2, discount_factor=0.95, offline=False):
     
     ## initiate dictionary to store the results
-    # sim_out = {
-    #     'agent': [],
-    #     'episode': [],
-    #     'mountain': [],
-    #     'start': [],
-    #     'goal': [],
-    #     'true_k': [],
-    #     'actual_cost': [],
-    #     'optimal_cost': [],
-    #     'action_score': [],
-    #     'cost_ratio': [],
-    #     'n_steps': [],
-    #     'actual_trajectory': [],
-    #     'optimal_trajectory': [],
-    #     'observations': [],
-    #     'RPE':[],
-    #     'search_attempts': [],
-    #     'posterior_mean': [],
-    #     'action_tree': [],
-    #     'theta_MLE': []
-    # }
     sim_out = {}
     for key in data_keys:
         sim_out[key]=[]
@@ -560,7 +559,6 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise
             max_search_attempts = 3
 
             while not end_episode:
-                
 
                 ## plain balanced GP
                 if ag == 'GP':
@@ -589,17 +587,17 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise
 
                         ## search
                         search_attempts = 0 # could do nan
-                        n_futures = 0
-                        action, next_root = MCTS.search(n_trees, n_futures, progress=True)
+                        # n_futures = 0
+                        action, next_root = MCTS.search(n_sims, n_futures, progress=True)
 
                         ## plot for debugging?
-                        # fig, axs = plt.subplots(1, 3, figsize=(15,5))
-                        # plot_r(env_copy.p_costs.reshape(N,N), ax=axs[0], title = 'costs')
-                        # plot_traj([env_copy.o_traj], ax=axs[0])
-                        # MCTS.tree.action_tree()
-                        # plot_action_tree(MCTS.tree.tree_q, current, goal, ax=axs[1], title = 'DP_inf')
-                        # plot_r(MCTS.posterior_mean_p_cost, ax=axs[2], title = 'average posterior p cost')
-                        # plt.show()
+                        fig, axs = plt.subplots(1, 3, figsize=(15,5))
+                        plot_r(env_copy.p_costs.reshape(N,N), ax=axs[0], title = 'costs')
+                        plot_traj([env_copy.o_traj], ax=axs[0])
+                        MCTS.tree.action_tree()
+                        plot_action_tree(MCTS.tree.tree_q, current, goal, ax=axs[1], title = 'DP_inf')
+                        plot_r(MCTS.posterior_mean_p_cost, ax=axs[2], title = 'average posterior p cost')
+                        plt.show()
                         
                         ## take action
                         env_copy.set_sim(False)
@@ -624,8 +622,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise
                             search_attempts += 1
 
                             ## search
-                            n_futures = 0
-                            action, next_root = MCTS.search(n_trees, n_futures, progress=True)
+                            action, next_root = MCTS.search(n_sims, n_futures, progress=True)
 
                             ## get the trajectory from the tree
                             MCTS.tree.action_tree()
