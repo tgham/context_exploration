@@ -183,6 +183,23 @@ class Tree:
                 except:
                     pass
 
+    ## prune, i.e. keep the root's four adjacent children, and remove the rest
+    def prune(self):
+
+        ## identify the root's children, i.e. the four adjacent states
+        keep_nodes = [str(self.root.state)]
+        for leaf in self.root.action_leaves.values():
+            if leaf is not None:
+                keep_nodes.append(str(leaf.next_state))
+
+        for sstate in list(self.nodes.keys()):
+            if str(self.nodes[sstate].state) not in keep_nodes:
+                del self.nodes[sstate]
+
+
+        
+
+
     
     ## calculate the best trajectory for any two points, given the tree
     def best_traj(self, start, goal):
