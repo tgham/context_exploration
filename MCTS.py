@@ -163,7 +163,7 @@ class MonteCarloTreeSearch():
         ## init
         total_cost = 0
         max_depth = 100
-        depth = 0
+        # depth = len(self.tree_path)
 
         ## get the agent's current location and goal
         actual_state = self.env.current
@@ -188,6 +188,9 @@ class MonteCarloTreeSearch():
             total_cost += starting_cost
             observation = env_copy.get_obs()
 
+            ## reset the depth counter
+            self.depth = 0
+
             ## rolling out from goal location, can just end here
             if action_leaf.terminated:
 
@@ -201,8 +204,8 @@ class MonteCarloTreeSearch():
             while True:
 
                 ## prevent infinite rollout
-                depth += 1
-                if depth > max_depth:
+                self.depth += 1
+                if self.depth > max_depth:
                     # print('exceeded max rolls in {} rollout'.format(['imagined', 'real'][real_rollout]))
 
                     # print(env_copy.V_inf)
@@ -229,7 +232,7 @@ class MonteCarloTreeSearch():
                 observation, cost, terminated, _, _ = env_copy.step(action)
 
                 ## increment cost
-                total_cost += cost * self.discount_factor**depth
+                total_cost += cost * self.discount_factor**self.depth
 
                 ## if terminated return the cost
                 if terminated:
@@ -247,7 +250,7 @@ class MonteCarloTreeSearch():
             future_total_costs = []
             for f in range(n_futures):
 
-                depth = 0
+                # depth = 0
                 total_cost = 0
 
                 ## imagine new start and goal locations
@@ -265,8 +268,8 @@ class MonteCarloTreeSearch():
                 while True:
 
                     ## prevent infinite rollout
-                    depth += 1
-                    if depth > max_depth:
+                    self.depth += 1
+                    if self.depth > max_depth:
                         # print('exceeded max rolls in {} rollout'.format(['imagined', 'real'][real_rollout]))
 
                         # print(env_copy.V_inf)
@@ -288,7 +291,7 @@ class MonteCarloTreeSearch():
                     observation, cost, terminated, _, _ = env_copy.step(action)
 
                     ## increment cost
-                    total_cost += cost * self.discount_factor**depth
+                    total_cost += cost * self.discount_factor**self.depth
 
                     ## if terminated, append cost
                     if terminated:
@@ -379,11 +382,10 @@ class MonteCarloTreeSearch():
             first_sim_cost = sim_costs[0] * self.discount_factor**dist_to_rollout
             backup_cost = first_sim_cost + discounted_tree_cost
 
-            ## calculate cost of all future rollouts, discounted by some meta-discount factor?
-            # meta_discount = 0.95
+            ## calculate cost of all future rollouts
             for s in range(1, len(sim_costs)):
                 # total_sim_cost += sim_costs[s] * meta_discount**s
-                total_sim_cost += sim_costs[s] * self.discount_factor**(dist_to_rollout + s)
+                total_sim_cost += sim_costs[s] #* self.discount_factor**(dist_to_rollout + s)
 
             ## backup + update counts
             # action_leaf.n_action_visits += 1
@@ -402,6 +404,9 @@ class MonteCarloTreeSearch():
 
         ## root sampling of new kernel
         # K_inf = self.GP.sample_k()
+
+        ## save posterior samples for debugging
+        all_posterior_p_costs = []
         
         ## loop through trees
         for t in range(n_trees):
@@ -417,6 +422,8 @@ class MonteCarloTreeSearch():
             self.agent.root_sample(self.env.obs)
             self.agent.dp()
             self.env.receive_predictions(self.agent.posterior_p_cost)
+            all_posterior_p_costs.append(self.agent.posterior_p_cost)
+
             
             ## debugging plot
             # plt.figure()
@@ -438,7 +445,6 @@ class MonteCarloTreeSearch():
         if progress:
             pbar.close()
 
-
         
         ## action selection
         MCTS_estimates = np.full(4, np.nan)
@@ -451,6 +457,9 @@ class MonteCarloTreeSearch():
         ## set root for next search
         next_state = self.tree.root.action_leaves[action].next_state
         next_root = self.tree.nodes[str(next_state)]
+
+        ## mean over posterior samples?
+        self.posterior_mean_p_cost = np.mean(all_posterior_p_costs, axis=0)
 
         return action, next_root
 
@@ -584,13 +593,13 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise
                         action, next_root = MCTS.search(n_trees, n_futures, progress=True)
 
                         ## plot for debugging?
-                        fig, axs = plt.subplots(1, 2, figsize=(10,5))
-                        plot_r(env_copy.p_costs.reshape(N,N)*-1, ax=axs[0], title = 'costs')
-                        plot_traj([env_copy.o_traj], ax=axs[0])
-                        # plot_action_tree(agent.Q_inf, current, goal, ax=axs[1], title = 'DP_inf')
-                        MCTS.tree.action_tree()
-                        plot_action_tree(MCTS.tree.tree_q, current, goal, ax=axs[1], title = 'DP_inf')
-                        plt.show()
+                        # fig, axs = plt.subplots(1, 3, figsize=(15,5))
+                        # plot_r(env_copy.p_costs.reshape(N,N), ax=axs[0], title = 'costs')
+                        # plot_traj([env_copy.o_traj], ax=axs[0])
+                        # MCTS.tree.action_tree()
+                        # plot_action_tree(MCTS.tree.tree_q, current, goal, ax=axs[1], title = 'DP_inf')
+                        # plot_r(MCTS.posterior_mean_p_cost, ax=axs[2], title = 'average posterior p cost')
+                        # plt.show()
                         
                         ## take action
                         env_copy.set_sim(False)
@@ -602,6 +611,9 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise
 
                         ## update observations
                         agent.get_env_info(env_copy)
+
+                        ## prune tree, i.e. remove all nodes that are not children of the new root
+                        MCTS.tree.prune()
 
 
                     ## if offline planning (i.e. plan the full trajectory)
