@@ -99,7 +99,7 @@ class MountainEnv(gym.Env):
         self.high_cost, self.low_cost = -0.9, -0.1
         default_param = 0.5
         self.alpha_row =20
-        self.beta_row = 1
+        self.beta_row = 0.5
         self.alpha_col = 1
         self.beta_col = 1
         self.row_p = np.random.beta(self.alpha_row,self.beta_row, self.N)
@@ -194,77 +194,30 @@ class MountainEnv(gym.Env):
 
 
     ## reset the environment
-    def reset(self, seed=None, options=None):
+    def reset(self, seed=None, start_end=None):
         # We need the following line to seed self.np_random
         super().reset(seed=seed)
 
+        ## set start and end
+        if start_end is not None:
+            self._agent_location = start_end[0]
+            self._goal_location = start_end[1]
+        else:
+            self._agent_location, self._goal_location = self.start_end()
 
-        ## sample start and goal locations
-        dist = 0
-        min_dist = self.N*0.7
-        angle = 0
-        angle_tolerance = 0.8
-        angle_bounds = [45*(1+angle_tolerance), 45*(1-angle_tolerance)]
-        row_or_col = 1
-        goal_val = 0
-        start_val = 0
-        min_val = -0.2
-        t = 0
-        worth_it = False
-        route_optimality_tolerance = 0.5
-        while (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (goal_val>min_val) or (start_val>min_val) or (not worth_it):
-            self._agent_location = self.np_random.integers(0, self.N, size=2, dtype=int)
-            self._goal_location = self.np_random.integers(
-                0, self.N, size=2, dtype=int
-            )
+        ## DP inits
+        dp_costs = self.p_costs*self.high_cost + (1-self.p_costs)*self.low_cost ## standard case (i.e. pq = p(high cost))
+        dp_costs[self._goal_location[0], self._goal_location[1]] = 0
+        # dp_costs = self.p_costs*self.low_cost + (1-self.p_costs)*self.high_cost ## alternative case (i.e. pq = p(low cost))
+        # dp_costs[self._goal_location[0], self._goal_location[1]] = 1
+        self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=self._goal_location)
+        self.optimal_trajectory(self._agent_location, self._goal_location)
 
-            ## distance criterion
-            dist = np.max(cdist([self._agent_location, self._goal_location], [self._agent_location, self._goal_location], metric='cityblock'))
-
-            ## same row/col criterion
-            row_or_col = np.sum(self._agent_location == self._goal_location)
-
-            ## angle criterion
-            angle = node_angle(self._agent_location, self._goal_location)
-
-            ## value criterion - i.e. what cost should the start and goal states have
-            goal_val = self.costs[self._goal_location[0], self._goal_location[1]]
-            goal_val = -1
-            start_val = self.costs[self._agent_location[0], self._agent_location[1]]
-
-            ### comparison of optimal vs manhattan routes
-            dp_costs = self.p_costs*self.high_cost + (1-self.p_costs)*self.low_cost ## standard case (i.e. pq = p(high cost))
-            dp_costs[self._goal_location[0], self._goal_location[1]] = 0
-            # dp_costs = self.p_costs*self.low_cost + (1-self.p_costs)*self.high_cost ## alternative case (i.e. pq = p(low cost))
-            # dp_costs[self._goal_location[0], self._goal_location[1]] = 1
-            self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=self._goal_location)
-            self.optimal_trajectory()
-
-            ## by length
-            # n_steps_opt = len(self.o_traj)-1
-            # worth_it = n_steps_opt > dist
-
-            ## or, by cost (i.e. vs manhattan vertical-first or horizontal-first)
-            # manhattan_costs = self.manhattan_trajectory(self._agent_location, self._goal_location)
-            # worth_it = (self.o_traj_total_cost/manhattan_costs[0]) < route_optimality_tolerance or (self.o_traj_total_cost/manhattan_costs[1]) < route_optimality_tolerance
-            worth_it = True
-            t+=1
-            if t>100:
-                raise ValueError('cant find start and end')
-
-            # last goal distance criterion
-            # self.starts
-
-        ## for sanity check, just place agent and goal in opposite corners
-        # self._agent_location = np.array(self.starts[self.n_eps%4])
-        # self._goal_location = np.array(self.goals[self.n_eps%4])
-        # self.n_eps += 1
 
         ## initialise trial info
         self.terminated = False
         observation = self.get_obs()
         info = self._get_info()
-        # current_cost = self.costs[self._agent_location[0], self._agent_location[1]] #+ np.random.normal(0, self.obs_noise)
         current_cost = self.get_cost(self._agent_location)
 
         ## reset obs on each trial
@@ -311,6 +264,71 @@ class MountainEnv(gym.Env):
             self.action_scores = []
         
         return observation, info
+    
+    ## get some S-E pairs
+    def start_end(self):
+
+        ## sample start and goal locations
+        dist = 0
+        min_dist = self.N*0.7
+        angle = 0
+        angle_tolerance = 0.8
+        angle_bounds = [45*(1+angle_tolerance), 45*(1-angle_tolerance)]
+        row_or_col = 1
+        goal_val = 0
+        start_val = 0
+        min_val = -0.2
+        t = 0
+        worth_it = False
+        route_optimality_tolerance = 0.5
+        while (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (goal_val>min_val) or (start_val>min_val) or (not worth_it):
+            agent_location = self.np_random.integers(0, self.N, size=2, dtype=int)
+            goal_location = self.np_random.integers(
+                0, self.N, size=2, dtype=int
+            )
+
+            ## distance criterion
+            dist = np.max(cdist([agent_location, goal_location], [agent_location, goal_location], metric='cityblock'))
+
+            ## same row/col criterion
+            row_or_col = np.sum(agent_location == goal_location)
+
+            ## angle criterion
+            angle = node_angle(agent_location, goal_location)
+
+            ## value criterion - i.e. what cost should the start and goal states have
+            goal_val = self.costs[goal_location[0], goal_location[1]]
+            goal_val = -1
+            start_val = self.costs[agent_location[0], agent_location[1]]
+
+            ### comparison of optimal vs manhattan routes
+            dp_costs = self.p_costs*self.high_cost + (1-self.p_costs)*self.low_cost ## standard case (i.e. pq = p(high cost))
+            dp_costs[goal_location[0], goal_location[1]] = 0
+            # dp_costs = self.p_costs*self.low_cost + (1-self.p_costs)*self.high_cost ## alternative case (i.e. pq = p(low cost))
+            # dp_costs[self._goal_location[0], self._goal_location[1]] = 1
+            self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=goal_location)
+            self.optimal_trajectory(agent_location, goal_location)
+
+            ## by length
+            # n_steps_opt = len(self.o_traj)-1
+            # worth_it = n_steps_opt > dist
+
+            ## or, by cost (i.e. vs manhattan vertical-first or horizontal-first)
+            manhattan_costs = self.manhattan_trajectory(agent_location, goal_location)
+            worth_it = (self.o_traj_total_cost/manhattan_costs[0]) < route_optimality_tolerance or (self.o_traj_total_cost/manhattan_costs[1]) < route_optimality_tolerance
+            worth_it = True
+
+            t+=1
+            if t>100:
+                raise ValueError('cant find start and end')
+
+        ## for sanity check, just place agent and goal in opposite corners
+        # self._agent_location = np.array(self.starts[self.n_eps%4])
+        # self._goal_location = np.array(self.goals[self.n_eps%4])
+        # self.n_eps += 1
+
+        return agent_location, goal_location
+
     
     ## custom functions for manually editing the env
     def set_state(self, state):
@@ -434,12 +452,11 @@ class MountainEnv(gym.Env):
 
 
     ## calculate the optimal trajectory between the two points, as given by the true DP solution
-    def optimal_trajectory(self):
-        start = self._agent_location
+    def optimal_trajectory(self, start, goal):
         current = start.copy()
-        goal = self._goal_location
         self.o_traj = [tuple(current)]
-        self.o_traj_costs = [self.costs[current[0], current[1]]]
+        # self.o_traj_costs = [self.costs[current[0], current[1]]]
+        self.o_traj_costs = [self.p_costs[current[0], current[1]]]
         
         visited = set()
         while not np.array_equal(current, goal):
@@ -464,7 +481,8 @@ class MountainEnv(gym.Env):
             
             # Update trajectory
             self.o_traj.append(tuple(current))
-            self.o_traj_costs.append(self.costs[current[0], current[1]])
+            # self.o_traj_costs.append(self.costs[current[0], current[1]])
+            self.o_traj_costs.append(self.p_costs[current[0], current[1]])
         
         # Compute total cost
         self.o_traj_total_cost = np.sum(self.o_traj_costs)
@@ -507,8 +525,10 @@ class MountainEnv(gym.Env):
             vertical_trajectory.append((x1, y1))
 
         ## calculate the costs of these trajectories
-        horizontal_trajectory_costs = [self.costs[x, y] for x, y in horizontal_trajectory]
-        vertical_trajectory_costs = [self.costs[x, y] for x, y in vertical_trajectory]
+        # horizontal_trajectory_costs = [self.costs[x, y] for x, y in horizontal_trajectory]
+        # vertical_trajectory_costs = [self.costs[x, y] for x, y in vertical_trajectory]
+        horizontal_trajectory_costs = [self.p_costs[x, y] for x, y in horizontal_trajectory]
+        vertical_trajectory_costs = [self.p_costs[x, y] for x, y in vertical_trajectory]
         manhattan_costs = [np.sum(horizontal_trajectory_costs), np.sum(vertical_trajectory_costs)]
 
         return manhattan_costs
