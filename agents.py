@@ -377,18 +377,17 @@ class Farmer:
         self.beta_col = env.beta_col
 
     ## root sampling of surface
-    def root_sample(self, obs=None, n_iter=1000):
-
-        ## if obs empty, just return prior
-        # if obs is None:
-        #     self.posterior_p = np.random.beta(self.alpha_row, self.beta_row, size=self.N)
-        #     self.posterior_q = np.random.beta(self.alpha_col, self.beta_col, size=self.N)
-        #     self.posterior_p_cost = np.outer(self.posterior_p, self.posterior_q)
-
-        ## otherwise, MH!
-        # else:
+    def root_sample(self, obs=None, n_iter=100, lazy=False):
         sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, obs, N=self.N)
-        self.posterior_p, self.posterior_q = sampler.sample(n_iter = n_iter)
+
+        ## lazy
+        if lazy:
+            self.posterior_p, self.posterior_q = sampler.lazy_sample(n_iter = n_iter)
+
+        ## full
+        else:
+            self.posterior_p, self.posterior_q = sampler.sample(n_iter = n_iter)
+
         self.posterior_p_cost = np.outer(self.posterior_p, self.posterior_q)
 
 
@@ -397,10 +396,10 @@ class Farmer:
 
         ## use expected cost of each state
         if expected_cost:
-            # dp_costs = self.posterior_p_cost*self.high_cost + (1-self.posterior_p_cost)*self.low_cost
-            dp_costs = self.posterior_p_cost*self.low_cost + (1-self.posterior_p_cost)*self.high_cost
-            # dp_costs[self.goal[0], self.goal[1]] = 0
-            dp_costs[self.goal[0], self.goal[1]] = 1
+            dp_costs = self.posterior_p_cost*self.high_cost + (1-self.posterior_p_cost)*self.low_cost
+            dp_costs[self.goal[0], self.goal[1]] = 0
+            # dp_costs = self.posterior_p_cost*self.low_cost + (1-self.posterior_p_cost)*self.high_cost
+            # dp_costs[self.goal[0], self.goal[1]] = 1
 
         ## or, sample costs using p and q probabilities 
         else:

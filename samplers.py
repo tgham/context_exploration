@@ -187,34 +187,21 @@ class GridSampler:
         prior_den = 0
         
         # # Add row parameter contributions
-        # for i in range(len(self.row_probs)):
-        #     _, _, m1, n1 = self.proposal_params(i, is_row=True)
-        #     prior_num += (m1 * np.log(proposed_row_probs[i]) + 
-        #                 n1 * np.log(1 - proposed_row_probs[i]))
-        #     prior_den += (m1 * np.log(current_row_probs[i]) + 
-        #                 n1 * np.log(1 - current_row_probs[i]))
-        
-        # # Add column parameter contributions
-        # for j in range(len(self.col_probs)):
-        #     _, _, m2, n2 = self.proposal_params(j, is_row=False)
-        #     prior_num += (m2 * np.log(proposed_col_probs[j]) + 
-        #                 n2 * np.log(1 - proposed_col_probs[j]))
-        #     prior_den += (m2 * np.log(current_col_probs[j]) + 
-        #                 n2 * np.log(1 - current_col_probs[j]))
-        
-        # Add row parameter contributions
         for i in range(len(self.row_probs)):
-            prior_num += (self.alpha_row * np.log(proposed_row_probs[i]) + 
-                        self.beta_row * np.log(1 - proposed_row_probs[i]))
-            prior_den += (self.alpha_row * np.log(current_row_probs[i]) + 
-                        self.beta_row * np.log(1 - current_row_probs[i]))
+            _, _, m1, n1 = self.proposal_params(i, is_row=True)
+            prior_num += (m1 * np.log(current_row_probs[i]) + 
+                        n1 * np.log(1 - current_row_probs[i]))
+            prior_den += (m1 * np.log(proposed_row_probs[i]) + 
+                        n1 * np.log(1 - proposed_row_probs[i]))
         
         # Add column parameter contributions
         for j in range(len(self.col_probs)):
-            prior_num += (self.alpha_col * np.log(proposed_col_probs[j]) + 
-                        self.beta_col * np.log(1 - proposed_col_probs[j]))
-            prior_den += (self.alpha_col * np.log(current_col_probs[j]) + 
-                        self.beta_col * np.log(1 - current_col_probs[j]))
+            _, _, m2, n2 = self.proposal_params(j, is_row=False)
+            prior_num += (m2 * np.log(current_col_probs[j]) + 
+                        n2 * np.log(1 - current_col_probs[j]))
+            prior_den += (m2 * np.log(proposed_col_probs[j]) + 
+                        n2 * np.log(1 - proposed_col_probs[j]))
+            
 
         # Calculate log acceptance ratio
         log_acceptance_ratio = (likelihood_num - likelihood_den) + (prior_num - prior_den)
