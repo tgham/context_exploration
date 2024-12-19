@@ -52,14 +52,16 @@ class Node:
 
     # __slots__ = ['state', 'n_state_visits', 'cost', 'terminated', 'node_id', 'parent_node_ids', 'N', 'untried_actions', 'action_leaves']
 
-    def __init__(self, state, cost, terminated, action_space, N):
+    def __init__(self, state, cost, history, terminated, action_space, N):
         
         ## state info
         self.state = np.append(state, cost)
         self.n_state_visits = 0
         self.cost = cost
         self.terminated = terminated
-        self.node_id = str(self.state)
+        self.history = history
+        # self.node_id = str(np.append(self.history, self.state))
+        self.node_id = str(self.history)
         self.parent_node_ids = []
         # self.children_node_ids = []
         self.N = N
@@ -108,14 +110,15 @@ class Action_Node:
         self.next_state = next_state
         self.terminated = terminated
         self.node_id = str(self.prev_state) + str(self.action) #+ str(self.next_state)
-        self.children = []
+        self.children=[]
+        self.children_ids = []
 
     def __str__(self):
         return "prev_state{}: (action={}, next_state={}, children={}, visits={}, performance={:0.4f})".format(
                                                   self.prev_state,
                                                   self.action,
                                                 self.next_state,
-                                                  self.children,
+                                                  self.children_ids,
                                                   self.n_action_visits,
                                                   self.performance,
                                                   )
@@ -135,17 +138,16 @@ class Tree:
         return not node.terminated and len(node.untried_actions) > 0
 
     ## add node
-    def add_state_node(self, state, cost, terminated, action_space, parent=None):
+    def add_state_node(self, state, cost, history, terminated, action_space, parent=None):
 
         ## check for existing state node
-        # state_str = str(state)
-        node_id = str(np.append(state, cost))
+        node_id = str(history)
         if node_id in self.nodes:
             # print(state,"already exists")
             return self.nodes[node_id]
         
         ## else, create a new state node
-        node = Node(state=state, cost=cost, terminated=terminated, action_space=action_space, N=self.N)
+        node = Node(state=state, cost=cost, history=history, terminated=terminated, action_space=action_space, N=self.N)
         self.nodes.update({node_id: node})
         
         ## store parent-child relationships
@@ -156,16 +158,19 @@ class Tree:
             node.parent_node_ids.append(parent.node_id)
             
             ## add this state node to the children of the previous action leaf
-            parent.children.append(node.node_id)
+            parent.children_ids.append(node.node_id)
 
         return node
 
 
 
-    def children(self, node):
+    def get_children(self, node):
         children = []
-        for node_id in self.nodes[node.node_id].children_node_ids:
-            children.append(self.nodes[node_id])
+        for a, leaf in node.action_leaves.items():
+            if leaf is not None:
+                for node_id in leaf.children_ids:
+                    children.append(tuple((a, leaf, node_id, self.nodes[node_id])))
+                    # children.append(tuple((a, self.nodes[node_id].state, self.nodes[node_id])))
         return children
 
     def parent(self, node):
@@ -187,19 +192,99 @@ class Tree:
                 except:
                     pass
 
-    ## prune, i.e. keep the root's four adjacent children, and remove the rest
-    def prune(self):
 
-        ## identify the root's children, i.e. the four adjacent states
-        # keep_nodes = [str(self.root.state)]
-        keep_nodes = self.root.node_id
-        for leaf in self.root.action_leaves.values():
-            if leaf is not None:
-                keep_nodes.append(str(leaf.next_state))
+    def print_tree(self, node_id, indent="", is_last=True):
+        """
+        Recursively print the tree structure with markers, visit counts, and values.
 
-        for sstate in list(self.nodes.keys()):
-            if str(self.nodes[sstate].state) not in keep_nodes:
-                del self.nodes[sstate]
+        Args:
+        - node_id: The ID of the current node.
+        - indent: The current indentation string for formatting.
+        - is_last: Whether this node is the last child of its parent.
+        """
+        # Get the current node
+        node = self.nodes[node_id]
+        node_label = f"{node.state}"
+
+        # Add branch marker
+        branch = "└── " if is_last else "├── "
+        print(f"{indent}{branch}Node: {node_label}")
+
+        # Update indentation for children
+        child_indent = indent + ("    " if is_last else "│   ")
+
+        # Group children by action
+        children_by_action = {}
+        for action, leaf, child_id, child_node in self.get_children(node):
+            if action not in children_by_action:
+                children_by_action[action] = []
+            children_by_action[action].append((leaf, child_id, child_node))
+
+        # Find the best action based on performance
+        best_action = max(
+            children_by_action.items(),
+            key=lambda item: item[1][0][0].performance,  # Access the performance of the first leaf
+            default=(None, [])
+        )[0]
+
+
+        # Iterate through actions and their corresponding children
+        num_actions = len(children_by_action)
+        for i, (action, children) in enumerate(children_by_action.items()):
+            # Check if this is the last action
+            is_action_last = i == num_actions - 1
+
+            # Print the action label (only once per action)
+            leaf = children[0][0]  # Assume all children of the same action share the same leaf
+            action_label = f"Action {action}, (n_v: {leaf.n_action_visits}, perf: {leaf.performance:.2f})"
+
+            # Highlight the best action in bold (use ANSI escape codes for bold text)
+            if action == best_action:
+                action_label = f"\033[1m{action_label}\033[0m"
+
+            action_branch = "└── " if is_action_last else "├── "
+            print(f"{child_indent}{action_branch}{action_label}")
+
+            # Update child indentation
+            sub_child_indent = child_indent + ("    " if is_action_last else "│   ")
+
+            # Print each child for this action
+            for j, (leaf, child_id, child_node) in enumerate(children):
+                # Check if this is the last child of this action
+                is_child_last = j == len(children) - 1
+
+                # Recursively print the child node
+                self.print_tree(
+                    child_id,
+                    indent=sub_child_indent,
+                    is_last=is_child_last,
+                )
+
+
+
+    ## prune, i.e. after taking a step, keep only that subtree
+    # def prune(self):
+
+    #     ## identify the root's children, i.e. the four adjacent states
+    #     # keep_nodes = [str(self.root.state)]
+    #     keep_nodes = self.root.node_id
+    #     for leaf in self.root.action_leaves.values():
+    #         if leaf is not None:
+    #             keep_nodes.append(str(leaf.next_state))
+
+    #     for sstate in list(self.nodes.keys()):
+    #         if str(self.nodes[sstate].state) not in keep_nodes:
+    #             del self.nodes[sstate]
+
+    def prune(self, current_node_id, action, next_state, cost):
+        
+        # Step 1: Find the action leaf corresponding to the action
+        current_node = self.nodes[current_node_id]
+        action_leaf = current_node.action_leaves[action]
+
+        ## set new root node
+
+
 
 
         
@@ -240,7 +325,6 @@ class Tree:
         
         return traj_states, traj_actions
                     
-
 
     
     
