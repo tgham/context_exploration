@@ -147,7 +147,7 @@ class MonteCarloTreeSearch():
                 else:
                     history = [tuple(o) for o in self.env.obs_tmp]
                     node = self.tree.add_state_node(next_state, cost, history, terminated, action_space = self.action_space, parent=action_leaf)
-                    action_leaf.children[str(np.append(next_state,cost))] = node
+                    # action_leaf.children[str(np.append(next_state,cost))] = node
 
                 ## update counts already?
                 action_leaf.n_action_visits += 1
@@ -388,6 +388,7 @@ class MonteCarloTreeSearch():
             # state_node = self.tree.nodes[state_node_id]
             # action_leaf = state_node.action_leaves[action]
             action_leaf = node.action_leaves[action]
+            np.array_equal(node.state[:2], state), 'error in tree path\n node: {} \n state: {}'.format(node, state)
 
             ## discounted costs from current node to rollout node
             # discounted_tree_cost = 0
@@ -413,10 +414,14 @@ class MonteCarloTreeSearch():
             action_leaf.performance = action_leaf.performance + (backup_cost - action_leaf.performance) / action_leaf.n_action_visits
 
             ## next node
-            try:
-                node = action_leaf.children[self.tree_path[depth+1][0]]
-            except:
-                pass
+            if depth+1 <= tree_len:
+                node = action_leaf.children[str(self.tree_path[depth+1][0])]
+            # try:
+            #     node = action_leaf.children[str(self.tree_path[depth+1][0])]
+            # except:
+                # if depth+1==tree_len:
+                #     print(action_leaf.children[str(self.tree_path[depth+1][0])])
+                # pass
 
 
     ## tree search --> action loop
