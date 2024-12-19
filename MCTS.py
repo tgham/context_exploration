@@ -138,8 +138,16 @@ class MonteCarloTreeSearch():
 
                 ## create next state node (if it doesn't already exist)
                 history = [tuple(o) for o in self.env.obs_tmp]
-                node = self.tree.add_state_node(next_state, cost, history, terminated, action_space = self.action_space, parent=action_leaf)
+                # node = self.tree.add_state_node(next_state, cost, history, terminated, action_space = self.action_space, parent=action_leaf)
                 # assert np.array_equal(node.state[:2], next_state), 'error in tree policy step {}\n started in {}\n supposed to take action {} to {}\n ended up moving from {} to {}'.format(t, state_tmp, action_leaf.action, node.state[:2], env_state_tmp, action_leaf.next_state)
+
+                ## or, see if the next state node already exists as a child of this action leaf
+                state_id = str(np.append(next_state, cost))
+                if state_id in action_leaf.children:
+                    node = action_leaf.children[state_id]
+                else:
+                    node = self.tree.add_state_node(next_state, cost, history, terminated, action_space = self.action_space, parent=action_leaf)
+
 
                 ## update counts already?
                 action_leaf.n_action_visits += 1
@@ -371,8 +379,6 @@ class MonteCarloTreeSearch():
         ## calculate discount factors
         discount_factors = [self.discount_factor**d for d in range(tree_len)]
 
-        
-
         ## loop through the tree path
         for depth, (state, action) in enumerate(self.tree_path):
 
@@ -421,14 +427,14 @@ class MonteCarloTreeSearch():
         all_posterior_p_costs = []
 
         ## precommit to future S-G pairs
-        future_breadth = 5
-        future_depth = 1
-        future_SGs = np.zeros((future_breadth, future_depth, 2,2))
-        for b in range(future_breadth):
-            for d in range(future_depth):
-                start, goal = self.env.sample_SG()
-                future_SGs[b,d,0] = start
-                future_SGs[b,d,1] = goal
+        # future_breadth = 5
+        # future_depth = 1
+        # future_SGs = np.zeros((future_breadth, future_depth, 2,2))
+        # for b in range(future_breadth):
+        #     for d in range(future_depth):
+        #         start, goal = self.env.sample_SG()
+        #         future_SGs[b,d,0] = start
+        #         future_SGs[b,d,1] = goal
 
         ## create copy of envs for each future S-G pair
         # future_envs = [copy.deepcopy(self.env) for _ in range(future_breadth)]
@@ -624,7 +630,6 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise
 
                         ## update root of the tree
                         new_history = [tuple(o) for o in env_copy.obs]
-                        new_root_id = str(new_history)
                         next_root = MCTS.tree.nodes[new_history]
                         MCTS.tree.root = next_root
                         assert np.array_equal(MCTS.tree.root.state, current), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action)
