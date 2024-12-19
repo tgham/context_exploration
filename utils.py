@@ -50,24 +50,24 @@ def make_env(N, true_k, kernel_params, metric, obs_noise):
 ## Node class
 class Node:
 
-    # __slots__ = ['state', 'n_state_visits', 'cost', 'terminated', 'identifier', 'parent_identifiers', 'N', 'untried_actions', 'action_leaves']
+    # __slots__ = ['state', 'n_state_visits', 'cost', 'terminated', 'node_id', 'parent_node_ids', 'N', 'untried_actions', 'action_leaves']
 
     def __init__(self, state, cost, terminated, action_space, N):
         
         ## state info
-        self.state = state
+        self.state = np.append(state, cost)
         self.n_state_visits = 0
         self.cost = cost
         self.terminated = terminated
-        self.identifier = str(self.state)
-        self.parent_identifiers = []
-        # self.children_identifiers = []
+        self.node_id = str(self.state)
+        self.parent_node_ids = []
+        # self.children_node_ids = []
         self.N = N
 
 
         ## define valid actions
         self.untried_actions = list(range(action_space))
-        row, col = self.state
+        row, col,_ = self.state
         if row == self.N-1:
             self.untried_actions.remove(0)
         if row == 0:
@@ -99,25 +99,26 @@ class Node:
     
 class Action_Node:
 
-    def __init__(self, prev_state, action, next_state, next_cost, terminated):
+    def __init__(self, prev_state, action, next_state, terminated):
         self.prev_state = prev_state
         self.action = action
         self.total_simulation_cost = 0
         self.performance = None
         self.n_action_visits = 0
         self.next_state = next_state
-        self.next_cost = next_cost
         self.terminated = terminated
-        self.identifier = str(self.prev_state) + str(self.action) + str(self.next_state)
+        self.node_id = str(self.prev_state) + str(self.action) #+ str(self.next_state)
+        self.children = []
 
     def __str__(self):
-        return "prev_state{}: (action={}, next_state={}, next_cost={}, visits={}, performance={:0.4f})".format(
+        return "prev_state{}: (action={}, next_state={}, children={}, visits={}, performance={:0.4f})".format(
                                                   self.prev_state,
                                                   self.action,
                                                 self.next_state,
-                                                self.next_cost,
+                                                  self.children,
                                                   self.n_action_visits,
-                                                  self.performance)
+                                                  self.performance,
+                                                  )
 
 
 ## Tree class
@@ -137,22 +138,25 @@ class Tree:
     def add_state_node(self, state, cost, terminated, action_space, parent=None):
 
         ## check for existing state node
-        state_str = str(state)
-        if state_str in self.nodes:
+        # state_str = str(state)
+        node_id = str(np.append(state, cost))
+        if node_id in self.nodes:
             # print(state,"already exists")
-            return self.nodes[state_str]
+            return self.nodes[node_id]
         
         ## else, create a new state node
         node = Node(state=state, cost=cost, terminated=terminated, action_space=action_space, N=self.N)
-        self.nodes.update({state_str: node})
+        self.nodes.update({node_id: node})
         
         ## store parent-child relationships
         if parent is None:
             self.root = node
             # self.nodes[str(state)].parent = None
         else:
-            node.parent_identifiers.append(parent.identifier)
-            ## don't need to do children, since these are already in the aciotn_leaves
+            node.parent_node_ids.append(parent.node_id)
+            
+            ## add this state node to the children of the previous action leaf
+            parent.children.append(node.node_id)
 
         return node
 
@@ -160,16 +164,16 @@ class Tree:
 
     def children(self, node):
         children = []
-        for identifier in self.nodes[node.identifier].children_identifiers:
-            children.append(self.nodes[identifier])
+        for node_id in self.nodes[node.node_id].children_node_ids:
+            children.append(self.nodes[node_id])
         return children
 
     def parent(self, node):
-        parent_identifier = self.nodes[node.identifier].parent_identifier
-        if parent_identifier is None:
+        parent_node_id = self.nodes[node.node_id].parent_node_id
+        if parent_node_id is None:
             return None #i.e. root reached, bc it has no parent
         else:
-            return self.nodes[parent_identifier]
+            return self.nodes[parent_node_id]
 
     ## calculate value of each S-A node
     def action_tree(self):
@@ -187,7 +191,8 @@ class Tree:
     def prune(self):
 
         ## identify the root's children, i.e. the four adjacent states
-        keep_nodes = [str(self.root.state)]
+        # keep_nodes = [str(self.root.state)]
+        keep_nodes = self.root.node_id
         for leaf in self.root.action_leaves.values():
             if leaf is not None:
                 keep_nodes.append(str(leaf.next_state))

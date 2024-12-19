@@ -49,8 +49,8 @@ class MonteCarloTreeSearch():
         observation, cost, terminated, truncated, info = self.env.step(action)
         next_state = observation['agent']
 
-        ## update info for s-a leaf - i.e. the state-action pair, and the cost of the state that you subsequently reach        
-        node.action_leaves[action] = Action_Node(prev_state = node.state, action=action, next_state = next_state, next_cost=cost, terminated=terminated)
+        ## update info for s-a leaf - i.e. the state-action pair
+        node.action_leaves[action] = Action_Node(prev_state = node.state, action=action, next_state = next_state, terminated=terminated)
         # node.action_leaves[action].performance = cost
         node.action_leaves[action].performance = 0
 
@@ -77,7 +77,7 @@ class MonteCarloTreeSearch():
         t = 0
         self.tree_costs = []
         # self.tree_cost.append(node.cost)
-        assert np.array_equal(node.state, actual_state), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, actual_state)
+        assert np.array_equal(node.state[:2], actual_state), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, actual_state)
 
         ## create a record of the nodes/leaves visited in the tree
         self.tree_path = []
@@ -128,11 +128,11 @@ class MonteCarloTreeSearch():
                 ## move in env
                 observation, cost, terminated, _, _ = self.env.step(action_leaf.action)
                 next_state = observation['agent'] ## could simplify this so that the step returns the next state rather than the goal too
-                self.tree_costs.append(action_leaf.next_cost)
+                self.tree_costs.append(cost)
 
                 ## create next state node (if it doesn't already exist)
-                node = self.tree.add_state_node(next_state, action_leaf.next_cost, terminated, action_space = self.action_space, parent=action_leaf)
-                assert np.array_equal(node.state, next_state), 'error in tree policy step {}\n started in {}\n supposed to take action {} to {}\n ended up moving from {} to {}'.format(t, state_tmp, node.action, node.state, env_state_tmp, action_leaf.next_state)
+                node = self.tree.add_state_node(next_state, cost, terminated, action_space = self.action_space, parent=action_leaf)
+                assert np.array_equal(node.state[:2], next_state), 'error in tree policy step {}\n started in {}\n supposed to take action {} to {}\n ended up moving from {} to {}'.format(t, state_tmp, node.action, node.state, env_state_tmp, action_leaf.next_state)
 
                 ## update counts already?
                 action_leaf.n_action_visits += 1
@@ -184,7 +184,8 @@ class MonteCarloTreeSearch():
             env_copy.set_state(action_leaf.next_state)
             
             ## begin with cost of current state
-            starting_cost = action_leaf.next_cost
+            # starting_cost = action_leaf.
+            starting_cost = env_copy.get_pred_cost(start)
             total_cost += starting_cost
             observation = env_copy.get_obs()
 
@@ -475,13 +476,13 @@ class MonteCarloTreeSearch():
         action = argm(MCTS_estimates, max_MCTS)
 
         ## set root for next search
-        next_state = self.tree.root.action_leaves[action].next_state
-        next_root = self.tree.nodes[str(next_state)]
+        # next_state = self.tree.root.action_leaves[action].next_state
+        # next_root = self.tree.nodes[str(next_state)]
 
         ## mean over posterior samples?
         self.posterior_mean_p_cost = np.mean(all_posterior_p_costs, axis=0)
 
-        return action, next_root
+        return action
 
 
 
@@ -588,7 +589,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise
                         ## search
                         search_attempts = 0 # could do nan
                         # n_futures = 0
-                        action, next_root = MCTS.search(n_sims, n_futures, progress=True)
+                        action = MCTS.search(n_sims, n_futures, progress=True)
 
                         ## plot for debugging?
                         fig, axs = plt.subplots(1, 3, figsize=(15,5))
@@ -601,9 +602,14 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise
                         
                         ## take action
                         env_copy.set_sim(False)
-                        observation, _, terminated, truncated, info = env_copy.step(action)
+                        observation, cost, terminated, truncated, info = env_copy.step(action)
                         current = observation['agent']
                         steps += 1
+
+                        ## update root of the tree
+                        next_root = MCTS.tree.nodes[str(np.append(current, cost))]
+                        # next_root = self.tree.nodes[str(np.append(next_state, self.env.costs[next_state[0], next_state[1]])).replace(' ', '')]
+
                         MCTS.tree.root = next_root
                         assert np.array_equal(MCTS.tree.root.state, current), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action)
 
