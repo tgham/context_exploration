@@ -50,8 +50,8 @@ class GridSampler:
         # Get relevant observations for this row/column
         rel_obs = self.row_to_obs[index] if is_row else self.col_to_obs[index]
         prior_mean_failure = 1-(
-            # self.beta_col / (2*(self.alpha_col + self.beta_col)) if is_row else self.beta_row / (2*(self.alpha_row + self.beta_row))
-            self.beta_col / ((self.alpha_col + self.beta_col)) if is_row else self.beta_row / ((self.alpha_row + self.beta_row))
+            self.beta_col / (2*(self.alpha_col + self.beta_col)) if is_row else self.beta_row / (2*(self.alpha_row + self.beta_row))
+            # self.beta_col / ((self.alpha_col + self.beta_col)) if is_row else self.beta_row / ((self.alpha_row + self.beta_row))
         )
 
         ### Count occurrences of each cost
@@ -90,25 +90,33 @@ class GridSampler:
     def LL(self, sampled_i, sampled_j, rel_obs, row_p, col_q):
         log_likelihood = 0.0
         for o in rel_obs:
-            if o[0] == sampled_i:
+
+            if (o[0] == sampled_i) and (o[1] != sampled_j):
                 rel_p = row_p
                 rel_q = self.col_probs[o[1]]
-            elif o[1] == sampled_j:
+            elif (o[1] == sampled_j) and (o[0] != sampled_i):
                 rel_p = self.row_probs[o[0]]
+                rel_q = col_q
+            elif (o[0] == sampled_i) and (o[1] == sampled_j):
+                rel_p = row_p
                 rel_q = col_q
             else:
                 raise ValueError("Observation does not match row or column.")
-                
             rel_cost = o[2]
             prob_tmp = rel_p * rel_q
             
-            # Use log probabilities
+            ## high cost observed
             if rel_cost == self.high_cost:
                 log_likelihood += np.log(prob_tmp)
-            else:  # rel_cost == self.low_cost
+                log_likelihood -= np.log(self.row_probs[sampled_i] * self.col_probs[sampled_j])
+
+            ## low cost observed
+            elif rel_cost == self.low_cost:
                 log_likelihood += np.log(1 - prob_tmp)
+                log_likelihood -= np.log(1 - self.row_probs[sampled_i] * self.col_probs[sampled_j])
                 
         return log_likelihood
+
 
     def update(self):
 
@@ -127,40 +135,34 @@ class GridSampler:
         rel_obs = [(i_, j_, cost_) for (i_, j_, cost_) in self.obs if (i_ == sampled_i) or (j_ == sampled_j)]
 
         ## calculate likelihoods
-        likelihood_num = self.LL(sampled_i, sampled_j, rel_obs, proposed_p, proposed_q)
-        likelihood_den = self.LL(sampled_i, sampled_j, rel_obs, current_p, current_q)
+        log_likelihood = self.LL(sampled_i, sampled_j, rel_obs, proposed_p, proposed_q)
 
         ## calculate prior * transition prob terms
-        # prior_num = proposed_p**m1 * (1 - proposed_p)**n1 * proposed_q**m2 * (1 - proposed_q)**n2
-        # prior_den = current_p**m1 * (1 - current_p)**n1 * current_q**m2 * (1 - current_q)**n2
-        # prior_num = current_p**m1 * (1 - current_p)**n1 * current_q**m2 * (1 - current_q)**n2
-        # prior_den = proposed_p**m1 * (1 - proposed_p)**n1 * proposed_q**m2 * (1 - proposed_q)**n2
-        # prior_num = (m1 * np.log(proposed_p) + n1 * np.log(1 - proposed_p) + 
-        #             m2 * np.log(proposed_q) + n2 * np.log(1 - proposed_q))
-        # prior_den = (m1 * np.log(current_p) + n1 * np.log(1 - current_p) + 
-        #                 m2 * np.log(current_q) + n2 * np.log(1 - current_q))
-        prior_num = (self.alpha_row * np.log(proposed_p) + self.beta_row * np.log(1 - proposed_p) + 
-                    self.alpha_col * np.log(proposed_q) + self.beta_col * np.log(1 - proposed_q))
-        prior_den = (self.alpha_row * np.log(current_p) + self.beta_row * np.log(1 - current_p) +
-                    self.alpha_col * np.log(current_q) + self.beta_col * np.log(1 - current_q))
+        proposal_distr_num = (m1 * np.log(current_p) + n1 * np.log(1 - current_p) + 
+                        m2 * np.log(current_q) + n2 * np.log(1 - current_q))
+        proposal_distr_den = (m1 * np.log(proposed_p) + n1 * np.log(1 - proposed_p) +
+                        m2 * np.log(proposed_q) + n2 * np.log(1 - proposed_q))        
+        log_acceptance_ratio = log_likelihood + proposal_distr_num - proposal_distr_den
 
+        
         ## calculate acceptance ratio
         epsilon = 1e-10
-        # acceptance_ratio = (likelihood_num * prior_num) / (likelihood_den * prior_den + epsilon)
-        
-        log_acceptance_ratio = (likelihood_num - likelihood_den) + (prior_num - prior_den)
         acceptance_ratio = np.exp(log_acceptance_ratio)
 
-        # print('likelihood_num:', likelihood_num)
-        # print('likelihood_den:', likelihood_den)
-        # print('prior_num:', prior_num)
-        # print('prior_den:', prior_den)
-        # print()
         if np.random.random() < min(1, acceptance_ratio):
             self.row_probs[sampled_i] = proposed_p
             self.col_probs[sampled_j] = proposed_q
             self.n_accepted += 1
-            # print(acceptance_ratio)
+
+    def LL_full(self, row_probs, col_probs):
+        log_likelihood = 0.0
+        for i, j, cost in self.obs:
+            prob_tmp = row_probs[i] * col_probs[j]
+            if cost == self.high_cost:
+                log_likelihood += np.log(prob_tmp)
+            else:
+                log_likelihood += np.log(1 - prob_tmp)
+        return log_likelihood
 
     def update_full(self):
         # Instead of sampling single i,j:
@@ -212,17 +214,6 @@ class GridSampler:
             self.row_probs = proposed_row_probs
             self.col_probs = proposed_col_probs
             self.n_accepted += 1
-
-
-    def LL_full(self, row_probs, col_probs):
-        log_likelihood = 0.0
-        for i, j, cost in self.obs:
-            prob_tmp = row_probs[i] * col_probs[j]
-            if cost == self.high_cost:
-                log_likelihood += np.log(prob_tmp)
-            else:
-                log_likelihood += np.log(1 - prob_tmp)
-        return log_likelihood
     
 
     def lazy_sample(self, n_iter=100):
