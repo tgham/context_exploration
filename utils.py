@@ -61,7 +61,8 @@ class Node:
         self.terminated = terminated
         self.history = history
         # self.node_id = str(np.append(self.history, self.state))
-        self.node_id = str(self.history)
+        self.node_id = tuple(self.history)
+        self.state_id = str(self.state)
         self.parent_node_ids = []
         # self.children_node_ids = []
         self.N = N
@@ -110,7 +111,7 @@ class Action_Node:
         self.next_state = next_state
         self.terminated = terminated
         self.node_id = str(self.prev_state) + str(self.action) #+ str(self.next_state)
-        self.children=[]
+        self.children={}
         self.children_ids = []
 
     def __str__(self):
@@ -141,14 +142,15 @@ class Tree:
     def add_state_node(self, state, cost, history, terminated, action_space, parent=None):
 
         ## check for existing state node
-        node_id = str(history)
-        if node_id in self.nodes:
-            # print(state,"already exists")
-            return self.nodes[node_id]
+        # node_id = str(history)
+        node_id = history
+        # if node_id in self.nodes:
+        #     # print(state,"already exists")
+        #     return self.nodes[node_id]
         
         ## else, create a new state node
         node = Node(state=state, cost=cost, history=history, terminated=terminated, action_space=action_space, N=self.N)
-        self.nodes.update({node_id: node})
+        self.nodes.update({tuple(node_id): node})
         
         ## store parent-child relationships
         if parent is None:
@@ -159,6 +161,7 @@ class Tree:
             
             ## add this state node to the children of the previous action leaf
             parent.children_ids.append(node.node_id)
+            parent.children[node.state_id] = node
 
         return node
 
@@ -260,29 +263,32 @@ class Tree:
                     is_last=is_child_last,
                 )
 
-
-
-    ## prune, i.e. after taking a step, keep only that subtree
-    # def prune(self):
-
-    #     ## identify the root's children, i.e. the four adjacent states
-    #     # keep_nodes = [str(self.root.state)]
-    #     keep_nodes = self.root.node_id
-    #     for leaf in self.root.action_leaves.values():
-    #         if leaf is not None:
-    #             keep_nodes.append(str(leaf.next_state))
-
-    #     for sstate in list(self.nodes.keys()):
-    #         if str(self.nodes[sstate].state) not in keep_nodes:
-    #             del self.nodes[sstate]
-
-    def prune(self, current_node_id, action, next_state, cost):
+    # def prune(self, action):
         
-        # Step 1: Find the action leaf corresponding to the action
-        current_node = self.nodes[current_node_id]
-        action_leaf = current_node.action_leaves[action]
+    #     # Step 1: Find the action leaf corresponding to the action
+    #     # current_node = self.nodes[current_node_id]
+    #     # action_leaf = current_node.action_leaves[action]
 
-        ## set new root node
+    #     ## from the root, find the actions that are NOT the action taken
+    #     actions_to_delete = [a for a in self.root.action_leaves.keys() if (a != action) & (self.root.action_leaves[a] is not None)]
+
+    #     ### get the IDs of the state nodes to delete
+
+    #     ## get the next states from these to-be-deleted action leaves
+    #     node_ids_to_delete = []
+    #     for a in actions_to_delete:
+    #         for child in self.root.action_leaves[a].children:
+    #             node_ids_to_delete.append(id)
+                
+
+    #     state_nodes_to_delete = []
+    #     for a in actions_to_delete:
+    #         state_nodes_to_delete.append(self.root.action_leaves[a].next_state)
+
+    #     ## delete the action leaves
+    #     for a in actions_to_delete:
+    #         del self.root.action_leaves[a]
+
 
 
 
