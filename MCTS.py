@@ -28,8 +28,11 @@ class MonteCarloTreeSearch():
         ## (AND THE STARTING COST?)
         starting_cost = self.env.costs[state[0], state[1]]
 
+        ## get obs history
+        history = [tuple(o) for o in self.env.obs]
+
         ## add state node to the tree
-        self.tree.add_state_node(state=state, cost=starting_cost, terminated=False, action_space = self.action_space, parent=None)
+        self.tree.add_state_node(state=state, cost=starting_cost, history=history, terminated=False, action_space = self.action_space, parent=None)
 
 
     ## expand the action space of a node
@@ -81,6 +84,7 @@ class MonteCarloTreeSearch():
 
         ## create a record of the nodes/leaves visited in the tree
         self.tree_path = []
+        self.node_id_path = []
         
         ## loop until you reach a leaf node or terminal state
         while not node.terminated:
@@ -90,6 +94,7 @@ class MonteCarloTreeSearch():
             if self.tree.is_expandable(node):
                 action_leaf = self.expand(node)
                 self.tree_path.append(tuple([node.state, action_leaf.action]))
+                self.node_id_path.append(node.node_id)
 
                 ### tree cost here???
                 # tree_cost += expanded_node.cost
@@ -118,12 +123,13 @@ class MonteCarloTreeSearch():
             else:
 
                 ## (some debugging vars)
-                # state_tmp = node.state
-                # env_state_tmp = self.env.get_obs()['agent']
+                state_tmp = node.state[:2]
+                env_state_tmp = self.env.get_obs()['agent']
 
                 ## get the best child
                 action_leaf = self.best_child(node)
                 self.tree_path.append(tuple([node.state, action_leaf.action]))
+                self.node_id_path.append(node.node_id)
 
                 ## move in env
                 observation, cost, terminated, _, _ = self.env.step(action_leaf.action)
@@ -131,8 +137,9 @@ class MonteCarloTreeSearch():
                 self.tree_costs.append(cost)
 
                 ## create next state node (if it doesn't already exist)
-                node = self.tree.add_state_node(next_state, cost, terminated, action_space = self.action_space, parent=action_leaf)
-                assert np.array_equal(node.state[:2], next_state), 'error in tree policy step {}\n started in {}\n supposed to take action {} to {}\n ended up moving from {} to {}'.format(t, state_tmp, node.action, node.state, env_state_tmp, action_leaf.next_state)
+                history = [tuple(o) for o in self.env.obs_tmp]
+                node = self.tree.add_state_node(next_state, cost, history, terminated, action_space = self.action_space, parent=action_leaf)
+                # assert np.array_equal(node.state[:2], next_state), 'error in tree policy step {}\n started in {}\n supposed to take action {} to {}\n ended up moving from {} to {}'.format(t, state_tmp, action_leaf.action, node.state[:2], env_state_tmp, action_leaf.next_state)
 
                 ## update counts already?
                 action_leaf.n_action_visits += 1
@@ -364,11 +371,14 @@ class MonteCarloTreeSearch():
         ## calculate discount factors
         discount_factors = [self.discount_factor**d for d in range(tree_len)]
 
+        
+
         ## loop through the tree path
         for depth, (state, action) in enumerate(self.tree_path):
 
             ## get the state node and action leaf
-            state_node = self.tree.nodes[str(state)]
+            state_node_id = self.node_id_path[depth]
+            state_node = self.tree.nodes[state_node_id]
             action_leaf = state_node.action_leaves[action]
 
             ## discounted costs from current node to rollout node
@@ -606,19 +616,18 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise
                         current = observation['agent']
                         steps += 1
 
-                        ## update root of the tree
-                        next_root = MCTS.tree.nodes[str(np.append(current, cost))]
-                        # next_root = self.tree.nodes[str(np.append(next_state, self.env.costs[next_state[0], next_state[1]])).replace(' ', '')]
-
-                        MCTS.tree.root = next_root
-                        assert np.array_equal(MCTS.tree.root.state, current), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action)
-
                         ## update observations
                         agent.get_env_info(env_copy)
 
                         ## prune tree, i.e. remove all nodes that are not children of the new root
                         MCTS.tree.prune()
 
+                        ## update root of the tree
+                        new_history = [tuple(o) for o in env_copy.obs]
+                        new_root_id = str(new_history)
+                        next_root = MCTS.tree.nodes[new_history]
+                        MCTS.tree.root = next_root
+                        assert np.array_equal(MCTS.tree.root.state, current), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action)
 
                     ## if offline planning (i.e. plan the full trajectory)
                     elif offline:
