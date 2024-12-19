@@ -194,16 +194,16 @@ class MountainEnv(gym.Env):
 
 
     ## reset the environment
-    def reset(self, seed=None, start_end=None):
+    def reset(self, seed=None, start_goal=None):
         # We need the following line to seed self.np_random
         super().reset(seed=seed)
 
         ## set start and end
-        if start_end is not None:
-            self._agent_location = start_end[0]
-            self._goal_location = start_end[1]
+        if start_goal is not None:
+            self._agent_location = np.array(start_goal[0], dtype=int)
+            self._goal_location = np.array(start_goal[1], dtype=int)
         else:
-            self._agent_location, self._goal_location = self.start_end()
+            self._agent_location, self._goal_location = self.sample_SG()
 
         ## DP inits
         dp_costs = self.p_costs*self.high_cost + (1-self.p_costs)*self.low_cost ## standard case (i.e. pq = p(high cost))
@@ -265,8 +265,8 @@ class MountainEnv(gym.Env):
         
         return observation, info
     
-    ## get some S-E pairs
-    def start_end(self):
+    ## get some S-G pairs
+    def sample_SG(self):
 
         ## sample start and goal locations
         dist = 0
@@ -302,20 +302,20 @@ class MountainEnv(gym.Env):
             start_val = self.costs[agent_location[0], agent_location[1]]
 
             ### comparison of optimal vs manhattan routes
-            dp_costs = self.p_costs*self.high_cost + (1-self.p_costs)*self.low_cost ## standard case (i.e. pq = p(high cost))
-            dp_costs[goal_location[0], goal_location[1]] = 0
-            # dp_costs = self.p_costs*self.low_cost + (1-self.p_costs)*self.high_cost ## alternative case (i.e. pq = p(low cost))
-            # dp_costs[self._goal_location[0], self._goal_location[1]] = 1
-            self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=goal_location)
-            self.optimal_trajectory(agent_location, goal_location)
+            # dp_costs = self.p_costs*self.high_cost + (1-self.p_costs)*self.low_cost ## standard case (i.e. pq = p(high cost))
+            # dp_costs[goal_location[0], goal_location[1]] = 0
+            # # dp_costs = self.p_costs*self.low_cost + (1-self.p_costs)*self.high_cost ## alternative case (i.e. pq = p(low cost))
+            # # dp_costs[self._goal_location[0], self._goal_location[1]] = 1
+            # self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=goal_location)
+            # self.optimal_trajectory(agent_location, goal_location)
 
             ## by length
             # n_steps_opt = len(self.o_traj)-1
             # worth_it = n_steps_opt > dist
 
             ## or, by cost (i.e. vs manhattan vertical-first or horizontal-first)
-            manhattan_costs = self.manhattan_trajectory(agent_location, goal_location)
-            worth_it = (self.o_traj_total_cost/manhattan_costs[0]) < route_optimality_tolerance or (self.o_traj_total_cost/manhattan_costs[1]) < route_optimality_tolerance
+            # manhattan_costs = self.manhattan_trajectory(agent_location, goal_location)
+            # worth_it = (self.o_traj_total_cost/manhattan_costs[0]) < route_optimality_tolerance or (self.o_traj_total_cost/manhattan_costs[1]) < route_optimality_tolerance
             worth_it = True
 
             t+=1
