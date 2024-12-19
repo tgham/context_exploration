@@ -62,7 +62,6 @@ class Node:
         self.history = history
         self.node_id = str(np.append(self.history, self.state))
         self.state_id = str(state)
-        self.history_id = str(self.history)
         self.parent_node_ids = []
         # self.children_node_ids = []
         self.N = N
@@ -162,7 +161,8 @@ class Tree:
             
             ## add this state node to the children of the previous action leaf
             parent.children_ids.append(node.node_id)
-            parent.children[node.state_id] = node
+            parent.children[str(np.append(state, cost))] = node
+            # parent.children[node.state_id] = node
 
         return node
 
@@ -173,8 +173,9 @@ class Tree:
         for a, leaf in node.action_leaves.items():
             if leaf is not None:
                 # for node_id in leaf.children_ids:
-                for child in leaf.children:
-                    children.append(tuple((a, leaf, child.state_id, child)))
+                for child_key in leaf.children.keys():
+                    child = leaf.children[child_key]
+                    children.append(tuple((a, leaf, child_key, child)))
                     # children.append(tuple((a, self.nodes[node_id].state, self.nodes[node_id])))
         return children
 
@@ -198,7 +199,7 @@ class Tree:
                     pass
 
 
-    def print_tree(self, node_id, indent="", is_last=True):
+    def print_tree(self, node, indent="", is_last=True):
         """
         Recursively print the tree structure with markers, visit counts, and values.
 
@@ -208,7 +209,7 @@ class Tree:
         - is_last: Whether this node is the last child of its parent.
         """
         # Get the current node
-        node = self.nodes[node_id]
+        # node = self.nodes[node_id]
         node_label = f"{node.state}"
 
         # Add branch marker
@@ -260,7 +261,7 @@ class Tree:
 
                 # Recursively print the child node
                 self.print_tree(
-                    child_id,
+                    child_node,
                     indent=sub_child_indent,
                     is_last=is_child_last,
                 )
@@ -281,13 +282,20 @@ class Tree:
     #         if str(self.nodes[sstate].state) not in keep_nodes:
     #             del self.nodes[sstate]
 
-    def prune(self, current_node_id, action, next_state, cost):
+    def prune(self, action, next_state):
         
-        # Step 1: Find the action leaf corresponding to the action
-        current_node = self.nodes[current_node_id]
-        action_leaf = current_node.action_leaves[action]
+        ## delete actions not taken
+        actions_to_delete = [a for a in self.root.action_leaves.keys() if (a != action) and (self.root.action_leaves[a] is not None)]
+        for a in actions_to_delete:
+            del self.root.action_leaves[a]
 
-        ## set new root node
+        ## delete subtree for the other state reachable from the root-action pair
+        self.root.action_leaves[action].children = {str(next_state): self.root.action_leaves[action].children[str(next_state)]}
+
+        
+
+
+            
 
 
 
