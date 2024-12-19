@@ -60,8 +60,9 @@ class Node:
         self.cost = cost
         self.terminated = terminated
         self.history = history
-        # self.node_id = str(np.append(self.history, self.state))
-        self.node_id = str(self.history)
+        self.node_id = str(np.append(self.history, self.state))
+        self.state_id = str(state)
+        self.history_id = str(self.history)
         self.parent_node_ids = []
         # self.children_node_ids = []
         self.N = N
@@ -110,7 +111,7 @@ class Action_Node:
         self.next_state = next_state
         self.terminated = terminated
         self.node_id = str(self.prev_state) + str(self.action) #+ str(self.next_state)
-        self.children=[]
+        self.children={}
         self.children_ids = []
 
     def __str__(self):
@@ -128,7 +129,7 @@ class Action_Node:
 class Tree:
 
     def __init__(self,N):
-        self.nodes = {}
+        # self.nodes = {}
         self.root = None
         self.N = N
         self.n_state_visits = np.zeros((N,N))
@@ -137,18 +138,20 @@ class Tree:
     def is_expandable(self, node):
         return not node.terminated and len(node.untried_actions) > 0
 
-    ## add node
+    ## attach action leaf to child state
     def add_state_node(self, state, cost, history, terminated, action_space, parent=None):
 
-        ## check for existing state node
-        node_id = str(history)
-        if node_id in self.nodes:
-            # print(state,"already exists")
-            return self.nodes[node_id]
+        # ## check for existing state node
+        # node_id = str(history)
+        # if node_id in self.nodes:
+        #     # print(state,"already exists")
+        #     return self.nodes[node_id]
+
         
-        ## else, create a new state node
+        ## create a new state node
+        node_id = str(history)
         node = Node(state=state, cost=cost, history=history, terminated=terminated, action_space=action_space, N=self.N)
-        self.nodes.update({node_id: node})
+        # self.nodes.update({node_id: node})
         
         ## store parent-child relationships
         if parent is None:
@@ -159,6 +162,7 @@ class Tree:
             
             ## add this state node to the children of the previous action leaf
             parent.children_ids.append(node.node_id)
+            parent.children[node.state_id] = node
 
         return node
 
@@ -168,8 +172,9 @@ class Tree:
         children = []
         for a, leaf in node.action_leaves.items():
             if leaf is not None:
-                for node_id in leaf.children_ids:
-                    children.append(tuple((a, leaf, node_id, self.nodes[node_id])))
+                # for node_id in leaf.children_ids:
+                for child in leaf.children:
+                    children.append(tuple((a, leaf, child.state_id, child)))
                     # children.append(tuple((a, self.nodes[node_id].state, self.nodes[node_id])))
         return children
 
