@@ -292,6 +292,9 @@ class Tree:
         ## delete subtree for the other state reachable from the root-action pair
         self.root.action_leaves[action].children = {str(next_state): self.root.action_leaves[action].children[str(next_state)]}
 
+        ## update the root
+        self.root = self.root.action_leaves[action].children[str(next_state)]
+
         
 
 
