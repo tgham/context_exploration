@@ -72,15 +72,26 @@ def plot_traj(trajs, ax, title=None):
 
     for ti, traj in enumerate(trajs):
 
-        ## plot start and goal points in red and green
-        ax.scatter(traj[0][1]+0.5, traj[0][0]+0.5, color='red', s=100)
-        ax.scatter(traj[-1][1]+0.5, traj[-1][0]+0.5, color='green', s=100)
-        # print(traj[1:-1])
+        ## optimal path
+        if ti==0:
 
-        ## plot path(s)
-        for t in traj[1:-1]:
-        # for t in traj:
-            ax.plot(t[1]+0.5, t[0]+0.5, markers[ti], color=colours[ti], markersize=10, linewidth=10)
+            ## plot start and goal
+            ax.scatter(traj[0][1]+0.5, traj[0][0]+0.5, color='red', s=100)
+            ax.scatter(traj[-1][1]+0.5, traj[-1][0]+0.5, color='green', s=100)
+
+            ## plot path(s)
+            for t in traj[1:-1]:
+                ax.plot(t[1]+0.5, t[0]+0.5, markers[ti], color=colours[ti], markersize=10, linewidth=10)
+
+        ## actual path 
+        else:
+            ## plot path(s)
+            for t in traj:
+                ax.plot(t[1]+0.5, t[0]+0.5, markers[ti], color=colours[ti], markersize=10, linewidth=10)
+                # ax.text(t[1]+0.5,t[0]+0.5 , round(t[2], 2), ha='center', va='center', color='red') # note the x,y are flipped because they are matrix indices
+
+
+
     
     # ax.legend(['Start', 'Goal','Direct', 'Optimal'], loc='upper right')
     ## legend for start and goal, and the two paths
