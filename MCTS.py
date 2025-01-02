@@ -273,16 +273,15 @@ class MonteCarloTreeSearch():
 
                 ## imagine new start and goal locations
                 seed = random.randint(0, 1000)
-                # start, goal = env_copy.sample_SG(seed=seed)
-                # _,_ = env_copy.reset(seed=seed, start_goal=[start, goal])
+                start, goal = env_copy.sample_SG()
+                _,_ = env_copy.reset(seed=seed, start_goal=[start, goal])
                 # start = env_copy.current
                 # goal = env_copy.goal
-                _,_ = env_copy.reset(seed=seed)
                 observation = env_copy.get_obs()
                 agent_copy.get_env_info(env_copy)
 
                 ## get DP Q-values for the new start and goal under the current posterior sample
-                agent_copy.dp()
+                # agent_copy.dp()
 
                 ## rollout until trial is terminated 
                 while True:
@@ -579,7 +578,7 @@ def simulate_agent(m, N, env=None, params=None, metric='cityblock', true_k=None,
         ## loop through agents
         for a, ag in enumerate(agents):
             
-            ## reset episode (IDEALLY THIS WOULD HAPPEN OUTSIDE THE AGENT LOOP, SO THAT THE SAME START AND GOAL ARE USED FOR ALL AGENTS)
+            ## reset episode 
             # env_copy = copy.deepcopy(agent_envs[a])
             env_copy = agent_envs[a]
             _, _ = env_copy.reset()
