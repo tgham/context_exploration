@@ -273,13 +273,15 @@ class MonteCarloTreeSearch():
 
                 ## imagine new start and goal locations
                 seed = random.randint(0, 1000)
+                # start, goal = env_copy.sample_SG(seed=seed)
+                # _,_ = env_copy.reset(seed=seed, start_goal=[start, goal])
+                # start = env_copy.current
+                # goal = env_copy.goal
                 _,_ = env_copy.reset(seed=seed)
-                start = env_copy.current
-                goal = env_copy.goal
                 observation = env_copy.get_obs()
                 agent_copy.get_env_info(env_copy)
 
-                ## get DP Q-values for the new start and goal under the current posterior
+                ## get DP Q-values for the new start and goal under the current posterior sample
                 agent_copy.dp()
 
                 ## rollout until trial is terminated 
@@ -306,8 +308,8 @@ class MonteCarloTreeSearch():
                     # action = agent_copy.optimal_policy(current, agent_copy.Q_inf)
 
                     # ## or greedy wrt/ distance
-                    # current = observation['agent']
-                    # action = agent_copy.greedy_policy(current, goal, eps = 0.0)
+                    current = observation['agent']
+                    action = agent_copy.greedy_policy(current, goal, eps = 0.0)
 
                     ## take action
                     observation, cost, terminated, _, _ = env_copy.step(action)
@@ -440,18 +442,27 @@ class MonteCarloTreeSearch():
         ## root sampling of new kernel
         # K_inf = self.GP.sample_k()
 
-        ## save posterior samples for debugging
+        ## generate all root samples
         all_posterior_p_costs = []
+        for t in range(n_sims):
+            self.agent.root_sample(self.env.obs)
+            all_posterior_p_costs.append(self.agent.posterior_p_cost)
+        posterior_mean_p_cost = np.mean(all_posterior_p_costs, axis=0)
+
+        ## debugging plot
+        # plt.figure()
+        # plot_r(posterior_mean_p_cost.reshape(self.N,self.N), ax = plt.subplot(), title='posterior sample')
+        # plt.show()
 
         ## precommit to future S-G pairs
-        future_breadth = 5
-        future_depth = 1
-        future_SGs = np.zeros((future_breadth, future_depth, 2,2))
-        for b in range(future_breadth):
-            for d in range(future_depth):
-                start, goal = self.env.sample_SG()
-                future_SGs[b,d,0] = start
-                future_SGs[b,d,1] = goal
+        # future_breadth = 5
+        # future_depth = 1
+        # future_SGs = np.zeros((future_breadth, future_depth, 2,2))
+        # for b in range(future_breadth):
+        #     for d in range(future_depth):
+        #         start, goal = self.env.sample_SG()
+        #         future_SGs[b,d,0] = start
+        #         future_SGs[b,d,1] = goal
 
         ## create copy of envs for each future S-G pair
         # future_envs = [copy.deepcopy(self.env) for _ in range(future_breadth)]
@@ -475,10 +486,14 @@ class MonteCarloTreeSearch():
             
             ## root sampling of new posterior
             # self.GP.root_sample(self.env.obs, K_inf)
-            self.agent.root_sample(self.env.obs)
-            # self.agent.dp()
+            # self.agent.root_sample(self.env.obs)
+            # # self.agent.dp()
+            # self.env.receive_predictions(self.agent.posterior_p_cost)
+            # all_posterior_p_costs.append(self.agent.posterior_p_cost)
+
+            ## or, use pre-calculated posterior mean every time
+            self.agent.posterior_p_cost = posterior_mean_p_cost
             self.env.receive_predictions(self.agent.posterior_p_cost)
-            all_posterior_p_costs.append(self.agent.posterior_p_cost)
 
             ## debugging plot
             # plt.figure()
@@ -522,7 +537,7 @@ class MonteCarloTreeSearch():
 
 
 ## parallel function for simulating many episodes within the same mountain env
-def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise=0.01, inf_noise = 0.01, n_episodes=10, agents = ['GP', 'GP-MCTS', 'farmer'], n_sims=1000, n_futures=0, exploration_constant=2, discount_factor=0.95, offline=False):
+def simulate_agent(m, N, env=None, params=None, metric='cityblock', true_k=None, n_episodes=10, agents = ['GP', 'GP-MCTS', 'farmer'], n_sims=1000, n_futures=0, exploration_constant=2, discount_factor=0.95, progress=False, offline=False):
     
     ## initiate dictionary to store the results
     sim_out = {}
@@ -534,9 +549,11 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise
     seed=os.getpid()
     np.random.seed(seed)
     
-    ## create base mountain environment
-    kernel_params = params
-    env = make_env(N, true_k, kernel_params, metric, obs_noise=obs_noise)
+    ## create base mountain environment (unless one is provided)
+    if env is None:
+        env = make_env(N, true_k, params, metric)
+    else:
+        env = copy.deepcopy(env) #not sure why this is necessary but otherwise leads to problem with reset()
 
     ## copy env so that each agent makes its own observations 
     agent_envs = [copy.deepcopy(env) for _ in agents]
@@ -622,22 +639,17 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise
                         ## search
                         search_attempts = 0 # could do nan
                         # n_futures = 0
-                        action = MCTS.search(n_sims, n_futures, progress=True)
-
-
-                        ## if there is a plot showing, close it
-                        plt.close()
-
+                        action = MCTS.search(n_sims, n_futures, progress=progress)
 
                         ## plot for debugging?
-                        fig, axs = plt.subplots(1, 3, figsize=(15,5))
-                        plot_r(env_copy.p_costs.reshape(N,N), ax=axs[0], title = 'costs')
-                        plot_traj([env_copy.o_traj, env_copy.a_traj], ax=axs[0])
-                        # plot_obs(env_copy.obs, ax=axs[0])
-                        # MCTS.tree.action_tree()
-                        # plot_action_tree(MCTS.tree.tree_q, current, goal, ax=axs[1], title = 'DP_inf')
-                        plot_r(MCTS.posterior_mean_p_cost, ax=axs[2], title = 'average posterior p cost')
-                        plt.show()
+                        # fig, axs = plt.subplots(1, 3, figsize=(15,5))
+                        # plot_r(env_copy.p_costs.reshape(N,N), ax=axs[0], title = 'costs')
+                        # plot_traj([env_copy.o_traj, env_copy.a_traj], ax=axs[0])
+                        # # plot_obs(env_copy.obs, ax=axs[0])
+                        # # MCTS.tree.action_tree()
+                        # # plot_action_tree(MCTS.tree.tree_q, current, goal, ax=axs[1], title = 'DP_inf')
+                        # plot_r(MCTS.posterior_mean_p_cost, ax=axs[2], title = 'average posterior p cost')
+                        # plt.show()
                         
                         ## take action
                         env_copy.set_sim(False)
@@ -666,7 +678,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise
                             search_attempts += 1
 
                             ## search
-                            action, next_root = MCTS.search(n_sims, n_futures, progress=True)
+                            action, next_root = MCTS.search(n_sims, n_futures, progress=progress)
 
                             ## get the trajectory from the tree
                             MCTS.tree.action_tree()
@@ -783,5 +795,5 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, obs_noise
 
                     end_episode = True
 
-
-    return sim_out,env_copy.p_costs# env_copy.costs
+    # return sim_out,env_copy.p_costs
+    return sim_out, _
