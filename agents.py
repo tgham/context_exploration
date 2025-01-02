@@ -18,8 +18,6 @@ from utils import *
 from scipy.stats import rankdata, truncnorm
 from scipy.linalg import cholesky
 from minimax_tilting_sampler import TruncatedMVN
-import torch
-import gpytorch
 from base_kernels import *
 from samplers import GridSampler
 

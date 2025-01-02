@@ -50,8 +50,8 @@ class GridSampler:
         # Get relevant observations for this row/column
         rel_obs = self.row_to_obs[index] if is_row else self.col_to_obs[index]
         prior_mean_failure = 1-(
-            self.beta_col / (2*(self.alpha_col + self.beta_col)) if is_row else self.beta_row / (2*(self.alpha_row + self.beta_row))
-            # self.beta_col / ((self.alpha_col + self.beta_col)) if is_row else self.beta_row / ((self.alpha_row + self.beta_row))
+            # self.beta_col / (2*(self.alpha_col + self.beta_col)) if is_row else self.beta_row / (2*(self.alpha_row + self.beta_row))
+            self.beta_col / ((self.alpha_col + self.beta_col)) if is_row else self.beta_row / ((self.alpha_row + self.beta_row))
         )
 
         ### Count occurrences of each cost
@@ -69,11 +69,12 @@ class GridSampler:
         # n = np.sum([cost == self.low_cost for (_, _, cost) in rel_obs])
 
         ## normalise counts to cap their magnitude
-        cap = 5
+        cap = 10
         total_count = m + n
         if total_count > cap:
             m = cap * m / total_count
             n = cap * n / total_count
+
     
         # Update Beta parameters based on observed data
         alpha_prop = self.alpha_row + m if is_row else self.alpha_col + m
