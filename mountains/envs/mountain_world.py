@@ -38,7 +38,7 @@ class Actions(Enum):
 
 class MountainEnv(gym.Env):
 
-    def __init__(self, N, true_k=None, kernel_params=None, metric = 'cityblock', obs_noise=0.05,size=5):
+    def __init__(self, N, n_episodes=1, true_k=None, kernel_params=None, metric = 'cityblock', size=5):
         
         ### GP inits
 
@@ -49,59 +49,13 @@ class MountainEnv(gym.Env):
         X,Y = np.meshgrid(x,y)
         self.locations = np.column_stack([X.ravel(), Y.ravel()])
 
-        ## initialise the kernels
-        # kernel_set = BaseKernels(self.locations)
-
-        # if kernel_params is None:
-        #     kernel_params = {
-        #         'c': 1,
-        #         'scale': 1,
-        #         'theta': np.pi,
-        #         'sigma_f': 1,
-        #         'length_scale': 1,
-        #         'periodic_length_scale': N/2,
-        #         'period': N/5,
-        #         'periodic_theta': np.pi/3
-        #     }
-        
-        # self.true_k = true_k
-        # if true_k == 'lin':
-        #     self.K_gen = kernel_set.linear(kernel_params['c'])
-        # elif true_k == 'lin_x':
-        #     self.K_gen = kernel_set.linear_1D(0, theta=kernel_params['theta'], scale=kernel_params['scale'], c=kernel_params['c'])
-        # elif true_k == 'lin_y':
-        #     self.K_gen = kernel_set.linear_1D(1, theta=kernel_params['theta'], scale=kernel_params['scale'], c=kernel_params['c'])
-        # elif true_k == 'rbf':
-        #     self.K_gen = kernel_set.rbf(sigma_f=kernel_params['sigma_f'], length_scale=kernel_params['length_scale'])
-        # elif true_k == 'rbf_x':
-        #     self.K_gen = kernel_set.rbf_1D(0, theta=kernel_params['theta'], sigma_f=kernel_params['sigma_f'], length_scale=kernel_params['length_scale'])
-        # elif true_k == 'rbf_y':
-        #     self.K_gen = kernel_set.rbf_1D(1, theta=kernel_params['theta'], sigma_f=kernel_params['sigma_f'], length_scale=kernel_params['length_scale'])
-        # elif true_k == 'periodic_x':
-        #     self.K_gen = kernel_set.periodic(0, sigma_f=kernel_params['sigma_f'], period=kernel_params['period'], periodic_length_scale=kernel_params['periodic_length_scale'], periodic_theta=kernel_params['periodic_theta'])
-        # elif true_k == 'periodic_y':
-        #     self.K_gen = kernel_set.periodic(1, sigma_f=kernel_params['sigma_f'], period=kernel_params['period'], periodic_length_scale=kernel_params['periodic_length_scale'], periodic_theta=kernel_params['periodic_theta'])
-        # else: #default
-        #     self.K_gen = kernel_set.rbf(length_scale=kernel_params['length_scale'], sigma_f=kernel_params['sigma_f'])
-
-        # ## generate true costs
-        # self.obs_noise = obs_noise
-        # self.high_cost, self.low_cost = -0.9, -0.1
-        # mean = np.zeros(self.N**2) - 0.5
-        # # mean=None
-        # self.costs = sample(mean, self.K_gen, None, self.high_cost, self.low_cost)  #+ np.random.normal(0, self.obs_noise, (self.N, self.N))
-
-        # ## normalise costs bt high_cost and low_cost??
-        # self.costs = self.high_cost + (self.low_cost - self.high_cost) * (self.costs - np.min(self.costs)) / (np.max(self.costs) - np.min(self.costs))
-
-
         ### initialise farm
         self.high_cost, self.low_cost = -0.9, -0.1
         default_param = 0.5
-        self.alpha_row =20
-        self.beta_row = 0.5
-        self.alpha_col = 1
-        self.beta_col = 1
+        self.alpha_row =2
+        self.beta_row = 1
+        self.alpha_col = 0.5
+        self.beta_col = 0.5
         self.row_p = np.random.beta(self.alpha_row,self.beta_row, self.N)
         self.col_q = np.random.beta(self.alpha_col, self.beta_col, self.N)
         # self.col_q = np.ones(self.N)
@@ -127,11 +81,18 @@ class MountainEnv(gym.Env):
         )
 
         ## init trial info
-        # self.starts = []
-        # self.goals = []
-        self.starts = [[0, 0],              [0, self.N-1],    [self.N-1, 0],    [self.N-1, self.N-1]]
-        self.goals = [[self.N-1, self.N-1], [self.N-1, 0],    [0, self.N-1],    [0, 0]]
-        self.n_eps = 0
+        # self.starts = [[0, 0],              [0, self.N-1],    [self.N-1, 0],    [self.N-1, self.N-1]]
+        # self.goals = [[self.N-1, self.N-1], [self.N-1, 0],    [0, self.N-1],    [0, 0]]
+        self.starts = []
+        self.goals = []
+        self.n_episodes = n_episodes
+        for e in range(n_episodes):
+            start, goal = self.sample_SG()
+            self.starts.append(start)
+            self.goals.append(goal)
+        self.e = 0
+
+
 
         # define actions, depending on metric
         self.metric = metric
@@ -199,19 +160,21 @@ class MountainEnv(gym.Env):
         super().reset(seed=seed)
 
         ## set start and end
-        if start_goal is not None:
+        if start_goal is not None: 
             self._agent_location = np.array(start_goal[0], dtype=int)
             self._goal_location = np.array(start_goal[1], dtype=int)
         else:
-            self._agent_location, self._goal_location = self.sample_SG()
+            # self._agent_location, self._goal_location = self.sample_SG()
+            self._agent_location = np.array(self.starts[self.e])
+            self._goal_location = np.array(self.goals[self.e])
 
-        ## DP inits
-        dp_costs = self.p_costs*self.high_cost + (1-self.p_costs)*self.low_cost ## standard case (i.e. pq = p(high cost))
-        dp_costs[self._goal_location[0], self._goal_location[1]] = 0
-        # dp_costs = self.p_costs*self.low_cost + (1-self.p_costs)*self.high_cost ## alternative case (i.e. pq = p(low cost))
-        # dp_costs[self._goal_location[0], self._goal_location[1]] = 1
-        self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=self._goal_location)
-        self.optimal_trajectory(self._agent_location, self._goal_location)
+            ## get true Q vals (u only do this if it's a real reset, rather than a reset for an imagined rollout)
+            dp_costs = self.p_costs*self.high_cost + (1-self.p_costs)*self.low_cost ## standard case (i.e. pq = p(high cost))
+            dp_costs[self._goal_location[0], self._goal_location[1]] = 0
+            # dp_costs = self.p_costs*self.low_cost + (1-self.p_costs)*self.high_cost ## alternative case (i.e. pq = p(low cost))
+            # dp_costs[self._goal_location[0], self._goal_location[1]] = 1
+            self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=self._goal_location)
+            self.optimal_trajectory(self._agent_location, self._goal_location)
 
 
         ## initialise trial info
@@ -272,7 +235,7 @@ class MountainEnv(gym.Env):
         dist = 0
         min_dist = self.N*0.7
         angle = 0
-        angle_tolerance = 0.8
+        angle_tolerance = 0.7
         angle_bounds = [45*(1+angle_tolerance), 45*(1-angle_tolerance)]
         row_or_col = 1
         goal_val = 0
@@ -441,6 +404,9 @@ class MountainEnv(gym.Env):
                 ## scores for the trial
                 self.action_score = np.nanmean(self.action_scores)
                 self.cost_ratio = self.o_traj_total_cost / self.a_traj_total_cost
+
+                ## update ep counter
+                self.e += 1
 
         else:
             self.terminated = False
