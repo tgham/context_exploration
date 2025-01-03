@@ -31,10 +31,10 @@ class GridSampler:
             self.row_probs = np.random.beta(self.alpha_row, self.beta_row, size=self.N)
             self.col_probs = np.random.beta(self.alpha_col, self.beta_col, size=self.N)
 
-        ## or, initialise all unseen rows and columns with the prior mean, and sample the rest
+        ## or, initialise all unseen rows and columns with the mean of the beta prior, then sample the rest
         elif CE:
-            self.row_probs = np.full(self.N, self.beta_row / (self.alpha_row + self.beta_row))
-            self.col_probs = np.full(self.N, self.beta_col / (self.alpha_col + self.beta_col))
+            self.row_probs = np.full(self.N, self.alpha_row / (self.alpha_row + self.beta_row))
+            self.col_probs = np.full(self.N, self.alpha_col / (self.alpha_col + self.beta_col))
             for o in self.obs:
                 if o[0] < self.N:
                     self.row_probs[o[0]] = np.random.beta(self.alpha_row, self.beta_row)
