@@ -52,15 +52,15 @@ class Node:
 
     # __slots__ = ['state', 'n_state_visits', 'cost', 'terminated', 'node_id', 'parent_node_ids', 'N', 'untried_actions', 'action_leaves']
 
-    def __init__(self, state, cost, history, terminated, action_space, N):
+    def __init__(self, state, cost, terminated, action_space, N):
         
         ## state info
         self.state = np.append(state, cost)
         self.n_state_visits = 0
         self.cost = cost
         self.terminated = terminated
-        self.history = history
-        self.node_id = str(np.append(self.history, self.state))
+        # self.node_id = str(np.append(self.history, self.state))
+        self.node_id = str(state)
         self.state_id = str(state)
         self.parent_node_ids = []
         # self.children_node_ids = []
@@ -138,7 +138,7 @@ class Tree:
         return not node.terminated and len(node.untried_actions) > 0
 
     ## attach action leaf to child state
-    def add_state_node(self, state, cost, history, terminated, action_space, parent=None):
+    def add_state_node(self, state, cost, terminated, action_space, parent=None):
 
         # ## check for existing state node
         # node_id = str(history)
@@ -148,9 +148,7 @@ class Tree:
 
         
         ## create a new state node
-        node_id = str(history)
-        node = Node(state=state, cost=cost, history=history, terminated=terminated, action_space=action_space, N=self.N)
-        # self.nodes.update({node_id: node})
+        node = Node(state=state, cost=cost, terminated=terminated, action_space=action_space, N=self.N)
         
         ## store parent-child relationships
         if parent is None:
