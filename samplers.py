@@ -2,7 +2,7 @@ import numpy as np
 import scipy
 
 class GridSampler:
-    def __init__(self, alpha_row, beta_row, alpha_col, beta_col, obs, N=10):
+    def __init__(self, alpha_row, beta_row, alpha_col, beta_col, obs, N=10, CE=False):
         """
         Initialize the sampler with prior parameters and observed data.
 
@@ -27,8 +27,19 @@ class GridSampler:
         self.low_cost = -0.1
 
         # Initialize row and column probabilities for the entire grid
-        self.row_probs = np.random.beta(self.alpha_row, self.beta_row, size=self.N)
-        self.col_probs = np.random.beta(self.alpha_col, self.beta_col, size=self.N)
+        if not CE:
+            self.row_probs = np.random.beta(self.alpha_row, self.beta_row, size=self.N)
+            self.col_probs = np.random.beta(self.alpha_col, self.beta_col, size=self.N)
+
+        ## or, initialise all unseen rows and columns with the prior mean, and sample the rest
+        elif CE:
+            self.row_probs = np.full(self.N, self.beta_row / (self.alpha_row + self.beta_row))
+            self.col_probs = np.full(self.N, self.beta_col / (self.alpha_col + self.beta_col))
+            for o in self.obs:
+                if o[0] < self.N:
+                    self.row_probs[o[0]] = np.random.beta(self.alpha_row, self.beta_row)
+                if o[1] < self.N:
+                    self.col_probs[o[1]] = np.random.beta(self.alpha_col, self.beta_col)
 
         ## cache obs groups for lazy sampling
         self.row_to_obs = {i: [(i, j, cost) for (i_, j, cost) in self.obs if i_ == i] for i in range(self.N)}
@@ -57,16 +68,12 @@ class GridSampler:
         ### Count occurrences of each cost
 
         ## standard case (i.e. pq = p(high cost))
-        m = np.sum([cost == self.high_cost for (_, _, cost) in rel_obs])
-        n = prior_mean_failure * np.sum([cost == self.low_cost for (_, _, cost) in rel_obs])
+        # m = np.sum([cost == self.high_cost for (_, _, cost) in rel_obs])
+        # n = prior_mean_failure * np.sum([cost == self.low_cost for (_, _, cost) in rel_obs])
 
         ## alternative case (i.e. pq = p(low cost))
-        # m = np.sum([cost == self.low_cost for (_, _, cost) in rel_obs])
-        # n = prior_mean_failure * np.sum([cost == self.high_cost for (_, _, cost) in rel_obs])
-        # m = prior_mean_failure * np.sum([cost == self.low_cost for (_, _, cost) in rel_obs])
-        # n = np.sum([cost == self.high_cost for (_, _, cost) in rel_obs])
-        # m = prior_mean_failure * np.sum([cost == self.high_cost for (_, _, cost) in rel_obs])
-        # n = np.sum([cost == self.low_cost for (_, _, cost) in rel_obs])
+        m = np.sum([cost == self.low_cost for (_, _, cost) in rel_obs])
+        n = prior_mean_failure * np.sum([cost == self.high_cost for (_, _, cost) in rel_obs])
 
         ## normalise counts to cap their magnitude
         cap = 10
@@ -105,16 +112,31 @@ class GridSampler:
                 raise ValueError("Observation does not match row or column.")
             rel_cost = o[2]
             prob_tmp = rel_p * rel_q
+
             
             ## high cost observed
             if rel_cost == self.high_cost:
-                log_likelihood += np.log(prob_tmp)
-                log_likelihood -= np.log(self.row_probs[sampled_i] * self.col_probs[sampled_j])
+                
+                ## pq = p(high cost)
+                # log_likelihood += np.log(prob_tmp)
+                # log_likelihood -= np.log(self.row_probs[sampled_i] * self.col_probs[sampled_j])
+
+                ## pq = p(low cost) (alternative case)
+                log_likelihood += np.log(1 - prob_tmp)
+                log_likelihood -= np.log(1 - self.row_probs[sampled_i] * self.col_probs[sampled_j])
 
             ## low cost observed
             elif rel_cost == self.low_cost:
-                log_likelihood += np.log(1 - prob_tmp)
-                log_likelihood -= np.log(1 - self.row_probs[sampled_i] * self.col_probs[sampled_j])
+
+                ## pq = p(high cost)
+                # log_likelihood += np.log(1 - prob_tmp)
+                # log_likelihood -= np.log(1 - self.row_probs[sampled_i] * self.col_probs[sampled_j])
+
+                ## pq = p(low cost) (alternative case)
+                log_likelihood += np.log(prob_tmp)
+                log_likelihood -= np.log(self.row_probs[sampled_i] * self.col_probs[sampled_j])
+
+
                 
         return log_likelihood
 

@@ -376,8 +376,8 @@ class Farmer:
         self.beta_col = env.beta_col
 
     ## root sampling of surface
-    def root_sample(self, obs=None, n_iter=100, lazy=True):
-        sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, obs, N=self.N)
+    def root_sample(self, obs=None, n_iter=100, lazy=True, CE=False):
+        sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, obs, N=self.N, CE=CE)
 
         ## lazy
         if lazy:
@@ -395,15 +395,26 @@ class Farmer:
 
         ## use expected cost of each state
         if expected_cost:
-            dp_costs = self.posterior_p_cost*self.high_cost + (1-self.posterior_p_cost)*self.low_cost
-            dp_costs[self.goal[0], self.goal[1]] = 0
-            # dp_costs = self.posterior_p_cost*self.low_cost + (1-self.posterior_p_cost)*self.high_cost
-            # dp_costs[self.goal[0], self.goal[1]] = 1
+            ## p(high cost)
+            # dp_costs = self.posterior_p_cost*self.high_cost + (1-self.posterior_p_cost)*self.low_cost
+            # dp_costs[self.goal[0], self.goal[1]] = 0
+            
+            ## p(low cost)
+            dp_costs = self.posterior_p_cost*self.low_cost + (1-self.posterior_p_cost)*self.high_cost
+            dp_costs[self.goal[0], self.goal[1]] = 1
 
         ## or, sample costs using p and q probabilities 
         else:
-            dp_costs = np.array([self.high_cost if np.random.random() < self.posterior_p[i] else self.low_cost for i in range(self.N)]).reshape(self.N, self.N)
-            dp_costs[self.goal[0], self.goal[1]] = 0
+            ## p(high cost)
+            # dp_costs = np.array([self.high_cost if np.random.random() < self.posterior_p[i] else self.low_cost for i in range(self.N)]).reshape(self.N, self.N)
+            # dp_costs[self.goal[0], self.goal[1]] = 0
+
+            ## p(low cost)
+            # dp_costs = np.array([self.low_cost if np.random.random() < self.posterior_p[i] else self.high_cost for i in range(self.N)]).reshape(self.N, self.N)
+
+            dp_costs = np.array([self.low_cost if r < self.posterior_p_cost.flatten()[i] else self.high_cost for i, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
+            dp_costs[self.goal[0], self.goal[1]] = 1
+
         self.V_inf, self.Q_inf, self.A_inf = value_iteration(dp_costs, self.goal)
 
     ## optimal policy, as given by the dynamic programming Q vals
