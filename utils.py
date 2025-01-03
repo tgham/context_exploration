@@ -266,6 +266,28 @@ class Tree:
                     is_last=is_child_last,
                 )
 
+    def max_depth(self, node):
+        """
+        Recursively calculate the maximum depth of the tree starting from the given node.
+
+        Args:
+        - node: The current node (root of the subtree being evaluated).
+
+        Returns:
+        - int: The maximum depth of the tree.
+        """
+        # Base case: If the node has no children, its depth is 1
+        if not self.get_children(node):
+            return 1
+
+        # Recursive case: Compute the depth for each child
+        child_depths = []
+        for _, _, _, child_node in self.get_children(node):
+            child_depths.append(self.max_depth(child_node))
+
+        # The depth of this node is 1 + max depth of its children
+        return 1 + max(child_depths)
+
 
 
     ## prune, i.e. after taking a step, keep only that subtree
