@@ -235,14 +235,14 @@ class MonteCarloTreeSearch():
 
                 #     ## raise error
                 #     raise ValueError('exceeded max rolls in {} rollout, start: {}, goal: {}'.format(['imagined', 'real'][real_rollout], start, goal))
+                current = observation['agent']
+
 
                 ## or, greedy
-                current = observation['agent']
-                # action = self.env.greedy_policy(current, goal, eps = 0.0)
+                # current = observation['agent']
                 action = agent_copy.greedy_policy(current, env_copy.goal, eps = 0.0)
 
                 ## or, optimised rollout 
-                # current = observation['agent']
                 # action = agent_copy.optimal_policy(current, agent_copy.Q_inf)
 
                 ## take action
@@ -300,14 +300,13 @@ class MonteCarloTreeSearch():
 
                         ## raise error
                         raise ValueError('exceeded max rolls in {} rollout, start: {}, goal: {}'.format(['imagined', 'real'][real_rollout], start, goal))
+                    current = observation['agent']
 
 
                     ## optimised rollout 
-                    # current = observation['agent']
                     # action = agent_copy.optimal_policy(current, agent_copy.Q_inf)
 
                     # ## or greedy wrt/ distance
-                    current = observation['agent']
                     action = agent_copy.greedy_policy(current, goal, eps = 0.0)
 
                     ## take action
@@ -443,10 +442,10 @@ class MonteCarloTreeSearch():
 
         ## generate all root samples
         all_posterior_p_costs = []
-        for t in range(n_sims):
-            self.agent.root_sample(self.env.obs)
-            all_posterior_p_costs.append(self.agent.posterior_p_cost)
-        posterior_mean_p_cost = np.mean(all_posterior_p_costs, axis=0)
+        # for t in range(n_sims):
+        #     self.agent.root_sample(self.env.obs)
+        #     all_posterior_p_costs.append(self.agent.posterior_p_cost)
+        # posterior_mean_p_cost = np.mean(all_posterior_p_costs, axis=0)
 
         ## debugging plot
         # plt.figure()
@@ -485,14 +484,14 @@ class MonteCarloTreeSearch():
             
             ## root sampling of new posterior
             # self.GP.root_sample(self.env.obs, K_inf)
-            # self.agent.root_sample(self.env.obs)
-            # # self.agent.dp()
-            # self.env.receive_predictions(self.agent.posterior_p_cost)
-            # all_posterior_p_costs.append(self.agent.posterior_p_cost)
+            self.agent.root_sample(self.env.obs)
+            self.agent.dp()
+            self.env.receive_predictions(self.agent.posterior_p_cost)
+            all_posterior_p_costs.append(self.agent.posterior_p_cost)
 
             ## or, use pre-calculated posterior mean every time
-            self.agent.posterior_p_cost = posterior_mean_p_cost
-            self.env.receive_predictions(self.agent.posterior_p_cost)
+            # self.agent.posterior_p_cost = posterior_mean_p_cost
+            # self.env.receive_predictions(self.agent.posterior_p_cost)
 
             ## debugging plot
             # plt.figure()
@@ -536,7 +535,7 @@ class MonteCarloTreeSearch():
 
 
 ## parallel function for simulating many episodes within the same mountain env
-def simulate_agent(m, N, env=None, params=None, metric='cityblock', true_k=None, n_episodes=10, agents = ['GP', 'GP-MCTS', 'farmer'], n_sims=1000, n_futures=0, exploration_constant=2, discount_factor=0.95, progress=False, offline=False):
+def simulate_agent(m, N, env=None, params=None, metric='cityblock', true_k=None, n_episodes=10, agents = ['GP', 'GP-MCTS', 'BAMCP','CE'], n_sims=1000, n_futures=0, exploration_constant=2, discount_factor=0.95, progress=False, offline=False):
     
     ## initiate dictionary to store the results
     sim_out = {}
@@ -548,11 +547,17 @@ def simulate_agent(m, N, env=None, params=None, metric='cityblock', true_k=None,
     seed=os.getpid()
     np.random.seed(seed)
     
-    ## create base mountain environment (unless one is provided)
-    if env is None:
-        env = make_env(N, true_k, params, metric)
-    else:
-        env = copy.deepcopy(env) #not sure why this is necessary but otherwise leads to problem with reset()
+    ## create base mountain environment
+    # if env is None:
+    #     env = make_env(N, true_k, params, metric)
+    # else:
+    #     env = copy.deepcopy(env) #not sure why this is necessary but otherwise leads to problem with reset()
+    env = make_env(N, n_episodes, None, None, metric)
+    
+    ## debugging plot env
+    # fig, ax = plt.subplots(1, 1, figsize=(5,5))
+    # plot_r(env.p_costs, ax = ax, title=m)
+    # plt.show()
 
     ## copy env so that each agent makes its own observations 
     agent_envs = [copy.deepcopy(env) for _ in agents]
@@ -592,7 +597,7 @@ def simulate_agent(m, N, env=None, params=None, metric='cityblock', true_k=None,
                 # K_inf = env_copy.K_gen.copy()
                 # K_inf = None
                 agent = GP
-            elif ag == 'farmer':
+            elif (ag == 'BAMCP') or (ag == 'CE'):
                 agent = farmer
             agent.get_env_info(env_copy)
 
@@ -605,7 +610,7 @@ def simulate_agent(m, N, env=None, params=None, metric='cityblock', true_k=None,
             terminated=False
             early_terminate = False
             steps = 0
-            max_steps = len(env_copy.o_traj)*2
+            max_steps = len(env_copy.o_traj)*1.5
             max_search_attempts = 3
 
             while not end_episode:
@@ -623,8 +628,46 @@ def simulate_agent(m, N, env=None, params=None, metric='cityblock', true_k=None,
 
                     search_attempts = 0 # could do nan
 
-                ## MCTS
-                else:
+                ## certainty-equivalent
+                elif ag == 'CE':
+                    env_copy.set_sim(False)
+
+                    ## get posterior mean grid
+                    all_posterior_p_costs = []
+                    for t in range(100):
+                        agent.root_sample(env_copy.obs, lazy=True, CE=True)
+                        all_posterior_p_costs.append(agent.posterior_p_cost)
+                    posterior_mean_p_cost = np.mean(all_posterior_p_costs, axis=0)
+                    agent.posterior_p_cost = posterior_mean_p_cost
+                    env_copy.receive_predictions(agent.posterior_p_cost)
+
+                    ## dynamic programming under this posterior mean
+                    agent.dp(expected_cost=False)
+
+                    ## plot for debugging?
+                    # _, axs = plt.subplots(1, 3, figsize=(10,5))
+                    # plot_r(env_copy.p_costs.reshape(N,N), ax=axs[0], title = 'costs')
+                    # plot_traj([env_copy.o_traj, env_copy.a_traj], ax=axs[0])
+                    # plot_obs(env_copy.obs, ax=axs[0])
+                    # plot_r(env_copy.predicted_p_costs, ax=axs[1], title = 'posterior mean p cost')
+                    # plot_action_tree(agent.Q_inf, current, goal, ax=axs[2], title = 'DP_inf')
+                    # plt.show()
+
+                    ## get and take action
+                    action = agent.optimal_policy(current, agent.Q_inf)
+                    observation, _, terminated, truncated, info = env_copy.step(action)
+                    current = observation['agent']
+                    steps += 1
+
+                    ## update observations
+                    agent.get_env_info(env_copy)
+
+                    search_attempts = 0 # could do nan
+
+
+
+                ## bamcp
+                elif ag == 'BAMCP':
                     env_copy.set_sim(True)
                     
                     ## init MCTS (if resetting the tree for each move, init here. otherwise, this should be outside the episode loop)
@@ -724,7 +767,7 @@ def simulate_agent(m, N, env=None, params=None, metric='cityblock', true_k=None,
                     early_terminate = True
 
                 if early_terminate:
-                    print('mountain ',m,': episode ',e,' terminated for agent ',ag,' after ',steps,' steps, cost: ', env_copy.a_traj_total_cost)
+                    print('mountain ',m,': episode ',e,' terminated for agent ',ag,' after ',steps,' steps')
 
                     ## reset
                     # observation, info = env.reset()
@@ -794,5 +837,5 @@ def simulate_agent(m, N, env=None, params=None, metric='cityblock', true_k=None,
 
                     end_episode = True
 
-    # return sim_out,env_copy.p_costs
-    return sim_out, _
+    return sim_out,env_copy.p_costs
+    # return sim_out, _
