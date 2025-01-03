@@ -548,10 +548,6 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
     np.random.seed(seed)
     
     ## create base mountain environment
-    # if env is None:
-    #     env = make_env(N, true_k, params, metric)
-    # else:
-    #     env = copy.deepcopy(env) #not sure why this is necessary but otherwise leads to problem with reset()
     env = make_env(N, n_episodes, None, None, metric)
     
     ## debugging plot env
@@ -562,23 +558,12 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
     ## copy env so that each agent makes its own observations 
     agent_envs = [copy.deepcopy(env) for _ in agents]
 
-    ## initialise the GP-MCTS agent
-    # K_inf = env.K_gen.copy()
-    # K_inf = None
-    # GP = GPAgent(N, K_inf, env.metric, inf_noise)
-
     ## initialise farmer
     farmer = Farmer(N)
 
     ## loop through episodes (i.e. different start and goal states for the same mountain)
     print(' ') # for some reason need this to get the pbar to appear
     for e in tqdm(range(n_episodes), desc='Mountain_'+str(m), position=m+1, leave=False):
-
-        ## reset episode
-        # observation, info = env.reset()
-        # start = env.get_obs()['agent']
-        # current = start
-        # goal = env.get_obs()['goal']
 
         ## loop through agents
         for a, ag in enumerate(agents):
@@ -642,7 +627,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     env_copy.receive_predictions(agent.posterior_p_cost)
 
                     ## dynamic programming under this posterior mean
-                    agent.dp(expected_cost=False)
+                    agent.dp(expected_cost=True)
 
                     ## plot for debugging?
                     # _, axs = plt.subplots(1, 3, figsize=(10,5))
@@ -705,11 +690,6 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                         ## prune tree, i.e. remove all nodes that are not children of the new root
                         MCTS.tree.prune(action, np.append(current, cost))
 
-                        ## update root of the tree
-                        # new_history = [tuple(o) for o in env_copy.obs]
-                        # new_root_id = str(new_history)
-                        # next_root = MCTS.tree.nodes[new_history]
-                        # MCTS.tree.root = next_root
                         assert np.array_equal(MCTS.tree.root.state[:2], current), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action)
 
                     ## if offline planning (i.e. plan the full trajectory)
@@ -754,7 +734,6 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                                 # MCTS.tree.root = MCTS.tree.nodes[str(current)]
                                 # env_copy.set_sim(True)
 
-
                                 ## give up if too many searches
                                 print('restarting search from ', MCTS.tree.root.state)
                                 if search_attempts>max_search_attempts:
@@ -768,13 +747,6 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
 
                 if early_terminate:
                     print('mountain ',m,': episode ',e,' terminated for agent ',ag,' after ',steps,' steps')
-
-                    ## reset
-                    # observation, info = env.reset()
-                    # start = env.get_obs()['agent']
-                    # goal = env.get_obs()['goal']
-                    # steps = 0
-                    # total_cost = 0
 
                     ## or just skip to the next episode
                     sim_out['agent'].append(agent)
