@@ -240,10 +240,10 @@ class MonteCarloTreeSearch():
 
                 ## or, greedy
                 # current = observation['agent']
-                action = agent_copy.greedy_policy(current, env_copy.goal, eps = 0.0)
+                # action = agent_copy.greedy_policy(current, env_copy.goal, eps = 0.0)
 
                 ## or, optimised rollout 
-                # action = agent_copy.optimal_policy(current, agent_copy.Q_inf)
+                action = agent_copy.optimal_policy(current, agent_copy.Q_inf)
 
                 ## take action
                 observation, cost, terminated, _, _ = env_copy.step(action)
@@ -535,7 +535,7 @@ class MonteCarloTreeSearch():
 
 
 ## parallel function for simulating many episodes within the same mountain env
-def simulate_agent(m, N, env=None, params=None, metric='cityblock', true_k=None, n_episodes=10, agents = ['GP', 'GP-MCTS', 'BAMCP','CE'], n_sims=1000, n_futures=0, exploration_constant=2, discount_factor=0.95, progress=False, offline=False):
+def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episodes=10, agents = ['GP', 'GP-MCTS', 'BAMCP','CE'], n_sims=1000, n_futures=0, exploration_constant=2, discount_factor=0.95, progress=False, offline=False):
     
     ## initiate dictionary to store the results
     sim_out = {}
