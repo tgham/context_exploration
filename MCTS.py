@@ -28,11 +28,8 @@ class MonteCarloTreeSearch():
         ## (AND THE STARTING COST?)
         starting_cost = self.env.costs[state[0], state[1]]
 
-        ## get obs history
-        history = [tuple(o) for o in self.env.obs]
-
         ## add state node to the tree
-        self.tree.add_state_node(state=state, cost=starting_cost, history=history, terminated=False, action_space = self.action_space, parent=None)
+        self.tree.add_state_node(state=state, cost=starting_cost, terminated=False, action_space = self.action_space, parent=None)
 
 
     ## expand the action space of a node
@@ -144,8 +141,7 @@ class MonteCarloTreeSearch():
                 if str(np.append(next_state,cost)) in action_leaf.children:
                     node = action_leaf.children[str(np.append(next_state,cost))]
                 else:
-                    history = [tuple(o) for o in self.env.obs_tmp]
-                    node = self.tree.add_state_node(next_state, cost, history, terminated, action_space = self.action_space, parent=action_leaf)
+                    node = self.tree.add_state_node(next_state, cost, terminated, action_space = self.action_space, parent=action_leaf)
                     # action_leaf.children[str(np.append(next_state,cost))] = node
                 assert np.array_equal(node.state[:2], next_state), 'error in tree policy step {}\n started in {}\n supposed to take action {} to {}\n ended up moving from {} to {}'.format(t, state_tmp, action_leaf.action, node.state[:2], env_state_tmp, action_leaf.next_state)
 
@@ -304,10 +300,10 @@ class MonteCarloTreeSearch():
 
 
                     ## optimised rollout 
-                    # action = agent_copy.optimal_policy(current, agent_copy.Q_inf)
+                    action = agent_copy.optimal_policy(current, agent_copy.Q_inf)
 
                     # ## or greedy wrt/ distance
-                    action = agent_copy.greedy_policy(current, goal, eps = 0.0)
+                    # action = agent_copy.greedy_policy(current, goal, eps = 0.0)
 
                     ## take action
                     observation, cost, terminated, _, _ = env_copy.step(action)
@@ -324,7 +320,17 @@ class MonteCarloTreeSearch():
             total_cost = np.mean(future_total_costs)
             return total_cost
             
-        
+    ## optimised rollout
+    def optimised_rollout_policy(self, action_leaf, real_rollout = True):
+
+        ## get the max Q value of the state that you have just reached from this action leaf
+        next_state = action_leaf.next_state
+        Qs = self.agent.Q_inf[next_state[0], next_state[1]]
+        max_Q = np.nanmax(Qs)
+
+        return max_Q
+
+
 
     ## calculate E-E value
     def compute_UCT(self, node, action_leaf): 
@@ -485,7 +491,7 @@ class MonteCarloTreeSearch():
             ## root sampling of new posterior
             # self.GP.root_sample(self.env.obs, K_inf)
             self.agent.root_sample(self.env.obs)
-            self.agent.dp()
+            self.agent.dp(expected_cost=False)
             self.env.receive_predictions(self.agent.posterior_p_cost)
             all_posterior_p_costs.append(self.agent.posterior_p_cost)
 
@@ -500,13 +506,16 @@ class MonteCarloTreeSearch():
 
             ## selection, expansion, simulation
             action_leaf = self.tree_policy()
-            initial_sim_cost = self.rollout_policy(action_leaf, real_rollout=True)
+            # initial_sim_cost = self.rollout_policy(action_leaf, real_rollout=True)
+            initial_sim_cost = self.optimised_rollout_policy(action_leaf, real_rollout=True)
 
             ## loop through future imagined episodes
-            future_sim_costs = self.rollout_policy(action_leaf, real_rollout=False, n_futures=n_futures)
+            # future_sim_costs = self.rollout_policy(action_leaf, real_rollout=False, n_futures=n_futures)
             
             ##backup
-            sim_costs = [initial_sim_cost, future_sim_costs]
+            sim_costs = [initial_sim_cost
+                        #  , future_sim_costs
+                         ]
             self.backward(sim_costs)
 
         if progress:
@@ -627,7 +636,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     env_copy.receive_predictions(agent.posterior_p_cost)
 
                     ## dynamic programming under this posterior mean
-                    agent.dp(expected_cost=True)
+                    agent.dp(expected_cost=False)
 
                     ## plot for debugging?
                     # _, axs = plt.subplots(1, 3, figsize=(10,5))
