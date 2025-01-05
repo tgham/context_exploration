@@ -13,7 +13,7 @@ from agents import GPAgent, Farmer
 
 class MonteCarloTreeSearch():
 
-    def __init__(self, env, agent, tree, exploration_constant=2, discount_factor=0.95):
+    def __init__(self, env, agent, tree, exploration_constant=2, discount_factor=0.99):
         self.env = env
         self.agent = agent
         self.tree = tree
@@ -188,7 +188,6 @@ class MonteCarloTreeSearch():
         
         ## or, make a copy
         env_copy = copy.deepcopy(self.env)
-        agent_copy = copy.deepcopy(self.agent) ## this is done so that the GP doesn't change its state. could of course just feed env back into it at end of rollout
 
         ## standard rollout if this is the first S-G pair
         if real_rollout:
@@ -239,7 +238,7 @@ class MonteCarloTreeSearch():
                 # action = agent_copy.greedy_policy(current, env_copy.goal, eps = 0.0)
 
                 ## or, optimised rollout 
-                action = agent_copy.optimal_policy(current, agent_copy.Q_inf)
+                action = agent.optimal_policy(current, agent.Q_inf)
 
                 ## take action
                 observation, cost, terminated, _, _ = env_copy.step(action)
@@ -253,6 +252,9 @@ class MonteCarloTreeSearch():
 
         ## or, rollout for some new imagined S-G pair
         else:
+
+            ## copy agent
+            agent_copy = copy.deepcopy(self.agent) ## this is done so that the agent doesn't change its state in the imagined rollouts. could of course just feed env back into it at end of rollout
 
             ## inherit obs from tree so far and sample new posterior
             # agent_copy.get_env_info(env_copy)
@@ -329,6 +331,22 @@ class MonteCarloTreeSearch():
         max_Q = np.nanmax(Qs)
 
         return max_Q
+
+        ## get the next state and goal
+        # next_state = action_leaf.next_state
+        # goal = self.env.goal
+
+        # ## get the states on the optimal path from the next state to the goal
+        # rollout_traj = self.env.optimal_trajectory(next_state, goal)
+
+        # ## get some costs
+        # rollout_costs = [self.env.get_pred_cost(state) for state in rollout_traj]
+        # total_cost = np.sum(rollout_costs)
+
+        # return total_cost
+
+
+
 
 
 
@@ -491,7 +509,7 @@ class MonteCarloTreeSearch():
             ## root sampling of new posterior
             # self.GP.root_sample(self.env.obs, K_inf)
             self.agent.root_sample(self.env.obs)
-            self.agent.dp(expected_cost=False)
+            self.agent.dp(expected_cost=True)
             self.env.receive_predictions(self.agent.posterior_p_cost)
             all_posterior_p_costs.append(self.agent.posterior_p_cost)
 
@@ -506,8 +524,8 @@ class MonteCarloTreeSearch():
 
             ## selection, expansion, simulation
             action_leaf = self.tree_policy()
-            # initial_sim_cost = self.rollout_policy(action_leaf, real_rollout=True)
-            initial_sim_cost = self.optimised_rollout_policy(action_leaf, real_rollout=True)
+            initial_sim_cost = self.rollout_policy(action_leaf, real_rollout=True)
+            # initial_sim_cost = self.optimised_rollout_policy(action_leaf, real_rollout=True)
 
             ## loop through future imagined episodes
             # future_sim_costs = self.rollout_policy(action_leaf, real_rollout=False, n_futures=n_futures)
@@ -517,6 +535,7 @@ class MonteCarloTreeSearch():
                         #  , future_sim_costs
                          ]
             self.backward(sim_costs)
+
 
         if progress:
             pbar.close()
@@ -636,7 +655,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     env_copy.receive_predictions(agent.posterior_p_cost)
 
                     ## dynamic programming under this posterior mean
-                    agent.dp(expected_cost=False)
+                    agent.dp(expected_cost=True)
 
                     ## plot for debugging?
                     # _, axs = plt.subplots(1, 3, figsize=(10,5))
@@ -755,7 +774,8 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     early_terminate = True
 
                 if early_terminate:
-                    print('mountain ',m,': episode ',e,' terminated for agent ',ag,' after ',steps,' steps')
+                    # print('mountain ',m,': episode ',e,' terminated for agent ',ag,' after ',steps,' steps')
+                    raise ValueError('mountain ',m,': episode ',e,' terminated for agent ',ag,' after ',steps,' steps')
 
                     ## or just skip to the next episode
                     sim_out['agent'].append(agent)
