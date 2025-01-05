@@ -238,7 +238,7 @@ class MonteCarloTreeSearch():
                 # action = agent_copy.greedy_policy(current, env_copy.goal, eps = 0.0)
 
                 ## or, optimised rollout 
-                action = agent.optimal_policy(current, agent.Q_inf)
+                action = self.agent.optimal_policy(current, self.agent.Q_inf)
 
                 ## take action
                 observation, cost, terminated, _, _ = env_copy.step(action)
@@ -326,24 +326,47 @@ class MonteCarloTreeSearch():
     def optimised_rollout_policy(self, action_leaf, real_rollout = True):
 
         ## get the max Q value of the state that you have just reached from this action leaf
-        next_state = action_leaf.next_state
-        Qs = self.agent.Q_inf[next_state[0], next_state[1]]
-        max_Q = np.nanmax(Qs)
-
-        return max_Q
-
-        ## get the next state and goal
         # next_state = action_leaf.next_state
-        # goal = self.env.goal
+        # Qs = self.agent.Q_inf[next_state[0], next_state[1]]
+        # max_Q = np.nanmax(Qs)
 
-        # ## get the states on the optimal path from the next state to the goal
-        # rollout_traj = self.env.optimal_trajectory(next_state, goal)
+        # return max_Q
 
-        # ## get some costs
-        # rollout_costs = [self.env.get_pred_cost(state) for state in rollout_traj]
-        # total_cost = np.sum(rollout_costs)
+        # get the next state and goal
+        current = action_leaf.next_state.copy()
+        # traj = [tuple(current)]
+        goal = self.env.goal
 
-        # return total_cost
+        ## init costs
+        total_cost = self.env.get_pred_cost(current)
+        depth = 0
+
+
+        ## get costs of optimal route
+        # while not np.array_equal(current, goal):
+        while True:
+            depth+=1
+            i, j = current
+            action = int(self.agent.A_inf[i, j])  # Ensure action index is int
+            
+            # Take action and update current state
+            if action == 0:  # Down
+                current = np.clip((i + 1, j), 0, self.N - 1)
+            elif action == 1:  # Right
+                current = np.clip((i, j + 1), 0, self.N - 1)
+            elif action == 2:  # Up
+                current = np.clip((i - 1, j), 0, self.N - 1)
+            elif action == 3:  # Left
+                current = np.clip((i, j - 1), 0, self.N - 1)
+            
+            # Update trajectory + costs
+            # traj.append(tuple(current))
+            cost = self.env.get_pred_cost(current)
+            total_cost += cost*self.discount_factor**depth
+        
+            ## return cost once goal is reached
+            if np.array_equal(current, goal):
+                return total_cost
 
 
 
@@ -524,8 +547,8 @@ class MonteCarloTreeSearch():
 
             ## selection, expansion, simulation
             action_leaf = self.tree_policy()
-            initial_sim_cost = self.rollout_policy(action_leaf, real_rollout=True)
-            # initial_sim_cost = self.optimised_rollout_policy(action_leaf, real_rollout=True)
+            # initial_sim_cost = self.rollout_policy(action_leaf, real_rollout=True)
+            initial_sim_cost = self.optimised_rollout_policy(action_leaf, real_rollout=True)
 
             ## loop through future imagined episodes
             # future_sim_costs = self.rollout_policy(action_leaf, real_rollout=False, n_futures=n_futures)

@@ -1,5 +1,6 @@
 import numpy as np
 import scipy
+# from numba import jit
 
 class GridSampler:
     def __init__(self, alpha_row, beta_row, alpha_col, beta_col, obs, N=10, CE=False):
@@ -61,8 +62,8 @@ class GridSampler:
         # Get relevant observations for this row/column
         rel_obs = self.row_to_obs[index] if is_row else self.col_to_obs[index]
         prior_mean_failure = 1-(
-            # self.beta_col / (2*(self.alpha_col + self.beta_col)) if is_row else self.beta_row / (2*(self.alpha_row + self.beta_row))
-            self.beta_col / ((self.alpha_col + self.beta_col)) if is_row else self.beta_row / ((self.alpha_row + self.beta_row))
+            self.beta_col / (2*(self.alpha_col + self.beta_col)) if is_row else self.beta_row / (2*(self.alpha_row + self.beta_row))
+            # self.beta_col / ((self.alpha_col + self.beta_col)) if is_row else self.beta_row / ((self.alpha_row + self.beta_row))
         )
 
         ### Count occurrences of each cost
@@ -76,7 +77,7 @@ class GridSampler:
         n = prior_mean_failure * np.sum([cost == self.high_cost for (_, _, cost) in rel_obs])
 
         ## normalise counts to cap their magnitude
-        cap = 10
+        cap = 5
         total_count = m + n
         if total_count > cap:
             m = cap * m / total_count
