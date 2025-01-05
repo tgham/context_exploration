@@ -1,0 +1,60 @@
+Sun Jan  5 10:08:04 2025    mcts_profile
+
+         9022841 function calls (8849475 primitive calls) in 7.270 seconds
+
+   Ordered by: cumulative time
+   List reduced from 646 to 50 due to restriction <50>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+       82    0.005    0.000    6.824    0.083 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/ipykernel/iostream.py:276(<lambda>)
+     1000    0.001    0.000    6.691    0.007 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/tqdm/notebook.py:260(update)
+     1000    0.001    0.000    6.687    0.007 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/tqdm/std.py:1198(update)
+       69    0.000    0.000    6.686    0.097 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/tqdm/std.py:1325(refresh)
+       71    0.001    0.000    6.685    0.094 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/tqdm/notebook.py:139(display)
+      160    0.000    0.000    6.682    0.042 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/traitlets/traitlets.py:708(__set__)
+      163    0.000    0.000    6.681    0.041 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/traitlets/traitlets.py:689(set)
+      156    0.000    0.000    6.680    0.043 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/traitlets/traitlets.py:1512(_notify_trait)
+      157    0.001    0.000    6.680    0.043 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/ipywidgets/widgets/widget.py:691(notify_change)
+     1000    0.003    0.000    3.098    0.003 /Users/grahamadmin/Documents/GP_worlds/agents.py:380(root_sample)
+     1000    0.026    0.000    3.073    0.003 /Users/grahamadmin/Documents/GP_worlds/samplers.py:243(lazy_sample)
+   100000    0.644    0.000    3.047    0.000 /Users/grahamadmin/Documents/GP_worlds/samplers.py:145(update)
+      142    0.001    0.000    2.149    0.015 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/ipywidgets/widgets/widget.py:570(send_state)
+   200000    0.583    0.000    1.844    0.000 /Users/grahamadmin/Documents/GP_worlds/samplers.py:58(proposal_params)
+1002/1000    0.009    0.000    1.809    0.002 /Users/grahamadmin/Documents/GP_worlds/agents.py:395(dp)
+     1000    1.688    0.002    1.690    0.002 /Users/grahamadmin/Documents/GP_worlds/value_iteration.py:6(value_iteration)
+     1000    0.038    0.000    1.458    0.001 /Users/grahamadmin/Documents/GP_worlds/MCTS.py:65(tree_policy)
+   400001    0.193    0.000    1.237    0.000 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/numpy/core/fromnumeric.py:2177(sum)
+   454813    0.333    0.000    1.130    0.000 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/numpy/core/fromnumeric.py:71(_wrapreduction)
+    21603    0.012    0.000    1.056    0.000 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/numpy/core/arrayprint.py:1595(_array_str_implementation)
+    21603    0.031    0.000    1.044    0.000 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/numpy/core/arrayprint.py:561(array2string)
+    21603    0.027    0.000    0.955    0.000 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/numpy/core/arrayprint.py:506(wrapper)
+    21603    0.045    0.000    0.916    0.000 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/numpy/core/arrayprint.py:523(_array2string)
+      142    0.001    0.000    0.705    0.005 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/ipywidgets/widgets/widget.py:822(_send)
+   504013    0.673    0.000    0.673    0.000 {method 'reduce' of 'numpy.ufunc' objects}
+     1000    0.030    0.000    0.644    0.001 /Users/grahamadmin/Documents/GP_worlds/MCTS.py:428(backward)
+     4533    0.004    0.000    0.622    0.000 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/gymnasium/wrappers/time_limit.py:46(step)
+     4533    0.002    0.000    0.618    0.000 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/gymnasium/wrappers/order_enforcing.py:52(step)
+     4533    0.003    0.000    0.616    0.000 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/gymnasium/wrappers/env_checker.py:45(step)
+     4533    0.060    0.000    0.613    0.000 /Users/grahamadmin/Documents/GP_worlds/mountains/envs/mountain_world.py:343(step)
+    21603    0.041    0.000    0.601    0.000 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/numpy/core/arrayprint.py:452(_get_format_function)
+    20665    0.012    0.000    0.522    0.000 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/numpy/core/arrayprint.py:411(<lambda>)
+    20665    0.019    0.000    0.511    0.000 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/numpy/core/arrayprint.py:907(__init__)
+    20665    0.161    0.000    0.486    0.000 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/numpy/core/arrayprint.py:934(fillFormat)
+        8    0.000    0.000    0.463    0.058 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/asyncio/events.py:86(_run)
+        8    0.000    0.000    0.463    0.058 {method 'run' of '_contextvars.Context' objects}
+        7    0.000    0.000    0.463    0.066 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/zmq/eventloop/zmqstream.py:583(_handle_events)
+        7    0.000    0.000    0.462    0.066 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/tornado/ioloop.py:742(_run_callback)
+        6    0.000    0.000    0.462    0.077 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/zmq/eventloop/zmqstream.py:694(<lambda>)
+        7    0.000    0.000    0.462    0.066 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/zmq/eventloop/zmqstream.py:624(_handle_recv)
+      2/1    0.000    0.000    0.461    0.461 {built-in method builtins.exec}
+      2/1    0.000    0.000    0.461    0.461 <string>:1(<module>)
+10088/5555    0.027    0.000    0.434    0.000 {method 'format' of 'str' objects}
+     4533    0.025    0.000    0.366    0.000 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/scipy/stats/_stats_py.py:10437(rankdata)
+518113/474126    0.156    0.000    0.277    0.000 {built-in method builtins.getattr}
+    21603    0.009    0.000    0.266    0.000 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/numpy/core/arrayprint.py:780(_formatArray)
+     4533    0.061    0.000    0.266    0.000 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/scipy/stats/_stats_py.py:10560(_rankdata)
+       82    0.000    0.000    0.264    0.003 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/ipykernel/iostream.py:278(_really_send)
+85474/21603    0.096    0.000    0.257    0.000 /Users/grahamadmin/micromamba/envs/eggs/lib/python3.12/site-packages/numpy/core/arrayprint.py:789(recurser)
+     1000    0.004    0.000    0.231    0.000 /Users/grahamadmin/Documents/GP_worlds/MCTS.py:36(expand)
+
+

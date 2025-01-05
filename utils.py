@@ -24,7 +24,7 @@ from minimax_tilting_sampler import TruncatedMVN
 
 
 ## create a mountain environment
-def make_env(N, true_k, kernel_params, metric, obs_noise):
+def make_env(N, n_episodes, true_k, kernel_params, metric):
 
     ## register env
     
@@ -41,7 +41,7 @@ def make_env(N, true_k, kernel_params, metric, obs_noise):
         kwargs={"size": N},
     )
     
-    env = gym.make("mountains/MountainEnv-v0", N=N, true_k=true_k, kernel_params=kernel_params, metric=metric, obs_noise=obs_noise)
+    env = gym.make("mountains/MountainEnv-v0", N=N, n_episodes=n_episodes, true_k=true_k, kernel_params=kernel_params, metric=metric)
     return env
 
 
@@ -52,17 +52,16 @@ class Node:
 
     # __slots__ = ['state', 'n_state_visits', 'cost', 'terminated', 'node_id', 'parent_node_ids', 'N', 'untried_actions', 'action_leaves']
 
-    def __init__(self, state, cost, history, terminated, action_space, N):
+    def __init__(self, state, cost, terminated, action_space, N):
         
         ## state info
         self.state = np.append(state, cost)
         self.n_state_visits = 0
         self.cost = cost
         self.terminated = terminated
-        self.history = history
         # self.node_id = str(np.append(self.history, self.state))
-        self.node_id = tuple(self.history)
-        self.state_id = str(self.state)
+        self.node_id = str(state)
+        self.state_id = str(state)
         self.parent_node_ids = []
         # self.children_node_ids = []
         self.N = N
@@ -129,7 +128,7 @@ class Action_Node:
 class Tree:
 
     def __init__(self,N):
-        self.nodes = {}
+        # self.nodes = {}
         self.root = None
         self.N = N
         self.n_state_visits = np.zeros((N,N))
@@ -138,19 +137,18 @@ class Tree:
     def is_expandable(self, node):
         return not node.terminated and len(node.untried_actions) > 0
 
-    ## add node
-    def add_state_node(self, state, cost, history, terminated, action_space, parent=None):
+    ## attach action leaf to child state
+    def add_state_node(self, state, cost, terminated, action_space, parent=None):
 
-        ## check for existing state node
+        # ## check for existing state node
         # node_id = str(history)
-        node_id = history
         # if node_id in self.nodes:
         #     # print(state,"already exists")
         #     return self.nodes[node_id]
+
         
-        ## else, create a new state node
-        node = Node(state=state, cost=cost, history=history, terminated=terminated, action_space=action_space, N=self.N)
-        self.nodes.update({tuple(node_id): node})
+        ## create a new state node
+        node = Node(state=state, cost=cost, terminated=terminated, action_space=action_space, N=self.N)
         
         ## store parent-child relationships
         if parent is None:
@@ -161,7 +159,8 @@ class Tree:
             
             ## add this state node to the children of the previous action leaf
             parent.children_ids.append(node.node_id)
-            parent.children[node.state_id] = node
+            parent.children[str(np.append(state, cost))] = node
+            # parent.children[node.state_id] = node
 
         return node
 
@@ -171,8 +170,10 @@ class Tree:
         children = []
         for a, leaf in node.action_leaves.items():
             if leaf is not None:
-                for node_id in leaf.children_ids:
-                    children.append(tuple((a, leaf, node_id, self.nodes[node_id])))
+                # for node_id in leaf.children_ids:
+                for child_key in leaf.children.keys():
+                    child = leaf.children[child_key]
+                    children.append(tuple((a, leaf, child_key, child)))
                     # children.append(tuple((a, self.nodes[node_id].state, self.nodes[node_id])))
         return children
 
@@ -196,7 +197,7 @@ class Tree:
                     pass
 
 
-    def print_tree(self, node_id, indent="", is_last=True):
+    def print_tree(self, node, indent="", is_last=True):
         """
         Recursively print the tree structure with markers, visit counts, and values.
 
@@ -206,7 +207,7 @@ class Tree:
         - is_last: Whether this node is the last child of its parent.
         """
         # Get the current node
-        node = self.nodes[node_id]
+        # node = self.nodes[node_id]
         node_label = f"{node.state}"
 
         # Add branch marker
@@ -258,37 +259,66 @@ class Tree:
 
                 # Recursively print the child node
                 self.print_tree(
-                    child_id,
+                    child_node,
                     indent=sub_child_indent,
                     is_last=is_child_last,
                 )
 
-    # def prune(self, action):
+    def max_depth(self, node):
+        """
+        Recursively calculate the maximum depth of the tree starting from the given node.
+
+        Args:
+        - node: The current node (root of the subtree being evaluated).
+
+        Returns:
+        - int: The maximum depth of the tree.
+        """
+        # Base case: If the node has no children, its depth is 1
+        if not self.get_children(node):
+            return 1
+
+        # Recursive case: Compute the depth for each child
+        child_depths = []
+        for _, _, _, child_node in self.get_children(node):
+            child_depths.append(self.max_depth(child_node))
+
+        # The depth of this node is 1 + max depth of its children
+        return 1 + max(child_depths)
+
+
+
+    ## prune, i.e. after taking a step, keep only that subtree
+    # def prune(self):
+
+    #     ## identify the root's children, i.e. the four adjacent states
+    #     # keep_nodes = [str(self.root.state)]
+    #     keep_nodes = self.root.node_id
+    #     for leaf in self.root.action_leaves.values():
+    #         if leaf is not None:
+    #             keep_nodes.append(str(leaf.next_state))
+
+    #     for sstate in list(self.nodes.keys()):
+    #         if str(self.nodes[sstate].state) not in keep_nodes:
+    #             del self.nodes[sstate]
+
+    def prune(self, action, next_state):
         
-    #     # Step 1: Find the action leaf corresponding to the action
-    #     # current_node = self.nodes[current_node_id]
-    #     # action_leaf = current_node.action_leaves[action]
+        ## delete actions not taken
+        actions_to_delete = [a for a in self.root.action_leaves.keys() if (a != action) and (self.root.action_leaves[a] is not None)]
+        for a in actions_to_delete:
+            del self.root.action_leaves[a]
 
-    #     ## from the root, find the actions that are NOT the action taken
-    #     actions_to_delete = [a for a in self.root.action_leaves.keys() if (a != action) & (self.root.action_leaves[a] is not None)]
+        ## delete subtree for the other state reachable from the root-action pair
+        self.root.action_leaves[action].children = {str(next_state): self.root.action_leaves[action].children[str(next_state)]}
 
-    #     ### get the IDs of the state nodes to delete
+        ## update the root
+        self.root = self.root.action_leaves[action].children[str(next_state)]
 
-    #     ## get the next states from these to-be-deleted action leaves
-    #     node_ids_to_delete = []
-    #     for a in actions_to_delete:
-    #         for child in self.root.action_leaves[a].children:
-    #             node_ids_to_delete.append(id)
-                
+        
 
-    #     state_nodes_to_delete = []
-    #     for a in actions_to_delete:
-    #         state_nodes_to_delete.append(self.root.action_leaves[a].next_state)
 
-    #     ## delete the action leaves
-    #     for a in actions_to_delete:
-    #         del self.root.action_leaves[a]
-
+            
 
 
 
@@ -349,81 +379,6 @@ def node_angle(a,b):
     ang%=90
     return ang
 
-## value iteration
-def value_iteration(dp_costs, goal, max_iters = 1000, theta = 0.0001, discount = 0.99):
-
-    N = len(dp_costs)
-    n_actions = 4
-
-    ## init actions
-    action_directions = np.array([[1, 0], [0, 1], [-1, 0], [0, -1]])
-    
-    ## init tables
-    V = np.zeros((N, N))
-    A = np.zeros((N, N))
-    Q = np.zeros((N, N, n_actions))
-
-    ## determine whether to use true costs or inferred costs
-    # if self.known_costs:
-    #     dp_costs = self.costs.copy()
-    # else:
-    #     dp_costs = self.posterior_mean.reshape(self.N, self.N).copy()
-
-    ## set cost of goal to 0
-    dp_costs[goal[0], goal[1]] = 0
-
-    assert np.all(dp_costs <= 0), 'costs are not all negative: {}'.format(dp_costs)
-
-    ## loop through states
-    for i in range(max_iters):
-        delta = 0
-        for x in range(N):
-            for y in range(N):
-                
-                ## (make sure the goal state has value 0)
-                if (x, y) == tuple(goal):
-                    # V[x, y] = 0
-                    continue
-
-                v = V[x, y]
-                q = np.zeros(n_actions)
-
-                ## loop through actions and get the discounted value of each of the next states
-                for a in range(n_actions):
-
-                    ## allow wall moves
-                    # next_state = np.clip([x, y] + self._action_to_direction[a], 0, self.N-1)
-                    # q[a] = dp_costs[next_state[0], next_state[1]] + discount*V[next_state[0], next_state[1]]
-
-                    ## or, don't allow wall moves
-                    next_state = [x, y] + action_directions[a]
-                    if (next_state[0] >= 0) and (next_state[0] < N) and (next_state[1] >= 0) and (next_state[1] < N):
-                        q[a] = dp_costs[next_state[0], next_state[1]] + discount*V[next_state[0], next_state[1]]
-                    else:
-                        q[a] = np.nan
-
-                    ## update the Q-table
-                    Q[x, y, a] = q[a]
-
-                ## use the best action to update the value of the current state
-                V[x, y] = np.nanmax(q)
-
-                # A[x, y] = np.argmax(q)
-                A[x, y] = argm(q, np.nanmax(q))
-
-                ## check if converged
-                delta = max(delta, np.abs(v - V[x, y]))
-        
-        if delta < theta:
-            # print('DP converged after {} iterations'.format(i))
-            break
-
-        if i == max_iters-1:
-            print('DP did not converge after {} iterations'.format(i))
-
-    ## need to check if this has lead to a valid policy
-
-    return V, Q, A
 
 ## sample from the GP
 def sample(mean, K, sigma=0.01, high_cost=-0.9, low_cost=-0.1):

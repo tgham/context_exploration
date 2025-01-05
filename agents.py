@@ -15,11 +15,10 @@ import heapq
 from collections import defaultdict
 from IPython.display import display, clear_output
 from utils import *
+from value_iteration import value_iteration
 from scipy.stats import rankdata, truncnorm
 from scipy.linalg import cholesky
 from minimax_tilting_sampler import TruncatedMVN
-import torch
-import gpytorch
 from base_kernels import *
 from samplers import GridSampler
 
@@ -359,7 +358,8 @@ class Farmer:
         self.metric = metric
         self.N = N
         self.n_actions = 4
-        self.action_to_direction = {0: np.array([0, 1]), 1: np.array([0, -1]), 2: np.array([1, 0]), 3: np.array([-1, 0])}
+        # self.action_to_direction = {0: np.array([0, 1]), 1: np.array([0, -1]), 2: np.array([1, 0]), 3: np.array([-1, 0])}
+        self.action_to_direction = {0: np.array([1,0]), 1: np.array([0, 1]), 2: np.array([-1, 0]), 3: np.array([0, -1])}
 
     ### interactions with the environment
 
@@ -377,8 +377,8 @@ class Farmer:
         self.beta_col = env.beta_col
 
     ## root sampling of surface
-    def root_sample(self, obs=None, n_iter=100, lazy=False):
-        sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, obs, N=self.N)
+    def root_sample(self, obs=None, n_iter=100, lazy=True, CE=False):
+        sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, obs, N=self.N, CE=CE)
 
         ## lazy
         if lazy:
@@ -396,15 +396,26 @@ class Farmer:
 
         ## use expected cost of each state
         if expected_cost:
-            dp_costs = self.posterior_p_cost*self.high_cost + (1-self.posterior_p_cost)*self.low_cost
-            dp_costs[self.goal[0], self.goal[1]] = 0
-            # dp_costs = self.posterior_p_cost*self.low_cost + (1-self.posterior_p_cost)*self.high_cost
-            # dp_costs[self.goal[0], self.goal[1]] = 1
+            ## p(high cost)
+            # dp_costs = self.posterior_p_cost*self.high_cost + (1-self.posterior_p_cost)*self.low_cost
+            # dp_costs[self.goal[0], self.goal[1]] = 0
+            
+            ## p(low cost)
+            dp_costs = self.posterior_p_cost*self.low_cost + (1-self.posterior_p_cost)*self.high_cost
+            dp_costs[self.goal[0], self.goal[1]] = 1
 
         ## or, sample costs using p and q probabilities 
         else:
-            dp_costs = np.array([self.high_cost if np.random.random() < self.posterior_p[i] else self.low_cost for i in range(self.N)]).reshape(self.N, self.N)
-            dp_costs[self.goal[0], self.goal[1]] = 0
+            ## p(high cost)
+            # dp_costs = np.array([self.high_cost if np.random.random() < self.posterior_p[i] else self.low_cost for i in range(self.N)]).reshape(self.N, self.N)
+            # dp_costs[self.goal[0], self.goal[1]] = 0
+
+            ## p(low cost)
+            # dp_costs = np.array([self.low_cost if np.random.random() < self.posterior_p[i] else self.high_cost for i in range(self.N)]).reshape(self.N, self.N)
+
+            dp_costs = np.array([self.low_cost if r < self.posterior_p_cost.flatten()[i] else self.high_cost for i, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
+            dp_costs[self.goal[0], self.goal[1]] = 1
+
         self.V_inf, self.Q_inf, self.A_inf = value_iteration(dp_costs, self.goal)
 
     ## optimal policy, as given by the dynamic programming Q vals
@@ -423,3 +434,19 @@ class Farmer:
         action = argm(current_q, max_current_q)
 
         return action
+    
+    ## greedy wrt/ distance to goal
+    def greedy_policy(self, current, goal, eps=0):
+        if np.random.rand() < eps:
+            return self.random_policy()
+        else:
+            # distances = cdist([current], [goal], metric=self.metric).flatten()
+            ## get adjacent states
+            next_states = np.clip(np.array([current + self.action_to_direction[i] for i in range(self.n_actions)]), 0, self.N-1)
+            
+            ## choose whichever one is closest to the goal
+            distances = cdist(next_states, [goal], metric=self.metric).flatten()
+            min_distance = np.min(distances)
+            action = argm(distances, min_distance)
+            # print(next_states, distances, min_distance, action)
+            return action

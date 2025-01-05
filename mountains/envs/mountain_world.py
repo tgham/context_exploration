@@ -15,6 +15,7 @@ import heapq
 from collections import defaultdict
 from IPython.display import display, clear_output
 from utils import *
+from value_iteration import value_iteration
 from scipy.stats import rankdata, truncnorm
 from scipy.linalg import cholesky
 from minimax_tilting_sampler import TruncatedMVN
@@ -38,9 +39,11 @@ class Actions(Enum):
 
 class MountainEnv(gym.Env):
 
-    def __init__(self, N, true_k=None, kernel_params=None, metric = 'cityblock', obs_noise=0.05,size=5):
+    def __init__(self, N, n_episodes=1, true_k=None, kernel_params=None, metric = 'cityblock', size=5):
         
-        ### GP inits
+        ## seed?
+        # seed = np.random.randint(0, 1000)
+        # np.random.seed(seed)
 
         ## initialise the GP grid
         self.N = N
@@ -49,66 +52,24 @@ class MountainEnv(gym.Env):
         X,Y = np.meshgrid(x,y)
         self.locations = np.column_stack([X.ravel(), Y.ravel()])
 
-        ## initialise the kernels
-        # kernel_set = BaseKernels(self.locations)
-
-        # if kernel_params is None:
-        #     kernel_params = {
-        #         'c': 1,
-        #         'scale': 1,
-        #         'theta': np.pi,
-        #         'sigma_f': 1,
-        #         'length_scale': 1,
-        #         'periodic_length_scale': N/2,
-        #         'period': N/5,
-        #         'periodic_theta': np.pi/3
-        #     }
-        
-        # self.true_k = true_k
-        # if true_k == 'lin':
-        #     self.K_gen = kernel_set.linear(kernel_params['c'])
-        # elif true_k == 'lin_x':
-        #     self.K_gen = kernel_set.linear_1D(0, theta=kernel_params['theta'], scale=kernel_params['scale'], c=kernel_params['c'])
-        # elif true_k == 'lin_y':
-        #     self.K_gen = kernel_set.linear_1D(1, theta=kernel_params['theta'], scale=kernel_params['scale'], c=kernel_params['c'])
-        # elif true_k == 'rbf':
-        #     self.K_gen = kernel_set.rbf(sigma_f=kernel_params['sigma_f'], length_scale=kernel_params['length_scale'])
-        # elif true_k == 'rbf_x':
-        #     self.K_gen = kernel_set.rbf_1D(0, theta=kernel_params['theta'], sigma_f=kernel_params['sigma_f'], length_scale=kernel_params['length_scale'])
-        # elif true_k == 'rbf_y':
-        #     self.K_gen = kernel_set.rbf_1D(1, theta=kernel_params['theta'], sigma_f=kernel_params['sigma_f'], length_scale=kernel_params['length_scale'])
-        # elif true_k == 'periodic_x':
-        #     self.K_gen = kernel_set.periodic(0, sigma_f=kernel_params['sigma_f'], period=kernel_params['period'], periodic_length_scale=kernel_params['periodic_length_scale'], periodic_theta=kernel_params['periodic_theta'])
-        # elif true_k == 'periodic_y':
-        #     self.K_gen = kernel_set.periodic(1, sigma_f=kernel_params['sigma_f'], period=kernel_params['period'], periodic_length_scale=kernel_params['periodic_length_scale'], periodic_theta=kernel_params['periodic_theta'])
-        # else: #default
-        #     self.K_gen = kernel_set.rbf(length_scale=kernel_params['length_scale'], sigma_f=kernel_params['sigma_f'])
-
-        # ## generate true costs
-        # self.obs_noise = obs_noise
-        # self.high_cost, self.low_cost = -0.9, -0.1
-        # mean = np.zeros(self.N**2) - 0.5
-        # # mean=None
-        # self.costs = sample(mean, self.K_gen, None, self.high_cost, self.low_cost)  #+ np.random.normal(0, self.obs_noise, (self.N, self.N))
-
-        # ## normalise costs bt high_cost and low_cost??
-        # self.costs = self.high_cost + (self.low_cost - self.high_cost) * (self.costs - np.min(self.costs)) / (np.max(self.costs) - np.min(self.costs))
-
-
         ### initialise farm
         self.high_cost, self.low_cost = -0.9, -0.1
         default_param = 0.5
-        self.alpha_row =20
-        self.beta_row = 0.5
-        self.alpha_col = 1
-        self.beta_col = 1
+        self.alpha_row = 0.25
+        self.beta_row = 0.25
+        self.alpha_col = 0.25
+        self.beta_col = 0.25
         self.row_p = np.random.beta(self.alpha_row,self.beta_row, self.N)
         self.col_q = np.random.beta(self.alpha_col, self.beta_col, self.N)
         # self.col_q = np.ones(self.N)
         self.p_costs = np.outer(self.row_p, self.col_q)
         # self.p_costs = 1 - self.p_costs
-        self.costs = np.array([self.high_cost if r<self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
-        # self.costs = np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
+
+        ## prob = p(high cost)
+        # self.costs = np.array([self.high_cost if r<self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
+
+        ## prob = p(low cost)
+        self.costs = np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
         
         ### gym inits
 
@@ -127,11 +88,18 @@ class MountainEnv(gym.Env):
         )
 
         ## init trial info
-        # self.starts = []
-        # self.goals = []
-        self.starts = [[0, 0],              [0, self.N-1],    [self.N-1, 0],    [self.N-1, self.N-1]]
-        self.goals = [[self.N-1, self.N-1], [self.N-1, 0],    [0, self.N-1],    [0, 0]]
-        self.n_eps = 0
+        # self.starts = [[0, 0],              [0, self.N-1],    [self.N-1, 0],    [self.N-1, self.N-1]]
+        # self.goals = [[self.N-1, self.N-1], [self.N-1, 0],    [0, self.N-1],    [0, 0]]
+        self.starts = []
+        self.goals = []
+        self.n_episodes = n_episodes
+        for e in range(n_episodes):
+            start, goal = self.sample_SG()
+            self.starts.append(start)
+            self.goals.append(goal)
+        self.e = 0
+
+
 
         # define actions, depending on metric
         self.metric = metric
@@ -199,19 +167,21 @@ class MountainEnv(gym.Env):
         super().reset(seed=seed)
 
         ## set start and end
-        if start_goal is not None:
+        if start_goal is not None: 
             self._agent_location = np.array(start_goal[0], dtype=int)
             self._goal_location = np.array(start_goal[1], dtype=int)
         else:
-            self._agent_location, self._goal_location = self.sample_SG()
+            # self._agent_location, self._goal_location = self.sample_SG()
+            self._agent_location = np.array(self.starts[self.e])
+            self._goal_location = np.array(self.goals[self.e])
 
-        ## DP inits
-        dp_costs = self.p_costs*self.high_cost + (1-self.p_costs)*self.low_cost ## standard case (i.e. pq = p(high cost))
-        dp_costs[self._goal_location[0], self._goal_location[1]] = 0
-        # dp_costs = self.p_costs*self.low_cost + (1-self.p_costs)*self.high_cost ## alternative case (i.e. pq = p(low cost))
-        # dp_costs[self._goal_location[0], self._goal_location[1]] = 1
-        self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=self._goal_location)
-        self.optimal_trajectory(self._agent_location, self._goal_location)
+            ## get true Q vals (u only do this if it's a real reset, rather than a reset for an imagined rollout)
+            # dp_costs = self.p_costs*self.high_cost + (1-self.p_costs)*self.low_cost ## standard case (i.e. pq = p(high cost))
+            # dp_costs[self._goal_location[0], self._goal_location[1]] = 0
+            dp_costs = self.p_costs*self.low_cost + (1-self.p_costs)*self.high_cost ## alternative case (i.e. pq = p(low cost))
+            dp_costs[self._goal_location[0], self._goal_location[1]] = 1
+            self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=self._goal_location)
+            self.optimal_trajectory(self._agent_location, self._goal_location)
 
 
         ## initialise trial info
@@ -270,18 +240,16 @@ class MountainEnv(gym.Env):
 
         ## sample start and goal locations
         dist = 0
-        min_dist = self.N*0.7
+        min_dist = self.N*0.75
         angle = 0
-        angle_tolerance = 0.8
+        angle_tolerance = 0.6
         angle_bounds = [45*(1+angle_tolerance), 45*(1-angle_tolerance)]
         row_or_col = 1
-        goal_val = 0
-        start_val = 0
-        min_val = -0.2
         t = 0
         worth_it = False
-        route_optimality_tolerance = 0.5
-        while (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (goal_val>min_val) or (start_val>min_val) or (not worth_it):
+        new = False
+        route_optimality_tolerance = 0.4
+        while (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (not worth_it) or (not new):
             agent_location = self.np_random.integers(0, self.N, size=2, dtype=int)
             goal_location = self.np_random.integers(
                 0, self.N, size=2, dtype=int
@@ -296,30 +264,43 @@ class MountainEnv(gym.Env):
             ## angle criterion
             angle = node_angle(agent_location, goal_location)
 
-            ## value criterion - i.e. what cost should the start and goal states have
-            goal_val = self.costs[goal_location[0], goal_location[1]]
-            goal_val = -1
-            start_val = self.costs[agent_location[0], agent_location[1]]
+            ## check if start or goal have appeared already
+            if len(self.starts)==0:
+                new = True
+            else:
+                for s, g in zip(self.starts, self.goals):
+                    if np.array_equal(agent_location, s) or np.array_equal(goal_location, g):
+                        new = False
+                    else:
+                        new = True
+            # new = (agent_location not in self.starts) and (goal_location not in self.goals)
+            # print(new)
+
+            ## checkpoint before doing DP
+            if (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (not new):
+                continue
 
             ### comparison of optimal vs manhattan routes
             # dp_costs = self.p_costs*self.high_cost + (1-self.p_costs)*self.low_cost ## standard case (i.e. pq = p(high cost))
             # dp_costs[goal_location[0], goal_location[1]] = 0
-            # # dp_costs = self.p_costs*self.low_cost + (1-self.p_costs)*self.high_cost ## alternative case (i.e. pq = p(low cost))
-            # # dp_costs[self._goal_location[0], self._goal_location[1]] = 1
-            # self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=goal_location)
-            # self.optimal_trajectory(agent_location, goal_location)
+            dp_costs = self.p_costs*self.low_cost + (1-self.p_costs)*self.high_cost ## alternative case (i.e. pq = p(low cost))
+            dp_costs[goal_location[0], goal_location[1]] = 1
+            self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=goal_location)
+            self.optimal_trajectory(agent_location, goal_location)
 
             ## by length
             # n_steps_opt = len(self.o_traj)-1
             # worth_it = n_steps_opt > dist
 
             ## or, by cost (i.e. vs manhattan vertical-first or horizontal-first)
-            # manhattan_costs = self.manhattan_trajectory(agent_location, goal_location)
+            manhattan_costs = self.manhattan_trajectory(agent_location, goal_location)
             # worth_it = (self.o_traj_total_cost/manhattan_costs[0]) < route_optimality_tolerance or (self.o_traj_total_cost/manhattan_costs[1]) < route_optimality_tolerance
-            worth_it = True
+            # print(manhattan_costs[0]/self.o_traj_total_cost, manhattan_costs[1]/self.o_traj_total_cost)
+            worth_it = (manhattan_costs[0]/self.o_traj_total_cost) <= route_optimality_tolerance or (manhattan_costs[1]/self.o_traj_total_cost) <= route_optimality_tolerance ## p(low cost)
+
 
             t+=1
-            if t>100:
+            if t>250:
                 raise ValueError('cant find start and end')
 
         ## for sanity check, just place agent and goal in opposite corners
@@ -344,11 +325,11 @@ class MountainEnv(gym.Env):
 
     ## get cost, given p(cost)
     def get_cost(self, state):
-        return self.high_cost if np.random.random() < self.p_costs[state[0], state[1]] else self.low_cost
-        # return self.high_cost if np.random.random() > self.p_costs[state[0], state[1]] else self.low_cost
+        # return self.high_cost if np.random.random() < self.p_costs[state[0], state[1]] else self.low_cost
+        return self.high_cost if np.random.random() > self.p_costs[state[0], state[1]] else self.low_cost
     def get_pred_cost(self, state):
-        return self.high_cost if np.random.random() < self.predicted_p_costs[state[0], state[1]] else self.low_cost
-        # return self.high_cost if np.random.random() > self.predicted_p_costs[state[0], state[1]] else self.low_cost
+        # return self.high_cost if np.random.random() < self.predicted_p_costs[state[0], state[1]] else self.low_cost
+        return self.high_cost if np.random.random() > self.predicted_p_costs[state[0], state[1]] else self.low_cost
     
     ## functions for receiving predictions from the agent
     def receive_predictions(self, predicted_p_costs):
@@ -442,6 +423,9 @@ class MountainEnv(gym.Env):
                 self.action_score = np.nanmean(self.action_scores)
                 self.cost_ratio = self.o_traj_total_cost / self.a_traj_total_cost
 
+                ## update ep counter
+                self.e += 1
+
         else:
             self.terminated = False
         observation = self.get_obs()
@@ -484,8 +468,10 @@ class MountainEnv(gym.Env):
             # self.o_traj_costs.append(self.costs[current[0], current[1]])
             self.o_traj_costs.append(self.p_costs[current[0], current[1]])
         
-        # Compute total cost
+        # Compute total cost 
         self.o_traj_total_cost = np.sum(self.o_traj_costs)
+
+        return visited
 
 
     ## calculate the cost of the simplest manhattan paths
@@ -535,3 +521,7 @@ class MountainEnv(gym.Env):
     
     
 
+
+    ## save env
+    def save(self, path):
+        np.save(path, self.__dict__)
