@@ -57,10 +57,10 @@ class MountainEnv(gym.Env):
         while not init_done:
             self.high_cost, self.low_cost = -0.9, -0.1
             default_param = 0.5
-            self.alpha_row = 2
+            self.alpha_row = 1
             self.beta_row =  1
             self.alpha_col = 1
-            self.beta_col =  2
+            self.beta_col =  1
             self.row_p = np.random.beta(self.alpha_row,self.beta_row, self.N)
             self.col_q = np.random.beta(self.alpha_col, self.beta_col, self.N)
             # self.col_q = np.ones(self.N)
@@ -174,6 +174,9 @@ class MountainEnv(gym.Env):
         # We need the following line to seed self.np_random
         super().reset(seed=seed)
 
+        ## set costs, given p_costs
+        self.costs = np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
+
         ## set start and end
         if start_goal is not None: 
             self._agent_location = np.array(start_goal[0], dtype=int)
@@ -196,7 +199,8 @@ class MountainEnv(gym.Env):
         self.terminated = False
         observation = self.get_obs()
         info = self._get_info()
-        current_cost = self.get_cost(self._agent_location)
+        # current_cost = self.get_cost(self._agent_location)
+        current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
 
         ## reset obs on each trial
         # self.obs = np.array([self._agent_location[0], self._agent_location[1], current_cost], ndmin=2)
@@ -256,8 +260,9 @@ class MountainEnv(gym.Env):
         t = 0
         worth_it = False
         new = False
+        new_rc = False
         route_optimality_tolerance = 0.5
-        while (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (not worth_it) or (not new):
+        while (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (not worth_it) or (not new) or (not new_rc):
             agent_location = self.np_random.integers(0, self.N, size=2, dtype=int)
             goal_location = self.np_random.integers(
                 0, self.N, size=2, dtype=int
@@ -281,11 +286,20 @@ class MountainEnv(gym.Env):
                         new = False
                     else:
                         new = True
-            # new = (agent_location not in self.starts) and (goal_location not in self.goals)
-            # print(new)
+
+            ## check if start or goal is in the same row or column as another start or goal
+            if len(self.starts)==0:
+                new_rc = True
+            else:
+                for s, g in zip(self.starts, self.goals):
+                    if np.sum(agent_location == s)>0 or np.sum(agent_location == g)>0 or np.sum(goal_location == s)>0 or np.sum(goal_location == g)>0:
+                        new_rc = False
+                    else:
+                        new_rc = True
+            
 
             ## checkpoint before doing DP
-            if (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (not new):
+            if (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (not new) or (not new_rc):
                 continue
 
             ### comparison of optimal vs manhattan routes
@@ -380,8 +394,8 @@ class MountainEnv(gym.Env):
         
         ## get the actual cost of the current state
         # current_cost = self.costs[self._agent_location[0], self._agent_location[1]] # + np.random.normal(0, self.obs_noise)
-        current_cost = self.get_cost(self._agent_location)
-
+        # current_cost = self.get_cost(self._agent_location)
+        current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
 
 
         ## return the real cost if not simulating
