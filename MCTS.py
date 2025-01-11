@@ -133,24 +133,13 @@ class MonteCarloTreeSearch():
                 next_state = observation['agent']
                 self.tree_costs.append(cost)
 
-                ## create next state node (if it doesn't already exist)
-                # history = [tuple(o) for o in self.env.obs_tmp]
-                # node = self.tree.add_state_node(next_state, cost, history, terminated, action_space = self.action_space, parent=action_leaf)
-
-                ## or, see if this node is already a child of the action_leaf, otherwise add this child
-                if str(np.append(next_state,cost)) in action_leaf.children:
-                    node = action_leaf.children[str(np.append(next_state,cost))]
-                else:
-                    node = self.tree.add_state_node(next_state, cost, terminated, action_space = self.action_space, parent=action_leaf)
-                    # action_leaf.children[str(np.append(next_state,cost))] = node
-                assert np.array_equal(node.state[:2], next_state), 'error in tree policy step {}\n started in {}\n supposed to take action {} to {}\n ended up moving from {} to {}'.format(t, state_tmp, action_leaf.action, node.state[:2], env_state_tmp, action_leaf.next_state)
-
-                ## or, see if the next state node already exists as a child of this action leaf
+                ## see if the next state node already exists as a child of this action leaf
                 state_id = str(np.append(next_state, cost))
                 if state_id in action_leaf.children:
                     node = action_leaf.children[state_id]
                 else:
-                    node = self.tree.add_state_node(next_state, cost, history, terminated, action_space = self.action_space, parent=action_leaf)
+                    node = self.tree.add_state_node(next_state, cost, terminated, action_space = self.action_space, parent=action_leaf)
+                assert np.array_equal(node.state[:2], next_state), 'error in tree policy step {}\n started in {}\n supposed to take action {} to {}\n ended up moving from {} to {}'.format(t, state_tmp, action_leaf.action, node.state[:2], env_state_tmp, action_leaf.next_state)
 
 
                 ## update counts already?
@@ -725,7 +714,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                         ## search
                         # action = MCTS.search(n_sims, n_futures, progress=progress)
 
-                        ## reduce number of sims if near to the goal
+                        ## reduce number of sims if near to the goal (A BETTER IDEA WLD BE TO REDUCE THE DISTANCE IF THE TREE HAS REACHED THE GOAL)
                         dist_to_goal = np.max(cdist([current, goal], [current, goal], metric='cityblock')) 
                         if dist_to_goal > (N/2):
                             action = MCTS.search(n_sims, n_futures, progress=progress)
@@ -814,7 +803,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
 
                 if early_terminate:
                     print('mountain ',m,': episode ',e,' terminated for agent ',ag,' after ',steps,' steps')
-                    raise ValueError('mountain ',m,': episode ',e,' terminated for agent ',ag,' after ',steps,' steps')
+                    # raise ValueError('mountain ',m,': episode ',e,' terminated for agent ',ag,' after ',steps,' steps')
 
                     ## or just skip to the next episode
                     sim_out['agent'].append(agent)
@@ -841,6 +830,9 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     # sim_out['theta_MLE'].append(best_theta)
 
                     end_episode = True
+
+                    ## stop the sim here!
+                    return sim_out, env_copy.p_costs
 
                 ## save data and end the episode
                 elif terminated:
