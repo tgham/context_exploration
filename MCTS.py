@@ -654,7 +654,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
             terminated=False
             early_terminate = False
             steps = 0
-            max_steps = len(env_copy.o_traj)*1.5
+            max_steps = len(env_copy.o_trajs[e])*1.75
             max_search_attempts = 3
 
             while not end_episode:
@@ -694,7 +694,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     # plot_traj([env_copy.o_traj, env_copy.a_traj], ax=axs[0])
                     # plot_obs(env_copy.obs, ax=axs[0])
                     # plot_r(env_copy.predicted_p_costs, ax=axs[1], title = 'posterior mean p cost')
-                    # plot_action_tree(agent.Q_inf, current, goal, ax=axs[2], title = 'DP_inf')
+                    # # plot_action_tree(agent.Q_inf, current, goal, ax=axs[2], title = 'DP_inf')
                     # plt.show()
 
                     ## get and take action
@@ -723,9 +723,16 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     if not offline:
 
                         ## search
-                        search_attempts = 0 # could do nan
-                        # n_futures = 0
-                        action = MCTS.search(n_sims, n_futures, progress=progress)
+                        # action = MCTS.search(n_sims, n_futures, progress=progress)
+
+                        ## reduce number of sims if near to the goal
+                        dist_to_goal = np.max(cdist([current, goal], [current, goal], metric='cityblock')) 
+                        if dist_to_goal > (N/2):
+                            action = MCTS.search(n_sims, n_futures, progress=progress)
+                        else:
+                            n_reduced_sims = int(n_sims/2)
+                            action = MCTS.search(n_reduced_sims, n_futures, progress=progress)
+
 
                         ## plot for debugging?
                         # fig, axs = plt.subplots(1, 3, figsize=(15,5))
@@ -748,6 +755,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
 
                         ## prune tree, i.e. remove all nodes that are not children of the new root
                         MCTS.tree.prune(action, np.append(current, cost))
+                        search_attempts = 0 # could do nan
 
                         assert np.array_equal(MCTS.tree.root.state[:2], current), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action)
 
@@ -805,7 +813,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     early_terminate = True
 
                 if early_terminate:
-                    # print('mountain ',m,': episode ',e,' terminated for agent ',ag,' after ',steps,' steps')
+                    print('mountain ',m,': episode ',e,' terminated for agent ',ag,' after ',steps,' steps')
                     raise ValueError('mountain ',m,': episode ',e,' terminated for agent ',ag,' after ',steps,' steps')
 
                     ## or just skip to the next episode
@@ -815,12 +823,12 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     sim_out['start'].append(start)
                     sim_out['goal'].append(goal)
                     sim_out['actual_cost'].append(np.nan)
-                    sim_out['optimal_cost'].append(env_copy.o_traj_total_cost)
+                    sim_out['optimal_cost'].append(env_copy.o_traj_total_costs[e])
                     sim_out['action_score'].append(np.nan)
                     sim_out['cost_ratio'].append(np.nan)
                     sim_out['n_steps'].append(steps)
                     sim_out['actual_trajectory'].append(env_copy.a_traj)
-                    sim_out['optimal_trajectory'].append(env_copy.o_traj)
+                    sim_out['optimal_trajectory'].append(env_copy.o_trajs[e])
                     sim_out['observations'].append(env_copy.obs)
                     sim_out['search_attempts'].append(search_attempts)
                     # sim_out['action_tree'].append(MCTS.tree.action_tree())
@@ -842,7 +850,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     sim_out['start'].append(start)
                     sim_out['goal'].append(goal)
                     sim_out['actual_cost'].append(env_copy.a_traj_total_cost)
-                    sim_out['optimal_cost'].append(env_copy.o_traj_total_cost)
+                    sim_out['optimal_cost'].append(env_copy.o_traj_total_costs[e])
                     # if np.round(env_copy.optimal_cost,4) < np.round(env_copy.accrued_cost,4):
                     #     print(env_copy.optimal_cost, env_copy.accrued_cost)
                     # assert np.round(env_copy.optimal_cost,4) >= np.round(env_copy.accrued_cost,4), 'accrued cost higher than optimal cost'
@@ -851,7 +859,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     sim_out['cost_ratio'].append(env_copy.cost_ratio)
                     sim_out['n_steps'].append(steps)
                     sim_out['actual_trajectory'].append(env_copy.a_traj)
-                    sim_out['optimal_trajectory'].append(env_copy.o_traj)
+                    sim_out['optimal_trajectory'].append(env_copy.o_trajs[e])
                     sim_out['observations'].append(env_copy.obs)
                     sim_out['search_attempts'].append(search_attempts)
                     # sim_out['action_tree'].append(MCTS.tree.action_tree())
