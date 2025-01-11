@@ -84,11 +84,21 @@ def plot_traj(trajs, ax, title=None):
                 ax.plot(t[1]+0.5, t[0]+0.5, markers[ti], color=colours[ti], markersize=10, linewidth=10)
 
         ## actual path 
+        # else:
+        #     ## plot path(s)
+        #     for t in traj:
+        #         ax.plot(t[1]+0.5, t[0]+0.5, markers[ti], color=colours[ti], markersize=10, linewidth=10)
+                # ax.text(t[1]+0.5,t[0]+0.5 , round(t[2], 2), ha='center', va='center', color='red') # note the x,y are flipped because they are matrix indices
+
+
+        ## actual path 
         else:
             ## plot path(s)
             for t in traj:
-                ax.plot(t[1]+0.5, t[0]+0.5, markers[ti], color=colours[ti], markersize=10, linewidth=10)
-                # ax.text(t[1]+0.5,t[0]+0.5 , round(t[2], 2), ha='center', va='center', color='red') # note the x,y are flipped because they are matrix indices
+                if len(t) == 3:
+                    ax.text(t[1] + 0.5, t[0] + 0.5, round(t[2], 2), ha='center', va='center', color='red', weight='bold')
+                else:
+                    ax.plot(t[1] + 0.5, t[0] + 0.5, markers[ti], color=colours[ti], markersize=10, linewidth=10)
 
 
 
