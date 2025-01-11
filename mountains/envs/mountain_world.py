@@ -53,51 +53,59 @@ class MountainEnv(gym.Env):
         self.locations = np.column_stack([X.ravel(), Y.ravel()])
 
         ### initialise farm
-        self.high_cost, self.low_cost = -0.9, -0.1
-        default_param = 0.5
-        self.alpha_row = 0.25
-        self.beta_row = 0.25
-        self.alpha_col = 0.25
-        self.beta_col = 0.25
-        self.row_p = np.random.beta(self.alpha_row,self.beta_row, self.N)
-        self.col_q = np.random.beta(self.alpha_col, self.beta_col, self.N)
-        # self.col_q = np.ones(self.N)
-        self.p_costs = np.outer(self.row_p, self.col_q)
-        # self.p_costs = 1 - self.p_costs
+        init_done = False
+        while not init_done:
+            self.high_cost, self.low_cost = -0.9, -0.1
+            default_param = 0.5
+            self.alpha_row = 2
+            self.beta_row =  1
+            self.alpha_col = 1
+            self.beta_col =  2
+            self.row_p = np.random.beta(self.alpha_row,self.beta_row, self.N)
+            self.col_q = np.random.beta(self.alpha_col, self.beta_col, self.N)
+            # self.col_q = np.ones(self.N)
+            self.p_costs = np.outer(self.row_p, self.col_q)
+            # self.p_costs = 1 - self.p_costs
 
-        ## prob = p(high cost)
-        # self.costs = np.array([self.high_cost if r<self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
+            ## prob = p(high cost)
+            # self.costs = np.array([self.high_cost if r<self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
 
-        ## prob = p(low cost)
-        self.costs = np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
-        
-        ### gym inits
+            ## prob = p(low cost)
+            self.costs = np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
+            
+            ### gym inits
 
-        ## sizes
-        self.window_size = 512
+            ## sizes
+            self.window_size = 512
 
-        # Observations are dictionaries with the agent's and the goal's location.
-        # Each location is encoded as an element of {0, ..., `size`}^2,
-        # i.e. MultiDiscrete([size, size]).
-        size = 5
-        self.observation_space = spaces.Dict(
-            {
-                "agent": spaces.Box(0, size - 1, shape=(2,), dtype=int),
-                "goal": spaces.Box(0, size - 1, shape=(2,), dtype=int),
-            }
-        )
+            # Observations are dictionaries with the agent's and the goal's location.
+            size = 5
+            self.observation_space = spaces.Dict(
+                {
+                    "agent": spaces.Box(0, size - 1, shape=(2,), dtype=int),
+                    "goal": spaces.Box(0, size - 1, shape=(2,), dtype=int),
+                }
+            )
 
-        ## init trial info
-        # self.starts = [[0, 0],              [0, self.N-1],    [self.N-1, 0],    [self.N-1, self.N-1]]
-        # self.goals = [[self.N-1, self.N-1], [self.N-1, 0],    [0, self.N-1],    [0, 0]]
-        self.starts = []
-        self.goals = []
-        self.n_episodes = n_episodes
-        for e in range(n_episodes):
-            start, goal = self.sample_SG()
-            self.starts.append(start)
-            self.goals.append(goal)
-        self.e = 0
+            ## init trial info
+            # self.starts = [[0, 0],              [0, self.N-1],    [self.N-1, 0],    [self.N-1, self.N-1]]
+            # self.goals = [[self.N-1, self.N-1], [self.N-1, 0],    [0, self.N-1],    [0, 0]]
+            self.starts = []
+            self.goals = []
+            self.o_trajs = []
+            self.o_traj_total_costs = []
+            self.n_episodes = n_episodes
+            for e in range(n_episodes):
+                try:
+                    start, goal = self.sample_SG()
+                    self.starts.append(start)
+                    self.goals.append(goal)
+                except:
+                    # print("couldn't find start and goal. retrying...")
+                    break
+            if len(self.starts)==self.n_episodes:
+                init_done = True
+                self.e = 0
 
 
 
@@ -240,7 +248,7 @@ class MountainEnv(gym.Env):
 
         ## sample start and goal locations
         dist = 0
-        min_dist = self.N*0.75
+        min_dist = self.N*0.6
         angle = 0
         angle_tolerance = 0.6
         angle_bounds = [45*(1+angle_tolerance), 45*(1-angle_tolerance)]
@@ -248,7 +256,7 @@ class MountainEnv(gym.Env):
         t = 0
         worth_it = False
         new = False
-        route_optimality_tolerance = 0.4
+        route_optimality_tolerance = 0.5
         while (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (not worth_it) or (not new):
             agent_location = self.np_random.integers(0, self.N, size=2, dtype=int)
             goal_location = self.np_random.integers(
@@ -286,7 +294,7 @@ class MountainEnv(gym.Env):
             dp_costs = self.p_costs*self.low_cost + (1-self.p_costs)*self.high_cost ## alternative case (i.e. pq = p(low cost))
             dp_costs[goal_location[0], goal_location[1]] = 1
             self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=goal_location)
-            self.optimal_trajectory(agent_location, goal_location)
+            o_traj, o_traj_total_cost = self.optimal_trajectory(agent_location, goal_location)
 
             ## by length
             # n_steps_opt = len(self.o_traj)-1
@@ -296,17 +304,19 @@ class MountainEnv(gym.Env):
             manhattan_costs = self.manhattan_trajectory(agent_location, goal_location)
             # worth_it = (self.o_traj_total_cost/manhattan_costs[0]) < route_optimality_tolerance or (self.o_traj_total_cost/manhattan_costs[1]) < route_optimality_tolerance
             # print(manhattan_costs[0]/self.o_traj_total_cost, manhattan_costs[1]/self.o_traj_total_cost)
-            worth_it = (manhattan_costs[0]/self.o_traj_total_cost) <= route_optimality_tolerance or (manhattan_costs[1]/self.o_traj_total_cost) <= route_optimality_tolerance ## p(low cost)
-
+            worth_it = (manhattan_costs[0]/o_traj_total_cost) <= route_optimality_tolerance and (manhattan_costs[1]/o_traj_total_cost) <= route_optimality_tolerance ## p(low cost)
 
             t+=1
-            if t>250:
+            if t>100:
                 raise ValueError('cant find start and end')
 
         ## for sanity check, just place agent and goal in opposite corners
         # self._agent_location = np.array(self.starts[self.n_eps%4])
         # self._goal_location = np.array(self.goals[self.n_eps%4])
         # self.n_eps += 1
+
+        self.o_trajs.append(o_traj)
+        self.o_traj_total_costs.append(o_traj_total_cost)
 
         return agent_location, goal_location
 
@@ -421,7 +431,7 @@ class MountainEnv(gym.Env):
 
                 ## scores for the trial
                 self.action_score = np.nanmean(self.action_scores)
-                self.cost_ratio = self.o_traj_total_cost / self.a_traj_total_cost
+                self.cost_ratio = self.o_traj_total_costs[self.e] / self.a_traj_total_cost
 
                 ## update ep counter
                 self.e += 1
@@ -438,9 +448,9 @@ class MountainEnv(gym.Env):
     ## calculate the optimal trajectory between the two points, as given by the true DP solution
     def optimal_trajectory(self, start, goal):
         current = start.copy()
-        self.o_traj = [tuple(current)]
+        o_traj = [tuple(current)]
         # self.o_traj_costs = [self.costs[current[0], current[1]]]
-        self.o_traj_costs = [self.p_costs[current[0], current[1]]]
+        o_traj_costs = [self.p_costs[current[0], current[1]]]
         
         visited = set()
         while not np.array_equal(current, goal):
@@ -464,14 +474,13 @@ class MountainEnv(gym.Env):
                 break
             
             # Update trajectory
-            self.o_traj.append(tuple(current))
+            o_traj.append(tuple(current))
             # self.o_traj_costs.append(self.costs[current[0], current[1]])
-            self.o_traj_costs.append(self.p_costs[current[0], current[1]])
-        
-        # Compute total cost 
-        self.o_traj_total_cost = np.sum(self.o_traj_costs)
+            o_traj_costs.append(self.p_costs[current[0], current[1]])
 
-        return visited
+        o_traj_total_cost = np.sum(o_traj_costs)
+
+        return o_traj, o_traj_total_cost
 
 
     ## calculate the cost of the simplest manhattan paths
