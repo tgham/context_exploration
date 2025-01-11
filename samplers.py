@@ -1,6 +1,6 @@
 import numpy as np
 import scipy
-# from numba import jit
+from numba import jit
 
 class GridSampler:
     def __init__(self, alpha_row, beta_row, alpha_col, beta_col, obs, N=10, CE=False):
@@ -60,11 +60,17 @@ class GridSampler:
         Calculate the Beta parameters for the proposal distribution.
         """
         # Get relevant observations for this row/column
-        rel_obs = self.row_to_obs[index] if is_row else self.col_to_obs[index]
-        prior_mean_failure = 1-(
-            self.beta_col / (2*(self.alpha_col + self.beta_col)) if is_row else self.beta_row / (2*(self.alpha_row + self.beta_row))
+        if is_row:
+            rel_obs = self.row_to_obs[index]
+            prior_mean_failure = 1-(
+                self.beta_col / (2*(self.alpha_col + self.beta_col))
             # self.beta_col / ((self.alpha_col + self.beta_col)) if is_row else self.beta_row / ((self.alpha_row + self.beta_row))
-        )
+            )
+        else:
+            rel_obs = self.col_to_obs[index]
+            prior_mean_failure = 1-(
+                self.beta_row / (2*(self.alpha_row + self.beta_row))
+            )
 
         ### Count occurrences of each cost
 
@@ -83,7 +89,6 @@ class GridSampler:
             m = cap * m / total_count
             n = cap * n / total_count
 
-    
         # Update Beta parameters based on observed data
         alpha_prop = self.alpha_row + m if is_row else self.alpha_col + m
         beta_prop = self.beta_row + n if is_row else self.beta_col + n
@@ -91,9 +96,6 @@ class GridSampler:
         return alpha_prop, beta_prop, m, n
 
     def propose(self, alpha, beta):
-        """
-        Sample from a Beta distribution with given alpha and beta parameters.
-        """
         return np.random.beta(alpha, beta)    
 
     def LL(self, sampled_i, sampled_j, rel_obs, row_p, col_q):
