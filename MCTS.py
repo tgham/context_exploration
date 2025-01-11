@@ -624,6 +624,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
             start = env_copy.current
             current = start
             goal = env_copy.goal
+            actions = []
 
             ## GP-MCTS agent receives info from env
             if ag =='GP-MCTS':
@@ -653,6 +654,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     eps = 0.05
                     alpha = 0.4
                     action = env_copy.balanced_policy(current, goal, eps, alpha)
+                    actions.append(action)
 
                     ## action
                     observation, _, terminated, truncated, info = env_copy.step(action)
@@ -688,6 +690,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
 
                     ## get and take action
                     action = agent.optimal_policy(current, agent.Q_inf)
+                    actions.append(action)
                     observation, _, terminated, truncated, info = env_copy.step(action)
                     current = observation['agent']
                     steps += 1
@@ -721,6 +724,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                         else:
                             n_reduced_sims = int(n_sims/2)
                             action = MCTS.search(n_reduced_sims, n_futures, progress=progress)
+                        actions.append(action)
 
 
                         ## plot for debugging?
@@ -757,6 +761,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
 
                             ## search
                             action, next_root = MCTS.search(n_sims, n_futures, progress=progress)
+                            actions.append(action)
 
                             ## get the trajectory from the tree
                             MCTS.tree.action_tree()
@@ -811,7 +816,9 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     sim_out['mountain'].append(m)
                     sim_out['start'].append(start)
                     sim_out['goal'].append(goal)
-                    sim_out['actual_cost'].append(np.nan)
+                    sim_out['actions'].append(actions)
+                    sim_out['costs'].append(np.nan)
+                    sim_out['total_cost'].append(np.nan)
                     sim_out['optimal_cost'].append(env_copy.o_traj_total_costs[e])
                     sim_out['action_score'].append(np.nan)
                     sim_out['cost_ratio'].append(np.nan)
@@ -841,7 +848,9 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     sim_out['mountain'].append(m)
                     sim_out['start'].append(start)
                     sim_out['goal'].append(goal)
-                    sim_out['actual_cost'].append(env_copy.a_traj_total_cost)
+                    sim_out['actions'].append(actions)
+                    sim_out['costs'].append(env_copy.a_traj_costs)
+                    sim_out['total_cost'].append(env_copy.a_traj_total_cost)
                     sim_out['optimal_cost'].append(env_copy.o_traj_total_costs[e])
                     # if np.round(env_copy.optimal_cost,4) < np.round(env_copy.accrued_cost,4):
                     #     print(env_copy.optimal_cost, env_copy.accrued_cost)
