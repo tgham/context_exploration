@@ -39,7 +39,7 @@ class Actions(Enum):
 
 class MountainEnv(gym.Env):
 
-    def __init__(self, N, n_episodes=1, true_k=None, kernel_params=None, metric = 'cityblock', size=5):
+    def __init__(self, N, n_episodes=1, true_k=None, beta_params=None, metric = 'cityblock', size=5):
         
         ## seed?
         # seed = np.random.randint(0, 1000)
@@ -57,10 +57,10 @@ class MountainEnv(gym.Env):
         while not init_done:
             self.high_cost, self.low_cost = -0.9, -0.1
             default_param = 0.5
-            self.alpha_row = 1
-            self.beta_row =  1
-            self.alpha_col = 1
-            self.beta_col =  1
+            self.alpha_row = beta_params['alpha_row']
+            self.beta_row = beta_params['beta_row']
+            self.alpha_col = beta_params['alpha_col']
+            self.beta_col = beta_params['beta_col']
             self.row_p = np.random.beta(self.alpha_row,self.beta_row, self.N)
             self.col_q = np.random.beta(self.alpha_col, self.beta_col, self.N)
             # self.col_q = np.ones(self.N)
@@ -71,7 +71,7 @@ class MountainEnv(gym.Env):
             # self.costs = np.array([self.high_cost if r<self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
 
             ## prob = p(low cost)
-            self.costs = np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
+            # self.costs = np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
             
             ### gym inits
 
@@ -92,6 +92,7 @@ class MountainEnv(gym.Env):
             # self.goals = [[self.N-1, self.N-1], [self.N-1, 0],    [0, self.N-1],    [0, 0]]
             self.starts = []
             self.goals = []
+            self.costss = []
             self.o_trajs = []
             self.o_traj_total_costs = []
             self.n_episodes = n_episodes
@@ -100,6 +101,13 @@ class MountainEnv(gym.Env):
                     start, goal = self.sample_SG()
                     self.starts.append(start)
                     self.goals.append(goal)
+
+                    ## prob = p(high cost)
+                    # self.costss.append(np.array([self.high_cost if r<self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N))
+                    
+                    ## prob = p(low cost)
+                    self.costss.append(np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N))
+
                 except:
                     # print("couldn't find start and goal. retrying...")
                     break
@@ -175,7 +183,8 @@ class MountainEnv(gym.Env):
         super().reset(seed=seed)
 
         ## set costs, given p_costs
-        self.costs = np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
+        # self.costs = np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
+        self.costs = self.costss[self.e]
 
         ## set start and end
         if start_goal is not None: 
@@ -187,10 +196,15 @@ class MountainEnv(gym.Env):
             self._goal_location = np.array(self.goals[self.e])
 
             ## get true Q vals (u only do this if it's a real reset, rather than a reset for an imagined rollout)
+
+            ## pq = p(high cost)
             # dp_costs = self.p_costs*self.high_cost + (1-self.p_costs)*self.low_cost ## standard case (i.e. pq = p(high cost))
             # dp_costs[self._goal_location[0], self._goal_location[1]] = 0
-            dp_costs = self.p_costs*self.low_cost + (1-self.p_costs)*self.high_cost ## alternative case (i.e. pq = p(low cost))
-            dp_costs[self._goal_location[0], self._goal_location[1]] = 1
+
+            ## pq = p(low cost)
+            dp_costs = self.p_costs*self.low_cost + (1-self.p_costs)*self.high_cost
+            dp_costs[self._goal_location[0], self._goal_location[1]] = 0
+
             self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=self._goal_location)
             self.optimal_trajectory(self._agent_location, self._goal_location)
 
@@ -303,10 +317,15 @@ class MountainEnv(gym.Env):
                 continue
 
             ### comparison of optimal vs manhattan routes
-            # dp_costs = self.p_costs*self.high_cost + (1-self.p_costs)*self.low_cost ## standard case (i.e. pq = p(high cost))
+
+            # ## standard case (i.e. pq = p(high cost))
+            # dp_costs = self.p_costs*self.high_cost + (1-self.p_costs)*self.low_cost 
             # dp_costs[goal_location[0], goal_location[1]] = 0
-            dp_costs = self.p_costs*self.low_cost + (1-self.p_costs)*self.high_cost ## alternative case (i.e. pq = p(low cost))
-            dp_costs[goal_location[0], goal_location[1]] = 1
+            
+            ## alternative case (i.e. pq = p(low cost))
+            dp_costs = self.p_costs*self.low_cost + (1-self.p_costs)*self.high_cost
+            dp_costs[goal_location[0], goal_location[1]] = 0
+
             self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=goal_location)
             o_traj, o_traj_total_cost = self.optimal_trajectory(agent_location, goal_location)
 
@@ -316,9 +335,9 @@ class MountainEnv(gym.Env):
 
             ## or, by cost (i.e. vs manhattan vertical-first or horizontal-first)
             manhattan_costs = self.manhattan_trajectory(agent_location, goal_location)
-            # worth_it = (self.o_traj_total_cost/manhattan_costs[0]) < route_optimality_tolerance or (self.o_traj_total_cost/manhattan_costs[1]) < route_optimality_tolerance
-            # print(manhattan_costs[0]/self.o_traj_total_cost, manhattan_costs[1]/self.o_traj_total_cost)
+            # worth_it = (manhattan_costs[0]/o_traj_total_cost) >= route_optimality_tolerance and (manhattan_costs[1]/o_traj_total_cost) >= route_optimality_tolerance ## p(high cost)
             worth_it = (manhattan_costs[0]/o_traj_total_cost) <= route_optimality_tolerance and (manhattan_costs[1]/o_traj_total_cost) <= route_optimality_tolerance ## p(low cost)
+
 
             t+=1
             if t>100:
@@ -349,10 +368,18 @@ class MountainEnv(gym.Env):
 
     ## get cost, given p(cost)
     def get_cost(self, state):
+
+        ## pq = p(high cost)
         # return self.high_cost if np.random.random() < self.p_costs[state[0], state[1]] else self.low_cost
+        
+        ## pq = p(low cost)
         return self.high_cost if np.random.random() > self.p_costs[state[0], state[1]] else self.low_cost
     def get_pred_cost(self, state):
+        
+        ## pq = p(high cost)
         # return self.high_cost if np.random.random() < self.predicted_p_costs[state[0], state[1]] else self.low_cost
+
+        ## pq = p(low cost)
         return self.high_cost if np.random.random() > self.predicted_p_costs[state[0], state[1]] else self.low_cost
     
     ## functions for receiving predictions from the agent
@@ -393,7 +420,6 @@ class MountainEnv(gym.Env):
         predicted_cost = self.get_pred_cost(self._agent_location)
         
         ## get the actual cost of the current state
-        # current_cost = self.costs[self._agent_location[0], self._agent_location[1]] # + np.random.normal(0, self.obs_noise)
         # current_cost = self.get_cost(self._agent_location)
         current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
 
@@ -489,7 +515,6 @@ class MountainEnv(gym.Env):
             
             # Update trajectory
             o_traj.append(tuple(current))
-            # self.o_traj_costs.append(self.costs[current[0], current[1]])
             o_traj_costs.append(self.p_costs[current[0], current[1]])
 
         o_traj_total_cost = np.sum(o_traj_costs)
@@ -541,10 +566,3 @@ class MountainEnv(gym.Env):
         manhattan_costs = [np.sum(horizontal_trajectory_costs), np.sum(vertical_trajectory_costs)]
 
         return manhattan_costs
-    
-    
-
-
-    ## save env
-    def save(self, path):
-        np.save(path, self.__dict__)
