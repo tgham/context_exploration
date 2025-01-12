@@ -596,7 +596,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
     np.random.seed(seed)
     
     ## create base mountain environment
-    env = make_env(N, n_episodes, None, None, metric)
+    env = make_env(N, n_episodes, None, params, metric)
     
     ## debugging plot env
     # fig, ax = plt.subplots(1, 1, figsize=(5,5))

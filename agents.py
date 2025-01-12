@@ -402,19 +402,18 @@ class Farmer:
             
             ## p(low cost)
             dp_costs = self.posterior_p_cost*self.low_cost + (1-self.posterior_p_cost)*self.high_cost
-            dp_costs[self.goal[0], self.goal[1]] = 1
+            dp_costs[self.goal[0], self.goal[1]] = 0
 
         ## or, sample costs using p and q probabilities 
         else:
             ## p(high cost)
-            # dp_costs = np.array([self.high_cost if np.random.random() < self.posterior_p[i] else self.low_cost for i in range(self.N)]).reshape(self.N, self.N)
+            # dp_costs = np.array([self.low_cost if r > self.posterior_p_cost.flatten()[i] else self.high_cost for i, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
             # dp_costs[self.goal[0], self.goal[1]] = 0
 
             ## p(low cost)
-            # dp_costs = np.array([self.low_cost if np.random.random() < self.posterior_p[i] else self.high_cost for i in range(self.N)]).reshape(self.N, self.N)
-
             dp_costs = np.array([self.low_cost if r < self.posterior_p_cost.flatten()[i] else self.high_cost for i, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
-            dp_costs[self.goal[0], self.goal[1]] = 1
+            dp_costs[self.goal[0], self.goal[1]] = 0
+
 
         self.V_inf, self.Q_inf, self.A_inf = value_iteration(dp_costs, self.goal)
 

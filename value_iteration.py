@@ -24,7 +24,7 @@ def value_iteration(dp_costs, goal, max_iters = 1000, theta = 0.0001, discount =
     #     dp_costs = self.posterior_mean.reshape(self.N, self.N).copy()
 
     ## set cost of goal to 0
-    dp_costs[goal[0], goal[1]] = 0
+    # dp_costs[goal[0], goal[1]] = 0
 
     # assert np.all(dp_costs <= 0), 'costs are not all negative: {}'.format(dp_costs)
 
