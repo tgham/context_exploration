@@ -435,6 +435,7 @@ data_keys = [
     'goal',
     'costs',
     'actions',
+    'CE_actions'
     'total_cost',
     'optimal_cost',
     'action_score',
