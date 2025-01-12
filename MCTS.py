@@ -190,12 +190,6 @@ class MonteCarloTreeSearch():
         if real_rollout:
             start = action_leaf.next_state
             env_copy.set_state(action_leaf.next_state)
-            
-            ## begin with cost of current state
-            # starting_cost = action_leaf.
-            starting_cost = env_copy.get_pred_cost(start)
-            total_cost += starting_cost
-            observation = env_copy.get_obs()
 
             ## reset the depth counter
             self.depth = 0
@@ -208,6 +202,10 @@ class MonteCarloTreeSearch():
 
                 return total_cost
             
+            ## begin with cost of current state
+            starting_cost = env_copy.get_pred_cost(start)
+            total_cost += starting_cost
+            observation = env_copy.get_obs()
 
             ## rollout until trial is terminated 
             while True:
@@ -239,13 +237,14 @@ class MonteCarloTreeSearch():
 
                 ## take action
                 observation, cost, terminated, _, _ = env_copy.step(action)
+                
+                ## if terminated return the cost (i.e. don't use the cost of the goal state)
+                if terminated:
+                    return total_cost
 
                 ## increment cost
                 total_cost += cost * self.discount_factor**self.depth
 
-                ## if terminated return the cost
-                if terminated:
-                    return total_cost
 
         ## or, rollout for some new imagined S-G pair
         else:
@@ -307,13 +306,14 @@ class MonteCarloTreeSearch():
                     ## take action
                     observation, cost, terminated, _, _ = env_copy.step(action)
 
-                    ## increment cost
-                    total_cost += cost * self.discount_factor**depth_tmp
-
-                    ## if terminated, append cost
+                    ## if terminated return the cost (i.e. don't use the cost of the goal state)
                     if terminated:
                         future_total_costs.append(total_cost)
                         break
+                    
+                    ## increment cost
+                    total_cost += cost * self.discount_factor**depth_tmp
+
 
             ## average the future costs
             total_cost = np.mean(future_total_costs)
@@ -322,25 +322,22 @@ class MonteCarloTreeSearch():
     ## optimised rollout
     def optimised_rollout_policy(self, action_leaf, real_rollout = True):
 
-        ## get the max Q value of the state that you have just reached from this action leaf
-        # next_state = action_leaf.next_state
-        # Qs = self.agent.Q_inf[next_state[0], next_state[1]]
-        # max_Q = np.nanmax(Qs)
+        ## init
+        total_cost = 0
+        depth = 0
 
-        # return max_Q
+        ## rolling out from goal location, can just end here
+        if action_leaf.terminated:
+            return total_cost
 
         # get the next state and goal
         current = action_leaf.next_state.copy()
-        # traj = [tuple(current)]
         goal = self.env.goal
 
-        ## init costs
-        total_cost = self.env.get_pred_cost(current)
-        depth = 0
-
+        ## begin with cost of current state
+        total_cost+=self.env.get_pred_cost(current)
 
         ## get costs of optimal route
-        # while not np.array_equal(current, goal):
         while True:
             depth+=1
             i, j = current
@@ -356,14 +353,14 @@ class MonteCarloTreeSearch():
             elif action == 3:  # Left
                 current = np.clip((i, j - 1), 0, self.N - 1)
             
-            # Update trajectory + costs
-            # traj.append(tuple(current))
+            ## return cost once goal is reached (i.e. don't use the cost of the goal state)
+            if np.array_equal(current, goal):
+                return total_cost
+            
+            ## update costs
             cost = self.env.get_pred_cost(current)
             total_cost += cost*self.discount_factor**depth
         
-            ## return cost once goal is reached
-            if np.array_equal(current, goal):
-                return total_cost
 
 
 
@@ -682,10 +679,9 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     ## plot for debugging?
                     # _, axs = plt.subplots(1, 3, figsize=(10,5))
                     # plot_r(env_copy.p_costs.reshape(N,N), ax=axs[0], title = 'costs')
-                    # plot_traj([env_copy.o_traj, env_copy.a_traj], ax=axs[0])
-                    # plot_obs(env_copy.obs, ax=axs[0])
+                    # plot_traj([env_copy.o_trajs[e], env_copy.a_traj], ax=axs[0])
                     # plot_r(env_copy.predicted_p_costs, ax=axs[1], title = 'posterior mean p cost')
-                    # # plot_action_tree(agent.Q_inf, current, goal, ax=axs[2], title = 'DP_inf')
+                    # plot_action_tree(agent.Q_inf, current, goal, ax=axs[2], title = 'DP_inf')
                     # plt.show()
 
                     ## get and take action
