@@ -362,11 +362,6 @@ class MonteCarloTreeSearch():
             total_cost += cost*self.discount_factor**depth
         
 
-
-
-
-
-
     ## calculate E-E value
     def compute_UCT(self, node, action_leaf): 
         # exploitation_term = child.total_simulation_cost / child.n_visits
@@ -483,6 +478,8 @@ class MonteCarloTreeSearch():
 
         ## generate all root samples
         all_posterior_p_costs = []
+        all_posterior_p = []
+        all_posterior_q = []
         # for t in range(n_sims):
         #     self.agent.root_sample(self.env.obs)
         #     all_posterior_p_costs.append(self.agent.posterior_p_cost)
@@ -529,6 +526,8 @@ class MonteCarloTreeSearch():
             self.agent.dp(expected_cost=True)
             self.env.receive_predictions(self.agent.posterior_p_cost)
             all_posterior_p_costs.append(self.agent.posterior_p_cost)
+            all_posterior_p.append(self.agent.posterior_p)
+            all_posterior_q.append(self.agent.posterior_q)
 
             ## or, use pre-calculated posterior mean every time
             # self.agent.posterior_p_cost = posterior_mean_p_cost
@@ -565,6 +564,7 @@ class MonteCarloTreeSearch():
         assert not np.isnan(np.nansum(MCTS_estimates)), 'no MCTS estimates for {}'.format(self.tree.root)
         max_MCTS = np.nanmax(MCTS_estimates)
         action = argm(MCTS_estimates, max_MCTS)
+        print(MCTS_estimates)
         
         ## set root for next search
         # next_state = self.tree.root.action_leaves[action].next_state
@@ -572,6 +572,8 @@ class MonteCarloTreeSearch():
 
         ## mean over posterior samples?
         self.posterior_mean_p_cost = np.mean(all_posterior_p_costs, axis=0)
+        self.posterior_mean_p = np.mean(all_posterior_p, axis=0)
+        self.posterior_mean_q = np.mean(all_posterior_q, axis=0)
 
         return action
 
@@ -622,6 +624,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
             current = start
             goal = env_copy.goal
             actions = []
+            CE_actions = []
 
             ## GP-MCTS agent receives info from env
             if ag =='GP-MCTS':
@@ -665,11 +668,18 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     env_copy.set_sim(False)
 
                     ## get posterior mean grid
-                    all_posterior_p_costs = []
+                    # all_posterior_p_costs = []
+                    all_posterior_p = []
+                    all_posterior_q = []
                     for t in range(100):
                         agent.root_sample(env_copy.obs, lazy=True, CE=True)
-                        all_posterior_p_costs.append(agent.posterior_p_cost)
-                    posterior_mean_p_cost = np.mean(all_posterior_p_costs, axis=0)
+                        # all_posterior_p_costs.append(agent.posterior_p_cost)
+                        all_posterior_p.append(agent.posterior_p)
+                        all_posterior_q.append(agent.posterior_q)
+                    # posterior_mean_p_cost = np.mean(all_posterior_p_costs, axis=0)
+                    posterior_mean_p = np.mean(all_posterior_p, axis=0)
+                    posterior_mean_q = np.mean(all_posterior_q, axis=0)
+                    posterior_mean_p_cost = np.outer(posterior_mean_p, posterior_mean_q)
                     agent.posterior_p_cost = posterior_mean_p_cost
                     env_copy.receive_predictions(agent.posterior_p_cost)
 
@@ -717,20 +727,37 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                         dist_to_goal = np.max(cdist([current, goal], [current, goal], metric='cityblock')) 
                         if dist_to_goal > (N/2):
                             action = MCTS.search(n_sims, n_futures, progress=progress)
-                        else:
+                        elif (dist_to_goal <= (N/2)) & (dist_to_goal > (N/4)):
                             n_reduced_sims = int(n_sims/2)
+                            action = MCTS.search(n_reduced_sims, n_futures, progress=progress)
+                        else:
+                            n_reduced_sims = int(n_sims/4)
                             action = MCTS.search(n_reduced_sims, n_futures, progress=progress)
                         actions.append(action)
 
+                        ##optional: check what the CE agent would have done with this info
+                        # CE_posterior = []
+                        # for t in range(100):
+                        #     agent.root_sample(env_copy.obs, lazy=True, CE=True)
+                        #     CE_posterior.append(agent.posterior_p_cost)
+                        # CE_posterior_mean = np.mean(CE_posterior, axis=0)
+                        # CE_posterior_mean = MCTS.posterior_mean_p_cost
+                        CE_posterior_mean_p_cost = np.outer(MCTS.posterior_mean_p, MCTS.posterior_mean_q)
+                        agent.posterior_p_cost = CE_posterior_mean_p_cost
+                        agent.dp(expected_cost=True)
+                        action_CE = agent.optimal_policy(current, agent.Q_inf)
+                        CE_actions.append(action_CE)
 
                         ## plot for debugging?
+                        # print('BAMCP action:', action,', CE action:', action_CE)
                         # fig, axs = plt.subplots(1, 3, figsize=(15,5))
-                        # plot_r(env_copy.p_costs.reshape(N,N), ax=axs[0], title = 'costs')
-                        # plot_traj([env_copy.o_traj, env_copy.a_traj], ax=axs[0])
-                        # # plot_obs(env_copy.obs, ax=axs[0])
-                        # # MCTS.tree.action_tree()
-                        # # plot_action_tree(MCTS.tree.tree_q, current, goal, ax=axs[1], title = 'DP_inf')
-                        # plot_r(MCTS.posterior_mean_p_cost, ax=axs[2], title = 'average posterior p cost')
+                        # plot_r(env_copy.p_costs.reshape(N,N), ax=axs[0], title = 'p_costs')
+                        # plot_traj([env_copy.o_trajs[e], env_copy.a_traj], ax=axs[0])
+                        # plot_obs(env_copy.obs, ax=axs[0])
+                        # MCTS.tree.action_tree()
+                        # plot_action_tree(MCTS.tree.tree_q, current, goal, ax=axs[1], title = 'DP_inf')
+                        # plot_r(MCTS.posterior_mean_p_cost, ax=axs[1], title = 'average posterior p cost')
+                        # plot_r(CE_posterior_mean, ax=axs[2], title = 'CE posterior p cost')
                         # plt.show()
                         
                         ## take action
@@ -738,6 +765,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                         observation, cost, terminated, truncated, info = env_copy.step(action)
                         current = observation['agent']
                         steps += 1
+                        
 
                         ## update observations
                         agent.get_env_info(env_copy)
@@ -745,6 +773,8 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                         ## prune tree, i.e. remove all nodes that are not children of the new root
                         MCTS.tree.prune(action, np.append(current, cost))
                         search_attempts = 0 # could do nan
+
+
 
                         assert np.array_equal(MCTS.tree.root.state[:2], current), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action)
 
@@ -813,6 +843,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     sim_out['start'].append(start)
                     sim_out['goal'].append(goal)
                     sim_out['actions'].append(actions)
+                    sim_out['CE_actions'].append(CE_actions)
                     sim_out['costs'].append(np.nan)
                     sim_out['total_cost'].append(np.nan)
                     sim_out['optimal_cost'].append(env_copy.o_traj_total_costs[e])
@@ -845,6 +876,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     sim_out['start'].append(start)
                     sim_out['goal'].append(goal)
                     sim_out['actions'].append(actions)
+                    sim_out['CE_actions'].append(CE_actions)
                     sim_out['costs'].append(env_copy.a_traj_costs)
                     sim_out['total_cost'].append(env_copy.a_traj_total_cost)
                     sim_out['optimal_cost'].append(env_copy.o_traj_total_costs[e])
