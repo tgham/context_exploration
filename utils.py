@@ -435,10 +435,11 @@ data_keys = [
     'start',
     'goal',
     'costs',
+    'optimal_costs',
     'actions',
     'CE_actions',
     'total_cost',
-    'optimal_cost',
+    'total_optimal_cost',
     'action_score',
     'cost_ratio',
     'n_steps',
@@ -449,7 +450,7 @@ data_keys = [
     'action_tree',
     'discounted_costs',
     'total_discounted_cost',
-    'discounted_optimal_cost',
+    'discounted_optimal_costs',
     'total_discounted_optimal_cost'
 
     ## GP-specific

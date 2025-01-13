@@ -844,8 +844,9 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     sim_out['actions'].append(actions)
                     sim_out['CE_actions'].append(CE_actions)
                     sim_out['costs'].append(np.nan)
+                    sim_out['optimal_costs'].append(env_copy.o_traj_costs[e])
                     sim_out['total_cost'].append(np.nan)
-                    sim_out['optimal_cost'].append(env_copy.o_traj_total_costs[e])
+                    sim_out['total_optimal_cost'].append(env_copy.o_traj_total_costs[e])
                     sim_out['action_score'].append(np.nan)
                     sim_out['cost_ratio'].append(np.nan)
                     sim_out['n_steps'].append(steps)
@@ -885,8 +886,9 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     sim_out['actions'].append(actions)
                     sim_out['CE_actions'].append(CE_actions)
                     sim_out['costs'].append(env_copy.a_traj_costs)
+                    sim_out['optimal_costs'].append(env_copy.o_traj_costs[e])
                     sim_out['total_cost'].append(env_copy.a_traj_total_cost)
-                    sim_out['optimal_cost'].append(env_copy.o_traj_total_costs[e])
+                    sim_out['total_optimal_cost'].append(env_copy.o_traj_total_costs[e])
                     # if np.round(env_copy.optimal_cost,4) < np.round(env_copy.accrued_cost,4):
                     #     print(env_copy.optimal_cost, env_copy.accrued_cost)
                     # assert np.round(env_copy.optimal_cost,4) >= np.round(env_copy.accrued_cost,4), 'accrued cost higher than optimal cost'
