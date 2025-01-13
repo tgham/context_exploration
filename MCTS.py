@@ -564,7 +564,6 @@ class MonteCarloTreeSearch():
         assert not np.isnan(np.nansum(MCTS_estimates)), 'no MCTS estimates for {}'.format(self.tree.root)
         max_MCTS = np.nanmax(MCTS_estimates)
         action = argm(MCTS_estimates, max_MCTS)
-        print(MCTS_estimates)
         
         ## set root for next search
         # next_state = self.tree.root.action_leaves[action].next_state
@@ -856,6 +855,14 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     sim_out['search_attempts'].append(search_attempts)
                     # sim_out['action_tree'].append(MCTS.tree.action_tree())
                     sim_out['action_tree'].append(np.nan)
+
+                    ## discounts
+                    sim_out['discounted_costs'].append(np.nan)
+                    sim_out['total_discounted_cost'].append(np.nan)
+                    discounts = [discount_factor**d for d in range(len(env_copy.o_trajs[e]))]
+                    discounted_costs = [c*d for c,d in zip(env_copy.o_traj_costs[e], discounts)]
+                    sim_out['discounted_optimal_costs'].append(discounted_costs)
+                    sim_out['total_discounted_optimal_cost'].append(np.sum(discounted_costs))
                     
                     ## GP-specific
                     # sim_out['true_k'].append(true_k)
@@ -893,6 +900,17 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     sim_out['search_attempts'].append(search_attempts)
                     # sim_out['action_tree'].append(MCTS.tree.action_tree())
                     sim_out['action_tree'].append(np.nan)
+
+                    ## calculate discounted actual and optimal costs
+                    discounts = [discount_factor**d for d in range(len(env_copy.a_traj_costs))]
+                    discounted_costs = [c*d for c,d in zip(env_copy.a_traj_costs, discounts)]
+                    sim_out['discounted_costs'].append(discounted_costs)
+                    sim_out['total_discounted_cost'].append(np.sum(discounted_costs))
+
+                    discounts = [discount_factor**d for d in range(len(env_copy.o_trajs[e]))]
+                    discounted_costs = [c*d for c,d in zip(env_copy.o_traj_costs[e], discounts)]
+                    sim_out['discounted_optimal_costs'].append(discounted_costs)
+                    sim_out['total_discounted_optimal_cost'].append(np.sum(discounted_costs))
                     
                     ## GP-specific
                     # sim_out['true_k'].append(true_k)
