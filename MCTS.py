@@ -602,7 +602,11 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
     # plt.show()
 
     ## copy env so that each agent makes its own observations 
-    agent_envs = [copy.deepcopy(env) for _ in agents]
+    # agent_envs = [copy.deepcopy(env) for _ in agents]
+    agent_envs = {}
+    for a in agents:
+        agent_envs[a] = copy.deepcopy(env)
+
 
     ## initialise farmer
     farmer = Farmer(N)
@@ -614,11 +618,27 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
         ## loop through agents
         for a, ag in enumerate(agents):
             
-            ## reset episode 
-            # env_copy = copy.deepcopy(agent_envs[a])
-            env_copy = agent_envs[a]
-            _, _ = env_copy.reset()
-            env_copy.set_sim(True)
+            ### reset episode 
+
+            ## copy env for our base agents
+            if (ag=='BAMCP') or (ag=='CE'):
+                env_copy = agent_envs[ag]
+                _, _ = env_copy.reset()
+                env_copy.set_sim(True)
+
+                ## save the state of these envs for our checker agents, so that we can imbue them with the same knowledge later on 
+                if (ag=='BAMCP') & ('CE w/ BAMCP' in agents):
+                    agent_envs['CE w/ BAMCP'] = copy.deepcopy(env_copy)
+                    assert np.array_equal(agent_envs['CE w/ BAMCP'].obs, env_copy.obs), 'obs do not match'
+                elif (ag=='CE') & ('BAMCP w/ CE' in agents):
+                    agent_envs['BAMCP w/ CE'] = copy.deepcopy(env_copy)
+                    assert np.array_equal(agent_envs['BAMCP w/ CE'].obs, env_copy.obs), 'obs do not match'
+
+            ## or, load env for our checker agents
+            else:
+                env_copy = agent_envs[ag]
+                env_copy.set_sim(True)
+
             start = env_copy.current
             current = start
             goal = env_copy.goal
@@ -630,13 +650,14 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                 # K_inf = env_copy.K_gen.copy()
                 # K_inf = None
                 agent = GP
-            elif (ag == 'BAMCP') or (ag == 'CE'):
+            elif (ag == 'BAMCP') or (ag == 'CE') or (ag=='BAMCP w/ CE') or (ag=='CE w/ BAMCP'):
                 agent = farmer
             agent.get_env_info(env_copy)
 
             ## initiate tree (if not resetting the tree for each move, init here. otherwise, this should be inside the episode loop)
-            tree = Tree(N)
-            MCTS = MonteCarloTreeSearch(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
+            if (ag == 'BAMCP') or (ag == 'BAMCP w/ CE'):
+                tree = Tree(N)
+                MCTS = MonteCarloTreeSearch(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
         
             ## run episode until goal is reached
             end_episode = False
@@ -663,7 +684,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     search_attempts = 0 # could do nan
 
                 ## certainty-equivalent
-                elif ag == 'CE':
+                elif (ag == 'CE') or (ag == 'CE w/ BAMCP'):
                     env_copy.set_sim(False)
 
                     ## get posterior mean grid
@@ -708,7 +729,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
 
 
                 ## bamcp
-                elif ag == 'BAMCP':
+                elif (ag == 'BAMCP') or (ag == 'BAMCP w/ CE'):
                     env_copy.set_sim(True)
                     
                     ## init MCTS (if resetting the tree for each move, init here. otherwise, this should be outside the episode loop)
@@ -843,6 +864,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     sim_out['goal'].append(goal)
                     sim_out['actions'].append(actions)
                     sim_out['CE_actions'].append(CE_actions)
+                    sim_out['optimal_actions'].append(env_copy.o_traj_actions[e])
                     sim_out['costs'].append(np.nan)
                     sim_out['optimal_costs'].append(env_copy.o_traj_costs[e])
                     sim_out['total_cost'].append(np.nan)
@@ -885,6 +907,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     sim_out['goal'].append(goal)
                     sim_out['actions'].append(actions)
                     sim_out['CE_actions'].append(CE_actions)
+                    sim_out['optimal_actions'].append(env_copy.o_traj_actions[e])
                     sim_out['costs'].append(env_copy.a_traj_costs)
                     sim_out['optimal_costs'].append(env_copy.o_traj_costs[e])
                     sim_out['total_cost'].append(env_copy.a_traj_total_cost)
@@ -922,7 +945,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     
                     ## update the agent env
                     # agent_envs[a] = copy.deepcopy(env_copy)
-                    agent_envs[a] = env_copy
+                    agent_envs[ag] = env_copy
 
                     end_episode = True
 
