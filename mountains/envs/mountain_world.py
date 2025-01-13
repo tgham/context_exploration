@@ -94,6 +94,7 @@ class MountainEnv(gym.Env):
             self.goals = []
             self.costss = []
             self.o_trajs = []
+            self.o_traj_costs = []
             self.o_traj_total_costs = []
             self.n_episodes = n_episodes
             for e in range(n_episodes):
@@ -268,14 +269,14 @@ class MountainEnv(gym.Env):
         dist = 0
         min_dist = self.N*0.6
         angle = 0
-        angle_tolerance = 0.6
+        angle_tolerance = 0.5
         angle_bounds = [45*(1+angle_tolerance), 45*(1-angle_tolerance)]
         row_or_col = 1
         t = 0
         worth_it = False
         new = False
         new_rc = False
-        route_optimality_tolerance = 0.5
+        route_optimality_tolerance = 0.75
         while (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (not worth_it) or (not new) or (not new_rc):
             agent_location = self.np_random.integers(0, self.N, size=2, dtype=int)
             goal_location = self.np_random.integers(
@@ -327,7 +328,8 @@ class MountainEnv(gym.Env):
             dp_costs[goal_location[0], goal_location[1]] = 0
 
             self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=goal_location)
-            o_traj, o_traj_total_cost = self.optimal_trajectory(agent_location, goal_location)
+            o_traj, o_traj_costs, o_traj_total_cost = self.optimal_trajectory(agent_location, goal_location)
+
 
             ## by length
             # n_steps_opt = len(self.o_traj)-1
@@ -336,8 +338,8 @@ class MountainEnv(gym.Env):
             ## or, by cost (i.e. vs manhattan vertical-first or horizontal-first)
             manhattan_costs = self.manhattan_trajectory(agent_location, goal_location)
             # worth_it = (manhattan_costs[0]/o_traj_total_cost) >= route_optimality_tolerance and (manhattan_costs[1]/o_traj_total_cost) >= route_optimality_tolerance ## p(high cost)
-            worth_it = (manhattan_costs[0]/o_traj_total_cost) <= route_optimality_tolerance and (manhattan_costs[1]/o_traj_total_cost) <= route_optimality_tolerance ## p(low cost)
-
+            # worth_it = (manhattan_costs[0]/o_traj_total_cost) <= route_optimality_tolerance and (manhattan_costs[1]/o_traj_total_cost) >= route_optimality_tolerance ## p(low cost)
+            worth_it = (o_traj_total_cost/manhattan_costs[0]) <= route_optimality_tolerance and (o_traj_total_cost/manhattan_costs[1]) <= route_optimality_tolerance ## p(low cost)
 
             t+=1
             if t>100:
@@ -349,6 +351,7 @@ class MountainEnv(gym.Env):
         # self.n_eps += 1
 
         self.o_trajs.append(o_traj)
+        self.o_traj_costs.append(o_traj_costs)
         self.o_traj_total_costs.append(o_traj_total_cost)
 
         return agent_location, goal_location
@@ -489,11 +492,14 @@ class MountainEnv(gym.Env):
     def optimal_trajectory(self, start, goal):
         current = start.copy()
         o_traj = [tuple(current)]
-        # self.o_traj_costs = [self.costs[current[0], current[1]]]
-        o_traj_costs = [self.p_costs[current[0], current[1]]]
+        # o_traj_costs = [self.p_costs[current[0], current[1]]]
+        expected_cost = self.p_costs[current[0], current[1]]*self.low_cost + (1-self.p_costs[current[0], current[1]])*self.high_cost
+        o_traj_costs = [expected_cost]
+
         
         visited = set()
-        while not np.array_equal(current, goal):
+        goal_reached = False
+        while not goal_reached:
             i, j = current
             action = int(self.A_true[i, j])  # Ensure action index is int
             visited.add(tuple(current))
@@ -515,11 +521,17 @@ class MountainEnv(gym.Env):
             
             # Update trajectory
             o_traj.append(tuple(current))
-            o_traj_costs.append(self.p_costs[current[0], current[1]])
+            # o_traj_costs.append(self.p_costs[current[0], current[1]])
+            expected_cost = self.p_costs[current[0], current[1]]*self.low_cost + (1-self.p_costs[current[0], current[1]])*self.high_cost
+            o_traj_costs.append(expected_cost)
+
+            ## check if goal has been reached
+            if np.array_equal(current, goal):
+                goal_reached = True
 
         o_traj_total_cost = np.sum(o_traj_costs)
 
-        return o_traj, o_traj_total_cost
+        return o_traj, o_traj_costs, o_traj_total_cost
 
 
     ## calculate the cost of the simplest manhattan paths
@@ -561,8 +573,10 @@ class MountainEnv(gym.Env):
         ## calculate the costs of these trajectories
         # horizontal_trajectory_costs = [self.costs[x, y] for x, y in horizontal_trajectory]
         # vertical_trajectory_costs = [self.costs[x, y] for x, y in vertical_trajectory]
-        horizontal_trajectory_costs = [self.p_costs[x, y] for x, y in horizontal_trajectory]
-        vertical_trajectory_costs = [self.p_costs[x, y] for x, y in vertical_trajectory]
+        # horizontal_trajectory_costs = [self.p_costs[x, y] for x, y in horizontal_trajectory]
+        # vertical_trajectory_costs = [self.p_costs[x, y] for x, y in vertical_trajectory]
+        horizontal_trajectory_costs = [self.p_costs[x, y]*self.low_cost + (1-self.p_costs[x, y])*self.high_cost for x, y in horizontal_trajectory]
+        vertical_trajectory_costs = [self.p_costs[x, y]*self.low_cost + (1-self.p_costs[x, y])*self.high_cost for x, y in vertical_trajectory]
         manhattan_costs = [np.sum(horizontal_trajectory_costs), np.sum(vertical_trajectory_costs)]
 
         return manhattan_costs
