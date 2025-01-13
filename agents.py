@@ -365,7 +365,7 @@ class Farmer:
 
     ## function for receiving info from env
     def get_env_info(self, env):
-        self.N = env.N
+        self.N = env.N 
         self.obs = env.obs
         self.current = env.current
         self.goal = env.goal
@@ -377,12 +377,12 @@ class Farmer:
         self.beta_col = env.beta_col
 
     ## root sampling of surface
-    def root_sample(self, obs=None, n_iter=100, lazy=True, CE=False):
+    def root_sample(self, obs=None, n_iter=100, lazy=True, CE=False, state=None):
         sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, obs, N=self.N, CE=CE)
 
         ## lazy
         if lazy:
-            self.posterior_p, self.posterior_q = sampler.lazy_sample(n_iter = n_iter)
+            self.posterior_p, self.posterior_q = sampler.lazy_sample(n_iter = n_iter, state=state)
 
         ## full
         else:

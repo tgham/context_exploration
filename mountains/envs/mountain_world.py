@@ -96,6 +96,7 @@ class MountainEnv(gym.Env):
             self.o_trajs = []
             self.o_traj_costs = []
             self.o_traj_total_costs = []
+            self.o_traj_actions = []
             self.n_episodes = n_episodes
             for e in range(n_episodes):
                 try:
@@ -116,7 +117,7 @@ class MountainEnv(gym.Env):
                 init_done = True
                 self.e = 0
 
-
+ 
 
         # define actions, depending on metric
         self.metric = metric
@@ -257,7 +258,13 @@ class MountainEnv(gym.Env):
 
         ## initialise actual trajectory as list of tuples
         if not self.sim:
+
+            ## start from start
             self.a_traj = [tuple(self._agent_location)]
+
+            ## or start from nothing
+            # self.a_traj = []
+            
             self.action_scores = []
         
         return observation, info
@@ -328,7 +335,7 @@ class MountainEnv(gym.Env):
             dp_costs[goal_location[0], goal_location[1]] = 0
 
             self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=goal_location)
-            o_traj, o_traj_costs, o_traj_total_cost = self.optimal_trajectory(agent_location, goal_location)
+            o_traj, o_traj_costs, o_traj_total_cost, o_traj_actions = self.optimal_trajectory(agent_location, goal_location)
 
 
             ## by length
@@ -353,6 +360,7 @@ class MountainEnv(gym.Env):
         self.o_trajs.append(o_traj)
         self.o_traj_costs.append(o_traj_costs)
         self.o_traj_total_costs.append(o_traj_total_cost)
+        self.o_traj_actions.append(o_traj_actions)
 
         return agent_location, goal_location
 
@@ -468,8 +476,12 @@ class MountainEnv(gym.Env):
             if not self.sim:
                 self.obs = self.obs_tmp.copy()
 
-                ## sum of costs of route
-                self.a_traj_costs = [self.costs[x, y] for x, y in self.a_traj]
+                ## sum of costs of route INC START AND END
+                # self.a_traj_costs = [self.costs[x, y] for x, y in self.a_traj]
+                # self.a_traj_total_cost = np.sum(self.a_traj_costs)
+
+                ## sum of costs of route EXC START AND END
+                self.a_traj_costs = [self.costs[x, y] for x, y in self.a_traj[1:-1]]
                 self.a_traj_total_cost = np.sum(self.a_traj_costs)
 
                 ## scores for the trial
@@ -491,17 +503,25 @@ class MountainEnv(gym.Env):
     ## calculate the optimal trajectory between the two points, as given by the true DP solution
     def optimal_trajectory(self, start, goal):
         current = start.copy()
+
+        ## start with the current state
         o_traj = [tuple(current)]
-        # o_traj_costs = [self.p_costs[current[0], current[1]]]
         expected_cost = self.p_costs[current[0], current[1]]*self.low_cost + (1-self.p_costs[current[0], current[1]])*self.high_cost
         o_traj_costs = [expected_cost]
 
-        
+        ## or start from nothing
+        # o_traj = []
+        # o_traj_costs = []
+
+        ## save the optimal actions
+        o_traj_actions = []
+
+        ## Loop until the goal is reached
         visited = set()
-        goal_reached = False
-        while not goal_reached:
+        while True:
             i, j = current
             action = int(self.A_true[i, j])  # Ensure action index is int
+            o_traj_actions.append(action)
             visited.add(tuple(current))
             
             # Take action and update current state
@@ -519,19 +539,27 @@ class MountainEnv(gym.Env):
                 print(self.A_true)
                 break
             
-            # Update trajectory
+            ## check if goal has been reached (THIS SHOULD COME BEFORE THE APPEND IF WE DON'T WANT TO INCLUDE THE GOAL STATE
+            # if np.array_equal(current, goal):
+            #     break
+
+            # Update trajectory and expected cost
             o_traj.append(tuple(current))
-            # o_traj_costs.append(self.p_costs[current[0], current[1]])
             expected_cost = self.p_costs[current[0], current[1]]*self.low_cost + (1-self.p_costs[current[0], current[1]])*self.high_cost
             o_traj_costs.append(expected_cost)
 
-            ## check if goal has been reached
+            ## check if goal has been reached (THIS SHOULD COME BEFORE THE APPEND IF WE DON'T WANT TO INCLUDE THE GOAL STATE
             if np.array_equal(current, goal):
-                goal_reached = True
+                break
 
+        ## calculate the total cost of the trajectory INC START AND END
+        # o_traj_total_cost = np.sum(o_traj_costs)
+
+        ## calculate the total cost of the trajectory EXC START AND END
+        o_traj_costs = o_traj_costs[1:-1]
         o_traj_total_cost = np.sum(o_traj_costs)
 
-        return o_traj, o_traj_costs, o_traj_total_cost
+        return o_traj, o_traj_costs, o_traj_total_cost, o_traj_actions
 
 
     ## calculate the cost of the simplest manhattan paths

@@ -1,11 +1,13 @@
 import random
 from math import sqrt, log
-from utils import Node, Action_Node, Tree, make_env, argm, data_keys
+from utils import Node, Action_Node, Tree, make_env, argm, data_keys, KL_divergence
 import copy
 import numpy as np
 from tqdm.auto import tqdm
 import os
 from scipy.spatial.distance import cdist
+from scipy.stats import gaussian_kde
+from scipy import special
 
 from plotter import *
 from agents import GPAgent, Farmer
@@ -556,6 +558,11 @@ class MonteCarloTreeSearch():
         if progress:
             pbar.close()
 
+        ## convert p and q lists to arrays
+        self.all_posterior_p_costs = np.array(all_posterior_p_costs)
+        self.all_posterior_p = np.array(all_posterior_p)
+        self.all_posterior_q = np.array(all_posterior_q)
+
         
         ## action selection
         MCTS_estimates = np.full(4, np.nan)
@@ -644,6 +651,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
             goal = env_copy.goal
             actions = []
             CE_actions = []
+            EKLs = []
 
             ## GP-MCTS agent receives info from env
             if ag =='GP-MCTS':
@@ -848,6 +856,67 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                                     print('mountain {}, epsiode {}: search attempts exceeded'.format(m, e))
                                     break
 
+                ### KL divergence
+                # if (ag=='BAMCP') or (ag=='BAMCP w/ CE'):
+
+                #     ## get the relevant prior samples, i.e. the p and q samples for the state that has just been reached
+                #     i, j = current
+                #     prior_p_samples = MCTS.all_posterior_p[:,i]
+                #     prior_q_samples = MCTS.all_posterior_q[:,j]
+
+                #     ##clipping
+                #     prior_joint = np.vstack([prior_p_samples, prior_q_samples])
+
+                #     ## debugging: plot kde of prior p and q samples
+                #     # fig, axs = plt.subplots(1, 3, figsize=(15,5))
+                #     # sns.kdeplot(prior_p_samples, ax=axs[0], label='prior p')
+                #     # sns.kdeplot(prior_q_samples, ax=axs[0], label='prior q')
+                #     # axs[0].set_title('prior')
+                #     # axs[0].legend()
+
+                #     ### simulate a set of posterior (root) samples under each of the possible outcomes of the action that was just taken
+                #     kl_divs = []
+                #     for o, outcome in enumerate([env_copy.low_cost, env_copy.high_cost]):
+                #         farmer_copy = copy.deepcopy(agent)
+                #         posterior_p_samples = []
+                #         posterior_q_samples = []
+                #         sim_obs = env_copy.obs.copy()
+                #         sim_obs[-1, -1] = outcome
+                #         state_to_update = np.array([i, j, outcome])
+                #         for t in range(n_sims):
+                #             farmer_copy.root_sample(sim_obs, lazy=True, CE=False, state=state_to_update)
+                #             posterior_p_samples.append(farmer_copy.posterior_p[i])
+                #             posterior_q_samples.append(farmer_copy.posterior_q[j])
+                #         posterior_joint = np.vstack([posterior_p_samples, posterior_q_samples])
+
+                #         # KL = KL_divergence(prior_joint, posterior_joint)
+
+                #         ## calculate KL divergence
+                #         kde_prior = gaussian_kde(prior_joint)
+                #         kde_posterior = gaussian_kde(posterior_joint)
+                #         eval_points = posterior_joint
+                #         p_posterior = kde_posterior.evaluate(eval_points)
+                #         p_prior = kde_prior.evaluate(eval_points)
+                #         kl_div = np.mean(np.log(p_posterior / p_prior))
+                #         kl_divs.append(kl_div)
+
+                #         ## debugging: plot kde of prior p and q samples
+                #         # sns.kdeplot(posterior_p_samples, ax=axs[o+1], label='posterior p')
+                #         # sns.kdeplot(posterior_q_samples, ax=axs[o+1], label='posterior q')
+                #         # axs[o+1].legend()
+                #         # axs[o+1].set_title('posterior for outcome {}'.format(outcome))
+                #     # plt.show()
+                    
+                #     # ## compute the expected KL divergence
+                #     p_low = np.mean(prior_p_samples * prior_q_samples) 
+                #     # p_low2 = np.mean(prior_p_samples) * np.mean(prior_q_samples)
+                #     p_high = 1 - p_low
+                #     expected_kl_div = p_low * kl_divs[0] + p_high * kl_divs[1]
+                #     EKLs.append(expected_kl_div)
+
+
+
+                
                 ## prevent endless episode 
                 if steps >= max_steps:
                     early_terminate = True
@@ -878,6 +947,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     sim_out['search_attempts'].append(search_attempts)
                     # sim_out['action_tree'].append(MCTS.tree.action_tree())
                     sim_out['action_tree'].append(np.nan)
+                    sim_out['expected_KL'].append(EKLs)
 
                     ## discounts
                     sim_out['discounted_costs'].append(np.nan)
@@ -925,6 +995,8 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     sim_out['search_attempts'].append(search_attempts)
                     # sim_out['action_tree'].append(MCTS.tree.action_tree())
                     sim_out['action_tree'].append(np.nan)
+                    sim_out['expected_KL'].append(EKLs)
+
 
                     ## calculate discounted actual and optimal costs
                     discounts = [discount_factor**d for d in range(len(env_copy.a_traj_costs))]

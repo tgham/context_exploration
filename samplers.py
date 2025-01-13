@@ -64,7 +64,6 @@ class GridSampler:
             rel_obs = self.row_to_obs[index]
             prior_mean_failure = 1-(
                 self.beta_col / (2*(self.alpha_col + self.beta_col))
-            # self.beta_col / ((self.alpha_col + self.beta_col)) if is_row else self.beta_row / ((self.alpha_row + self.beta_row))
             )
         else:
             rel_obs = self.col_to_obs[index]
@@ -83,7 +82,7 @@ class GridSampler:
         n = prior_mean_failure * np.sum([cost == self.high_cost for (_, _, cost) in rel_obs])
 
         ## normalise counts to cap their magnitude
-        cap = 5
+        cap = np.max([5, self.alpha_row + self.beta_row, self.alpha_col + self.beta_col])
         total_count = m + n
         if total_count > cap:
             m = cap * m / total_count
@@ -144,12 +143,19 @@ class GridSampler:
         return log_likelihood
 
 
-    def update(self):
+    def update(self, state=None):
 
         ## sample an observation at random
-        sampled_i, sampled_j, cost = self.sample_obs()
-        current_p = self.row_probs[sampled_i]
-        current_q = self.col_probs[sampled_j]
+        if state is None:
+            sampled_i, sampled_j, cost = self.sample_obs()
+            current_p = self.row_probs[sampled_i]
+            current_q = self.col_probs[sampled_j]
+        else:
+            sampled_i, sampled_j, cost = state
+            sampled_i = int(sampled_i)
+            sampled_j = int(sampled_j)
+            current_p = self.row_probs[sampled_i]
+            current_q = self.col_probs[sampled_j]
 
         ## generate proposals
         alpha_p, beta_p, m1, n1 = self.proposal_params(sampled_i, is_row=True)
@@ -242,11 +248,11 @@ class GridSampler:
             self.n_accepted += 1
     
 
-    def lazy_sample(self, n_iter=100):
+    def lazy_sample(self, n_iter=100, state=None):
         self.n_accepted = 0
         """Run the sampler for a specified number of iterations."""
         for _ in range(n_iter):
-            self.update()
+            self.update(state)
         # print(f"Acceptance rate (lazy): {self.n_accepted / n_iter}")
         return self.row_probs, self.col_probs
     
