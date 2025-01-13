@@ -19,6 +19,7 @@ import uuid
 import random
 from collections import deque
 from minimax_tilting_sampler import TruncatedMVN
+import ast
 # from MCTS import MonteCarloTreeSearch
 
 
@@ -435,7 +436,7 @@ data_keys = [
     'goal',
     'costs',
     'actions',
-    'CE_actions'
+    'CE_actions',
     'total_cost',
     'optimal_cost',
     'action_score',
@@ -446,6 +447,10 @@ data_keys = [
     'observations',
     'search_attempts',
     'action_tree',
+    'discounted_costs',
+    'total_discounted_cost',
+    'discounted_optimal_cost',
+    'total_discounted_optimal_cost'
 
     ## GP-specific
     # 'true_k',
@@ -453,3 +458,13 @@ data_keys = [
     # 'posterior_mean',
     # 'theta_MLE',
 ]
+
+## parse strings to lists
+def parse_lists(df):
+    cols = df.columns[2:]
+    for key in cols:
+        try:
+            df[key] = df[key].apply(lambda x: np.array(ast.literal_eval(x)))
+        except:
+            pass
+    return df
