@@ -66,6 +66,7 @@ def plot_traj(trajs, ax, title=None):
     ## plot direct and optimal trajectories using different markers
     markers = ['*','x','x']
     colours = ['white','red','red']
+    costs = ['L','H']
 
     # if len(trajs[0]) ==2:
     #     trajs = [trajs]    
@@ -83,20 +84,15 @@ def plot_traj(trajs, ax, title=None):
             for t in traj[1:-1]:
                 ax.plot(t[1]+0.5, t[0]+0.5, markers[ti], color=colours[ti], markersize=10, linewidth=10)
 
-        ## actual path 
-        # else:
-        #     ## plot path(s)
-        #     for t in traj:
-        #         ax.plot(t[1]+0.5, t[0]+0.5, markers[ti], color=colours[ti], markersize=10, linewidth=10)
-                # ax.text(t[1]+0.5,t[0]+0.5 , round(t[2], 2), ha='center', va='center', color='red') # note the x,y are flipped because they are matrix indices
-
 
         ## actual path 
         else:
             ## plot path(s)
             for t in traj:
+
+                ## label the costs
                 if len(t) == 3:
-                    ax.text(t[1] + 0.5, t[0] + 0.5, round(t[2], 2), ha='center', va='center', color='red', weight='bold')
+                    ax.text(t[1] + 0.5, t[0] + 0.5, costs[round(t[2], 2)==-0.9], ha='center', va='center', color='darkred', weight='bold')
                 else:
                     ax.plot(t[1] + 0.5, t[0] + 0.5, markers[ti], color=colours[ti], markersize=10, linewidth=10)
 
