@@ -1,19 +1,56 @@
+from numba import njit
 import numpy as np
-import scipy
-from numba import jit
+
+@njit
+def compute_log_likelihood(sampled_i, sampled_j, rel_obs, row_p, col_q, row_probs, col_probs, high_cost, low_cost):
+    log_likelihood = 0.0
+    for o in rel_obs:
+        i, j, cost = int(o[0]), int(o[1]), o[2]
+        if (i == sampled_i) and (j != sampled_j):
+            rel_p = row_p
+            rel_q = col_probs[j]
+        elif (j == sampled_j) and (i != sampled_i):
+            rel_p = row_probs[i]
+            rel_q = col_q
+        elif (i == sampled_i) and (j == sampled_j):
+            rel_p = row_p
+            rel_q = col_q
+        else:
+            raise ValueError("Observation does not match row or column.")
+
+        prob_tmp = rel_p * rel_q
+
+        if cost == high_cost:
+            log_likelihood += np.log(1 - prob_tmp)
+            log_likelihood -= np.log(1 - row_probs[sampled_i] * col_probs[sampled_j])
+        elif cost == low_cost:
+            log_likelihood += np.log(prob_tmp)
+            log_likelihood -= np.log(row_probs[sampled_i] * col_probs[sampled_j])
+
+    return log_likelihood
+
+@njit
+def propose(alpha, beta):
+    return np.random.beta(alpha, beta)
+
+@njit
+def proposal_params(obs, high_cost, low_cost, alpha, beta, sampled_prob):
+    alpha_new, beta_new = alpha, beta
+    for o in obs:
+        cost = o[2]
+        if cost == high_cost:
+            beta_new += 1
+        elif cost == low_cost:
+            alpha_new += 1
+        else:
+            raise ValueError("Invalid cost encountered in observations.")
+    return alpha_new, beta_new
+
+import numpy as np
+from numba import njit
 
 class GridSampler:
     def __init__(self, alpha_row, beta_row, alpha_col, beta_col, obs, N=10, CE=False):
-        """
-        Initialize the sampler with prior parameters and observed data.
-
-        Parameters:
-        - alpha_row, beta_row: Beta distribution priors for rows.
-        - alpha_col, beta_col: Beta distribution priors for columns.
-        - obs: A list of tuples (_, i, j,cost) where
-          i is the row index, j is the column index, and cost is the observed value (e.g., -0.9 or -0.1).
-        - N: The size of the grid (default is 10x10).
-        """
         self.alpha_row = alpha_row
         self.beta_row = beta_row
         self.alpha_col = alpha_col
@@ -22,18 +59,12 @@ class GridSampler:
         if self.obs is None:
             self.obs = np.array([])
         else:
-            self.obs = [(int(i), int(j), float(cost)) for (i, j, cost) in self.obs]
+            self.obs = np.array([(int(i), int(j), float(cost)) for (i, j, cost) in self.obs])
         self.N = N
         self.high_cost = -0.9
         self.low_cost = -0.1
 
-        # Initialize row and column probabilities for the entire grid
-        if not CE:
-            self.row_probs = np.random.beta(self.alpha_row, self.beta_row, size=self.N)
-            self.col_probs = np.random.beta(self.alpha_col, self.beta_col, size=self.N)
-
-        ## or, initialise all unseen rows and columns with the mean of the beta prior, then sample the rest
-        elif CE:
+        if CE:
             self.row_probs = np.full(self.N, self.alpha_row / (self.alpha_row + self.beta_row))
             self.col_probs = np.full(self.N, self.alpha_col / (self.alpha_col + self.beta_col))
             for o in self.obs:
@@ -41,225 +72,34 @@ class GridSampler:
                     self.row_probs[o[0]] = np.random.beta(self.alpha_row, self.beta_row)
                 if o[1] < self.N:
                     self.col_probs[o[1]] = np.random.beta(self.alpha_col, self.beta_col)
-
-        ## cache obs groups for lazy sampling
-        self.row_to_obs = {i: [(i, j, cost) for (i_, j, cost) in self.obs if i_ == i] for i in range(self.N)}
-        self.col_to_obs = {j: [(i, j, cost) for (i, j_, cost) in self.obs if j_ == j] for j in range(self.N)}
-
-        # Identify rows and columns with observations
-        self.observed_rows = [i for i in range(self.N) if len(self.row_to_obs[i]) > 0]
-        self.observed_cols = [j for j in range(self.N) if len(self.col_to_obs[j]) > 0]
-
-
-    def sample_obs(self):
-        """Select a random observation from the data."""
-        return self.obs[np.random.randint(len(self.obs))]
-    
-    def proposal_params(self, index, is_row):
-        """
-        Calculate the Beta parameters for the proposal distribution.
-        """
-        # Get relevant observations for this row/column
-        if is_row:
-            rel_obs = self.row_to_obs[index]
-            prior_mean_failure = 1-(
-                self.beta_col / (2*(self.alpha_col + self.beta_col))
-            )
         else:
-            rel_obs = self.col_to_obs[index]
-            prior_mean_failure = 1-(
-                self.beta_row / (2*(self.alpha_row + self.beta_row))
-            )
+            self.row_probs = np.random.beta(self.alpha_row, self.beta_row, size=self.N)
+            self.col_probs = np.random.beta(self.alpha_col, self.beta_col, size=self.N)
 
-        ### Count occurrences of each cost
+    def update(self):
+        sampled_i, sampled_j, _ = self.obs[np.random.randint(len(self.obs))]
+        sampled_i, sampled_j = int(sampled_i), int(sampled_j)
+        current_p = self.row_probs[sampled_i]
+        current_q = self.col_probs[sampled_j]
 
-        ## standard case (i.e. pq = p(high cost))
-        # m = np.sum([cost == self.high_cost for (_, _, cost) in rel_obs])
-        # n = prior_mean_failure * np.sum([cost == self.low_cost for (_, _, cost) in rel_obs])
+        rel_obs = np.array([(int(i), int(j), cost) for i, j, cost in self.obs if i == sampled_i or j == sampled_j])
 
-        ## alternative case (i.e. pq = p(low cost))
-        m = np.sum([cost == self.low_cost for (_, _, cost) in rel_obs])
-        n = prior_mean_failure * np.sum([cost == self.high_cost for (_, _, cost) in rel_obs])
+        alpha_p, beta_p = proposal_params(rel_obs, self.high_cost, self.low_cost, self.alpha_row, self.beta_row, current_p)
+        alpha_q, beta_q = proposal_params(rel_obs, self.high_cost, self.low_cost, self.alpha_col, self.beta_col, current_q)
 
-        ## normalise counts to cap their magnitude
-        cap = np.max([5, self.alpha_row + self.beta_row, self.alpha_col + self.beta_col])
-        total_count = m + n
-        if total_count > cap:
-            m = cap * m / total_count
-            n = cap * n / total_count
+        proposed_p = propose(alpha_p, beta_p)
+        proposed_q = propose(alpha_q, beta_q)
 
-        # Update Beta parameters based on observed data
-        alpha_prop = self.alpha_row + m if is_row else self.alpha_col + m
-        beta_prop = self.beta_row + n if is_row else self.beta_col + n
+        log_likelihood = compute_log_likelihood(sampled_i, sampled_j, rel_obs, proposed_p, proposed_q,
+                                                self.row_probs, self.col_probs, self.high_cost, self.low_cost)
 
-        return alpha_prop, beta_prop, m, n
-
-    def propose(self, alpha, beta):
-        return np.random.beta(alpha, beta)    
-
-    def LL(self, sampled_i, sampled_j, rel_obs, row_p, col_q):
-        log_likelihood = 0.0
-        for o in rel_obs:
-
-            if (o[0] == sampled_i) and (o[1] != sampled_j):
-                rel_p = row_p
-                rel_q = self.col_probs[o[1]]
-            elif (o[1] == sampled_j) and (o[0] != sampled_i):
-                rel_p = self.row_probs[o[0]]
-                rel_q = col_q
-            elif (o[0] == sampled_i) and (o[1] == sampled_j):
-                rel_p = row_p
-                rel_q = col_q
-            else:
-                raise ValueError("Observation does not match row or column.")
-            rel_cost = o[2]
-            prob_tmp = rel_p * rel_q
-
-            
-            ## high cost observed
-            if rel_cost == self.high_cost:
-                
-                ## pq = p(high cost)
-                # log_likelihood += np.log(prob_tmp)
-                # log_likelihood -= np.log(self.row_probs[sampled_i] * self.col_probs[sampled_j])
-
-                ## pq = p(low cost) (alternative case)
-                log_likelihood += np.log(1 - prob_tmp)
-                log_likelihood -= np.log(1 - self.row_probs[sampled_i] * self.col_probs[sampled_j])
-
-            ## low cost observed
-            elif rel_cost == self.low_cost:
-
-                ## pq = p(high cost)
-                # log_likelihood += np.log(1 - prob_tmp)
-                # log_likelihood -= np.log(1 - self.row_probs[sampled_i] * self.col_probs[sampled_j])
-
-                ## pq = p(low cost) (alternative case)
-                log_likelihood += np.log(prob_tmp)
-                log_likelihood -= np.log(self.row_probs[sampled_i] * self.col_probs[sampled_j])
-
-
-                
-        return log_likelihood
-
-
-    def update(self, state=None):
-
-        ## sample an observation at random
-        if state is None:
-            sampled_i, sampled_j, cost = self.sample_obs()
-            current_p = self.row_probs[sampled_i]
-            current_q = self.col_probs[sampled_j]
-        else:
-            sampled_i, sampled_j, cost = state
-            sampled_i = int(sampled_i)
-            sampled_j = int(sampled_j)
-            current_p = self.row_probs[sampled_i]
-            current_q = self.col_probs[sampled_j]
-
-        ## generate proposals
-        alpha_p, beta_p, m1, n1 = self.proposal_params(sampled_i, is_row=True)
-        alpha_q, beta_q, m2, n2 = self.proposal_params(sampled_j, is_row=False)
-        proposed_p = self.propose(alpha_p, beta_p)
-        proposed_q = self.propose(alpha_q, beta_q)
-
-        ## subselect relevant obs (i.e. those containing i or j)
-        rel_obs = [(i_, j_, cost_) for (i_, j_, cost_) in self.obs if (i_ == sampled_i) or (j_ == sampled_j)]
-
-        ## calculate likelihoods
-        log_likelihood = self.LL(sampled_i, sampled_j, rel_obs, proposed_p, proposed_q)
-
-        ## calculate prior * transition prob terms
-        proposal_distr_num = (m1 * np.log(current_p) + n1 * np.log(1 - current_p) + 
-                        m2 * np.log(current_q) + n2 * np.log(1 - current_q))
-        proposal_distr_den = (m1 * np.log(proposed_p) + n1 * np.log(1 - proposed_p) +
-                        m2 * np.log(proposed_q) + n2 * np.log(1 - proposed_q))        
-        log_acceptance_ratio = log_likelihood + proposal_distr_num - proposal_distr_den
-
-        
-        ## calculate acceptance ratio
-        epsilon = 1e-10
-        acceptance_ratio = np.exp(log_acceptance_ratio)
+        acceptance_ratio = np.exp(log_likelihood)
 
         if np.random.random() < min(1, acceptance_ratio):
             self.row_probs[sampled_i] = proposed_p
             self.col_probs[sampled_j] = proposed_q
-            self.n_accepted += 1
 
-    def LL_full(self, row_probs, col_probs):
-        log_likelihood = 0.0
-        for i, j, cost in self.obs:
-            prob_tmp = row_probs[i] * col_probs[j]
-            if cost == self.high_cost:
-                log_likelihood += np.log(prob_tmp)
-            else:
-                log_likelihood += np.log(1 - prob_tmp)
-        return log_likelihood
-
-    def update_full(self):
-        # Instead of sampling single i,j:
-        current_row_probs = self.row_probs.copy()
-        current_col_probs = self.col_probs.copy()
-        proposed_row_probs = np.zeros_like(self.row_probs)
-        proposed_col_probs = np.zeros_like(self.col_probs)
-        
-        # Generate proposals for all parameters
-        for i in range(len(self.row_probs)):
-            alpha_p, beta_p, m1, n1 = self.proposal_params(i, is_row=True)
-            proposed_row_probs[i] = self.propose(alpha_p, beta_p)
-        
-        for j in range(len(self.col_probs)):
-            alpha_q, beta_q, m2, n2 = self.proposal_params(j, is_row=False)
-            proposed_col_probs[j] = self.propose(alpha_q, beta_q)
-
-        # Calculate likelihood using ALL observations
-        likelihood_num = self.LL_full(proposed_row_probs, proposed_col_probs)
-        likelihood_den = self.LL_full(current_row_probs, current_col_probs)
-
-        # Calculate prior terms for all parameters
-        prior_num = 0
-        prior_den = 0
-        
-        # # Add row parameter contributions
-        for i in range(len(self.row_probs)):
-            _, _, m1, n1 = self.proposal_params(i, is_row=True)
-            prior_num += (m1 * np.log(current_row_probs[i]) + 
-                        n1 * np.log(1 - current_row_probs[i]))
-            prior_den += (m1 * np.log(proposed_row_probs[i]) + 
-                        n1 * np.log(1 - proposed_row_probs[i]))
-        
-        # Add column parameter contributions
-        for j in range(len(self.col_probs)):
-            _, _, m2, n2 = self.proposal_params(j, is_row=False)
-            prior_num += (m2 * np.log(current_col_probs[j]) + 
-                        n2 * np.log(1 - current_col_probs[j]))
-            prior_den += (m2 * np.log(proposed_col_probs[j]) + 
-                        n2 * np.log(1 - proposed_col_probs[j]))
-            
-
-        # Calculate log acceptance ratio
-        log_acceptance_ratio = (likelihood_num - likelihood_den) + (prior_num - prior_den)
-        acceptance_ratio = np.exp(log_acceptance_ratio)
-
-        # Accept or reject all proposals together
-        if np.random.random() < min(1, acceptance_ratio):
-            self.row_probs = proposed_row_probs
-            self.col_probs = proposed_col_probs
-            self.n_accepted += 1
-    
-
-    def lazy_sample(self, n_iter=100, state=None):
-        self.n_accepted = 0
-        """Run the sampler for a specified number of iterations."""
+    def lazy_sample(self, n_iter=100):
         for _ in range(n_iter):
-            self.update(state)
-        # print(f"Acceptance rate (lazy): {self.n_accepted / n_iter}")
-        return self.row_probs, self.col_probs
-    
-    def sample(self, n_iter=100):
-        self.n_accepted = 0
-        """Run the sampler for a specified number of iterations."""
-        for _ in range(n_iter):
-            self.update_full()
-        # print(f"Acceptance rate: {self.n_accepted / n_iter}")
+            self.update()
         return self.row_probs, self.col_probs
