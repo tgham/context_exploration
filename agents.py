@@ -21,6 +21,7 @@ from scipy.linalg import cholesky
 from minimax_tilting_sampler import TruncatedMVN
 from base_kernels import *
 from samplers import GridSampler
+# from c_samplers import GridSampler
 
 
 
@@ -377,22 +378,53 @@ class Farmer:
         self.beta_col = env.beta_col
 
     ## root sampling of surface
-    def root_sample(self, obs=None, n_iter=100, lazy=True, CE=False, state=None):
+    # def root_sample(self, obs=None, n_iter=100, lazy=True, CE=False, state=None):
+    #     sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, obs, N=self.N, CE=CE)
+
+    #     ## lazy
+    #     if lazy:
+    #         self.posterior_p, self.posterior_q = sampler.lazy_sample(n_iter = n_iter)
+    #         # self.posterior_p, self.posterior_q = sampler.lazy_sample(n_iter = n_iter, state=state)
+
+    #     ## full
+    #     else:
+    #         self.posterior_p, self.posterior_q = sampler.sample(n_iter = n_iter)
+
+    #     self.posterior_p_cost = np.outer(self.posterior_p, self.posterior_q)
+
+
+    ## generate full set of root samples
+    def root_samples(self, obs=None, n_samples=1000, n_iter=100, lazy=True, CE=False):
         sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, obs, N=self.N, CE=CE)
 
         ## lazy
         if lazy:
-            self.posterior_p, self.posterior_q = sampler.lazy_sample(n_iter = n_iter, state=state)
+            self.all_posterior_ps = np.zeros((n_samples, self.N))
+            self.all_posterior_qs = np.zeros((n_samples, self.N))
+            self.all_posterior_p_costs = np.zeros((n_samples, self.N, self.N))
 
-        ## full
-        else:
-            self.posterior_p, self.posterior_q = sampler.sample(n_iter = n_iter)
+            ## loop through samples
+            for s in range(n_samples):
+                self.all_posterior_ps[s,:], self.all_posterior_qs[s,:] = sampler.lazy_sample(n_iter = n_iter)
+                self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
 
-        self.posterior_p_cost = np.outer(self.posterior_p, self.posterior_q)
+        ## posterior means
+        self.posterior_mean_p_cost = np.mean(self.all_posterior_p_costs, axis=0)
+        self.posterior_mean_p = np.mean(self.all_posterior_ps, axis=0)
+        self.posterior_mean_q = np.mean(self.all_posterior_qs, axis=0)
+
+        ## debugging plot - kde of samples
+        # fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+        # for p in range(self.N):
+        #     sns.kdeplot(self.all_posterior_ps[:,p], ax=axs[0])
+        #     sns.kdeplot(self.all_posterior_qs[:,p], ax=axs[1])
+        # axs[0].set_title('p')
+        # axs[1].set_title('q')
+        # plt.show()
 
 
     ## dynamic programming
-    def dp(self, expected_cost=True):
+    def dp(self, posterior_p_cost, expected_cost=True):
 
         ## use expected cost of each state
         if expected_cost:
@@ -401,7 +433,7 @@ class Farmer:
             # dp_costs[self.goal[0], self.goal[1]] = 0
             
             ## p(low cost)
-            dp_costs = self.posterior_p_cost*self.low_cost + (1-self.posterior_p_cost)*self.high_cost
+            dp_costs = posterior_p_cost*self.low_cost + (1-posterior_p_cost)*self.high_cost
             dp_costs[self.goal[0], self.goal[1]] = 0
 
         ## or, sample costs using p and q probabilities 
@@ -411,7 +443,7 @@ class Farmer:
             # dp_costs[self.goal[0], self.goal[1]] = 0
 
             ## p(low cost)
-            dp_costs = np.array([self.low_cost if r < self.posterior_p_cost.flatten()[i] else self.high_cost for i, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
+            dp_costs = np.array([self.low_cost if r < posterior_p_cost.flatten()[i] else self.high_cost for i, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
             dp_costs[self.goal[0], self.goal[1]] = 0
 
 
