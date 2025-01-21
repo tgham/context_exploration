@@ -56,6 +56,7 @@ class GridSampler:
         self.alpha_col = alpha_col
         self.beta_col = beta_col
         self.obs = obs
+        self.CE = CE
         if self.obs is None:
             self.obs = np.array([])
         else:
@@ -64,14 +65,15 @@ class GridSampler:
         self.high_cost = -0.9
         self.low_cost = -0.1
 
-        if CE:
+    def init_pqs(self):
+        if self.CE:
             self.row_probs = np.full(self.N, self.alpha_row / (self.alpha_row + self.beta_row))
             self.col_probs = np.full(self.N, self.alpha_col / (self.alpha_col + self.beta_col))
             for o in self.obs:
                 if o[0] < self.N:
-                    self.row_probs[o[0]] = np.random.beta(self.alpha_row, self.beta_row)
+                    self.row_probs[int(o[0])] = np.random.beta(self.alpha_row, self.beta_row)
                 if o[1] < self.N:
-                    self.col_probs[o[1]] = np.random.beta(self.alpha_col, self.beta_col)
+                    self.col_probs[int(o[1])] = np.random.beta(self.alpha_col, self.beta_col)
         else:
             self.row_probs = np.random.beta(self.alpha_row, self.beta_row, size=self.N)
             self.col_probs = np.random.beta(self.alpha_col, self.beta_col, size=self.N)
@@ -100,6 +102,7 @@ class GridSampler:
             self.col_probs[sampled_j] = proposed_q
 
     def lazy_sample(self, n_iter=100):
+        self.init_pqs()
         for _ in range(n_iter):
             self.update()
         return self.row_probs, self.col_probs
