@@ -477,12 +477,12 @@ class MountainEnv(gym.Env):
                 self.obs = self.obs_tmp.copy()
 
                 ## sum of costs of route INC START AND END
-                # self.a_traj_costs = [self.costs[x, y] for x, y in self.a_traj]
-                # self.a_traj_total_cost = np.sum(self.a_traj_costs)
+                self.a_traj_costs = [self.costs[x, y] for x, y in self.a_traj]
+                self.a_traj_total_cost = np.sum(self.a_traj_costs)
 
                 ## sum of costs of route EXC START AND END
-                self.a_traj_costs = [self.costs[x, y] for x, y in self.a_traj[1:-1]]
-                self.a_traj_total_cost = np.sum(self.a_traj_costs)
+                # self.a_traj_costs = [self.costs[x, y] for x, y in self.a_traj[1:-1]]
+                # self.a_traj_total_cost = np.sum(self.a_traj_costs)
 
                 ## scores for the trial
                 self.action_score = np.nanmean(self.action_scores)
@@ -553,11 +553,11 @@ class MountainEnv(gym.Env):
                 break
 
         ## calculate the total cost of the trajectory INC START AND END
-        # o_traj_total_cost = np.sum(o_traj_costs)
+        o_traj_total_cost = np.sum(o_traj_costs)
 
         ## calculate the total cost of the trajectory EXC START AND END
-        o_traj_costs = o_traj_costs[1:-1]
-        o_traj_total_cost = np.sum(o_traj_costs)
+        # o_traj_costs = o_traj_costs[1:-1]
+        # o_traj_total_cost = np.sum(o_traj_costs)
 
         return o_traj, o_traj_costs, o_traj_total_cost, o_traj_actions
 
