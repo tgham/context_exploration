@@ -952,7 +952,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     ## discounts
                     sim_out['discounted_costs'].append(np.nan)
                     sim_out['total_discounted_cost'].append(np.nan)
-                    discounts = [discount_factor**d for d in range(len(env_copy.o_trajs[e]))]
+                    discounts = [discount_factor**d for d in range(len(env_copy.o_trajs[e]))] ## NEED TO FIX THIS BUT DON'T HAVE TIME
                     discounted_costs = [c*d for c,d in zip(env_copy.o_traj_costs[e], discounts)]
                     sim_out['discounted_optimal_costs'].append(discounted_costs)
                     sim_out['total_discounted_optimal_cost'].append(np.sum(discounted_costs))
@@ -978,10 +978,6 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     sim_out['actions'].append(actions)
                     sim_out['CE_actions'].append(CE_actions)
                     sim_out['optimal_actions'].append(env_copy.o_traj_actions[e])
-                    sim_out['costs'].append(env_copy.a_traj_costs)
-                    sim_out['optimal_costs'].append(env_copy.o_traj_costs[e])
-                    sim_out['total_cost'].append(env_copy.a_traj_total_cost)
-                    sim_out['total_optimal_cost'].append(env_copy.o_traj_total_costs[e])
                     # if np.round(env_copy.optimal_cost,4) < np.round(env_copy.accrued_cost,4):
                     #     print(env_copy.optimal_cost, env_copy.accrued_cost)
                     # assert np.round(env_copy.optimal_cost,4) >= np.round(env_copy.accrued_cost,4), 'accrued cost higher than optimal cost'
@@ -998,16 +994,44 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     sim_out['expected_KL'].append(EKLs)
 
 
+                    ### costs
+
+                    ## actual costs
+                    sim_out['costs'].append(env_copy.a_traj_costs)
+                    sim_out['optimal_costs'].append(env_copy.o_traj_costs[e])
+                   
+                    # INC START AND END COSTS
+                    # sim_out['total_cost'].append(env_copy.a_traj_total_cost) 
+                    # sim_out['total_optimal_cost'].append(env_copy.o_traj_total_costs[e])
+
+                    # EXC START AND END COSTS
+                    sim_out['total_cost'].append(np.sum(env_copy.a_traj_costs[1:-1]))
+                    sim_out['total_optimal_cost'].append(np.sum(env_copy.o_traj_costs[e][1:-1]))
+
+
+
                     ## calculate discounted actual and optimal costs
-                    discounts = [discount_factor**d for d in range(len(env_copy.a_traj_costs))]
-                    discounted_costs = [c*d for c,d in zip(env_copy.a_traj_costs, discounts)]
+
+                    ## INC START AND END COSTS
+                    # discounts = [discount_factor**d for d in range(len(env_copy.a_traj_costs))] 
+                    # discounted_costs = [c*d for c,d in zip(env_copy.a_traj_costs, discounts)]
+                    # sim_out['discounted_costs'].append(discounted_costs)
+                    # sim_out['total_discounted_cost'].append(np.sum(discounted_costs))
+                    # discounts = [discount_factor**d for d in range(len(env_copy.o_trajs[e]))]
+                    # discounted_costs = [c*d for c,d in zip(env_copy.o_traj_costs[e], discounts)]
+                    # sim_out['discounted_optimal_costs'].append(discounted_costs)
+                    # sim_out['total_discounted_optimal_cost'].append(np.sum(discounted_costs))
+
+                    ## EXC START AND END COSTS
+                    discounts = [discount_factor**d for d in range(len(env_copy.a_traj_costs)-2)]
+                    discounted_costs = [c*d for c,d in zip(env_copy.a_traj_costs[1:-1], discounts)]
                     sim_out['discounted_costs'].append(discounted_costs)
                     sim_out['total_discounted_cost'].append(np.sum(discounted_costs))
-
-                    discounts = [discount_factor**d for d in range(len(env_copy.o_trajs[e]))]
-                    discounted_costs = [c*d for c,d in zip(env_copy.o_traj_costs[e], discounts)]
+                    discounts = [discount_factor**d for d in range(len(env_copy.o_trajs[e])-2)]
+                    discounted_costs = [c*d for c,d in zip(env_copy.o_traj_costs[e][1:-1], discounts)]
                     sim_out['discounted_optimal_costs'].append(discounted_costs)
                     sim_out['total_discounted_optimal_cost'].append(np.sum(discounted_costs))
+
                     
                     ## GP-specific
                     # sim_out['true_k'].append(true_k)
