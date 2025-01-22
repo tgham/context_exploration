@@ -21,12 +21,15 @@ from collections import deque
 from minimax_tilting_sampler import TruncatedMVN
 import ast
 from scipy.spatial import cKDTree as KDTree
+import cProfile
+import pstats
+import subprocess
 # from MCTS import MonteCarloTreeSearch
 
 
 
 ## create a mountain environment
-def make_env(N, n_episodes, true_k, beta_params, metric):
+def make_env(N, n_episodes, true_k, beta_params, metric, seed=None):
 
     ## register env
     
@@ -43,7 +46,7 @@ def make_env(N, n_episodes, true_k, beta_params, metric):
         kwargs={"size": N},
     )
     
-    env = gym.make("mountains/MountainEnv-v0", N=N, n_episodes=n_episodes, true_k=true_k, beta_params=beta_params, metric=metric)
+    env = gym.make("mountains/MountainEnv-v0", N=N, n_episodes=n_episodes, true_k=true_k, beta_params=beta_params, metric=metric, seed=seed)
     return env
 
 
@@ -62,8 +65,8 @@ class Node:
         self.cost = cost
         self.terminated = terminated
         # self.node_id = str(np.append(self.history, self.state))
-        self.node_id = str(state)
-        self.state_id = str(state)
+        self.node_id = tuple(state)
+        self.state_id = tuple(state)
         self.parent_node_ids = []
         # self.children_node_ids = []
         self.N = N
@@ -111,7 +114,7 @@ class Action_Node:
         self.n_action_visits = 0
         self.next_state = next_state
         self.terminated = terminated
-        self.node_id = str(self.prev_state) + str(self.action) #+ str(self.next_state)
+        self.node_id = (self.prev_state, self.action) #+ str(self.next_state)
         self.children={}
         self.children_ids = []
 
@@ -161,7 +164,9 @@ class Tree:
             
             ## add this state node to the children of the previous action leaf
             parent.children_ids.append(node.node_id)
-            parent.children[str(np.append(state, cost))] = node
+            child_key = tuple(np.append(state, cost))
+            parent.children[child_key] = node
+            # parent.children[str(np.append(state, cost))] = node
             # parent.children[node.state_id] = node
 
         return node
@@ -312,10 +317,10 @@ class Tree:
             del self.root.action_leaves[a]
 
         ## delete subtree for the other state reachable from the root-action pair
-        self.root.action_leaves[action].children = {str(next_state): self.root.action_leaves[action].children[str(next_state)]}
+        self.root.action_leaves[action].children = {tuple(next_state): self.root.action_leaves[action].children[tuple(next_state)]}
 
         ## update the root
-        self.root = self.root.action_leaves[action].children[str(next_state)]
+        self.root = self.root.action_leaves[action].children[tuple(next_state)]
 
         
 
@@ -519,3 +524,34 @@ def KL_divergence(x, y):
     # There is a mistake in the paper. In Eq. 14, the right side misses a negative sign
     # on the first term of the right hand side.
     return -np.log(r/s).sum() * d / n + np.log(m / (n - 1.))
+
+
+def profile_func(func, *args, **kwargs):
+
+    ## check first of all if a profiler is active, in which case disable it
+    if cProfile.Profile().disable() is not None:
+        cProfile.Profile().disable()
+
+    ## profile the function
+    profiler = cProfile.Profile()
+    profiler.enable()
+    func(*args, **kwargs)
+    profiler.disable()
+
+    ## save profiling report
+    func_name = func.__name__
+    profile_file = f'{func_name}_profile.pstats'
+    profiler.dump_stats(profile_file)
+    with open(f'{func_name}_profile.txt', 'w') as f:
+        p = pstats.Stats(profiler, stream=f)
+        p.sort_stats('cumulative').print_stats(50)
+
+    ## convert to dot file
+    dot_file = f'{func_name}_profile.dot'
+    subprocess.run(['gprof2dot', '-f', 'pstats', profile_file, '-o', dot_file], check=True)
+
+    ## generate PNG visualization
+    png_file = f'{func_name}_profile.png'
+    subprocess.run(['dot', '-Tpng', dot_file, '-o', png_file], check=True)
+
+    print(f"Profiling complete. Visualization saved as {png_file}")
