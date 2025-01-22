@@ -136,7 +136,7 @@ class MonteCarloTreeSearch():
                 self.tree_costs.append(cost)
 
                 ## see if the next state node already exists as a child of this action leaf
-                state_id = str(np.append(next_state, cost))
+                state_id = tuple(np.append(next_state, cost))
                 if state_id in action_leaf.children:
                     node = action_leaf.children[state_id]
                 else:
@@ -459,7 +459,7 @@ class MonteCarloTreeSearch():
 
             ## next node
             if depth < path_len-1:
-                node = action_leaf.children[str(self.tree_path[depth+1][0])]
+                node = action_leaf.children[tuple(self.tree_path[depth+1][0])]
             # try:
             #     node = action_leaf.children[str(self.tree_path[depth+1][0])]
             # except:
