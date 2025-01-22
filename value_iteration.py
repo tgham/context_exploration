@@ -1,9 +1,9 @@
 import numpy as np
-from numba import jit
+from numba import jit, njit
 from utils import argm
 
 ## value iteration
-@jit(nopython=True)
+@njit
 def value_iteration(dp_costs, goal, max_iters = 1000, theta = 0.0001, discount = 0.99):
 
     N = len(dp_costs)
@@ -34,14 +34,14 @@ def value_iteration(dp_costs, goal, max_iters = 1000, theta = 0.0001, discount =
         for x in range(N):
             for y in range(N):
                 
-                ## (make sure the goal state has value 0)
-                # if (x, y) == tuple(goal):
-                if np.array_equal([x, y], goal):
+                ## skip if at goal state to ensure that v(goal) = 0
+                if x == goal[0] and y == goal[1]:
                     # V[x, y] = 0
                     continue
 
                 v = V[x, y]
-                q = np.zeros(n_actions)
+                # q = np.zeros(n_actions)
+                q = np.full(n_actions, np.nan)
 
                 ## loop through actions and get the discounted value of each of the next states
                 for a in range(n_actions):
@@ -51,20 +51,17 @@ def value_iteration(dp_costs, goal, max_iters = 1000, theta = 0.0001, discount =
                     # q[a] = dp_costs[next_state[0], next_state[1]] + discount*V[next_state[0], next_state[1]]
 
                     ## or, don't allow wall moves
-                    next_state = np.array([x, y]) + action_directions[a]
-                    if (next_state[0] >= 0) and (next_state[0] < N) and (next_state[1] >= 0) and (next_state[1] < N):
-                        q[a] = dp_costs[next_state[0], next_state[1]] + discount*V[next_state[0], next_state[1]]
-                    else:
-                        q[a] = np.nan
+                    next_x = x + action_directions[a][0]
+                    next_y = y + action_directions[a][1]
+                    if 0 <= next_x < N and 0 <= next_y < N:
+                        q[a] = dp_costs[next_x, next_y] + discount * V[next_x, next_y]
 
-                    ## update the Q-table
-                    Q[x, y, a] = q[a]
+                ## update the Q-table
+                Q[x, y] = q
 
                 ## use the best action to update the value of the current state
                 V[x, y] = np.nanmax(q)
 
-                # A[x, y] = np.argmax(q)
-                # A[x, y] = argm(q, np.nanmax(q))
                 idx = np.where(q == np.nanmax(q))[0]
                 A[x, y] = np.random.choice(idx)
 
@@ -81,3 +78,4 @@ def value_iteration(dp_costs, goal, max_iters = 1000, theta = 0.0001, discount =
     ## need to check if this has lead to a valid policy
 
     return V, Q, A
+
