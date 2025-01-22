@@ -1,9 +1,9 @@
 from numba import njit
 import numpy as np
 import random
-from math import log
+from math import log, exp
 
-@njit(nopython=True)
+@njit
 def compute_log_likelihood(sampled_i, sampled_j, rel_obs, proposed_row_p, proposed_col_q, current_row_p, current_col_q, high_cost, low_cost):
     log_likelihood = 0.0
     for o in rel_obs:
@@ -45,11 +45,11 @@ def compute_log_likelihood(sampled_i, sampled_j, rel_obs, proposed_row_p, propos
 
     return log_likelihood
 
-@njit(nopython=True)
+@njit
 def propose(alpha, beta):
     return np.random.beta(alpha, beta)
 
-@njit(nopython=True)
+@njit
 def proposal_params(sampled_idx, alpha_prior, beta_prior, low_counts, high_counts):
 
     ## calculate prior mean failure
@@ -80,7 +80,7 @@ def proposal_params(sampled_idx, alpha_prior, beta_prior, low_counts, high_count
     return alpha_prop, beta_prop, m, n
 
 
-@njit(nopython=True)
+@njit
 def random_idx(arr_len):
     return np.random.randint(arr_len)
 
@@ -126,10 +126,11 @@ class GridSampler:
 
 
 
-    def update(self):
+    def update(self, it):
 
         ## get a random observation and the current p and q associated with it
-        sampled_obs = self.obs[random_idx(len(self.obs))]
+        # sampled_obs = self.obs[random_idx(len(self.obs))]
+        sampled_obs = self.obs[self.random_idxs[it]]
         # sampled_i, sampled_j = sampled_obs[0], sampled_obs[1]
         sampled_i, sampled_j = int(sampled_obs[0]), int(sampled_obs[1])
         current_p = self.row_probs[sampled_i]
@@ -171,15 +172,22 @@ class GridSampler:
         
         ## acceptance ratio
         log_acceptance_ratio = log_likelihood + proposal_distr_num - proposal_distr_den
-        acceptance_ratio = np.exp(log_acceptance_ratio)
+        acceptance_ratio = exp(log_acceptance_ratio)
 
-        if np.random.random() < min(1, acceptance_ratio):
+        # if np.random.random() < min(1, acceptance_ratio):
+        if self.acceptance_thresholds[it] < min(1, acceptance_ratio):
             self.row_probs[sampled_i] = proposed_p
             self.col_probs[sampled_j] = proposed_q
 
     def lazy_sample(self, n_iter=100):
         self.init_pqs()
-        for _ in range(n_iter):
-            self.update()
+        
+        ## precompute some misc things
+        self.random_idxs = np.random.randint(len(self.obs), size=n_iter)
+        self.acceptance_thresholds = np.random.random(n_iter)
+
+        ## iterate
+        for it in range(n_iter):
+            self.update(it)
         return self.row_probs, self.col_probs
     
