@@ -48,8 +48,13 @@ class MonteCarloTreeSearch():
 
         ## take action and get new state
         action = node.untried_action()
-        next_state, cost, terminated, truncated, _ = self.env.step(action)
-        # next_state = observation['agent']
+        # next_state, cost, terminated, truncated, _ = self.env.step(action)
+
+        ## or, do this without updating the environment object
+        next_state = np.clip(actual_state + self.env.action_to_direction[action],
+                                0, self.N - 1)
+        cost = self.env.get_pred_cost(next_state)
+        terminated = np.array_equal(next_state, self.env.goal)
 
         ## update info for s-a leaf - i.e. the state-action pair
         node.action_leaves[action] = Action_Node(prev_state = node.state, action=action, next_state = next_state, terminated=terminated)
@@ -105,16 +110,11 @@ class MonteCarloTreeSearch():
                 node.n_state_visits += 1
 
                 ## revert env
-                self.env.set_state(actual_state)
+                # self.env.set_state(actual_state)
 
                 ## save tree obs for subsequent rollouts
-                self.tree_obs = self.env.obs_tmp.copy()
-                self.env.flush_obs()
-                # if len(self.tree_obs) != len(self.env.obs)+len(self.tree_path):
-                #     print('env obs:',self.env.obs)
-                #     print('tree obs:',self.tree_obs)
-                #     print('tree path:',self.tree_path)
-                # assert len(self.tree_obs) == len(self.env.obs)+len(self.tree_path), 'tree obs and path lengths do not match\n tree obs: {}, env.obs: {}, tree path: {}'.format(len(self.tree_obs), len(self.env.obs),len(self.tree_path))
+                # self.tree_obs = self.env.obs_tmp.copy()
+                # self.env.flush_obs()
 
                 return action_leaf
                 
@@ -122,9 +122,9 @@ class MonteCarloTreeSearch():
             else:
 
                 ## (some debugging vars)
-                state_tmp = node.state[:2]
+                # state_tmp = node.state[:2]
                 # env_state_tmp = self.env.get_obs()['agent']
-                env_state_tmp = self.env.current
+                # env_state_tmp = self.env.current
 
                 ## get the best child
                 action_leaf = self.best_child(node)
@@ -132,7 +132,13 @@ class MonteCarloTreeSearch():
                 self.node_id_path.append(node.node_id)
 
                 ## move in env
-                next_state, cost, terminated, _, _ = self.env.step(action_leaf.action)
+                # next_state, cost, terminated, _, _ = self.env.step(action_leaf.action)
+                # self.tree_costs.append(cost)
+
+                ## or, do this without updating the environment object
+                next_state = action_leaf.next_state
+                cost = self.env.get_pred_cost(next_state)
+                terminated = action_leaf.terminated
                 self.tree_costs.append(cost)
 
                 ## see if the next state node already exists as a child of this action leaf
@@ -141,8 +147,7 @@ class MonteCarloTreeSearch():
                     node = action_leaf.children[state_id]
                 else:
                     node = self.tree.add_state_node(next_state, cost, terminated, action_space = self.action_space, parent=action_leaf)
-                assert np.array_equal(node.state[:2], next_state), 'error in tree policy step {}\n started in {}\n supposed to take action {} to {}\n ended up moving from {} to {}'.format(t, state_tmp, action_leaf.action, node.state[:2], env_state_tmp, action_leaf.next_state)
-
+                # assert np.array_equal(node.state[:2], next_state), 'error in tree policy step {}\n started in {}\n supposed to take action {} to {}\n ended up moving from {} to {}'.format(t, state_tmp, action_leaf.action, node.state[:2], env_state_tmp, action_leaf.next_state)
 
                 ## update counts already?
                 action_leaf.n_action_visits += 1
@@ -162,8 +167,8 @@ class MonteCarloTreeSearch():
         self.env.set_state(actual_state)
 
         ## save tree obs for subsequent rollouts
-        self.tree_obs = self.env.obs_tmp.copy()
-        self.env.flush_obs()
+        # self.tree_obs = self.env.obs_tmp.copy()
+        # self.env.flush_obs()
         # assert len(self.tree_obs) == len(self.env.obs)+len(self.tree_path), 'tree obs and path lengths do not match\n tree obs: {}, env.obs: {}, tree path: {}'.format(len(self.tree_obs), len(self.env.obs),len(self.tree_path))
 
         return action_leaf
@@ -698,7 +703,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     ## get and take action
                     action = agent.optimal_policy(current, agent.Q_inf)
                     actions.append(action)
-                    current, _, terminated, truncated, _ = env_copy.step(action)
+                    current, _, terminated, _, _ = env_copy.step(action)
                     # current = observation['agent']
                     steps += 1
 
@@ -751,7 +756,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                         
                         ## take action
                         env_copy.set_sim(False)
-                        current, cost, terminated, truncated, _ = env_copy.step(action)
+                        current, cost, terminated, _, _ = env_copy.step(action)
                         # current = observation['agent']
                         steps += 1
                         
@@ -787,7 +792,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                                 env_copy.set_sim(False)
                                 for state, action in zip(traj_states, traj_actions):
                                     assert np.array_equal(state, current), 'error in trajectory execution\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, state, action)
-                                    current, _, terminated, truncated, _ = env_copy.step(action)
+                                    current, _, terminated, _, _ = env_copy.step(action)
                                     # current = observation['agent']
                                     steps += 1
                                     # if terminated:
