@@ -39,11 +39,14 @@ class Actions(Enum):
 
 class MountainEnv(gym.Env):
 
-    def __init__(self, N, n_episodes=1, true_k=None, beta_params=None, metric = 'cityblock', size=5):
+    def __init__(self, N, n_episodes=1, true_k=None, beta_params=None, metric = 'cityblock', size=5, seed=None):
         
-        ## seed?
-        # seed = np.random.randint(0, 1000)
-        # np.random.seed(seed)
+        ## seed
+        if seed is not None:
+            seed = np.random.randint(0, 1000)
+        self.seed = seed
+        np.random.seed(self.seed)
+
 
         ## initialise the GP grid
         self.N = N
@@ -129,16 +132,17 @@ class MountainEnv(gym.Env):
         """
         if self.metric == 'cityblock':
             self.action_space = spaces.Discrete(4)
-            self._action_to_direction = {
-                Actions.right.value: np.array([1, 0]),
-                Actions.up.value: np.array([0, 1]),
-                Actions.left.value: np.array([-1, 0]),
-                Actions.down.value: np.array([0, -1]),
-            }
+            # self.action_to_direction = {
+            #     Actions.right.value: np.array([1, 0]),
+            #     Actions.up.value: np.array([0, 1]),
+            #     Actions.left.value: np.array([-1, 0]),
+            #     Actions.down.value: np.array([0, -1]),
+            # }
+            self.action_to_direction = np.array([[1, 0], [0, 1], [-1, 0], [0, -1]])
             self.n_actions = 4
         elif self.metric == 'chebyshev':
             self.action_space = spaces.Discrete(8)
-            self._action_to_direction = {
+            self.action_to_direction = {
                 Actions.right.value: np.array([1, 0]),
                 Actions.up.value: np.array([0, 1]),
                 Actions.left.value: np.array([-1, 0]),
@@ -404,20 +408,21 @@ class MountainEnv(gym.Env):
     ## take a step in the environment
     def step(self, action):
         
-        ## first, get the ranking of the best actions to take under the *true* optimal policy, given the agent's current position
-        current_Q_vals = self.Q_true[self._agent_location[0], self._agent_location[1], :]
-        action_ranking = rankdata(current_Q_vals, method='max') - 1
+        ## if not simulating, get the ranking of the best actions to take under the *true* optimal policy, given the agent's current position
+        # current_Q_vals = self.Q_true[self._agent_location[0], self._agent_location[1], :]
+        # action_ranking = rankdata(current_Q_vals, method='max') - 1
 
-        ## get the score of the action that will  actually be taken, given the ranking of the optimal actions
-        action_score = action_ranking[action] + 1
-        action_score /= self.n_actions ## may be more suitable to divide by len(actions) in case of wall states
+        # ## get the score of the action that will  actually be taken, given the ranking of the optimal actions
+        # action_score = action_ranking[action] + 1
+        # action_score /= self.n_actions ## may be more suitable to divide by len(actions) in case of wall states
 
-        ## or, score the action based on the normalised Q-values of the available actions
-        norm_Q_vals = (current_Q_vals - np.nanmin(current_Q_vals)) / (np.nanmax(current_Q_vals) - np.nanmin(current_Q_vals))
-        action_score = norm_Q_vals[action]
+        # ## or, score the action based on the normalised Q-values of the available actions
+        # norm_Q_vals = (current_Q_vals - np.nanmin(current_Q_vals)) / (np.nanmax(current_Q_vals) - np.nanmin(current_Q_vals))
+        # action_score = norm_Q_vals[action]
+
         
         ## take the actual action 
-        direction = self._action_to_direction[action] 
+        direction = self.action_to_direction[action] 
 
         ## move to the new state
         self._agent_location = np.clip(

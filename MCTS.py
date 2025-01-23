@@ -346,14 +346,16 @@ class MonteCarloTreeSearch():
             action = int(self.agent.A_inf[i, j])  # Ensure action index is int
             
             # Take action and update current state
-            if action == 0:  # Down
-                current = np.clip((i + 1, j), 0, self.N - 1)
-            elif action == 1:  # Right
-                current = np.clip((i, j + 1), 0, self.N - 1)
-            elif action == 2:  # Up
-                current = np.clip((i - 1, j), 0, self.N - 1)
-            elif action == 3:  # Left
-                current = np.clip((i, j - 1), 0, self.N - 1)
+            direction = self.env.action_to_direction[action]
+            current = np.clip(current + direction, 0, self.N - 1)
+            # if action == 0:  # Down
+            #     current = np.clip((i + 1, j), 0, self.N - 1)
+            # elif action == 1:  # Right
+            #     current = np.clip((i, j + 1), 0, self.N - 1)
+            # elif action == 2:  # Up
+            #     current = np.clip((i - 1, j), 0, self.N - 1)
+            # elif action == 3:  # Left
+            #     current = np.clip((i, j - 1), 0, self.N - 1)
             
             ## return cost once goal is reached (i.e. don't use the cost of the goal state)
             if np.array_equal(current, goal):
@@ -432,7 +434,7 @@ class MonteCarloTreeSearch():
             # state_node = self.tree.nodes[state_node_id]
             # action_leaf = state_node.action_leaves[action]
             action_leaf = node.action_leaves[action]
-            np.array_equal(node.state[:2], state), 'error in tree path\n node: {} \n state: {}'.format(node, state)
+            # assert np.array_equal(node.state[:2], [:2]), 'error in tree path\n node: {} \n state: {}'.format(node.state[:2], state[:2])
 
             ## discounted costs from current node to rollout node
             # discounted_tree_cost = 0
@@ -493,13 +495,8 @@ class MonteCarloTreeSearch():
 
             if progress:
                 pbar.update(1)
-                
-            # ## root sampling of new kernel
-            # K_inf = self.GP.sample_k()
             
             ## root sampling of new posterior
-            # self.GP.root_sample(self.env.obs, K_inf)
-            # self.agent.root_sample(self.env.obs)
             posterior_p_cost = self.agent.all_posterior_p_costs[t]
             self.agent.dp(posterior_p_cost, expected_cost=True)
             self.env.receive_predictions(posterior_p_cost)
