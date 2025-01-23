@@ -2,6 +2,7 @@ from numba import njit
 import numpy as np
 import random
 from math import log, exp
+from functools import lru_cache
 
 @njit
 def compute_log_likelihood(sampled_i, sampled_j, rel_obs, proposed_row_p, proposed_col_q, current_row_p, current_col_q, high_cost, low_cost):
@@ -49,8 +50,9 @@ def compute_log_likelihood(sampled_i, sampled_j, rel_obs, proposed_row_p, propos
 def propose(alpha, beta):
     return np.random.beta(alpha, beta)
 
-@njit
-def proposal_params(sampled_idx, alpha_prior, beta_prior, low_counts, high_counts):
+# @njit
+@lru_cache(maxsize=None)
+def proposal_params(alpha_prior, beta_prior, low_counts, high_counts):
 
     ## calculate prior mean failure
     prior_mean_failure = 1-(
@@ -84,6 +86,11 @@ def proposal_params(sampled_idx, alpha_prior, beta_prior, low_counts, high_count
 def random_idx(arr_len):
     return np.random.randint(arr_len)
 
+# @lru_cache(maxsize=None)
+# def get_rel_obs(obs, sampled_i, sampled_j):
+#     rel_obs = np.array([(i_, j_, cost_) for (i_, j_, cost_) in obs if (i_ == sampled_i) or (j_ == sampled_j)], dtype=np.float64)
+#     return rel_obs
+
 class GridSampler:
     def __init__(self, alpha_row, beta_row, alpha_col, beta_col, obs, N=10, CE=False):
         self.alpha_row = alpha_row
@@ -103,6 +110,7 @@ class GridSampler:
         ## cache obs groups for lazy sampling
         self.row_to_obs = {i: [(i, j, cost) for (i_, j, cost) in self.obs if i_ == i] for i in range(self.N)}
         self.col_to_obs = {j: [(i, j, cost) for (i, j_, cost) in self.obs if j_ == j] for j in range(self.N)}
+        self.cached_obs = {}
 
         ## precompute the number of high and low costs for each row and column
         self.low_counts_rows = np.array([np.sum([cost == self.low_cost for (_, _, cost) in self.row_to_obs[i]]) for i in range(self.N)])
@@ -125,7 +133,6 @@ class GridSampler:
             self.col_probs = np.random.beta(self.alpha_col, self.beta_col, size=self.N)
 
 
-
     def update(self, it):
 
         ## get a random observation and the current p and q associated with it
@@ -142,12 +149,12 @@ class GridSampler:
         ## first for the row
         low_counts_row = self.low_counts_rows[sampled_i]
         high_counts_row = self.high_counts_rows[sampled_i]
-        alpha_p, beta_p, m1, n1 = proposal_params(sampled_i, self.alpha_row, self.beta_row, low_counts_row, high_counts_row)
+        alpha_p, beta_p, m1, n1 = proposal_params(self.alpha_row, self.beta_row, low_counts_row, high_counts_row)
 
         ## then for the column
         low_counts_col = self.low_counts_cols[sampled_j]
         high_counts_col = self.high_counts_cols[sampled_j]
-        alpha_q, beta_q, m2, n2 = proposal_params(sampled_j, self.alpha_col, self.beta_col, low_counts_col, high_counts_col)
+        alpha_q, beta_q, m2, n2 = proposal_params(self.alpha_col, self.beta_col, low_counts_col, high_counts_col)
 
         ## draw from proposal distribution
         proposed_p = propose(alpha_p, beta_p)
@@ -158,7 +165,8 @@ class GridSampler:
         # rel_col_obs = [obs for obs in self.col_to_obs[sampled_j] if obs[0] != sampled_i] #need to ensure that this array doesn't also include the observation for row=i and col=j, since this is already included in rel_row_obs
         # rel_obs = rel_row_obs + rel_col_obs
         # rel_obs = np.array([(int(i), int(j), cost) for i, j, cost in self.obs if i == sampled_i or j == sampled_j], dtype=np.float64)
-        rel_obs = np.array([(i_, j_, cost_) for (i_, j_, cost_) in self.obs if (i_ == sampled_i) or (j_ == sampled_j)], dtype=np.float64)
+        # rel_obs = np.array([(i_, j_, cost_) for (i_, j_, cost_) in self.obs if (i_ == sampled_i) or (j_ == sampled_j)], dtype=np.float64)
+        rel_obs = self.get_rel_obs(sampled_i, sampled_j)
 
         ## calculate likelihoods
         log_likelihood = compute_log_likelihood(sampled_i, sampled_j, rel_obs, proposed_p, proposed_q,
@@ -190,4 +198,11 @@ class GridSampler:
         for it in range(n_iter):
             self.update(it)
         return self.row_probs, self.col_probs
+    
+    def get_rel_obs(self, sampled_i, sampled_j):
+        if (sampled_i, sampled_j) in self.cached_obs:
+            return self.cached_obs[(sampled_i, sampled_j)]
+        rel_obs = np.array([(i_, j_, cost_) for (i_, j_, cost_) in self.obs if (i_ == sampled_i) or (j_ == sampled_j)], dtype=np.float64)
+        self.cached_obs[(sampled_i, sampled_j)] = rel_obs
+        return rel_obs
     
