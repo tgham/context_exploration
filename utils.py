@@ -24,7 +24,9 @@ from scipy.spatial import cKDTree as KDTree
 import cProfile
 import pstats
 import subprocess
-# from MCTS import MonteCarloTreeSearch
+import time
+from numba import jit, njit
+
 
 
 
@@ -321,15 +323,6 @@ class Tree:
 
         ## update the root
         self.root = self.root.action_leaves[action].children[tuple(next_state)]
-
-        
-
-
-            
-
-
-
-
         
 
 
@@ -555,3 +548,13 @@ def profile_func(func, *args, **kwargs):
     subprocess.run(['dot', '-Tpng', dot_file, '-o', png_file], check=True)
 
     print(f"Profiling complete. Visualization saved as {png_file}")
+
+
+## cached function for moving to the next state
+def get_next_state(current, direction, N):
+    next_state = np.clip(
+        current + direction,
+        0,
+        N - 1
+    )
+    return next_state
