@@ -48,8 +48,8 @@ class MonteCarloTreeSearch():
 
         ## take action and get new state
         action = node.untried_action()
-        observation, cost, terminated, truncated, info = self.env.step(action)
-        next_state = observation['agent']
+        next_state, cost, terminated, truncated, _ = self.env.step(action)
+        # next_state = observation['agent']
 
         ## update info for s-a leaf - i.e. the state-action pair
         node.action_leaves[action] = Action_Node(prev_state = node.state, action=action, next_state = next_state, terminated=terminated)
@@ -123,7 +123,8 @@ class MonteCarloTreeSearch():
 
                 ## (some debugging vars)
                 state_tmp = node.state[:2]
-                env_state_tmp = self.env.get_obs()['agent']
+                # env_state_tmp = self.env.get_obs()['agent']
+                env_state_tmp = self.env.current
 
                 ## get the best child
                 action_leaf = self.best_child(node)
@@ -131,8 +132,7 @@ class MonteCarloTreeSearch():
                 self.node_id_path.append(node.node_id)
 
                 ## move in env
-                observation, cost, terminated, _, _ = self.env.step(action_leaf.action)
-                next_state = observation['agent']
+                next_state, cost, terminated, _, _ = self.env.step(action_leaf.action)
                 self.tree_costs.append(cost)
 
                 ## see if the next state node already exists as a child of this action leaf
@@ -207,7 +207,8 @@ class MonteCarloTreeSearch():
             ## begin with cost of current state
             starting_cost = env_copy.get_pred_cost(start)
             total_cost += starting_cost
-            observation = env_copy.get_obs()
+            # observation = env_copy.get_obs()
+            current = start
 
             ## rollout until trial is terminated 
             while True:
@@ -227,7 +228,7 @@ class MonteCarloTreeSearch():
 
                 #     ## raise error
                 #     raise ValueError('exceeded max rolls in {} rollout, start: {}, goal: {}'.format(['imagined', 'real'][real_rollout], start, goal))
-                current = observation['agent']
+                # current = observation['agent']
 
 
                 ## or, greedy
@@ -238,7 +239,7 @@ class MonteCarloTreeSearch():
                 action = self.agent.optimal_policy(current, self.agent.Q_inf)
 
                 ## take action
-                observation, cost, terminated, _, _ = env_copy.step(action)
+                current, cost, terminated, _, _ = env_copy.step(action)
                 
                 ## if terminated return the cost (i.e. don't use the cost of the goal state)
                 if terminated:
@@ -273,7 +274,8 @@ class MonteCarloTreeSearch():
                 _,_ = env_copy.reset(seed=seed, start_goal=[start, goal])
                 # start = env_copy.current
                 # goal = env_copy.goal
-                observation = env_copy.get_obs()
+                # observation = env_copy.get_obs()
+                current = start
                 agent_copy.get_env_info(env_copy)
 
                 ## get DP Q-values for the new start and goal under the current posterior sample
@@ -296,7 +298,7 @@ class MonteCarloTreeSearch():
 
                         ## raise error
                         raise ValueError('exceeded max rolls in {} rollout, start: {}, goal: {}'.format(['imagined', 'real'][real_rollout], start, goal))
-                    current = observation['agent']
+                    # current = observation['agent']
 
 
                     ## optimised rollout 
@@ -306,7 +308,7 @@ class MonteCarloTreeSearch():
                     # action = agent_copy.greedy_policy(current, goal, eps = 0.0)
 
                     ## take action
-                    observation, cost, terminated, _, _ = env_copy.step(action)
+                    current, cost, terminated, _, _ = env_copy.step(action)
 
                     ## if terminated return the cost (i.e. don't use the cost of the goal state)
                     if terminated:
@@ -648,8 +650,8 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     actions.append(action)
 
                     ## action
-                    observation, _, terminated, truncated, info = env_copy.step(action)
-                    current = observation['agent']
+                    current, _, terminated, truncated, _ = env_copy.step(action)
+                    # current = observation['agent']
                     steps += 1
 
                     search_attempts = 0 # could do nan
@@ -696,8 +698,8 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     ## get and take action
                     action = agent.optimal_policy(current, agent.Q_inf)
                     actions.append(action)
-                    observation, _, terminated, truncated, info = env_copy.step(action)
-                    current = observation['agent']
+                    current, _, terminated, truncated, _ = env_copy.step(action)
+                    # current = observation['agent']
                     steps += 1
 
                     ## update observations
@@ -749,8 +751,8 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                         
                         ## take action
                         env_copy.set_sim(False)
-                        observation, cost, terminated, truncated, info = env_copy.step(action)
-                        current = observation['agent']
+                        current, cost, terminated, truncated, _ = env_copy.step(action)
+                        # current = observation['agent']
                         steps += 1
                         
 
@@ -785,8 +787,8 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                                 env_copy.set_sim(False)
                                 for state, action in zip(traj_states, traj_actions):
                                     assert np.array_equal(state, current), 'error in trajectory execution\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, state, action)
-                                    observation, _, terminated, truncated, info = env_copy.step(action)
-                                    current = observation['agent']
+                                    current, _, terminated, truncated, _ = env_copy.step(action)
+                                    # current = observation['agent']
                                     steps += 1
                                     # if terminated:
                                     #     break
@@ -802,7 +804,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                                 # env_copy.set_sim(False)
                                 # for state, action in zip(traj_states, traj_actions):
                                 #     assert np.array_equal(state, current), 'error in trajectory execution\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, state, action)
-                                #     observation, _, terminated, truncated, info = env_copy.step(action)
+                                #     observation, _, terminated, truncated = env_copy.step(action)
                                 #     current = observation['agent']
                                 #     steps += 1
                                 # MCTS.tree.root = MCTS.tree.nodes[str(current)]

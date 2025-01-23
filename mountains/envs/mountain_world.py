@@ -83,11 +83,11 @@ class MountainEnv(gym.Env):
 
             # Observations are dictionaries with the agent's and the goal's location.
             size = 5
-            self.observation_space = spaces.Dict(
-                {
-                    "agent": spaces.Box(0, size - 1, shape=(2,), dtype=int),
-                    "goal": spaces.Box(0, size - 1, shape=(2,), dtype=int),
-                }
+            # Observation space is a 2D location on the grid
+            self.observation_space = gym.spaces.Box(
+                low=np.array([0, 0]),  # Minimum x and y
+                high=np.array([self.N - 1, self.N - 1]),  # Maximum x and y
+                dtype=np.int32
             )
 
             ## init trial info
@@ -217,8 +217,8 @@ class MountainEnv(gym.Env):
 
         ## initialise trial info
         self.terminated = False
-        observation = self.get_obs()
-        info = self._get_info()
+        # observation = self.get_obs()
+        # info = self._get_info()
         # current_cost = self.get_cost(self._agent_location)
         current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
 
@@ -271,7 +271,7 @@ class MountainEnv(gym.Env):
             
             self.action_scores = []
         
-        return observation, info
+        # return observation, info
     
     ## get some S-G pairs
     def sample_SG(self):
@@ -498,11 +498,13 @@ class MountainEnv(gym.Env):
 
         else:
             self.terminated = False
-        observation = self.get_obs()
-        info = self._get_info()
+        # observation = self.get_obs()
+        # info = self._get_info()
         terminated = self.terminated
         truncated=False
-        return observation, cost, terminated, truncated, info    
+        agent_loc = self._agent_location
+        info = {} ## make this empty since gym requires it
+        return agent_loc, cost, terminated, truncated, info 
 
 
     ## calculate the optimal trajectory between the two points, as given by the true DP solution
