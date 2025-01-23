@@ -390,7 +390,10 @@ class MountainEnv(gym.Env):
         ## pq = p(low cost)
         return self.high_cost if np.random.random() > self.p_costs[state[0], state[1]] else self.low_cost
     def get_pred_cost(self, state):
-        
+
+        ## ensure coordinates of state are integers
+        state = np.array(state, dtype=int)
+
         ## pq = p(high cost)
         # return self.high_cost if np.random.random() < self.predicted_p_costs[state[0], state[1]] else self.low_cost
 
@@ -408,26 +411,28 @@ class MountainEnv(gym.Env):
     ## take a step in the environment
     def step(self, action):
         
-        ## if not simulating, get the ranking of the best actions to take under the *true* optimal policy, given the agent's current position
-        # current_Q_vals = self.Q_true[self._agent_location[0], self._agent_location[1], :]
+        ## get the current Q-values
+        current_Q_vals = self.Q_true[self._agent_location[0], self._agent_location[1], :]
+
+        ## get the ranking of the best actions to take under the *true* optimal policy, given the agent's current position
         # action_ranking = rankdata(current_Q_vals, method='max') - 1
 
         # ## get the score of the action that will  actually be taken, given the ranking of the optimal actions
         # action_score = action_ranking[action] + 1
         # action_score /= self.n_actions ## may be more suitable to divide by len(actions) in case of wall states
 
-        # ## or, score the action based on the normalised Q-values of the available actions
-        # norm_Q_vals = (current_Q_vals - np.nanmin(current_Q_vals)) / (np.nanmax(current_Q_vals) - np.nanmin(current_Q_vals))
-        # action_score = norm_Q_vals[action]
-
+        ## or, score the action based on the normalised Q-values of the available actions
+        norm_Q_vals = (current_Q_vals - np.nanmin(current_Q_vals)) / (np.nanmax(current_Q_vals) - np.nanmin(current_Q_vals))
+        action_score = norm_Q_vals[action]
         
         ## take the actual action 
         direction = self.action_to_direction[action] 
 
         ## move to the new state
-        self._agent_location = np.clip(
-            self._agent_location + direction, 0, self.N - 1
-        )
+        # self._agent_location = np.clip(
+        #     self._agent_location + direction, 0, self.N - 1
+        # )
+        self._agent_location = get_next_state(self._agent_location, direction, self.N)
 
 
         ## get the predicted cost of the new state
