@@ -1,6 +1,6 @@
 import random
 from math import sqrt, log
-from utils import Node, Action_Node, Tree, make_env, argm, data_keys, KL_divergence
+from utils import Node, Action_Node, Tree, make_env, argm, data_keys, KL_divergence, get_next_state
 import copy
 import numpy as np
 from tqdm.auto import tqdm
@@ -48,13 +48,15 @@ class MonteCarloTreeSearch():
 
         ## take action and get new state
         action = node.untried_action()
-        # next_state, cost, terminated, truncated, _ = self.env.step(action)
+        next_state, cost, terminated, truncated, _ = self.env.step(action)
 
         ## or, do this without updating the environment object
-        next_state = np.clip(actual_state + self.env.action_to_direction[action],
-                                0, self.N - 1)
-        cost = self.env.get_pred_cost(next_state)
-        terminated = np.array_equal(next_state, self.env.goal)
+        # next_state = np.clip(actual_state + self.env.action_to_direction[action],
+        #                         0, self.N - 1)
+        # cost = self.env.get_pred_cost(next_state)
+        # direction = self.env.action_to_direction[action]
+        # next_state = get_next_state(actual_state, direction, self.N)
+        # terminated = np.array_equal(next_state, self.env.goal)
 
         ## update info for s-a leaf - i.e. the state-action pair
         node.action_leaves[action] = Action_Node(prev_state = node.state, action=action, next_state = next_state, terminated=terminated)
@@ -110,7 +112,7 @@ class MonteCarloTreeSearch():
                 node.n_state_visits += 1
 
                 ## revert env
-                # self.env.set_state(actual_state)
+                self.env.set_state(actual_state)
 
                 ## save tree obs for subsequent rollouts
                 # self.tree_obs = self.env.obs_tmp.copy()
@@ -132,13 +134,19 @@ class MonteCarloTreeSearch():
                 self.node_id_path.append(node.node_id)
 
                 ## move in env
-                # next_state, cost, terminated, _, _ = self.env.step(action_leaf.action)
-                # self.tree_costs.append(cost)
+                next_state, cost, terminated, _, _ = self.env.step(action_leaf.action)
+                self.tree_costs.append(cost)
+                cost = self.env.get_pred_cost(next_state)
+                self.tree_costs.append(cost)
 
                 ## or, do this without updating the environment object
-                next_state = action_leaf.next_state
-                cost = self.env.get_pred_cost(next_state)
-                terminated = action_leaf.terminated
+                # next_state = np.clip(node.state[:2] + self.env.action_to_direction[action_leaf.action],
+                #                 0, self.N - 1)
+                # direction = self.env.action_to_direction[action_leaf.action]
+                # next_state = get_next_state(node.state[:2], direction, self.N)
+                # cost = self.env.get_pred_cost(next_state)
+                # terminated = action_leaf.terminated
+
                 self.tree_costs.append(cost)
 
                 ## see if the next state node already exists as a child of this action leaf
@@ -599,7 +607,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
             ## copy env for our base agents
             if (ag=='BAMCP') or (ag=='CE'):
                 env_copy = agent_envs[ag]
-                _, _ = env_copy.reset()
+                env_copy.reset()
                 env_copy.set_sim(True)
 
                 ## save the state of these envs for our checker agents, so that we can imbue them with the same knowledge later on 
@@ -747,12 +755,12 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                         CE_actions.append(action_CE)
 
                         ## plot for debugging?
-                        # print('BAMCP action:', action,', CE action:', action_CE)
-                        # fig, axs = plt.subplots(1, 3, figsize=(15,5))
-                        # plot_r(env_copy.p_costs.reshape(N,N), ax=axs[0], title = 'p_costs')
-                        # plot_traj([env_copy.o_trajs[e], env_copy.a_traj], ax=axs[0])
-                        # plot_r(agent.posterior_mean_p_cost, ax=axs[1], title = 'average posterior p cost')
-                        # plt.show()
+                        print('BAMCP action:', action,', CE action:', action_CE)
+                        fig, axs = plt.subplots(1, 3, figsize=(15,5))
+                        plot_r(env_copy.p_costs.reshape(N,N), ax=axs[0], title = 'p_costs')
+                        plot_traj([env_copy.o_trajs[e], env_copy.a_traj], ax=axs[0])
+                        plot_r(agent.posterior_mean_p_cost, ax=axs[1], title = 'average posterior p cost')
+                        plt.show()
                         
                         ## take action
                         env_copy.set_sim(False)
@@ -765,12 +773,11 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                         agent.get_env_info(env_copy)
 
                         ## prune tree, i.e. remove all nodes that are not children of the new root
-                        MCTS.tree.prune(action, np.append(current, cost))
+                        if not terminated:
+                            MCTS.tree.prune(action, np.append(current, cost))
+                            assert np.array_equal(MCTS.tree.root.state[:2], current), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action)
                         search_attempts = 0 # could do nan
 
-
-
-                        assert np.array_equal(MCTS.tree.root.state[:2], current), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action)
 
                     ## if offline planning (i.e. plan the full trajectory)
                     elif offline:
@@ -823,65 +830,65 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                                     break
 
                 ### log determinant of covariance matrix
-                if (ag=='BAMCP') or (ag=='BAMCP w/ CE'):
+                # if (ag=='BAMCP') or (ag=='BAMCP w/ CE'):
 
-                    ## get prior p and q samples
-                    prior_p_samples = agent.all_posterior_ps
-                    prior_q_samples = agent.all_posterior_qs
-                    prior_all_samples = np.vstack([prior_p_samples.T, prior_q_samples.T])
+                #     ## get prior p and q samples
+                #     prior_p_samples = agent.all_posterior_ps
+                #     prior_q_samples = agent.all_posterior_qs
+                #     prior_all_samples = np.vstack([prior_p_samples.T, prior_q_samples.T])
 
-                    ## log det of prior covariance matrix 
-                    prior_cov = np.cov(prior_all_samples)
-                    prior_LD = np.linalg.slogdet(prior_cov)[1]
-                    assert prior_cov.shape[0] == N*2, 'covariance matrix is wrong shape'
+                #     ## log det of prior covariance matrix 
+                #     prior_cov = np.cov(prior_all_samples)
+                #     prior_LD = np.linalg.slogdet(prior_cov)[1]
+                #     assert prior_cov.shape[0] == N*2, 'covariance matrix is wrong shape'
                     
                     
-                    ## order the outcomes (counterfactual, then actual. This is to allow reuse of the posterior samples associated with the actual outcome on the next timestep)
-                    actual_outcome = env_copy.obs.copy()[-1, -1]
-                    if actual_outcome == env_copy.low_cost:
-                        ordered_outcomes = [env_copy.high_cost, env_copy.low_cost]
-                    else:
-                        ordered_outcomes = [env_copy.low_cost, env_copy.high_cost]
-                    posterior_LDs = []
+                #     ## order the outcomes (counterfactual, then actual. This is to allow reuse of the posterior samples associated with the actual outcome on the next timestep)
+                #     actual_outcome = env_copy.obs.copy()[-1, -1]
+                #     if actual_outcome == env_copy.low_cost:
+                #         ordered_outcomes = [env_copy.high_cost, env_copy.low_cost]
+                #     else:
+                #         ordered_outcomes = [env_copy.low_cost, env_copy.high_cost]
+                #     posterior_LDs = []
 
-                    ## posterior samples under each of the possible outcomes of the action that was just taken
-                    for o, outcome in enumerate(ordered_outcomes):
-                        sim_obs = env_copy.obs.copy()
-                        sim_obs[-1, -1] = outcome
-                        agent.root_samples(sim_obs, n_samples=n_sims)
-                        posterior_samples = np.vstack([np.array(agent.all_posterior_ps).T, np.array(agent.all_posterior_qs).T])
-                        posterior_cov = np.cov(posterior_samples)
-                        assert posterior_cov.shape == prior_cov.shape, 'prior and posterior covariance matrices do not match: {} vs {}'.format(posterior_cov.shape, prior_cov.shape)
+                #     ## posterior samples under each of the possible outcomes of the action that was just taken
+                #     for o, outcome in enumerate(ordered_outcomes):
+                #         sim_obs = env_copy.obs.copy()
+                #         sim_obs[-1, -1] = outcome
+                #         agent.root_samples(sim_obs, n_samples=n_sims)
+                #         posterior_samples = np.vstack([np.array(agent.all_posterior_ps).T, np.array(agent.all_posterior_qs).T])
+                #         posterior_cov = np.cov(posterior_samples)
+                #         assert posterior_cov.shape == prior_cov.shape, 'prior and posterior covariance matrices do not match: {} vs {}'.format(posterior_cov.shape, prior_cov.shape)
                         
-                        ## posterior log det
-                        posterior_cov
-                        LD = np.linalg.slogdet(posterior_cov)[1]
-                        posterior_LDs.append(LD)
+                #         ## posterior log det
+                #         posterior_cov
+                #         LD = np.linalg.slogdet(posterior_cov)[1]
+                #         posterior_LDs.append(LD)
 
 
-                    ## expected log det, i.e. the difference between the prior and the expected posterior log dets, weighted by the probability of each outcome
-                    p_low = np.mean(prior_p_samples * prior_q_samples)
-                    p_high = 1 - p_low
-                    if actual_outcome == env_copy.low_cost:
-                        expected_LD = p_low * (posterior_LDs[1] - prior_LD) + p_high * (posterior_LDs[0] - prior_LD)
-                    else:
-                        expected_LD = p_low * (posterior_LDs[0] - prior_LD) + p_high * (posterior_LDs[1] - prior_LD)
+                #     ## expected log det, i.e. the difference between the prior and the expected posterior log dets, weighted by the probability of each outcome
+                #     p_low = np.mean(prior_p_samples * prior_q_samples)
+                #     p_high = 1 - p_low
+                #     if actual_outcome == env_copy.low_cost:
+                #         expected_LD = p_low * (posterior_LDs[1] - prior_LD) + p_high * (posterior_LDs[0] - prior_LD)
+                #     else:
+                #         expected_LD = p_low * (posterior_LDs[0] - prior_LD) + p_high * (posterior_LDs[1] - prior_LD)
 
-                    ## reorder the posterior LDs to match low and high cost outcomes (i.e. 0th element is the low cost outcome)
-                    # if ordered_outcomes[1] == env_copy.low_cost:
-                    #     posterior_LDs = [posterior_LDs[1], posterior_LDs[0]]
-                    # expected_LD2 = p_low * (posterior_LDs[0] - prior_LD) + p_high * (posterior_LDs[1] - prior_LD)
-                    # assert expected_LD==expected_LD2, 'expected LDs when actual outcome is {} do not match: {} vs {}'.format(actual_outcome, expected_LD, expected_LD2)
+                #     ## reorder the posterior LDs to match low and high cost outcomes (i.e. 0th element is the low cost outcome)
+                #     # if ordered_outcomes[1] == env_copy.low_cost:
+                #     #     posterior_LDs = [posterior_LDs[1], posterior_LDs[0]]
+                #     # expected_LD2 = p_low * (posterior_LDs[0] - prior_LD) + p_high * (posterior_LDs[1] - prior_LD)
+                #     # assert expected_LD==expected_LD2, 'expected LDs when actual outcome is {} do not match: {} vs {}'.format(actual_outcome, expected_LD, expected_LD2)
 
-                    CE_deviation = action==action_CE
-                    print('action {} deviate from CE'.format(['did','did not'][CE_deviation]))
-                    print('prior LD: ',prior_LD)
-                    print('posterior LDs: ',posterior_LDs, ', probs: ',p_low, p_high)
-                    print('expected change in LD: ',expected_LD)
-                    print()
+                #     CE_deviation = action==action_CE
+                #     print('action {} deviate from CE'.format(['did','did not'][CE_deviation]))
+                #     print('prior LD: ',prior_LD)
+                #     print('posterior LDs: ',posterior_LDs, ', probs: ',p_low, p_high)
+                #     print('expected change in LD: ',expected_LD)
+                #     print()
 
-                    ## reuse samples associated with the actual outcome on the next timestep
-                    reuse_samples = True
+                #     ## reuse samples associated with the actual outcome on the next timestep
+                #     reuse_samples = True
 
 
 
