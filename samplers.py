@@ -7,8 +7,7 @@ from functools import lru_cache
 @njit
 def compute_log_likelihood(sampled_i, sampled_j, rel_obs, proposed_row_p, proposed_col_q, current_row_p, current_col_q, high_cost, low_cost):
     log_likelihood = 0.0
-    for o in rel_obs:
-        i, j, cost = o
+    for i, j, cost in rel_obs:
 
         ## determine whether to use current or proposed p and q
         # if (i == sampled_i) and (j != sampled_j):
@@ -45,6 +44,19 @@ def compute_log_likelihood(sampled_i, sampled_j, rel_obs, proposed_row_p, propos
             log_likelihood -= log(current_prob)
 
     return log_likelihood
+
+@njit
+def compute_log_likelihood_global(obs, row_probs, col_probs, high_cost, low_cost):
+    """Compute the total log-likelihood for all observations."""
+    log_likelihood = 0.0
+    for i, j, cost in obs:
+        prob = row_probs[int(i)] * col_probs[int(j)]
+        if cost == high_cost:
+            log_likelihood += np.log(1 - prob)
+        else:  # cost == low_cost
+            log_likelihood += np.log(prob)
+    return log_likelihood
+
 
 @njit
 def propose(alpha, beta):
@@ -86,6 +98,10 @@ def proposal_params(alpha_prior, beta_prior, low_counts, high_counts):
 def random_idx(arr_len):
     return np.random.randint(arr_len)
 
+@njit
+def acceptance_priors(ps, qs, m1,m2,n1,n2):
+    return np.sum(m1 * np.log(ps) + n1 * np.log(1 - ps) + m2 * np.log(qs) + n2 * np.log(1 - qs))
+
 # @lru_cache(maxsize=None)
 # def get_rel_obs(obs, sampled_i, sampled_j):
 #     rel_obs = np.array([(i_, j_, cost_) for (i_, j_, cost_) in obs if (i_ == sampled_i) or (j_ == sampled_j)], dtype=np.float64)
@@ -124,10 +140,10 @@ class GridSampler:
             self.row_probs = np.full(self.N, self.alpha_row / (self.alpha_row + self.beta_row))
             self.col_probs = np.full(self.N, self.alpha_col / (self.alpha_col + self.beta_col))
             for o in self.obs:
-                if o[0] < self.N:
-                    self.row_probs[o[0]] = np.random.beta(self.alpha_row, self.beta_row)
-                if o[1] < self.N:
-                    self.col_probs[o[1]] = np.random.beta(self.alpha_col, self.beta_col)
+                # if o[0] < self.N:
+                self.row_probs[int(o[0])] = np.random.beta(self.alpha_row, self.beta_row)
+                # if o[1] < self.N:
+                self.col_probs[int(o[1])] = np.random.beta(self.alpha_col, self.beta_col)
         else:
             self.row_probs = np.random.beta(self.alpha_row, self.beta_row, size=self.N)
             self.col_probs = np.random.beta(self.alpha_col, self.beta_col, size=self.N)
@@ -180,12 +196,56 @@ class GridSampler:
         
         ## acceptance ratio
         log_acceptance_ratio = log_likelihood + proposal_distr_num - proposal_distr_den
-        acceptance_ratio = exp(log_acceptance_ratio)
+        acceptance_ratio = np.exp(log_acceptance_ratio)
 
         # if np.random.random() < min(1, acceptance_ratio):
         if self.acceptance_thresholds[it] < min(1, acceptance_ratio):
             self.row_probs[sampled_i] = proposed_p
             self.col_probs[sampled_j] = proposed_q
+
+    ## Perform a full MH sampling update for all rows and columns
+    def update_full(self):
+        
+        # Backup current parameters
+        current_ps = self.row_probs.copy()
+        current_qs = self.col_probs.copy()
+
+        ## Propose new probabilities for all rows and columns
+        proposed_ps = np.zeros(self.N)
+        # proposed_qs = proposed_ps.copy()
+        proposed_qs = np.zeros(self.N)
+        for i in range(self.N):
+            low_counts_row = self.low_counts_rows[i]
+            high_counts_row = self.high_counts_rows[i]
+            alpha_p, beta_p, m1, n1 = proposal_params(self.alpha_row, self.beta_row, low_counts_row, high_counts_row)
+            proposed_ps[i] = propose(alpha_p, beta_p)
+        for j in range(self.N):
+            low_counts_col = self.low_counts_cols[j]
+            high_counts_col = self.high_counts_cols[j]
+            alpha_q, beta_q, m2, n2 = proposal_params(self.alpha_col, self.beta_col, low_counts_col, high_counts_col)
+            proposed_qs[j] = propose(alpha_q, beta_q)
+
+        # Compute likelihood for proposed and current probabilities using all observations
+        proposed_likelihood = compute_log_likelihood_global(self.obs, proposed_ps, proposed_qs, self.high_cost, self.low_cost)
+        current_likelihood = compute_log_likelihood_global(self.obs, current_ps, current_qs, self.high_cost, self.low_cost)
+
+        ## Compute prior terms for all rows and columns
+        # prior_proposed = np.sum(m1 * np.log(proposed_ps) + n1 * np.log(1 - proposed_ps) + 
+        #                 m2 * np.log(proposed_qs) + n2 * np.log(1 - proposed_qs))
+        # prior_current = np.sum(m1 * np.log(current_ps) + n1 * np.log(1 - current_ps) + 
+        #                     m2 * np.log(current_qs) + n2 * np.log(1 - current_qs))
+        prior_proposed = acceptance_priors(proposed_ps, proposed_qs, m1, m2, n1, n2)
+        prior_current = acceptance_priors(current_ps, current_qs, m1, m2, n1, n2)
+
+
+        # Calculate acceptance ratio
+        log_acceptance_ratio = proposed_likelihood - current_likelihood +  prior_current - prior_proposed
+        acceptance_ratio = np.exp(log_acceptance_ratio)
+
+        # Accept or reject
+        if np.random.random() < min(1, acceptance_ratio):
+            self.row_probs = proposed_ps
+            self.col_probs = proposed_qs
 
     def lazy_sample(self, n_iter=100):
         self.init_pqs()
@@ -199,10 +259,16 @@ class GridSampler:
             self.update(it)
         return self.row_probs, self.col_probs
     
+    def full_sample(self, n_iter=100):
+        self.init_pqs()
+        for it in range(n_iter):
+            self.update_full()
+        return self.row_probs, self.col_probs
+    
     def get_rel_obs(self, sampled_i, sampled_j):
         if (sampled_i, sampled_j) in self.cached_obs:
             return self.cached_obs[(sampled_i, sampled_j)]
         rel_obs = np.array([(i_, j_, cost_) for (i_, j_, cost_) in self.obs if (i_ == sampled_i) or (j_ == sampled_j)], dtype=np.float64)
         self.cached_obs[(sampled_i, sampled_j)] = rel_obs
         return rel_obs
-    
+
