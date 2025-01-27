@@ -47,7 +47,6 @@ class MountainEnv(gym.Env):
         self.seed = seed
         np.random.seed(self.seed)
 
-
         ## initialise the GP grid
         self.N = N
         x = np.arange(N)
@@ -140,6 +139,9 @@ class MountainEnv(gym.Env):
             # }
             self.action_to_direction = np.array([[1, 0], [0, 1], [-1, 0], [0, -1]])
             self.n_actions = 4
+
+            ## action labels (NB these deviate from env action space, bc axes are flipped for plotting
+            self.action_labels = ['down', 'right', 'up', 'left']
         elif self.metric == 'chebyshev':
             self.action_space = spaces.Discrete(8)
             self.action_to_direction = {
@@ -389,6 +391,7 @@ class MountainEnv(gym.Env):
         
         ## pq = p(low cost)
         return self.high_cost if np.random.random() > self.p_costs[state[0], state[1]] else self.low_cost
+    
     def get_pred_cost(self, state):
 
         ## ensure coordinates of state are integers
