@@ -24,7 +24,7 @@ def plot_r(sampled_rewards, ax, title=None, cbar=False):
     ax.set_title(title)
     # ax.set_title('Sampled Reward Distribution,\nkernel: {}'.format(self.kernel_type))
     if cbar:
-        ax.collections[0].colorbar.set_label('p(toll)') 
+        ax.collections[0].colorbar.set_label('p(low cost)') 
         # ax.collections[0].colorbar.set_label('Route cost')
     return ax
 
@@ -77,8 +77,9 @@ def plot_traj(trajs, ax, title=None):
         if ti==0:
 
             ## plot start and goal
-            ax.scatter(traj[0][1]+0.5, traj[0][0]+0.5, color='red', s=100)
-            ax.scatter(traj[-1][1]+0.5, traj[-1][0]+0.5, color='green', s=100)
+            # ax.scatter(traj[0][1]+0.5, traj[0][0]+0.5, color='red', s=100)
+            ax.scatter(traj[0][1]+0.5, traj[0][0]+0.5, color='red', edgecolor='black', s=200, linewidth=2)
+            ax.scatter(traj[-1][1]+0.5, traj[-1][0]+0.5, color='lime', edgecolor='black', s=200, linewidth=2)
 
             ## plot path(s)
             for t in traj[1:-1]:
