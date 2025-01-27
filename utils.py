@@ -452,7 +452,7 @@ data_keys = [
     'total_discounted_cost',
     'discounted_optimal_costs',
     'total_discounted_optimal_cost',
-    'expected_KL'
+    'expected_LD'
 
     ## GP-specific
     # 'true_k',
