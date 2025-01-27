@@ -118,7 +118,7 @@ class MonteCarloTreeSearch():
             else:
 
                 ## (some debugging vars)
-                # state_tmp = node.state[:2]
+                state_tmp = node.state[:2]
                 # env_state_tmp = self.env.get_obs()['agent']
                 # env_state_tmp = self.env.current
 
@@ -130,8 +130,6 @@ class MonteCarloTreeSearch():
                 ## move in env
                 next_state, cost, terminated, _, _ = self.env.step(action_leaf.action)
                 self.tree_costs.append(cost)
-                cost = self.env.get_pred_cost(next_state)
-                self.tree_costs.append(cost)
 
                 ## or, do this without updating the environment object
                 # next_state = np.clip(node.state[:2] + self.env.action_to_direction[action_leaf.action],
@@ -140,8 +138,8 @@ class MonteCarloTreeSearch():
                 # next_state = get_next_state(node.state[:2], direction, self.N)
                 # cost = self.env.get_pred_cost(next_state)
                 # terminated = action_leaf.terminated
+                # self.tree_costs.append(cost)
 
-                self.tree_costs.append(cost)
 
                 ## see if the next state node already exists as a child of this action leaf
                 state_id = tuple(np.append(next_state, cost))
@@ -150,6 +148,7 @@ class MonteCarloTreeSearch():
                 else:
                     node = self.tree.add_state_node(next_state, cost, terminated, action_space = self.action_space, parent=action_leaf)
                 # assert np.array_equal(node.state[:2], next_state), 'error in tree policy step {}\n started in {}\n supposed to take action {} to {}\n ended up moving from {} to {}'.format(t, state_tmp, action_leaf.action, node.state[:2], env_state_tmp, action_leaf.next_state)
+                assert np.array_equal(node.state[:2], next_state), 'error in tree policy step {}\n started in {}\n supposed to take action {} to {}\n ended up moving  to {}'.format(t, state_tmp, action_leaf.action, node.state[:2], action_leaf.next_state)
 
                 ## update counts already?
                 action_leaf.n_action_visits += 1
@@ -439,7 +438,7 @@ class MonteCarloTreeSearch():
             # state_node = self.tree.nodes[state_node_id]
             # action_leaf = state_node.action_leaves[action]
             action_leaf = node.action_leaves[action]
-            # assert np.array_equal(node.state[:2], [:2]), 'error in tree path\n node: {} \n state: {}'.format(node.state[:2], state[:2])
+            assert np.array_equal(node.state[:2], state[:2]), 'error in tree path\n node: {} \n state: {}'.format(node.state[:2], state[:2])
 
             ## discounted costs from current node to rollout node
             # discounted_tree_cost = 0
@@ -548,7 +547,7 @@ class MonteCarloTreeSearch():
         # print('action probs:', action_probs)
         # print('entropy:', entropy)
 
-        return action
+        return action, MCTS_estimates
 
 
 
@@ -618,7 +617,8 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
             goal = env_copy.goal
             actions = []
             CE_actions = []
-            EKLs = []
+            ELDs = []
+            
 
             ## GP-MCTS agent receives info from env
             if ag =='GP-MCTS':
@@ -665,7 +665,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
 
                     ## get posterior mean grid
                     # agent.root_sample(env_copy.obs, lazy=True, CE=True)
-                    agent.root_samples(obs=env_copy.obs, n_samples=n_sims, lazy=True,CE=True)
+                    agent.root_samples(obs=env_copy.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy,CE=True)
                     env_copy.receive_predictions(agent.posterior_mean_p_cost)
 
                     ## dynamic programming under this posterior mean
@@ -715,6 +715,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                 ## bamcp
                 elif (ag == 'BAMCP') or (ag == 'BAMCP w/ CE'):
                     env_copy.set_sim(True)
+                    MCTS.actual_state = current
                     
                     ## init MCTS (if resetting the tree for each move, init here. otherwise, this should be outside the episode loop)
                     # tree = Tree(N)
@@ -730,33 +731,79 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                         ## reduce number of sims if near to the goal (A BETTER IDEA WLD BE TO REDUCE THE DISTANCE IF THE TREE HAS REACHED THE GOAL)
                         dist_to_goal = np.max(cdist([current, goal], [current, goal], metric='cityblock')) 
                         if dist_to_goal > (N/2):
-                            action = MCTS.search(n_sims, n_futures, n_iter=n_iter, lazy=lazy, progress=progress, reuse_samples=reuse_samples)
+                            n_sims_tmp = n_sims
+                            action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures, n_iter=n_iter, lazy=lazy, progress=progress, reuse_samples=reuse_samples)
                         elif (dist_to_goal <= (N/2)) & (dist_to_goal > (N/4)):
-                            n_reduced_sims = int(n_sims/2)
-                            action = MCTS.search(n_reduced_sims, n_futures, n_iter=n_iter, lazy=lazy, progress=progress, reuse_samples=reuse_samples)
+                            n_sims_tmp = int(n_sims/2)
+                            action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures, n_iter=n_iter, lazy=lazy, progress=progress, reuse_samples=reuse_samples)
                         else:
-                            n_reduced_sims = int(n_sims/4)
-                            action = MCTS.search(n_reduced_sims, n_futures,n_iter=n_iter, lazy=lazy,  progress=progress, reuse_samples=reuse_samples)
+                            n_sims_tmp = int(n_sims/4)
+                            action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures,n_iter=n_iter, lazy=lazy,  progress=progress, reuse_samples=reuse_samples)
                         actions.append(action)
 
-                        ##optional: check what the CE agent would have done with the mean of this set of samples (NEED TO THINK ABOUT WHETHER THIS IS RIGHT, SINCE THE UNOBSERVED ROWS/COLS ARE INITIALISED DIFFERENTLY)
-                        agent.dp(agent.posterior_mean_p_cost, expected_cost=True)
+                        ### optional: check what the CE agent would have done with the mean of this set of samples
+                        # agent.dp(agent.posterior_mean_p_cost, expected_cost=True)
+                        # action_CE = agent.optimal_policy(current, agent.Q_inf)
+                        # CE_actions.append(action_CE)
+
+                        ## ensure that all unobserved row and columns are set to the prior mean (i.e. proper CE)
+                        all_posterior_ps_tmp = agent.all_posterior_ps.copy()
+                        all_posterior_qs_tmp = agent.all_posterior_qs.copy()
+                        for i in range(N):
+                            for o in env_copy.obs:
+                                if o[0] == i:
+                                    break
+                            else:
+                                all_posterior_ps_tmp[:,i] = env_copy.alpha_row / (env_copy.alpha_row + env_copy.beta_row)
+                        for j in range(N):
+                            for o in env_copy.obs:
+                                if o[1] == j:
+                                    break
+                            else:
+                                all_posterior_qs_tmp[:,j] = env_copy.alpha_col / (env_copy.alpha_col + env_copy.beta_col)
+                        all_posterior_p_costs_tmp = np.zeros((n_sims_tmp, N,N))
+                        for s in range(n_sims_tmp):
+                            all_posterior_p_costs_tmp[s] = np.outer(all_posterior_ps_tmp[s], all_posterior_qs_tmp[s])
+                        posterior_mean_p_cost_tmp = np.mean(all_posterior_p_costs_tmp, axis=0)
+
+                        ## get CE's action
+                        agent.dp(posterior_mean_p_cost_tmp, expected_cost=True)
                         action_CE = agent.optimal_policy(current, agent.Q_inf)
                         CE_actions.append(action_CE)
 
+
+
                         ## plot for debugging?
-                        print('BAMCP action:', action,', CE action:', action_CE)
-                        fig, axs = plt.subplots(1, 3, figsize=(15,5))
-                        plot_r(env_copy.p_costs.reshape(N,N), ax=axs[0], title = 'p_costs')
-                        plot_traj([env_copy.o_trajs[e], env_copy.a_traj], ax=axs[0])
-                        plot_r(agent.posterior_mean_p_cost, ax=axs[1], title = 'average posterior p cost')
-                        plt.show()
-                        
+                        # print('next action: BAMCP action:', env_copy.action_labels[action],', CE action:', env_copy.action_labels[action_CE])
+                        # _, axs = plt.subplots(1, 3, figsize=(21,7))
+                        # plot_r(env_copy.p_costs.reshape(N,N), ax=axs[0], title = 'p_costs')
+                        # a_traj = np.zeros((len(env_copy.a_traj),3))
+                        # for i, a in enumerate(env_copy.a_traj):
+                        #     a_traj[i,:2] = a
+                        #     a_traj[i,2] = env_copy.costs[a[0], a[1]]
+                        # # plot_traj([env_copy.o_trajs[e], env_copy.a_traj], ax=axs[0])
+                        # plot_traj([env_copy.o_trajs[e], a_traj], ax=axs[0])
+                        # plot_r(agent.posterior_mean_p_cost, ax=axs[1], title = 'average posterior p cost')
+                        # plot_action_tree(agent.Q_inf, current, goal, ax=axs[2], title = 'CE_DP_inf')
+                        # plt.show()
+                        # MCTS_Q_labelled = {env_copy.action_labels[k]:v for k,v in enumerate(MCTS_Q)}
+                        # if action != action_CE:
+                        #     print('MCTS Q:', MCTS_Q_labelled)
+                        #     print('n_visits of action leaves:',{env_copy.action_labels[k]:v.n_action_visits for k,v in MCTS.tree.root.action_leaves.items()})
+
                         ## take action
                         env_copy.set_sim(False)
                         current, cost, terminated, _, _ = env_copy.step(action)
-                        # current = observation['agent']
                         steps += 1
+
+                        ## check for backtracking
+                        if len(actions)>1:
+                            # backtracked = np.abs(action-actions[-2]) ==2
+                            backtracked = np.array_equal(current, env_copy.a_traj[-3])
+                            if backtracked:
+                                print(MCTS.tree.print_tree(MCTS.tree.root))
+                                # print('backtracked in state:', current,' back from ', env_copy.a_traj[-2])
+                                raise ValueError('backtracked in state:', current,' back from ', env_copy.a_traj[-2], ', en route to ', goal)
                         
 
                         ## update observations
@@ -777,7 +824,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                             search_attempts += 1
 
                             ## search
-                            action, next_root = MCTS.search(n_sims, n_futures, progress=progress, reuse_samples=reuse_samples)
+                            action, MCTS_Q = MCTS.search(n_sims, n_futures, progress=progress, reuse_samples=reuse_samples)
                             actions.append(action)
 
                             ## get the trajectory from the tree
@@ -820,65 +867,69 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                                     break
 
                 ### log determinant of covariance matrix
-                # if (ag=='BAMCP') or (ag=='BAMCP w/ CE'):
+                if (ag=='BAMCP') or (ag=='BAMCP w/ CE'):
 
-                #     ## get prior p and q samples
-                #     prior_p_samples = agent.all_posterior_ps
-                #     prior_q_samples = agent.all_posterior_qs
-                #     prior_all_samples = np.vstack([prior_p_samples.T, prior_q_samples.T])
+                    ## get prior p and q samples
+                    prior_p_samples = agent.all_posterior_ps
+                    prior_q_samples = agent.all_posterior_qs
+                    prior_all_samples = np.vstack([prior_p_samples.T, prior_q_samples.T])
 
-                #     ## log det of prior covariance matrix 
-                #     prior_cov = np.cov(prior_all_samples)
-                #     prior_LD = np.linalg.slogdet(prior_cov)[1]
-                #     assert prior_cov.shape[0] == N*2, 'covariance matrix is wrong shape'
+                    ## log det of prior covariance matrix 
+                    prior_cov = np.cov(prior_all_samples)
+                    prior_LD = np.linalg.slogdet(prior_cov)[1]
+                    assert prior_cov.shape[0] == N*2, 'covariance matrix is wrong shape'
                     
                     
-                #     ## order the outcomes (counterfactual, then actual. This is to allow reuse of the posterior samples associated with the actual outcome on the next timestep)
-                #     actual_outcome = env_copy.obs.copy()[-1, -1]
-                #     if actual_outcome == env_copy.low_cost:
-                #         ordered_outcomes = [env_copy.high_cost, env_copy.low_cost]
-                #     else:
-                #         ordered_outcomes = [env_copy.low_cost, env_copy.high_cost]
-                #     posterior_LDs = []
+                    ## order the outcomes (counterfactual, then actual. This is to allow reuse of the posterior samples associated with the actual outcome on the next timestep)
+                    actual_outcome = env_copy.obs.copy()[-1, -1]
+                    if actual_outcome == env_copy.low_cost:
+                        ordered_outcomes = [env_copy.high_cost, env_copy.low_cost]
+                    else:
+                        ordered_outcomes = [env_copy.low_cost, env_copy.high_cost]
+                    posterior_LDs = []
 
-                #     ## posterior samples under each of the possible outcomes of the action that was just taken
-                #     for o, outcome in enumerate(ordered_outcomes):
-                #         sim_obs = env_copy.obs.copy()
-                #         sim_obs[-1, -1] = outcome
-                #         agent.root_samples(sim_obs, n_samples=n_sims)
-                #         posterior_samples = np.vstack([np.array(agent.all_posterior_ps).T, np.array(agent.all_posterior_qs).T])
-                #         posterior_cov = np.cov(posterior_samples)
-                #         assert posterior_cov.shape == prior_cov.shape, 'prior and posterior covariance matrices do not match: {} vs {}'.format(posterior_cov.shape, prior_cov.shape)
+                    ## posterior samples under each of the possible outcomes of the action that was just taken
+                    for o, outcome in enumerate(ordered_outcomes):
+                        sim_obs = env_copy.obs.copy()
+                        sim_obs[-1, -1] = outcome
+                        agent.root_samples(sim_obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy, CE=False)
+                        posterior_samples = np.vstack([np.array(agent.all_posterior_ps).T, np.array(agent.all_posterior_qs).T])
+                        posterior_cov = np.cov(posterior_samples)
+                        assert posterior_cov.shape == prior_cov.shape, 'prior and posterior covariance matrices do not match: {} vs {}'.format(posterior_cov.shape, prior_cov.shape)
                         
-                #         ## posterior log det
-                #         posterior_cov
-                #         LD = np.linalg.slogdet(posterior_cov)[1]
-                #         posterior_LDs.append(LD)
+                        ## posterior log det
+                        posterior_cov
+                        LD = np.linalg.slogdet(posterior_cov)[1]
+                        posterior_LDs.append(LD)
 
 
-                #     ## expected log det, i.e. the difference between the prior and the expected posterior log dets, weighted by the probability of each outcome
-                #     p_low = np.mean(prior_p_samples * prior_q_samples)
-                #     p_high = 1 - p_low
-                #     if actual_outcome == env_copy.low_cost:
-                #         expected_LD = p_low * (posterior_LDs[1] - prior_LD) + p_high * (posterior_LDs[0] - prior_LD)
-                #     else:
-                #         expected_LD = p_low * (posterior_LDs[0] - prior_LD) + p_high * (posterior_LDs[1] - prior_LD)
+                    ## expected log det, i.e. the difference between the prior and the expected posterior log dets, weighted by the probability of each outcome
+                    p_low = np.mean(prior_p_samples * prior_q_samples)
+                    p_high = 1 - p_low
+                    if actual_outcome == env_copy.low_cost:
+                        expected_LD = p_low * (posterior_LDs[1] - prior_LD) + p_high * (posterior_LDs[0] - prior_LD)
+                    else:
+                        expected_LD = p_low * (posterior_LDs[0] - prior_LD) + p_high * (posterior_LDs[1] - prior_LD)
+                    ELDs.append(expected_LD)
 
-                #     ## reorder the posterior LDs to match low and high cost outcomes (i.e. 0th element is the low cost outcome)
-                #     # if ordered_outcomes[1] == env_copy.low_cost:
-                #     #     posterior_LDs = [posterior_LDs[1], posterior_LDs[0]]
-                #     # expected_LD2 = p_low * (posterior_LDs[0] - prior_LD) + p_high * (posterior_LDs[1] - prior_LD)
-                #     # assert expected_LD==expected_LD2, 'expected LDs when actual outcome is {} do not match: {} vs {}'.format(actual_outcome, expected_LD, expected_LD2)
+                    ## reorder the posterior LDs to match low and high cost outcomes (i.e. 0th element is the low cost outcome)
+                    # if ordered_outcomes[1] == env_copy.low_cost:
+                    #     posterior_LDs = [posterior_LDs[1], posterior_LDs[0]]
+                    # expected_LD2 = p_low * (posterior_LDs[0] - prior_LD) + p_high * (posterior_LDs[1] - prior_LD)
+                    # assert expected_LD==expected_LD2, 'expected LDs when actual outcome is {} do not match: {} vs {}'.format(actual_outcome, expected_LD, expected_LD2)
 
-                #     CE_deviation = action==action_CE
-                #     print('action {} deviate from CE'.format(['did','did not'][CE_deviation]))
-                #     print('prior LD: ',prior_LD)
-                #     print('posterior LDs: ',posterior_LDs, ', probs: ',p_low, p_high)
-                #     print('expected change in LD: ',expected_LD)
-                #     print()
+                    # CE_deviation = action==action_CE
+                    # print('action {} deviate from CE'.format(['did','did not'][CE_deviation]))
+                    # print('prior LD: ',prior_LD)
+                    # if actual_outcome == env_copy.low_cost:
+                    #     print('posterior LDs: low = ',posterior_LDs[1], ', high = ',posterior_LDs[0], ', probs: ',p_low, p_high)
+                    # else:
+                    #     print('posterior LDs: low = ',posterior_LDs[0], ', high = ',posterior_LDs[1], ', probs: ',p_low, p_high)
+                    # print('expected change in LD: ',expected_LD)
+                    # print()
 
-                #     ## reuse samples associated with the actual outcome on the next timestep
-                #     reuse_samples = True
+                    ## reuse samples associated with the actual outcome on the next timestep
+                    reuse_samples = True
 
 
 
@@ -973,7 +1024,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     sim_out['search_attempts'].append(search_attempts)
                     # sim_out['action_tree'].append(MCTS.tree.action_tree())
                     sim_out['action_tree'].append(np.nan)
-                    sim_out['expected_KL'].append(EKLs)
+                    sim_out['expected_KD'].append(ELDs)
 
                     ## discounts
                     sim_out['discounted_costs'].append(np.nan)
@@ -1017,7 +1068,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     sim_out['search_attempts'].append(search_attempts)
                     # sim_out['action_tree'].append(MCTS.tree.action_tree())
                     sim_out['action_tree'].append(np.nan)
-                    sim_out['expected_KL'].append(EKLs)
+                    sim_out['expected_LD'].append(ELDs)
 
 
                     ### costs
