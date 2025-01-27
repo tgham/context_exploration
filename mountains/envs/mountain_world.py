@@ -410,20 +410,23 @@ class MountainEnv(gym.Env):
 
     ## take a step in the environment
     def step(self, action):
+
+        self.terminated = False
         
-        ## get the current Q-values
-        current_Q_vals = self.Q_true[self._agent_location[0], self._agent_location[1], :]
+        ## get the current Q-values (only necessary if not simulating)
+        if not self.sim:
+            current_Q_vals = self.Q_true[self._agent_location[0], self._agent_location[1], :]
 
-        ## get the ranking of the best actions to take under the *true* optimal policy, given the agent's current position
-        # action_ranking = rankdata(current_Q_vals, method='max') - 1
+            ## get the ranking of the best actions to take under the *true* optimal policy, given the agent's current position
+            # action_ranking = rankdata(current_Q_vals, method='max') - 1
 
-        # ## get the score of the action that will  actually be taken, given the ranking of the optimal actions
-        # action_score = action_ranking[action] + 1
-        # action_score /= self.n_actions ## may be more suitable to divide by len(actions) in case of wall states
+            # ## get the score of the action that will  actually be taken, given the ranking of the optimal actions
+            # action_score = action_ranking[action] + 1
+            # action_score /= self.n_actions ## may be more suitable to divide by len(actions) in case of wall states
 
-        ## or, score the action based on the normalised Q-values of the available actions
-        norm_Q_vals = (current_Q_vals - np.nanmin(current_Q_vals)) / (np.nanmax(current_Q_vals) - np.nanmin(current_Q_vals))
-        action_score = norm_Q_vals[action]
+            ## or, score the action based on the normalised Q-values of the available actions
+            norm_Q_vals = (current_Q_vals - np.nanmin(current_Q_vals)) / (np.nanmax(current_Q_vals) - np.nanmin(current_Q_vals))
+            action_score = norm_Q_vals[action]
         
         ## take the actual action 
         direction = self.action_to_direction[action] 
@@ -473,7 +476,7 @@ class MountainEnv(gym.Env):
 
             ## still need to store obs_tmp along the way for subsequent posterior inference
             # self.a_traj.append(tuple(self._agent_location))
-            self.obs_tmp = np.vstack([self.obs_tmp, [self._agent_location[0], self._agent_location[1], cost]])
+            # self.obs_tmp = np.vstack([self.obs_tmp, [self._agent_location[0], self._agent_location[1], cost]])
                 
 
         # An episode is done iff the agent has reached the goal
@@ -501,15 +504,12 @@ class MountainEnv(gym.Env):
                 ## update ep counter
                 self.e += 1
 
-        else:
-            self.terminated = False
         # observation = self.get_obs()
         # info = self._get_info()
-        terminated = self.terminated
         truncated=False
         agent_loc = self._agent_location
         info = {} ## make this empty since gym requires it
-        return agent_loc, cost, terminated, truncated, info 
+        return agent_loc, cost, self.terminated, truncated, info 
 
 
     ## calculate the optimal trajectory between the two points, as given by the true DP solution
