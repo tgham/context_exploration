@@ -17,6 +17,8 @@ class MonteCarloTreeSearch():
 
     def __init__(self, env, agent, tree, exploration_constant=2, discount_factor=0.99):
         self.env = env
+        self.actual_state = self.env.current
+        self.actual_goal = self.env.goal
         self.agent = agent
         self.tree = tree
         self.action_space = self.env.action_space.n
@@ -24,21 +26,15 @@ class MonteCarloTreeSearch():
         self.exploration_constant = exploration_constant
         self.discount_factor = discount_factor
 
-        ## get initial state and goal 
-        state = self.env.current
-
-        ## (AND THE STARTING COST?)
-        starting_cost = self.env.costs[state[0], state[1]]
+        ## cost of current state?
+        starting_cost = self.env.costs[self.actual_state[0], self.actual_state[1]]
 
         ## add state node to the tree
-        self.tree.add_state_node(state=state, cost=starting_cost, terminated=False, action_space = self.action_space, parent=None)
+        self.tree.add_state_node(state=self.actual_state, cost=starting_cost, terminated=False, action_space = self.action_space, parent=None)
 
 
     ## expand the action space of a node
     def expand(self, node):
-
-        ## get a copy of the current state, so that the environment can be reset to this state after simulating the action
-        actual_state = self.env.current
 
         ## create copy of env and set state
         # env_copy = copy.deepcopy(self.env)
@@ -64,7 +60,7 @@ class MonteCarloTreeSearch():
         node.action_leaves[action].performance = 0
 
         ## reset the environment to the actual state
-        self.env.set_state(actual_state)
+        self.env.set_state(self.actual_state)
 
         return node.action_leaves[action]
 
@@ -77,8 +73,6 @@ class MonteCarloTreeSearch():
         # env_copy = copy.deepcopy(self.env)
         # env_copy.set_sim(True)
 
-        ## get the agent's current location
-        actual_state = self.env.current
         assert self.env.sim, 'env is not in sim mode'
 
         ## initialise the tree
@@ -86,7 +80,7 @@ class MonteCarloTreeSearch():
         t = 0
         self.tree_costs = []
         # self.tree_cost.append(node.cost)
-        assert np.array_equal(node.state[:2], actual_state), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, actual_state)
+        assert np.array_equal(node.state[:2], self.actual_state), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.actual_state)
 
         ## create a record of the nodes/leaves visited in the tree
         self.tree_path = []
@@ -112,7 +106,7 @@ class MonteCarloTreeSearch():
                 node.n_state_visits += 1
 
                 ## revert env
-                self.env.set_state(actual_state)
+                self.env.set_state(self.actual_state)
 
                 ## save tree obs for subsequent rollouts
                 # self.tree_obs = self.env.obs_tmp.copy()
@@ -172,7 +166,7 @@ class MonteCarloTreeSearch():
             #     break
 
         ## revert env
-        self.env.set_state(actual_state)
+        self.env.set_state(self.actual_state)
 
         ## save tree obs for subsequent rollouts
         # self.tree_obs = self.env.obs_tmp.copy()
@@ -188,10 +182,6 @@ class MonteCarloTreeSearch():
         total_cost = 0
         max_depth = 100
         # depth = len(self.tree_path)
-
-        ## get the agent's current location and goal
-        actual_state = self.env.current
-        actual_goal = self.env.goal
         assert self.env.sim, 'env is not in sim mode'
         
         ## set the state from which the rollout is initiated
@@ -213,7 +203,7 @@ class MonteCarloTreeSearch():
             if action_leaf.terminated:
 
                 ## revert env
-                # self.env.set_state(actual_state)
+                # self.env.set_state(self.actual_state)
 
                 return total_cost
             
@@ -349,7 +339,7 @@ class MonteCarloTreeSearch():
 
         # get the next state and goal
         current = action_leaf.next_state.copy()
-        goal = self.env.goal
+        # goal = self.env.goal
 
         ## begin with cost of current state
         total_cost+=self.env.get_pred_cost(current)
@@ -373,7 +363,7 @@ class MonteCarloTreeSearch():
             #     current = np.clip((i, j - 1), 0, self.N - 1)
             
             ## return cost once goal is reached (i.e. don't use the cost of the goal state)
-            if np.array_equal(current, goal):
+            if np.array_equal(current, self.actual_goal):
                 return total_cost
             
             ## update costs
@@ -484,7 +474,7 @@ class MonteCarloTreeSearch():
 
 
     ## tree search --> action loop
-    def search(self, n_sims=1000, n_futures=1, progress=False, reuse_samples=False):
+    def search(self, n_sims=1000, n_futures=0, n_iter=100, lazy=False,  progress=False, reuse_samples=False):
 
         if progress:
             pbar = tqdm(total=n_sims, desc='MCTS search', position=0, leave=False, miniters=10, ascii=True, bar_format="{l_bar}{bar}")
@@ -497,7 +487,7 @@ class MonteCarloTreeSearch():
 
         ## if samples not provided, generate new set of root samples
         if not reuse_samples:
-            self.agent.root_samples(obs = self.env.obs, n_samples=n_sims)
+            self.agent.root_samples(obs = self.env.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy, CE=False)
 
 
         ## debugging plot
@@ -565,7 +555,7 @@ class MonteCarloTreeSearch():
 
 
 ## parallel function for simulating many episodes within the same mountain env
-def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episodes=10, agents = ['GP', 'GP-MCTS', 'BAMCP','CE'], n_sims=1000, n_futures=0, exploration_constant=2, discount_factor=0.95, progress=False, offline=False):
+def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episodes=10, agents = ['GP', 'GP-MCTS', 'BAMCP','CE'], n_sims=1000, n_futures=0, n_iter=10, lazy=False, exploration_constant=2, discount_factor=0.95, progress=False, offline=False):
     
     ## initiate dictionary to store the results
     sim_out = {}
@@ -740,13 +730,13 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                         ## reduce number of sims if near to the goal (A BETTER IDEA WLD BE TO REDUCE THE DISTANCE IF THE TREE HAS REACHED THE GOAL)
                         dist_to_goal = np.max(cdist([current, goal], [current, goal], metric='cityblock')) 
                         if dist_to_goal > (N/2):
-                            action = MCTS.search(n_sims, n_futures, progress=progress, reuse_samples=reuse_samples)
+                            action = MCTS.search(n_sims, n_futures, n_iter=n_iter, lazy=lazy, progress=progress, reuse_samples=reuse_samples)
                         elif (dist_to_goal <= (N/2)) & (dist_to_goal > (N/4)):
                             n_reduced_sims = int(n_sims/2)
-                            action = MCTS.search(n_reduced_sims, n_futures, progress=progress, reuse_samples=reuse_samples)
+                            action = MCTS.search(n_reduced_sims, n_futures, n_iter=n_iter, lazy=lazy, progress=progress, reuse_samples=reuse_samples)
                         else:
                             n_reduced_sims = int(n_sims/4)
-                            action = MCTS.search(n_reduced_sims, n_futures, progress=progress, reuse_samples=reuse_samples)
+                            action = MCTS.search(n_reduced_sims, n_futures,n_iter=n_iter, lazy=lazy,  progress=progress, reuse_samples=reuse_samples)
                         actions.append(action)
 
                         ##optional: check what the CE agent would have done with the mean of this set of samples (NEED TO THINK ABOUT WHETHER THIS IS RIGHT, SINCE THE UNOBSERVED ROWS/COLS ARE INITIALISED DIFFERENTLY)
