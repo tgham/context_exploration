@@ -3,6 +3,7 @@ import numpy as np
 import random
 from math import log, exp
 from functools import lru_cache
+from matplotlib import pyplot as plt
 
 @njit
 def compute_log_likelihood(sampled_i, sampled_j, rel_obs, proposed_row_p, proposed_col_q, current_row_p, current_col_q, high_cost, low_cost):
@@ -254,15 +255,47 @@ class GridSampler:
         self.random_idxs = np.random.randint(len(self.obs), size=n_iter)
         self.acceptance_thresholds = np.random.random(n_iter)
 
+        ## save progress of samples to check convergence
+        # self.row_iters = np.zeros((n_iter, self.N))
+        # self.col_iters = np.zeros((n_iter, self.N))
+
         ## iterate
         for it in range(n_iter):
             self.update(it)
+
+            ## save samples to plot progress
+        #     self.row_iters[it] = self.row_probs
+        #     self.col_iters[it] = self.col_probs
+        # fig, axs = plt.subplots(1,2, figsize=(10,5))
+        # axs[0].plot(self.row_iters)
+        # axs[0].set_title('Row probs')
+        # axs[1].plot(self.col_iters)
+        # axs[1].set_title('Col probs')
+        # plt.show()
+
         return self.row_probs, self.col_probs
     
     def full_sample(self, n_iter=100):
         self.init_pqs()
+
+        ## save progress of samples to check convergence
+        # self.row_iters = np.zeros((n_iter, self.N))
+        # self.col_iters = np.zeros((n_iter, self.N))
+
         for it in range(n_iter):
             self.update_full()
+
+            ## save samples to plot progress
+        #     self.row_iters[it] = self.row_probs
+        #     self.col_iters[it] = self.col_probs
+        # fig, axs = plt.subplots(1,2, figsize=(10,5))
+        # axs[0].plot(self.row_iters)
+        # axs[0].set_title('Row probs')
+        # axs[1].plot(self.col_iters)
+        # axs[1].set_title('Col probs')
+        # plt.show()
+
+
         return self.row_probs, self.col_probs
     
     def get_rel_obs(self, sampled_i, sampled_j):

@@ -31,7 +31,7 @@ from numba import jit, njit
 
 
 ## create a mountain environment
-def make_env(N, n_episodes, true_k, beta_params, metric, seed=None):
+def make_env(N, n_episodes, expt, beta_params, metric, seed=None):
 
     ## register env
     
@@ -48,7 +48,7 @@ def make_env(N, n_episodes, true_k, beta_params, metric, seed=None):
         kwargs={"size": N},
     )
     
-    env = gym.make("mountains/MountainEnv-v0", N=N, n_episodes=n_episodes, true_k=true_k, beta_params=beta_params, metric=metric, seed=seed)
+    env = gym.make("mountains/MountainEnv-v0", N=N, n_episodes=n_episodes, expt=expt, beta_params=beta_params, metric=metric, seed=seed)
     return env
 
 
@@ -426,41 +426,6 @@ def k_check(K):
     return np.any([not symm, not psd])
 
 
-## data-saving/dict stuff
-data_keys = [
-    'agent',
-    'mountain',
-    'episode',
-    'start',
-    'goal',
-    'costs',
-    'optimal_costs',
-    'actions',
-    'CE_actions',
-    'optimal_actions',
-    'total_cost',
-    'total_optimal_cost',
-    'action_score',
-    'cost_ratio',
-    'n_steps',
-    'actual_trajectory',
-    'optimal_trajectory',
-    'observations',
-    'search_attempts',
-    'action_tree',
-    'discounted_costs',
-    'total_discounted_cost',
-    'discounted_optimal_costs',
-    'total_discounted_optimal_cost',
-    'expected_LD'
-
-    ## GP-specific
-    # 'true_k',
-    # 'RPE',
-    # 'posterior_mean',
-    # 'theta_MLE',
-]
-
 ## parse strings to lists
 def parse_lists(df):
     cols = df.columns[2:]
@@ -472,51 +437,35 @@ def parse_lists(df):
     return df
 
 
-
+## KL divergence between prior and posterior samples, where samples as assumed to be multivariate Gaussians
 def KL_divergence(x, y):
-    """Compute the Kullback-Leibler divergence between two multivariate samples.
-    Parameters
-    ----------
-    x : 2D array (n,d)
-        Samples from distribution P, which typically represents the true
-        distribution.
-    y : 2D array (m,d)
-        Samples from distribution Q, which typically represents the approximate
-        distribution.
-    Returns
-    -------
-    out : float
-        The estimated Kullback-Leibler divergence D(P||Q).
-    References
-    ----------
-    Pérez-Cruz, F. Kullback-Leibler divergence estimation of
-    continuous distributions IEEE International Symposium on Information
-    Theory, 2008.
-    """
+    '''x is the prior, y is the posterior'''
 
-    # Check the dimensions are consistent
-    x = np.atleast_2d(x)
-    y = np.atleast_2d(y)
+    ## calculate gaussian terms
+    cov_x = np.cov(x)
+    cov_y = np.cov(y)
+    mu_x = np.mean(x, axis=1)
+    mu_y = np.mean(y, axis=1)
+    d = len(mu_x)
+    assert d == cov_x.shape[0], "Mean and covariance dimensions do not match"
 
-    n,d = x.shape
-    m,dy = y.shape
+    ## trace term
+    inv_cov_y = np.linalg.inv(cov_y)
+    trace_term = np.trace(inv_cov_y @ cov_x)
 
-    assert(d == dy)
+    ## log determinant term
+    log_det_x = np.linalg.slogdet(cov_x)[1]
+    log_det_y = np.linalg.slogdet(cov_y)[1]
+    LD_term = log_det_y - log_det_x
 
+    ## mu term
+    mean_diff = mu_y - mu_x
+    mean_term = mean_diff.T @ inv_cov_y @ mean_diff
 
-    # Build a KD tree representation of the samples and find the nearest neighbour
-    # of each point in x.
-    xtree = KDTree(x)
-    ytree = KDTree(y)
+    ## combine
+    KL = 0.5* (trace_term - d + LD_term + mean_term) 
 
-    # Get the first two nearest neighbours for x, since the closest one is the
-    # sample itself.
-    r = xtree.query(x, k=2, eps=.01, p=2)[0][:,1]
-    s = ytree.query(x, k=1, eps=.01, p=2)[0]
-
-    # There is a mistake in the paper. In Eq. 14, the right side misses a negative sign
-    # on the first term of the right hand side.
-    return -np.log(r/s).sum() * d / n + np.log(m / (n - 1.))
+    return KL
 
 
 def profile_func(func, *args, **kwargs):
@@ -558,3 +507,40 @@ def get_next_state(current, direction, N):
         N - 1
     )
     return next_state
+
+
+## data-saving/dict stuff
+data_keys = [
+    'agent',
+    'mountain',
+    'episode',
+    'start',
+    'goal',
+    'costs',
+    'optimal_costs',
+    'actions',
+    'CE_actions',
+    'optimal_actions',
+    'total_cost',
+    'total_optimal_cost',
+    'action_score',
+    'cost_ratio',
+    'n_steps',
+    'actual_trajectory',
+    'optimal_trajectory',
+    'observations',
+    'search_attempts',
+    'action_tree',
+    'discounted_costs',
+    'total_discounted_cost',
+    'discounted_optimal_costs',
+    'total_discounted_optimal_cost',
+    'expected_LD',
+    'expected_KL'
+
+    ## GP-specific
+    # 'true_k',
+    # 'RPE',
+    # 'posterior_mean',
+    # 'theta_MLE',
+]

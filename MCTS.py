@@ -554,7 +554,7 @@ class MonteCarloTreeSearch():
 
 
 ## parallel function for simulating many episodes within the same mountain env
-def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episodes=10, agents = ['GP', 'GP-MCTS', 'BAMCP','CE'], n_sims=1000, n_futures=0, n_iter=10, lazy=False, exploration_constant=2, discount_factor=0.95, progress=False, offline=False):
+def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episodes=10, agents = ['GP', 'GP-MCTS', 'BAMCP','CE'], n_sims=1000, n_futures=0, n_iter=10, lazy=False, exploration_constant=2, discount_factor=0.95, progress=False, offline=False):
     
     ## initiate dictionary to store the results
     sim_out = {}
@@ -567,7 +567,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
     np.random.seed(seed)
     
     ## create base mountain environment
-    env = make_env(N, n_episodes, None, params, metric)
+    env = make_env(N, n_episodes, expt, params, metric)
     
     ## debugging plot env
     # fig, ax = plt.subplots(1, 1, figsize=(5,5))
@@ -618,6 +618,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
             actions = []
             CE_actions = []
             ELDs = []
+            EKLs = []
             
 
             ## GP-MCTS agent receives info from env
@@ -734,10 +735,12 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                             n_sims_tmp = n_sims
                             action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures, n_iter=n_iter, lazy=lazy, progress=progress, reuse_samples=reuse_samples)
                         elif (dist_to_goal <= (N/2)) & (dist_to_goal > (N/4)):
-                            n_sims_tmp = int(n_sims/2)
+                            # n_sims_tmp = int(n_sims/2)
+                            n_sims_tmp = n_sims
                             action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures, n_iter=n_iter, lazy=lazy, progress=progress, reuse_samples=reuse_samples)
                         else:
-                            n_sims_tmp = int(n_sims/4)
+                            # n_sims_tmp = int(n_sims/4)
+                            n_sims_tmp = n_sims
                             action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures,n_iter=n_iter, lazy=lazy,  progress=progress, reuse_samples=reuse_samples)
                         actions.append(action)
 
@@ -801,7 +804,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                             # backtracked = np.abs(action-actions[-2]) ==2
                             backtracked = np.array_equal(current, env_copy.a_traj[-3])
                             if backtracked:
-                                print(MCTS.tree.print_tree(MCTS.tree.root))
+                                # print(MCTS.tree.print_tree(MCTS.tree.root))
                                 # print('backtracked in state:', current,' back from ', env_copy.a_traj[-2])
                                 raise ValueError('backtracked in state:', current,' back from ', env_copy.a_traj[-2], ', en route to ', goal)
                         
@@ -872,12 +875,12 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     ## get prior p and q samples
                     prior_p_samples = agent.all_posterior_ps
                     prior_q_samples = agent.all_posterior_qs
-                    prior_all_samples = np.vstack([prior_p_samples.T, prior_q_samples.T])
+                    prior_samples = np.vstack([prior_p_samples.T, prior_q_samples.T])
 
                     ## log det of prior covariance matrix 
-                    prior_cov = np.cov(prior_all_samples)
-                    prior_LD = np.linalg.slogdet(prior_cov)[1]
-                    assert prior_cov.shape[0] == N*2, 'covariance matrix is wrong shape'
+                    # prior_cov = np.cov(prior_samples)
+                    # prior_LD = np.linalg.slogdet(prior_cov)[1]
+                    # assert prior_cov.shape[0] == N*2, 'covariance matrix is wrong shape'
                     
                     
                     ## order the outcomes (counterfactual, then actual. This is to allow reuse of the posterior samples associated with the actual outcome on the next timestep)
@@ -887,6 +890,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     else:
                         ordered_outcomes = [env_copy.low_cost, env_copy.high_cost]
                     posterior_LDs = []
+                    KLs = []
 
                     ## posterior samples under each of the possible outcomes of the action that was just taken
                     for o, outcome in enumerate(ordered_outcomes):
@@ -894,23 +898,44 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                         sim_obs[-1, -1] = outcome
                         agent.root_samples(sim_obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy, CE=False)
                         posterior_samples = np.vstack([np.array(agent.all_posterior_ps).T, np.array(agent.all_posterior_qs).T])
-                        posterior_cov = np.cov(posterior_samples)
-                        assert posterior_cov.shape == prior_cov.shape, 'prior and posterior covariance matrices do not match: {} vs {}'.format(posterior_cov.shape, prior_cov.shape)
                         
                         ## posterior log det
-                        posterior_cov
-                        LD = np.linalg.slogdet(posterior_cov)[1]
-                        posterior_LDs.append(LD)
+                        # posterior_cov = np.cov(posterior_samples)
+                        # assert posterior_cov.shape == prior_cov.shape, 'prior and posterior covariance matrices do not match: {} vs {}'.format(posterior_cov.shape, prior_cov.shape)
+                        # LD = np.linalg.slogdet(posterior_cov)[1]
+                        # posterior_LDs.append(LD)
+
+                        ## or, calculate the KL divergence between two multivariate gaussians
+                        KL = KL_divergence(prior_samples, posterior_samples)
+                        KLs.append(KL)
 
 
                     ## expected log det, i.e. the difference between the prior and the expected posterior log dets, weighted by the probability of each outcome
+                    # p_low = np.mean(prior_p_samples * prior_q_samples)
+                    # p_high = 1 - p_low
+                    # if actual_outcome == env_copy.low_cost:
+                    #     expected_LD = p_low * (posterior_LDs[1] - prior_LD) + p_high * (posterior_LDs[0] - prior_LD)
+                    # else:
+                    #     expected_LD = p_low * (posterior_LDs[0] - prior_LD) + p_high * (posterior_LDs[1] - prior_LD)
+                    # ELDs.append(expected_LD)
+
+                    ## expected KL divergence
                     p_low = np.mean(prior_p_samples * prior_q_samples)
                     p_high = 1 - p_low
                     if actual_outcome == env_copy.low_cost:
-                        expected_LD = p_low * (posterior_LDs[1] - prior_LD) + p_high * (posterior_LDs[0] - prior_LD)
+                        expected_KL = p_low * (KLs[1]) + p_high * (KLs[0])
                     else:
-                        expected_LD = p_low * (posterior_LDs[0] - prior_LD) + p_high * (posterior_LDs[1] - prior_LD)
-                    ELDs.append(expected_LD)
+                        expected_KL = p_low * (KLs[0]) + p_high * (KLs[1])
+                    EKLs.append(expected_KL)
+
+                    ## debugging
+                    # print(ag)
+                    # if actual_outcome == env_copy.low_cost:
+                    #     print('posterior KLs: low = ',KLs[1], ', high = ',KLs[0], ', probs: ',p_low, p_high)
+                    # else:
+                    #     print('posterior KLs: low = ',KLs[0], ', high = ',KLs[1], ', probs: ',p_low, p_high)
+                    # print('expected KL: ',expected_KL)
+                    # print()
 
                     ## reorder the posterior LDs to match low and high cost outcomes (i.e. 0th element is the low cost outcome)
                     # if ordered_outcomes[1] == env_copy.low_cost:
@@ -1024,7 +1049,8 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     sim_out['search_attempts'].append(search_attempts)
                     # sim_out['action_tree'].append(MCTS.tree.action_tree())
                     sim_out['action_tree'].append(np.nan)
-                    sim_out['expected_KD'].append(ELDs)
+                    sim_out['expected_LD'].append(ELDs)
+                    sim_out['expected_KL'].append(EKLs)
 
                     ## discounts
                     sim_out['discounted_costs'].append(np.nan)
@@ -1069,6 +1095,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', true_k=None, n_episode
                     # sim_out['action_tree'].append(MCTS.tree.action_tree())
                     sim_out['action_tree'].append(np.nan)
                     sim_out['expected_LD'].append(ELDs)
+                    sim_out['expected_KL'].append(EKLs)
 
 
                     ### costs
