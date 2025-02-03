@@ -131,8 +131,8 @@ class MountainEnv(gym.Env):
             self.expt = expt
             self.starts = []
             self.goals = []
-            self.paths = []
-            self.moves = []
+            self.path_states = []
+            self.path_actions = []
             self.costss = []
             self.o_trajs = []
             self.o_traj_costs = []
@@ -156,7 +156,7 @@ class MountainEnv(gym.Env):
                 #     moves, path_pair = self.sample_paths(start, goal)
                 #     self.starts.append(start)
                 #     self.goals.append(goal)
-                #     self.paths.append(path_pair)
+                #     self.path_states.append(path_pair)
 
                 try:
                     ## free movement
@@ -170,11 +170,11 @@ class MountainEnv(gym.Env):
                         # start = np.array([0,0])
                         # goal = np.array([3, 3])
                         max_turns = 4
-                        moves, path_pair = self.sample_paths(start, goal, max_turns)
+                        path_actions, path_states = self.sample_paths(start, goal, max_turns)
                         self.starts.append(start)
                         self.goals.append(goal)
-                        self.paths.append(path_pair)
-                        self.moves.append(moves)
+                        self.path_states.append(path_states)
+                        self.path_actions.append(path_actions)
                 except:
                     break
 
@@ -191,7 +191,7 @@ class MountainEnv(gym.Env):
 
             if len(self.starts)==self.n_episodes:
                 init_done = True
-                self.e = 0
+                self.episode = 0
             t+=1
             if t>500:
                 raise ValueError('couldnt initialise env')
@@ -228,7 +228,7 @@ class MountainEnv(gym.Env):
 
         ## set costs, given p_costs
         # self.costs = np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
-        self.costs = self.costss[self.e]
+        self.costs = self.costss[self.episode]
 
         ## set start and end
         if start_goal is not None: 
@@ -236,8 +236,8 @@ class MountainEnv(gym.Env):
             self._goal_location = np.array(start_goal[1], dtype=int)
         else:
             # self._agent_location, self._goal_location = self.sample_SG()
-            self._agent_location = np.array(self.starts[self.e])
-            self._goal_location = np.array(self.goals[self.e])
+            self._agent_location = np.array(self.starts[self.episode])
+            self._goal_location = np.array(self.goals[self.episode])
 
             
             ## get true Q vals (PROBABLY only need to do this if we're interested in optimal paths, as in the free-choice expt, BUT LET'S KEEP FOR NOW)
@@ -436,7 +436,7 @@ class MountainEnv(gym.Env):
             rel_cost_diff_tol = 0.8
             rel_cost_diff = 1
             n_common_within_ep = np.inf
-            if len(self.paths)>0:
+            if len(self.path_states)>0:
                 n_common_across_eps = np.inf
             else:
                 n_common_across_eps = 0
@@ -467,9 +467,9 @@ class MountainEnv(gym.Env):
                     # print('within ep:',n_common_within_ep, max_common_within_ep)
 
                     ## check if too much overlap across episodes
-                    if len(self.paths)>0:
+                    if len(self.path_states)>0:
                         common_across_eps = []
-                        for paths in self.paths:
+                        for paths in self.path_states:
                             p1, p2 = paths
                             common_across_eps.append(len(set(p1).intersection(set(path_1))))
                             common_across_eps.append(len(set(p2).intersection(set(path_2))))
@@ -487,9 +487,9 @@ class MountainEnv(gym.Env):
 
         ## compare with previous paths
         # max_common = len(moves)/1.25
-        # if len(self.paths)>0:
-        #     # for p1, p2 in zip(self.paths, self.paths):
-        #     for paths in self.paths:
+        # if len(self.path_states)>0:
+        #     # for p1, p2 in zip(self.path_states, self.path_states):
+        #     for paths in self.path_states:
         #         p1, p2 = paths
 
         #         ## check if these paths have appeared before
@@ -506,8 +506,9 @@ class MountainEnv(gym.Env):
         #             print(n_common, max_common)
         #             raise ValueError('paths too similar')
 
-        paths = [build_path(moves_1), build_path(moves_2)]
-        return [moves_1, moves_2], paths
+        path_states = [build_path(moves_1), build_path(moves_2)]
+        path_actions = [moves_1, moves_2]
+        return path_actions, path_states
 
 
 
@@ -660,10 +661,10 @@ class MountainEnv(gym.Env):
 
                 ## scores for the trial
                 self.action_score = np.nanmean(self.action_scores)
-                self.cost_ratio = self.o_traj_total_costs[self.e] / self.a_traj_total_cost
+                self.cost_ratio = self.o_traj_total_costs[self.episode] / self.a_traj_total_cost
 
                 ## update ep counter
-                self.e += 1
+                self.episode += 1
 
         # observation = self.get_obs()
         # info = self._get_info()
