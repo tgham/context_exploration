@@ -109,6 +109,7 @@ class MountainEnv(gym.Env):
 
         ### initialise farm
         init_done = False
+        t=0
         while not init_done:
             self.high_cost, self.low_cost = -0.9, -0.1
             self.alpha_row = beta_params['alpha_row']
@@ -168,26 +169,32 @@ class MountainEnv(gym.Env):
                     elif expt=='2AFC':
                         # start = np.array([0,0])
                         # goal = np.array([3, 3])
-                        moves, path_pair = self.sample_paths(start, goal)
+                        max_turns = 4
+                        moves, path_pair = self.sample_paths(start, goal, max_turns)
                         self.starts.append(start)
                         self.goals.append(goal)
                         self.paths.append(path_pair)
                         self.moves.append(moves)
-
-                    ## prob = p(high cost)
-                    # self.costss.append(np.array([self.high_cost if r<self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N))
-                    
-                    ## prob = p(low cost)
-                    self.costss.append(np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N))
-
                 except:
-                    # print("couldn't find start and goal. retrying...")
                     break
+
+                ## prob = p(high cost)
+                # self.costss.append(np.array([self.high_cost if r<self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N))
+                
+                ## prob = p(low cost)
+                self.costss.append(np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N))
+
+                # except:
+                #     print("couldn't solve for current env. reinitialising...")
+                #     break
 
 
             if len(self.starts)==self.n_episodes:
                 init_done = True
                 self.e = 0
+            t+=1
+            if t>500:
+                raise ValueError('couldnt initialise env')
         self.sim = False
 
     ## get info from current state
@@ -232,8 +239,9 @@ class MountainEnv(gym.Env):
             self._agent_location = np.array(self.starts[self.e])
             self._goal_location = np.array(self.goals[self.e])
 
-            ## get true Q vals (u only do this if it's a real reset, rather than a reset for an imagined rollout)
-
+            
+            ## get true Q vals (PROBABLY only need to do this if we're interested in optimal paths, as in the free-choice expt, BUT LET'S KEEP FOR NOW)
+            # if self.expt=='free':
             ## pq = p(high cost)
             # dp_costs = self.p_costs*self.high_cost + (1-self.p_costs)*self.low_cost ## standard case (i.e. pq = p(high cost))
             # dp_costs[self._goal_location[0], self._goal_location[1]] = 0
@@ -244,6 +252,7 @@ class MountainEnv(gym.Env):
 
             self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=self._goal_location)
             self.optimal_trajectory(self._agent_location, self._goal_location)
+
 
 
         ## initialise trial info
@@ -384,7 +393,7 @@ class MountainEnv(gym.Env):
             worth_it = (o_traj_total_cost/manhattan_costs[0]) <= route_optimality_tolerance and (o_traj_total_cost/manhattan_costs[1]) <= route_optimality_tolerance ## p(low cost)
 
             t+=1
-            if t>100:
+            if t>50:
                 raise ValueError('cant find start and end')
 
         ## for sanity check, just place agent and goal in opposite corners
@@ -400,34 +409,106 @@ class MountainEnv(gym.Env):
         return agent_location, goal_location
     
     ## sample a pair of manhattan paths from the set of all possible manhattan paths
-    def sample_paths(self, start, goal):
+    def sample_paths(self, start, goal, max_turns=1):
 
-        ## determine direction of cardinal movement
+        ## get info about manhattan
         dx = goal[0] - start[0]
         dy = goal[1] - start[1]
+        x_actions = np.repeat(0, abs(dx)) if dx > 0 else np.repeat(2, abs(dx))
+        y_actions = np.repeat(1, abs(dy)) if dy > 0 else np.repeat(3, abs(dy))
 
-        ## convert these dx and dy values into actions, as given by action_to_direction
-        x_actions = np.repeat(0, abs(dx)) if dx>0 else np.repeat(2, abs(dx))
-        y_actions = np.repeat(1, abs(dy)) if dy>0 else np.repeat(3, abs(dy))
-        moves = np.concatenate([x_actions, y_actions])
+        def build_path(order):
+            path = [tuple(start)]
+            for move in order:
+                path.append(tuple(get_next_state(path[-1], self.action_to_direction[move], self.N)))
+            return path
 
-        ## sample two paths based on certain criteria
-        rel_cost_diff_tol = 0.75 ## minimum difference in cost between two paths
-        rel_cost_diff = 1
-        while rel_cost_diff >= rel_cost_diff_tol:
-            moves_1 = np.random.choice(moves, len(moves), replace=False)
-            moves_2 = np.random.choice(moves, len(moves), replace=False)
-            path_1 = [(start[0], start[1])]
-            path_2 = [(start[0], start[1])]
-            for m in range(len(moves_1)):
-                path_1.append(get_next_state(path_1[-1], self.action_to_direction[moves_1[m]], self.N))
-                path_2.append(get_next_state(path_2[-1], self.action_to_direction[moves_2[m]], self.N))
-            path_1_costs = [np.sum([self.p_costs[x, y] for x, y in path_1])]
-            path_2_costs = [np.sum([self.p_costs[x, y] for x, y in path_2])]
-            rel_cost_diff = np.min([path_1_costs[0], path_2_costs[0]]) / np.max([path_1_costs[0], path_2_costs[0]])
-        moves = [moves_1, moves_2]
-        paths = [list(map(tuple, path_1)), list(map(tuple, path_2))]
-        return moves, paths
+        ## if only one turn allowed, then only possible paths: all x then y, or all y then x
+        if max_turns == 1:
+            moves_1 = np.concatenate([x_actions, y_actions])
+            moves_2 = np.concatenate([y_actions, x_actions])
+        
+        ## otheriwse, allow for more turns
+        else:
+            moves = np.concatenate([x_actions, y_actions])
+
+            ## set path criteria
+            rel_cost_diff_tol = 0.8
+            rel_cost_diff = 1
+            n_common_within_ep = np.inf
+            if len(self.paths)>0:
+                n_common_across_eps = np.inf
+            else:
+                n_common_across_eps = 0
+            max_common_within_ep = (len(moves)-1)/2
+            max_common_across_eps = (len(moves)-1)/1.2
+            t=0
+            while (rel_cost_diff >= rel_cost_diff_tol) or (n_common_within_ep >= max_common_within_ep) or (n_common_across_eps >= max_common_across_eps):
+
+                ## generate random permutations of the moves
+                moves_1 = np.random.permutation(moves)
+                moves_2 = np.random.permutation(moves)
+
+                ## check number of turns
+                def count_turns(moves_seq):
+                    return sum(m1 != m2 and (m1 + m2) % 2 == 1 for m1, m2 in zip(moves_seq[:-1], moves_seq[1:]))
+                if count_turns(moves_1) <= max_turns and count_turns(moves_2) <= max_turns:
+                    path_1 = build_path(moves_1)
+                    path_2 = build_path(moves_2)
+
+                    ## check against criteria
+                    path_1_cost = np.sum([self.p_costs[x, y] for x, y in path_1])
+                    path_2_cost = np.sum([self.p_costs[x, y] for x, y in path_2])
+                    rel_cost_diff = min(path_1_cost, path_2_cost) / max(path_1_cost, path_2_cost)
+                    # print('rel cost diff:', rel_cost_diff, rel_cost_diff_tol)
+
+                    ## check if too much overlap within episode
+                    n_common_within_ep = len(set(path_1).intersection(set(path_2)))
+                    # print('within ep:',n_common_within_ep, max_common_within_ep)
+
+                    ## check if too much overlap across episodes
+                    if len(self.paths)>0:
+                        common_across_eps = []
+                        for paths in self.paths:
+                            p1, p2 = paths
+                            common_across_eps.append(len(set(p1).intersection(set(path_1))))
+                            common_across_eps.append(len(set(p2).intersection(set(path_2))))
+                            common_across_eps.append(len(set(p1).intersection(set(path_2))))
+                            common_across_eps.append(len(set(p2).intersection(set(path_1))))
+                        n_common_across_eps = np.max(common_across_eps)
+                        # print('across eps:', n_common_across_eps, max_common_across_eps)
+                            
+                t+=1
+                if t>100:
+                    raise ValueError('cant find paths')
+
+
+
+
+        ## compare with previous paths
+        # max_common = len(moves)/1.25
+        # if len(self.paths)>0:
+        #     # for p1, p2 in zip(self.paths, self.paths):
+        #     for paths in self.paths:
+        #         p1, p2 = paths
+
+        #         ## check if these paths have appeared before
+        #         if np.array_equal(p1, path_1) or np.array_equal(p2, path_2) or np.array_equal(p1, path_2) or np.array_equal(p2, path_1):
+        #             raise ValueError('paths already exist')
+                
+        #         ## check if these paths are too similar to previous paths
+        #         # n_common = (len(set(p1).intersection(set(path_1))) + len(set(p2).intersection(set(path_2))) + len(set(p1).intersection(set(path_2))) + len(set(p2).intersection(set(path_1))))
+        #         n_common_across_eps = [len(set(p1).intersection(set(path_1))),
+        #                      len(set(p2).intersection(set(path_2))),
+        #                      len(set(p1).intersection(set(path_2))),
+        #                      len(set(p2).intersection(set(path_1)))]
+        #         if np.max(n_common) > max_common:
+        #             print(n_common, max_common)
+        #             raise ValueError('paths too similar')
+
+        paths = [build_path(moves_1), build_path(moves_2)]
+        return [moves_1, moves_2], paths
+
 
 
     ## generate all possible Manhattan paths from start to goal
@@ -446,10 +527,6 @@ class MountainEnv(gym.Env):
     #     unique_paths = set(permutations(moves))
 
     #     return unique_paths
-
-
-
-
 
     
     ## custom functions for manually editing the env
