@@ -14,6 +14,7 @@ def convert_pyx(py_file):
 
 if __name__ == "__main__":
     make_pyx('MCTS.py', 'c_MCTS.pyx')
+    # make_pyx('samplers.py', 'c_samplers.pyx')
     # make_pyx('utils.py', 'c_utils.pyx')
     # convert_pyx('utils.py')
     # make_pyx('mountain_world.py', 'c_mountain_world.pyx')

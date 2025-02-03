@@ -8,6 +8,6 @@ setup(
 )
 
 # setup(
-#     ext_modules=cythonize("c_utils.pyx"),
+#     ext_modules=cythonize("c_samplers.pyx"),
 #     include_dirs=[numpy.get_include()]
 # )

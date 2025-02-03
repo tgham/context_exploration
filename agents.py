@@ -396,17 +396,26 @@ class Farmer:
     ## generate full set of root samples
     def root_samples(self, obs=None, n_samples=1000, n_iter=100, lazy=True, CE=False):
         sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, obs, N=self.N, CE=CE)
+        self.all_posterior_ps = np.zeros((n_samples, self.N))
+        self.all_posterior_qs = np.zeros((n_samples, self.N))
+        self.all_posterior_p_costs = np.zeros((n_samples, self.N, self.N))
 
         ## lazy
         if lazy:
-            self.all_posterior_ps = np.zeros((n_samples, self.N))
-            self.all_posterior_qs = np.zeros((n_samples, self.N))
-            self.all_posterior_p_costs = np.zeros((n_samples, self.N, self.N))
 
             ## loop through samples
             for s in range(n_samples):
                 self.all_posterior_ps[s,:], self.all_posterior_qs[s,:] = sampler.lazy_sample(n_iter = n_iter)
                 self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
+
+        ## full 
+        else:
+
+            ## loop through samples
+            for s in range(n_samples):
+                self.all_posterior_ps[s,:], self.all_posterior_qs[s,:] = sampler.full_sample(n_iter = n_iter)
+                self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
+
 
         ## posterior means
         self.posterior_mean_p_cost = np.mean(self.all_posterior_p_costs, axis=0)
