@@ -48,103 +48,27 @@ class MountainEnv(gym.Env):
         self.seed = seed
         np.random.seed(self.seed)
 
-        ## initialise the GP grid
+        ## initialise the grid
         self.N = N
         x = np.arange(N)
         y = np.arange(N)
         X,Y = np.meshgrid(x,y)
         self.locations = np.column_stack([X.ravel(), Y.ravel()])
 
-        ### initialise farm
-        init_done = False
-        while not init_done:
-            self.high_cost, self.low_cost = -0.9, -0.1
-            default_param = 0.5
-            self.alpha_row = beta_params['alpha_row']
-            self.beta_row = beta_params['beta_row']
-            self.alpha_col = beta_params['alpha_col']
-            self.beta_col = beta_params['beta_col']
-            self.row_p = np.random.beta(self.alpha_row,self.beta_row, self.N)
-            self.col_q = np.random.beta(self.alpha_col, self.beta_col, self.N)
-            self.p_costs = np.outer(self.row_p, self.col_q)
 
-            ## prob = p(high cost)
-            # self.costs = np.array([self.high_cost if r<self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
+        ### misc gym inits
 
-            ## prob = p(low cost)
-            # self.costs = np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
-            
-            
-            
-            ### misc gym inits
+        ## sizes
+        self.window_size = 512
 
-            ## sizes
-            self.window_size = 512
-
-            # Observations are dictionaries with the agent's and the goal's location.
-            size = 5
-            # Observation space is a 2D location on the grid
-            self.observation_space = gym.spaces.Box(
-                low=np.array([0, 0]),  # Minimum x and y
-                high=np.array([self.N - 1, self.N - 1]),  # Maximum x and y
-                dtype=np.int32
-            )
-
-            ## init trial info, depending on the expt type
-            self.expt = expt
-            self.starts = []
-            self.goals = []
-            self.paths = []
-            self.costss = []
-            self.o_trajs = []
-            self.o_traj_costs = []
-            self.o_traj_total_costs = []
-            self.o_traj_actions = []
-            self.n_episodes = n_episodes
-
-            ## if 2AFC, we use the same SG pair all the way through
-            if expt=='2AFC':
-                try:
-                    start, goal = self.sample_SG()
-                except:
-                    break
-
-            ## generate relevant trial info for each episode
-            for e in range(n_episodes):
-
-                try:
-                    ## free movement
-                    if expt == 'free':
-                        start, goal = self.sample_SG()
-                        self.starts.append(start)
-                        self.goals.append(goal)
-
-                    ## 2AFC
-                    elif expt=='2AFC':
-                        path_pair = self.sample_paths(start, goal)
-                        self.starts.append(start)
-                        self.goals.append(goal)
-                        self.paths.append(path_pair)
-
-                    ## prob = p(high cost)
-                    # self.costss.append(np.array([self.high_cost if r<self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N))
-                    
-                    ## prob = p(low cost)
-                    self.costss.append(np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N))
-
-                except:
-                    # print("couldn't find start and goal. retrying...")
-                    break
-
-
-
-
-
-            if len(self.starts)==self.n_episodes:
-                init_done = True
-                self.e = 0
-
- 
+        # Observations are dictionaries with the agent's and the goal's location.
+        size = 5
+        # Observation space is a 2D location on the grid
+        self.observation_space = gym.spaces.Box(
+            low=np.array([0, 0]),  # Minimum x and y
+            high=np.array([self.N - 1, self.N - 1]),  # Maximum x and y
+            dtype=np.int32
+        )
 
         # define actions, depending on metric
         self.metric = metric
@@ -182,9 +106,89 @@ class MountainEnv(gym.Env):
             }
             self.n_actions = 8
 
-        self.sim = False
 
-    ### RL env inits
+        ### initialise farm
+        init_done = False
+        while not init_done:
+            self.high_cost, self.low_cost = -0.9, -0.1
+            self.alpha_row = beta_params['alpha_row']
+            self.beta_row = beta_params['beta_row']
+            self.alpha_col = beta_params['alpha_col']
+            self.beta_col = beta_params['beta_col']
+            self.row_p = np.random.beta(self.alpha_row,self.beta_row, self.N)
+            self.col_q = np.random.beta(self.alpha_col, self.beta_col, self.N)
+            self.p_costs = np.outer(self.row_p, self.col_q)
+
+            ## prob = p(high cost)
+            # self.costs = np.array([self.high_cost if r<self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
+
+            ## prob = p(low cost)
+            # self.costs = np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
+            
+
+            ## init trial info, depending on the expt type
+            self.expt = expt
+            self.starts = []
+            self.goals = []
+            self.paths = []
+            self.moves = []
+            self.costss = []
+            self.o_trajs = []
+            self.o_traj_costs = []
+            self.o_traj_total_costs = []
+            self.o_traj_actions = []
+            self.n_episodes = n_episodes
+
+            ## if 2AFC, we use the same SG pair all the way through
+            if expt=='2AFC':
+                try:
+                    start, goal = self.sample_SG()
+                except:
+                    continue
+
+            ## generate relevant trial info for each episode
+            for e in range(n_episodes):
+
+                # if expt=='2AFC':
+                #     start = np.array([0,0])
+                #     goal = np.array([3, 3])
+                #     moves, path_pair = self.sample_paths(start, goal)
+                #     self.starts.append(start)
+                #     self.goals.append(goal)
+                #     self.paths.append(path_pair)
+
+                try:
+                    ## free movement
+                    if expt == 'free':
+                        start, goal = self.sample_SG()
+                        self.starts.append(start)
+                        self.goals.append(goal)
+
+                    ## 2AFC
+                    elif expt=='2AFC':
+                        # start = np.array([0,0])
+                        # goal = np.array([3, 3])
+                        moves, path_pair = self.sample_paths(start, goal)
+                        self.starts.append(start)
+                        self.goals.append(goal)
+                        self.paths.append(path_pair)
+                        self.moves.append(moves)
+
+                    ## prob = p(high cost)
+                    # self.costss.append(np.array([self.high_cost if r<self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N))
+                    
+                    ## prob = p(low cost)
+                    self.costss.append(np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N))
+
+                except:
+                    # print("couldn't find start and goal. retrying...")
+                    break
+
+
+            if len(self.starts)==self.n_episodes:
+                init_done = True
+                self.e = 0
+        self.sim = False
 
     ## get info from current state
     def get_obs(self):
@@ -409,8 +413,8 @@ class MountainEnv(gym.Env):
 
         ## sample two paths based on certain criteria
         rel_cost_diff_tol = 0.75 ## minimum difference in cost between two paths
-        rel_cost_diff = 0
-        while rel_cost_diff <= rel_cost_diff_tol:
+        rel_cost_diff = 1
+        while rel_cost_diff >= rel_cost_diff_tol:
             moves_1 = np.random.choice(moves, len(moves), replace=False)
             moves_2 = np.random.choice(moves, len(moves), replace=False)
             path_1 = [(start[0], start[1])]
@@ -420,7 +424,7 @@ class MountainEnv(gym.Env):
                 path_2.append(get_next_state(path_2[-1], self.action_to_direction[moves_2[m]], self.N))
             path_1_costs = [np.sum([self.p_costs[x, y] for x, y in path_1])]
             path_2_costs = [np.sum([self.p_costs[x, y] for x, y in path_2])]
-            rel_cost_diff = np.abs(path_1_costs[0] - path_2_costs[0]) / np.max([path_1_costs[0], path_2_costs[0]])
+            rel_cost_diff = np.min([path_1_costs[0], path_2_costs[0]]) / np.max([path_1_costs[0], path_2_costs[0]])
         moves = [moves_1, moves_2]
         paths = [list(map(tuple, path_1)), list(map(tuple, path_2))]
         return moves, paths
