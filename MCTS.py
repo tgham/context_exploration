@@ -17,6 +17,7 @@ class MonteCarloTreeSearch():
 
     def __init__(self, env, agent, tree, exploration_constant=2, discount_factor=0.99):
         self.env = env
+        self.expt = env.expt
         self.actual_state = self.env.current
         self.actual_goal = self.env.goal
         self.episode = self.env.episode
@@ -36,32 +37,23 @@ class MonteCarloTreeSearch():
 
     ## expand the action space of a node
     def expand(self, node):
-
-        ## create copy of env and set state
-        # env_copy = copy.deepcopy(self.env)
-        # env_copy.set_state(node.state)
-        # assert env_copy.sim, 'env is not in sim mode'
         assert self.env.sim, 'env is not in sim mode'
 
-        ## take action and get new state
+        ## take action (or path) and get new state
         action = node.untried_action()
-        next_state, cost, terminated, truncated, _ = self.env.step(action)
+        if self.expt == 'free':
+            next_state, _, terminated, _, _ = self.env.step(action)
 
-        ## or, do this without updating the environment object
-        # next_state = np.clip(actual_state + self.env.action_to_direction[action],
-        #                         0, self.N - 1)
-        # cost = self.env.get_pred_cost(next_state)
-        # direction = self.env.action_to_direction[action]
-        # next_state = get_next_state(actual_state, direction, self.N)
-        # terminated = np.array_equal(next_state, self.env.goal)
+            ## reset the environment to the actual state
+            self.env.set_state(self.actual_state)
 
+        elif self.expt == '2AFC':
+            terminated = node.episode == self.env.n_episodes
+            next_state = node.state[:2] #i.e. this stays the same since agent always regens to the same start state. may instead choose to fill this with the states that are actually traversed
+            
         ## update info for s-a leaf - i.e. the state-action pair
-        node.action_leaves[action] = Action_Node(prev_state = node.state, action=action, next_state = next_state, terminated=terminated)
-        # node.action_leaves[action].performance = cost
+        node.action_leaves[action] = Action_Node(prev_state = node.state, action=action, next_state = next_state, terminated=terminated, episode=node.episode)
         node.action_leaves[action].performance = 0
-
-        ## reset the environment to the actual state
-        self.env.set_state(self.actual_state)
 
         return node.action_leaves[action]
 
@@ -69,18 +61,15 @@ class MonteCarloTreeSearch():
 
     ## take an action according to the tree policy, i.e. take the best UCT child and see where it takes you
     def tree_policy(self):
-        
-        ## create copy of env and set state
-        # env_copy = copy.deepcopy(self.env)
-        # env_copy.set_sim(True)
-
-        assert self.env.sim, 'env is not in sim mode'
 
         ## initialise the tree
         node = self.tree.root
         t = 0
+        episode = self.env.episode
+        goal = node.goal
         self.tree_costs = []
         # self.tree_cost.append(node.cost)
+        assert episode == node.episode, 'episode mismatch between env and tree\n env: {} \n tree: {}'.format(episode, node.episode)
         assert np.array_equal(node.state[:2], self.actual_state), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.actual_state)
 
         ## create a record of the nodes/leaves visited in the tree
@@ -88,6 +77,7 @@ class MonteCarloTreeSearch():
         self.node_id_path = []
         
         ## loop until you reach a leaf node or terminal state
+        assert self.env.sim, 'env is not in sim mode'
         while not node.terminated:
             t+=1
 
@@ -96,11 +86,6 @@ class MonteCarloTreeSearch():
                 action_leaf = self.expand(node)
                 self.tree_path.append(tuple([node.state, action_leaf.action]))
                 self.node_id_path.append(node.node_id)
-
-                ### tree cost here???
-                # tree_cost += expanded_node.cost
-                # self.tree_cost.append(expanded_node.cost) ## maybe don't need to do this??? because it's included in the rollout too?
-                # self.tree_costs.append(action_leaf.next_cost)
 
                 ## update counts already?
                 action_leaf.n_action_visits += 1
@@ -120,50 +105,46 @@ class MonteCarloTreeSearch():
 
                 ## (some debugging vars)
                 state_tmp = node.state[:2]
-                # env_state_tmp = self.env.get_obs()['agent']
-                # env_state_tmp = self.env.current
 
                 ## get the best child
                 action_leaf = self.best_child(node)
                 self.tree_path.append(tuple([node.state, action_leaf.action]))
                 self.node_id_path.append(node.node_id)
 
-                ## move in env
-                next_state, cost, terminated, _, _ = self.env.step(action_leaf.action)
-                self.tree_costs.append(cost)
+                ## move in env (single action for free expt, whole path for 2AFC)
+                if self.expt == 'free':
+                    next_state, cost, terminated, _, _ = self.env.step(action_leaf.action)
+                    self.tree_costs.append(cost)
+                    next_node_episode = self.episode #??
 
-                ## or, do this without updating the environment object
-                # next_state = np.clip(node.state[:2] + self.env.action_to_direction[action_leaf.action],
-                #                 0, self.N - 1)
-                # direction = self.env.action_to_direction[action_leaf.action]
-                # next_state = get_next_state(node.state[:2], direction, self.N)
-                # cost = self.env.get_pred_cost(next_state)
-                # terminated = action_leaf.terminated
-                # self.tree_costs.append(cost)
+                elif self.expt == '2AFC':
+                    path_id = action_leaf.action
+                    actions = self.env.path_actions[node.episode][path_id]
+                    costs = []
+                    # next_states = []
+                    for action in actions:
+                        next_state, cost, _, _, _ = self.env.step(action)
+                        # next_states.append(next_state)
+                        costs.append(cost)
+                    cost=costs ## rename for consistency
+                    self.tree_costs.append(np.sum(cost)) ## might choose to discount this
+                    next_state = node.state[:2] ## I think this is correct, since the agent always regenerates to the same start state
+                    terminated = node.episode == self.env.n_episodes
+                    next_node_episode = node.episode + 1
 
+                    ### PROBABLY ALSO NEED TO ENSURE THAT THE ENVIRONMENT NOW RESETS TO THE NEXT EPISODE?
 
                 ## see if the next state node already exists as a child of this action leaf
-                node_id = tuple(np.append(next_state, cost))
-                if node_id in action_leaf.children:
-                    node = action_leaf.children[node_id]
+                next_node_id = tuple(np.append(next_state, cost))
+                if next_node_id in action_leaf.children:
+                    node = action_leaf.children[next_node_id]
                 else:
-                    node = self.tree.add_state_node(next_state, cost, self.actual_goal, terminated, episode = self.episode, action_space = self.action_space, parent=action_leaf)
-                # assert np.array_equal(node.state[:2], next_state), 'error in tree policy step {}\n started in {}\n supposed to take action {} to {}\n ended up moving from {} to {}'.format(t, state_tmp, action_leaf.action, node.state[:2], env_state_tmp, action_leaf.next_state)
+                    node = self.tree.add_state_node(next_state, cost, goal, terminated, episode = next_node_episode, action_space = self.action_space, parent=action_leaf)
                 assert np.array_equal(node.state[:2], next_state), 'error in tree policy step {}\n started in {}\n supposed to take action {} to {}\n ended up moving  to {}'.format(t, state_tmp, action_leaf.action, node.state[:2], action_leaf.next_state)
 
                 ## update counts already?
                 action_leaf.n_action_visits += 1
                 node.n_state_visits += 1
-
-            ## if the agent has reached a state that has already been visited, initiate a rollout from there
-            # visited_states = np.array([self.tree_path[i][0] for i in range(len(self.tree_path))])
-            # if any(np.array_equal(next_state, state) for state in visited_states):
-            #     print('tree policy stuck')
-            #     break
-
-            # if t>self.N**2:
-            #     print('tree policy stuck')
-            #     break
 
         ## revert env
         self.env.set_state(self.actual_state)
@@ -329,52 +310,84 @@ class MonteCarloTreeSearch():
     ## optimised rollout
     def optimised_rollout_policy(self, action_leaf, real_rollout = True):
 
-        ## init
-        total_cost = 0
-        depth = 0
+        ### free expt
+        if self.expt == 'free':
+        
+            ## init
+            total_cost = 0
+            depth = 0
 
-        ## rolling out from goal location, can just end here
-        if action_leaf.terminated:
-            return total_cost
-
-        # get the next state and goal
-        current = action_leaf.next_state.copy()
-        # goal = self.env.goal
-
-        ## begin with cost of current state
-        total_cost+=self.env.get_pred_cost(current)
-
-        ## get costs of optimal route
-        while True:
-            depth+=1
-            i, j = current
-            action = int(self.agent.A_inf[i, j])  # Ensure action index is int
-            
-            # Take action and update current state
-            direction = self.env.action_to_direction[action]
-            current = np.clip(current + direction, 0, self.N - 1)
-            # if action == 0:  # Down
-            #     current = np.clip((i + 1, j), 0, self.N - 1)
-            # elif action == 1:  # Right
-            #     current = np.clip((i, j + 1), 0, self.N - 1)
-            # elif action == 2:  # Up
-            #     current = np.clip((i - 1, j), 0, self.N - 1)
-            # elif action == 3:  # Left
-            #     current = np.clip((i, j - 1), 0, self.N - 1)
-            
-            ## return cost once goal is reached (i.e. don't use the cost of the goal state)
-            if np.array_equal(current, self.actual_goal):
+            ## rolling out from goal location, can just end here
+            if action_leaf.terminated:
                 return total_cost
+
+            # get the next state and goal
+            current = action_leaf.next_state.copy()
+            # goal = self.env.goal
+
+            ## begin with cost of current state
+            total_cost+=self.env.get_pred_cost(current)
+
+            ## get costs of optimal route
+            while True:
+                depth+=1
+                i, j = current
+                action = int(self.agent.A_inf[i, j])  # Ensure action index is int
+                
+                # Take action and update current state
+                direction = self.env.action_to_direction[action]
+                current = np.clip(current + direction, 0, self.N - 1)
+                # if action == 0:  # Down
+                #     current = np.clip((i + 1, j), 0, self.N - 1)
+                # elif action == 1:  # Right
+                #     current = np.clip((i, j + 1), 0, self.N - 1)
+                # elif action == 2:  # Up
+                #     current = np.clip((i - 1, j), 0, self.N - 1)
+                # elif action == 3:  # Left
+                #     current = np.clip((i, j - 1), 0, self.N - 1)
+                
+                ## return cost once goal is reached (i.e. don't use the cost of the goal state)
+                if np.array_equal(current, self.actual_goal):
+                    return total_cost
+                
+                ## update costs
+                cost = self.env.get_pred_cost(current)
+                total_cost += cost*self.discount_factor**depth
+
+
+        ### 2AFC expt
+        elif self.expt == '2AFC':
+
+            ## if final episode, just stop here
+            episode = action_leaf.episode
+            if action_leaf.terminated:
+                return 0
             
-            ## update costs
-            cost = self.env.get_pred_cost(current)
-            total_cost += cost*self.discount_factor**depth
+            ## OPTIMISED: get the total cost of the two paths and return the better one
+            for path_id in range(self.action_space):
+                path_states = self.env.path_states[episode][path_id]
+                ro_costs = []
+                total_cost = 0
+                for state in path_states:
+                    cost = self.env.get_pred_cost(state)
+                    total_cost += cost ## NEED TO DISCOUNT HERE!!!??
+                ro_costs.append(total_cost)
+            ro_cost = np.max(ro_costs)
+
+            ## GREEDY: randomly choose between the two paths
+            # path_id = np.random.choice(self.n_AFC)
+            # path_states = self.env.path_states[action_leaf.episode+1][path_id]
+            # ro_cost = 0
+            # for state in path_states:
+            #     cost = self.env.get_pred_cost(state)
+            #     ro_cost += cost
+
+            return ro_cost 
+
         
 
     ## calculate E-E value
     def compute_UCT(self, node, action_leaf): 
-        # exploitation_term = child.total_simulation_cost / child.n_visits
-        # exploration_term = exploration_constant * sqrt(2 * log(parent.n_visits) / child.n_visits)
         exploitation_term = action_leaf.performance 
         assert action_leaf.n_action_visits > 0 or action_leaf.terminated, 'action leaf has not been visited: {}'.format(action_leaf)
         exploration_term = self.exploration_constant * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
@@ -387,32 +400,16 @@ class MonteCarloTreeSearch():
         ## get action children
         action_leaves = [node.action_leaves[a] for a in node.action_leaves.keys()]
 
-        ## remove action that keeps you in your current state
-        action_leaves = [leaf for leaf in action_leaves if not np.array_equal(leaf.next_state, leaf.prev_state)]
-        
-        ## remove action that takes you back to previous state in the tree
-        if len(self.tree_path) > 0:
-            prev_state = self.tree_path[-1][0]
-            action_leaves = [leaf for leaf in action_leaves if not np.array_equal(leaf.next_state, prev_state)]
+        ## some hacky fixes for free expt to prevent backtracking
+        if self.expt == 'free':
 
-    
-        
-        ## or, remove any actions that take you back to a state that has already been visited in the tree
-        # if len(self.tree_path) > 0:
-        #     # visited_states = {tuple(state) for state, _ in self.tree_path}
-        #     # action_leaves = [leaf for leaf in action_leaves if tuple(leaf.next_state) not in visited_states]
-
-        #     visited_states = np.array([self.tree_path[i][0] for i in range(len(self.tree_path))])
-        #     action_leaves_tmp = []
-        #     for leaf in action_leaves:
-        #         if all(not np.array_equal(leaf.next_state, state) for state in visited_states):
-        #             action_leaves_tmp.append(leaf)
-        #     action_leaves = action_leaves_tmp
+            ## remove action that keeps you in your current state
+            action_leaves = [leaf for leaf in action_leaves if not np.array_equal(leaf.next_state, leaf.prev_state)]
             
-        #     ## check if the agent has got stuck
-        #     if len(action_leaves_tmp) == 0:
-        #         print(visited_states, node)
-        
+            ## remove action that takes you back to previous state in the tree
+            if len(self.tree_path) > 0:
+                prev_state = self.tree_path[-1][0]
+                action_leaves = [leaf for leaf in action_leaves if not np.array_equal(leaf.next_state, prev_state)]
 
         ## calculate UCT for each action leaf
         UCTs = [self.compute_UCT(node, leaf) for leaf in action_leaves]
@@ -579,29 +576,6 @@ class MonteCarloTreeSearch_2AFC():
 
 
     
-    ## expand
-    def expand(self, node):
-
-        ## select an untried path
-        path_id = node.untried_action()
-        actions = self.env.path_actions[node.episode][path_id]
-        # assert self.env.sim
-        # next_states = []
-        # costs = []
-        # for action in actions:
-        #     next_state, cost, terminated, truncated, _ = self.env.step(action)
-        #     next_states.append(next_state)
-        #     costs.append(cost)
-        
-        ## update info for s-a leaf - i.e. the set of states and costs arising from this path
-        # node.action_leaves[move_id] = Episode_Action_Node(prev_state = None, action=move_id, next_state = None, terminated=None)
-        terminated = node.episode == self.env.n_episodes
-        node.action_leaves[path_id] = Episode_Action_Node(path_id = path_id, episode = node.episode, terminated=terminated)
-        node.action_leaves[path_id].performance = 0
-        # self.env.set_state(self.actual_state)
-
-        return node.action_leaves[path_id]
-    
     ## tree policy
     def tree_policy(self):
 
@@ -609,14 +583,12 @@ class MonteCarloTreeSearch_2AFC():
 
         ## initialise the tree
         node = self.tree.root
-        starting_cost = node.current_cost
         t = 0
         episode = self.env.episode
-        assert episode == self.tree.root.episode, 'episode mismatch between env and tree\n env: {} \n tree: {}'.format(episode, self.tree.root.episode)
-        start = node.start
         goal = node.goal
         self.tree_costs = []
-        # assert np.array_equal(node.state[:2], self.actual_state), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.actual_state)
+        assert episode == self.tree.root.episode, 'episode mismatch between env and tree\n env: {} \n tree: {}'.format(episode, self.tree.root.episode)
+        assert np.array_equal(node.state[:2], self.actual_state), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.actual_state)
 
         ## create a record of the nodes/leaves visited in the tree
         self.tree_path = []
@@ -629,25 +601,28 @@ class MonteCarloTreeSearch_2AFC():
             ## expansion step
             if self.tree.is_expandable(node):
                 action_leaf = self.expand(node)
-                # self.tree_path.append(tuple([node.state, action_leaf.action]))
-                # self.tree_path.append(action_leaf.path_id)
-                self.tree_path.append(tuple([node.node_id, action_leaf.path_id]))
+                self.tree_path.append(tuple([node.state, action_leaf.action]))
+                # self.tree_path.append(tuple([node.node_id, action_leaf.path_id]))
                 self.node_id_path.append(node.node_id)
 
                 ## update counts already?
                 action_leaf.n_action_visits += 1
                 node.n_state_visits += 1
 
+                ## revert env
+                self.env.set_state(self.actual_state)
+
                 return action_leaf
                 
             ## selection step
             else:
 
+                ## (some debugging vars)
+                state_tmp = node.state[:2]
+
                 ## get the best child
                 action_leaf = self.best_child(node)
-                # self.tree_path.append(tuple([node.state, action_leaf.action]))
-                # self.tree_path.append(action_leaf.path_id)
-                self.tree_path.append(tuple([node.node_id, action_leaf.path_id]))
+                self.tree_path.append(tuple([node.state, action_leaf.action]))
                 self.node_id_path.append(node.node_id)
 
                 ## move in env
