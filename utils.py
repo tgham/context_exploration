@@ -62,39 +62,41 @@ class Node:
     def __init__(self, state, cost, goal, terminated, episode, action_space, N):
         
         ## state info
-        self.state = np.append(state, cost)
+        self.state = np.append(state, cost) ## in the 2AFC case, this amounts to current state + costs that have just been observed on prior simulated episode
         self.n_state_visits = 0
         self.cost = cost
         self.episode = episode
         self.terminated = terminated
         self.goal = goal
-        self.node_id = tuple(state)
+        self.node_id = tuple(self.state)
         self.parent_node_ids = []
         self.N = N
 
 
         ## define valid actions
         self.untried_actions = list(range(action_space))
-        row, col,_ = self.state
-        if row == self.N-1:
-            self.untried_actions.remove(0)
-        if row == 0:
-            self.untried_actions.remove(2)
-        if col == self.N-1:
-            self.untried_actions.remove(1)
-        if col == 0:
-            self.untried_actions.remove(3)
+        if action_space == 4: # i.e. free choice, meaning we want to restrict wall movements
+            row, col,_ = self.state
+            if row == self.N-1:
+                self.untried_actions.remove(0)
+            if row == 0:
+                self.untried_actions.remove(2)
+            if col == self.N-1:
+                self.untried_actions.remove(1)
+            if col == 0:
+                self.untried_actions.remove(3)
 
         ## action leaves
         self.action_leaves = {a: None for a in self.untried_actions}
 
 
     def __str__(self):
-        action_leaves_msg = {action: leaf.performance if leaf is not None else None for action, leaf in self.action_leaves.items()}
-        return "state {}: (visits={}, cost={:0.4f}, terminated={})\n{})".format(
+        action_leaves_msg = {action: np.round(leaf.performance,3) if leaf is not None else None for action, leaf in self.action_leaves.items()}
+        return "state {}: (episode={}, visits={}, terminated={})\n{})".format(
                                                   self.state,
+                                                    self.episode,
                                                   self.n_state_visits,
-                                                  self.cost,
+                                                #   self.cost,
                                                   self.terminated,
                                                   action_leaves_msg
                                                   )
@@ -107,84 +109,30 @@ class Node:
     
 class Action_Node:
 
-    def __init__(self, prev_state, action, next_state, terminated):
+    def __init__(self, prev_state, action, next_state, terminated, episode):
         self.prev_state = prev_state
-        self.action = action
+        self.action = action ## in 2AFC, this specifies the path ID (i.e. 0 or 1)
         self.total_simulation_cost = 0
         self.performance = None
         self.n_action_visits = 0
         self.next_state = next_state
         self.terminated = terminated
+        self.episode = episode
         self.node_id = (self.prev_state, self.action) #+ str(self.next_state)
         self.children={}
         self.children_ids = []
 
     def __str__(self):
-        return "prev_state{}: (action={}, next_state={}, children={}, visits={}, performance={:0.4f})".format(
+        # return "prev_state{}: (action={}, next_state={}, children={}, visits={}, performance={:0.4f})".format(
+        return "prev_state{}: (action={}, next_state={}, n_children={}, visits={}, performance={:0.3f})".format(
                                                   self.prev_state,
                                                   self.action,
                                                 self.next_state,
-                                                  self.children_ids,
+                                                  len(self.children_ids),
                                                   self.n_action_visits,
                                                   self.performance,
                                                   )
     
-class Episode_Node:
-
-    # ''' episode nodes are defined by the current state, episode number, and the states+costs observed up until that point'''
-    def  __init__(self, start, goal, episode, current_cost, prev_costs, terminated, n_AFC, N):
-        self.start = start
-        self.goal = goal
-        self.episode = episode
-        self.terminated = terminated
-        self.prev_costs = prev_costs
-        self.current_cost = current_cost #i.e. the cost of the starting state of the episode (may not need this)
-        self.N = N
-        self.n_state_visits = 0
-        self.node_id = tuple([prev_costs, episode]) ## might want to define this differently 
-        self.parent_node_ids = []
-        self.children_ids = []
-        self.children = {}
-
-        ## action leaves
-        self.untried_actions = list(range(n_AFC))
-        self.action_leaves = {a: None for a in self.untried_actions}
-
-    # def __str__(self):
-    #     action_leaves_msg = {action: leaf.performance if leaf is not None else None for action, leaf in self.action_leaves.items()}
-    #     return "episode {}: (prev_costs={}, current_cost={:0.4f}, children={}, visits={}, performance={:0.4f})\n{})".format(
-    #                                               self.episode,
-    #                                               self.prev_costs,
-    #                                               self.current_cost,
-    #                                               self.children_ids,
-    #                                               self.n_state_visits,
-    #                                               self.performance,
-    #                                               action_leaves_msg
-    #                                               )
-
-    ## select a random untried action
-    def untried_action(self):
-        action = random.choice(self.untried_actions)
-        self.untried_actions.remove(action)
-        return action
-    
-class Episode_Action_Node:
-
-    def __init__(self, path_id, episode, terminated):
-        self.path_id = path_id
-        self.total_simulation_cost = 0
-        self.performance = None
-        self.n_action_visits = 0
-        self.terminated = terminated
-        self.episode = episode
-        # self.node_id = (self.prev_state, self.action) #+ str(self.next_state)
-        self.node_id = (episode, path_id)
-        self.children={}
-        self.children_ids = []
-
-
-
-
 ## Tree class
 class Tree:
 
@@ -192,7 +140,6 @@ class Tree:
         # self.nodes = {}
         self.root = None
         self.N = N
-        self.n_state_visits = np.zeros((N,N))
 
     ## check if node is expandable
     def is_expandable(self, node):
@@ -225,34 +172,19 @@ class Tree:
             # parent.children[str(np.append(state, cost))] = node
 
         return node
-    
-    ## attach action leaf to child episode
-    def add_episode_node(self, start, goal, episode, current_cost, prev_costs, terminated, n_AFC, parent=None):
 
-        ## create a new episode node
-        node = Episode_Node(start, goal, episode, current_cost, prev_costs, terminated, n_AFC, self.N)
-        
-        ## store parent-child relationships
-        if parent is None:
-            self.root = node
-        else:
-            node.parent_node_ids.append(parent.node_id)
-            parent.children_ids.append(node.node_id)
-            child_key = tuple([prev_costs, episode])
-            parent.children[child_key] = node
-
-        return node
-
-
-    def get_children(self, node):
+    def get_children(self, node, dummy=False):
         children = []
         for a, leaf in node.action_leaves.items():
             if leaf is not None:
-                # for node_id in leaf.children_ids:
                 for child_key in leaf.children.keys():
                     child = leaf.children[child_key]
                     children.append(tuple((a, leaf, child_key, child)))
-                    # children.append(tuple((a, self.nodes[node_id].state, self.nodes[node_id])))
+
+                ## if there are no children (i.e. the S-A leaf has been made, but doesn't have any S nodes), add a dummy child
+                if dummy:
+                    if len(leaf.children) == 0:
+                        children.append(tuple((a, leaf, None, None)))
         return children
 
     def parent(self, node):
@@ -275,7 +207,7 @@ class Tree:
                     pass
 
 
-    def print_tree(self, node, indent="", is_last=True):
+    def print_tree(self, node, indent="", is_last=True, dummy=False):
         """
         Recursively print the tree structure with markers, visit counts, and values.
 
@@ -283,21 +215,29 @@ class Tree:
         - node_id: The ID of the current node.
         - indent: The current indentation string for formatting.
         - is_last: Whether this node is the last child of its parent.
+        - dummy: Whether to print display action leaves that don't have any children.
         """
         # Get the current node
         # node = self.nodes[node_id]
-        node_label = f"{node.state}"
+        if dummy:
+            if node is None:
+                return
+            else:
+                node_label = f"{node.state}"
+        else:
+            node_label = f"{node.state}"
+        episode_label = f"{node.episode}"
 
         # Add branch marker
         branch = "└── " if is_last else "├── "
-        print(f"{indent}{branch}Node: {node_label}")
+        print(f"{indent}{branch}Node: {node_label}, Episode: {episode_label}")
 
         # Update indentation for children
         child_indent = indent + ("    " if is_last else "│   ")
 
         # Group children by action
         children_by_action = {}
-        for action, leaf, child_id, child_node in self.get_children(node):
+        for action, leaf, child_id, child_node in self.get_children(node, dummy):
             if action not in children_by_action:
                 children_by_action[action] = []
             children_by_action[action].append((leaf, child_id, child_node))
@@ -318,7 +258,7 @@ class Tree:
 
             # Print the action label (only once per action)
             leaf = children[0][0]  # Assume all children of the same action share the same leaf
-            action_label = f"Action {action}, (n_v: {leaf.n_action_visits}, perf: {leaf.performance:.2f})"
+            action_label = f"Action {action}, (n_v: {leaf.n_action_visits}, branch factor: {len(children)}, perf: {leaf.performance:.2f})"
 
             # Highlight the best action in bold (use ANSI escape codes for bold text)
             if action == best_action:
