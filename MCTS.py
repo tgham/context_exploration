@@ -1,6 +1,6 @@
 import random
 from math import sqrt, log
-from utils import Node, Action_Node, Episode_Node, Episode_Action_Node, Tree, make_env, argm, data_keys, KL_divergence, get_next_state
+from utils import Node, Action_Node, Tree, make_env, argm, data_keys, KL_divergence, get_next_state
 import copy
 import numpy as np
 from tqdm.auto import tqdm
@@ -23,7 +23,11 @@ class MonteCarloTreeSearch():
         self.episode = self.env.episode
         self.agent = agent
         self.tree = tree
-        self.action_space = self.env.action_space.n
+        if self.expt == 'free':
+            self.action_space = self.env.action_space.n
+        elif self.expt == '2AFC':
+            # self.action_space = self.env.n_AFC
+            self.action_space = 2
         self.N = self.env.N
         self.exploration_constant = exploration_constant
         self.discount_factor = discount_factor
@@ -48,7 +52,7 @@ class MonteCarloTreeSearch():
             self.env.set_state(self.actual_state)
 
         elif self.expt == '2AFC':
-            terminated = node.episode == self.env.n_episodes
+            terminated = node.episode == self.env.n_episodes-1 ## i.e. this action leaf corresponds to the action made in the final episode, so it leads to termination of the block
             next_state = node.state[:2] #i.e. this stays the same since agent always regens to the same start state. may instead choose to fill this with the states that are actually traversed
             
         ## update info for s-a leaf - i.e. the state-action pair
@@ -65,21 +69,29 @@ class MonteCarloTreeSearch():
         ## initialise the tree
         node = self.tree.root
         t = 0
-        episode = self.env.episode
+        node_episode = self.env.episode
         goal = node.goal
         self.tree_costs = []
         # self.tree_cost.append(node.cost)
-        assert episode == node.episode, 'episode mismatch between env and tree\n env: {} \n tree: {}'.format(episode, node.episode)
+        assert node_episode == node.episode, 'episode mismatch between env and tree\n env: {} \n tree: {}'.format(episode, node.episode)
         assert np.array_equal(node.state[:2], self.actual_state), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.actual_state)
 
         ## create a record of the nodes/leaves visited in the tree
         self.tree_path = []
         self.node_id_path = []
+
+        ## TEMPORARY FIX: if 2afc, create a copy of the env
+        if self.expt == '2AFC':
+            env_copy = copy.deepcopy(self.env)
+            assert env_copy.sim, 'env copy is not in sim mode'
         
         ## loop until you reach a leaf node or terminal state
         assert self.env.sim, 'env is not in sim mode'
         while not node.terminated:
             t+=1
+
+            ## update state node count
+            node.n_state_visits += 1
 
             ## expansion step
             if self.tree.is_expandable(node):
@@ -89,7 +101,7 @@ class MonteCarloTreeSearch():
 
                 ## update counts already?
                 action_leaf.n_action_visits += 1
-                node.n_state_visits += 1
+                # node.n_state_visits += 1
 
                 ## revert env
                 self.env.set_state(self.actual_state)
@@ -115,36 +127,39 @@ class MonteCarloTreeSearch():
                 if self.expt == 'free':
                     next_state, cost, terminated, _, _ = self.env.step(action_leaf.action)
                     self.tree_costs.append(cost)
-                    next_node_episode = self.episode #??
+                    node_episode = self.episode #??
 
                 elif self.expt == '2AFC':
                     path_id = action_leaf.action
                     actions = self.env.path_actions[node.episode][path_id]
                     costs = []
-                    # next_states = []
                     for action in actions:
-                        next_state, cost, _, _, _ = self.env.step(action)
-                        # next_states.append(next_state)
+                        # _, cost, _, _, _ = self.env.step(action)
+                        _, cost, _, _, _ = env_copy.step(action)
                         costs.append(cost)
                     cost=costs ## rename for consistency
                     self.tree_costs.append(np.sum(cost)) ## might choose to discount this
                     next_state = node.state[:2] ## I think this is correct, since the agent always regenerates to the same start state
-                    terminated = node.episode == self.env.n_episodes
-                    next_node_episode = node.episode + 1
+                    terminated = node.episode == env_copy.n_episodes ## i.e. ...
+                    node_episode += 1
 
-                    ### PROBABLY ALSO NEED TO ENSURE THAT THE ENVIRONMENT NOW RESETS TO THE NEXT EPISODE?
+                    ## since the agent has chosen a path to the goal, we need to move the environment to the next episode
+                    env_copy.episode +=1 
+                    env_copy.reset()
 
                 ## see if the next state node already exists as a child of this action leaf
                 next_node_id = tuple(np.append(next_state, cost))
                 if next_node_id in action_leaf.children:
                     node = action_leaf.children[next_node_id]
+                    # print(node)
+                    # print()
                 else:
-                    node = self.tree.add_state_node(next_state, cost, goal, terminated, episode = next_node_episode, action_space = self.action_space, parent=action_leaf)
+                    node = self.tree.add_state_node(next_state, cost, goal, terminated, episode = node_episode, action_space = self.action_space, parent=action_leaf)
                 assert np.array_equal(node.state[:2], next_state), 'error in tree policy step {}\n started in {}\n supposed to take action {} to {}\n ended up moving  to {}'.format(t, state_tmp, action_leaf.action, node.state[:2], action_leaf.next_state)
 
                 ## update counts already?
                 action_leaf.n_action_visits += 1
-                node.n_state_visits += 1
+                # node.n_state_visits += 1
 
         ## revert env
         self.env.set_state(self.actual_state)
@@ -358,33 +373,98 @@ class MonteCarloTreeSearch():
         ### 2AFC expt
         elif self.expt == '2AFC':
 
+            ## first need to get the starting cost r, which is essentially the cost of path choice that corresponds to the action leaf
+            first_episode = action_leaf.episode
+            # print(first_episode)
+            # print(action_leaf)
+            path_id = action_leaf.action
+            starting_cost = 0
+            for state in self.env.path_states[first_episode][path_id]:
+                cost = self.env.get_pred_cost(state)
+                starting_cost += cost
+            total_cost = starting_cost
+
             ## if final episode, just stop here
-            episode = action_leaf.episode
             if action_leaf.terminated:
-                return 0
+                return total_cost
             
-            ## OPTIMISED: get the total cost of the two paths and return the better one
-            for path_id in range(self.action_space):
-                path_states = self.env.path_states[episode][path_id]
-                ro_costs = []
-                total_cost = 0
-                for state in path_states:
-                    cost = self.env.get_pred_cost(state)
-                    total_cost += cost ## NEED TO DISCOUNT HERE!!!??
-                ro_costs.append(total_cost)
-            ro_cost = np.max(ro_costs)
+            ## loop through remaining episodes
+            for ep in range(action_leaf.episode, self.env.n_episodes):
+            
+                ## OPTIMISED: get the total cost of the two paths and return the better one
+                path_costs = []
+                for path_id in range(self.action_space):
+                    path_states = self.env.path_states[ep][path_id]
+                    ro_cost = 0
+                    for state in path_states:
+                        cost = self.env.get_pred_cost(state)
+                        ro_cost += cost ## NEED TO DISCOUNT HERE!!!??
+                    path_costs.append(ro_cost)
+                total_cost += np.max(path_costs)
 
-            ## GREEDY: randomly choose between the two paths
-            # path_id = np.random.choice(self.n_AFC)
-            # path_states = self.env.path_states[action_leaf.episode+1][path_id]
-            # ro_cost = 0
-            # for state in path_states:
-            #     cost = self.env.get_pred_cost(state)
-            #     ro_cost += cost
+                ## GREEDY: randomly choose between the two paths
+                # path_id = np.random.choice(self.n_AFC)
+                # path_states = self.env.path_states[action_leaf.episode+1][path_id]
+                # ro_cost = 0
+                # for state in path_states:
+                #     cost = self.env.get_pred_cost(state)
+                #     ro_cost += cost
 
-            return ro_cost 
+            return total_cost 
 
-        
+    
+    ## backup costs until you reach the root
+    def backward(self, sim_costs):
+        tree_len = len(self.tree_costs)
+        path_len = len(self.tree_path)
+
+        ## calculate discount factors
+        discount_factors = [self.discount_factor**d for d in range(tree_len)]
+        node = self.tree.root
+
+        print(self.tree_path)
+
+        ## loop through the tree path
+        for depth, (state, action) in enumerate(self.tree_path):
+
+            ## get the state node and action leaf
+            # state_node_id = self.node_id_path[depth]
+            # state_node = self.tree.nodes[state_node_id]
+            # action_leaf = state_node.action_leaves[action]
+            action_leaf = node.action_leaves[action]
+            assert np.array_equal(node.state[:2], state[:2]), 'error in tree path\n node: {} \n state: {}'.format(node.state[:2], state[:2])
+
+            ## discounted costs from current node to rollout node
+            # discounted_tree_cost = 0
+            # dist_to_rollout = tree_len - depth
+            # for d in range(dist_to_rollout):
+            #     discounted_tree_cost += self.tree_costs[d + depth] * self.discount_factor**d
+            dist_to_rollout = tree_len - depth
+            discounted_tree_cost = np.dot(self.tree_costs[depth:depth + dist_to_rollout], discount_factors[:dist_to_rollout])
+
+            ## calculate cost of the rollout, discounted by the distance from the current node to the rollout node
+            total_sim_cost = 0
+            first_sim_cost = sim_costs[0] * self.discount_factor**dist_to_rollout
+            backup_cost = first_sim_cost + discounted_tree_cost
+
+            ## calculate cost of all future rollouts
+            # for s in range(1, len(sim_costs)):
+            #     # total_sim_cost += sim_costs[s] * meta_discount**s
+            #     total_sim_cost += sim_costs[s] #* self.discount_factor**(dist_to_rollout + s)
+
+            ## backup + update counts
+            # action_leaf.n_action_visits += 1
+            # state_node.n_state_visits += 1
+            action_leaf.performance = action_leaf.performance + (backup_cost - action_leaf.performance) / action_leaf.n_action_visits
+
+            ## next node
+            if depth < path_len-1:
+                node = action_leaf.children[tuple(self.tree_path[depth+1][0])]
+            # try:
+            #     node = action_leaf.children[str(self.tree_path[depth+1][0])]
+            # except:
+            #     pass
+
 
     ## calculate E-E value
     def compute_UCT(self, node, action_leaf): 
@@ -418,56 +498,6 @@ class MonteCarloTreeSearch():
         best_child = action_leaves[max_idx]
 
         return best_child
-    
-    ## backup costs until you reach the root
-    def backward(self, sim_costs):
-        tree_len = len(self.tree_costs)
-        path_len = len(self.tree_path)
-
-        ## calculate discount factors
-        discount_factors = [self.discount_factor**d for d in range(tree_len)]
-        node = self.tree.root
-
-        ## loop through the tree path
-        for depth, (state, action) in enumerate(self.tree_path):
-
-            ## get the state node and action leaf
-            # state_node_id = self.node_id_path[depth]
-            # state_node = self.tree.nodes[state_node_id]
-            # action_leaf = state_node.action_leaves[action]
-            action_leaf = node.action_leaves[action]
-            assert np.array_equal(node.state[:2], state[:2]), 'error in tree path\n node: {} \n state: {}'.format(node.state[:2], state[:2])
-
-            ## discounted costs from current node to rollout node
-            # discounted_tree_cost = 0
-            # dist_to_rollout = tree_len - depth
-            # for d in range(dist_to_rollout):
-            #     discounted_tree_cost += self.tree_costs[d + depth] * self.discount_factor**d
-            dist_to_rollout = tree_len - depth
-            discounted_tree_cost = np.dot(self.tree_costs[depth:depth + dist_to_rollout], discount_factors[:dist_to_rollout])
-
-            ## calculate cost of the rollout, discounted by the distance from the current node to the rollout node
-            total_sim_cost = 0
-            first_sim_cost = sim_costs[0] * self.discount_factor**dist_to_rollout
-            backup_cost = first_sim_cost + discounted_tree_cost
-
-            ## calculate cost of all future rollouts
-            for s in range(1, len(sim_costs)):
-                # total_sim_cost += sim_costs[s] * meta_discount**s
-                total_sim_cost += sim_costs[s] #* self.discount_factor**(dist_to_rollout + s)
-
-            ## backup + update counts
-            # action_leaf.n_action_visits += 1
-            # state_node.n_state_visits += 1
-            action_leaf.performance = action_leaf.performance + (backup_cost - action_leaf.performance) / action_leaf.n_action_visits
-
-            ## next node
-            if depth < path_len-1:
-                node = action_leaf.children[tuple(self.tree_path[depth+1][0])]
-            # try:
-            #     node = action_leaf.children[str(self.tree_path[depth+1][0])]
-            # except:
-            #     pass
 
 
     ## tree search --> action loop
@@ -528,7 +558,7 @@ class MonteCarloTreeSearch():
 
         
         ## action selection
-        MCTS_estimates = np.full(4, np.nan)
+        MCTS_estimates = np.full(self.action_space, np.nan)
         for action, leaf in self.tree.root.action_leaves.items():
             MCTS_estimates[action] = leaf.performance
         assert not np.isnan(np.nansum(MCTS_estimates)), 'no MCTS estimates for {}'.format(self.tree.root)
@@ -546,284 +576,6 @@ class MonteCarloTreeSearch():
         # print('entropy:', entropy)
 
         return action, MCTS_estimates
-
-
-
-
-
-
-class MonteCarloTreeSearch_2AFC():
-
-
-    def __init__(self, env, agent, tree, exploration_constant=2, discount_factor=0.99):
-        self.env = env
-        self.actual_state = self.env.current
-        self.actual_goal = self.env.goal
-        self.agent = agent
-        self.tree = tree
-        self.n_AFC = 2
-        self.N = self.env.N
-        self.episode = self.env.episode
-        self.exploration_constant = exploration_constant
-        self.discount_factor = discount_factor
-
-        ## cost of current state
-        current_cost = self.env.costs[self.actual_state[0], self.actual_state[1]]
-        prev_costs = None
-
-        ## add state node to the tree
-        self.tree.add_episode_node(start = self.actual_state, goal = self.actual_goal, episode=self.episode, current_cost=current_cost, prev_costs=prev_costs,terminated=False, n_AFC=self.n_AFC, parent=None)
-
-
-    
-    ## tree policy
-    def tree_policy(self):
-
-        assert self.env.sim, 'env is not in sim mode'
-
-        ## initialise the tree
-        node = self.tree.root
-        t = 0
-        episode = self.env.episode
-        goal = node.goal
-        self.tree_costs = []
-        assert episode == self.tree.root.episode, 'episode mismatch between env and tree\n env: {} \n tree: {}'.format(episode, self.tree.root.episode)
-        assert np.array_equal(node.state[:2], self.actual_state), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.actual_state)
-
-        ## create a record of the nodes/leaves visited in the tree
-        self.tree_path = []
-        self.node_id_path = []
-        
-        ## loop until you reach a leaf node or terminal state
-        while not node.terminated:
-            t+=1
-
-            ## expansion step
-            if self.tree.is_expandable(node):
-                action_leaf = self.expand(node)
-                self.tree_path.append(tuple([node.state, action_leaf.action]))
-                # self.tree_path.append(tuple([node.node_id, action_leaf.path_id]))
-                self.node_id_path.append(node.node_id)
-
-                ## update counts already?
-                action_leaf.n_action_visits += 1
-                node.n_state_visits += 1
-
-                ## revert env
-                self.env.set_state(self.actual_state)
-
-                return action_leaf
-                
-            ## selection step
-            else:
-
-                ## (some debugging vars)
-                state_tmp = node.state[:2]
-
-                ## get the best child
-                action_leaf = self.best_child(node)
-                self.tree_path.append(tuple([node.state, action_leaf.action]))
-                self.node_id_path.append(node.node_id)
-
-                ## move in env
-                path_id = action_leaf.path_id
-                actions = self.env.path_actions[node.episode][path_id]
-                costs = []
-                next_states = []
-                for action in actions:
-                    next_state, cost, terminated, _, _ = self.env.step(action)
-                    next_states.append(next_state)
-                    costs.append(cost)
-                self.tree_costs.append(np.sum(costs)) ## might choose to discount this
-
-                ## see if the next state node already exists as a child of this action leaf
-                episode +=1 ## i.e. having chosen a path, we now progress to the next episode
-                episode_id = tuple([costs, episode])
-                terminated = episode == self.env.n_episodes
-                if episode_id in action_leaf.children:
-                    node = action_leaf.children[episode_id]
-                else:
-                    node = self.tree.add_episode_node(start, goal, episode, starting_cost, costs,terminated, self.n_AFC, parent=action_leaf)
-
-
-                ## update counts already?
-                action_leaf.n_action_visits += 1
-                node.n_state_visits += 1
-
-                ## next node
-                node = action_leaf.children[None]
-
-        ## revert env
-        self.env.set_state(self.actual_state)
-
-        return action_leaf
-    
-
-    ## rollout policy
-    def rollout_policy(self, episode):
-
-        ## if final episode, just stop here
-        if episode==self.env.n_episodes:
-            return 0
-        
-        ## OPTIMISED: get the total cost of the two paths and return the better one
-        for path_id in range(self.n_AFC):
-            path_states = self.env.path_states[episode][path_id]
-            ro_costs = []
-            total_cost = 0
-            for state in path_states:
-                cost = self.env.get_pred_cost(state)
-                total_cost += cost ## NEED TO DISCOUNT HERE!!!??
-            ro_costs.append(total_cost)
-        ro_cost = np.max(ro_costs)
-
-        ## GREEDY: randomly choose between the two paths
-        # path_id = np.random.choice(self.n_AFC)
-        # path_states = self.env.path_states[action_leaf.episode+1][path_id]
-        # ro_cost = 0
-        # for state in path_states:
-        #     cost = self.env.get_pred_cost(state)
-        #     ro_cost += cost
-
-        return ro_cost 
-    
-    ## backup costs to root
-    def backward(self, sim_costs):
-
-        ## calculate discount factors
-        tree_len = len(self.tree_costs)
-        discount_factors = [self.discount_factor**d for d in range(tree_len)]
-        node = self.tree.root
-
-        ## loop through the tree path
-        for depth, (node_id, path_id) in enumerate(self.tree_path):
-
-            ## get the state node and action leaf
-            action_leaf = node.action_leaves[path_id]
-
-            ## discounted costs from current node to rollout node
-            dist_to_rollout = tree_len - depth
-            discounted_tree_cost = np.dot(self.tree_costs[depth:depth + dist_to_rollout], discount_factors[:dist_to_rollout])
-
-            ## calculate cost of the rollout, discounted by the distance from the current node to the rollout node
-            first_sim_cost = sim_costs[0] * self.discount_factor**dist_to_rollout
-            backup_cost = first_sim_cost + discounted_tree_cost
-
-            ## backup + update counts
-            action_leaf.performance = action_leaf.performance + (backup_cost - action_leaf.performance) / action_leaf.n_action_visits
-
-            ## next node
-            if depth < len(self.tree_path)-1:
-                node = action_leaf.children[tuple(self.tree_path[depth+1][0])]
-
-
-
-            
-    
-
-    
-    ## argmax based on UCT values? SAME AS BEFORE, EXCEPT FOR THE CHECK FOR BACKTRACKING
-    def best_child(self, node):
-    
-        ## get action children
-        action_leaves = [node.action_leaves[a] for a in node.action_leaves.keys()]
-
-        ## calculate UCT for each action leaf
-        UCTs = [self.compute_UCT(node, leaf) for leaf in action_leaves]
-        max_UCT = np.max(UCTs)
-        max_idx = argm(UCTs, max_UCT)
-        best_child = action_leaves[max_idx]
-
-        return best_child
-    
-    ## calculate E-E value (SAME AS BEFORE)
-    def compute_UCT(self, node, action_leaf): 
-        exploitation_term = action_leaf.performance 
-        assert action_leaf.n_action_visits > 0 or action_leaf.terminated, 'action leaf has not been visited: {}'.format(action_leaf)
-        exploration_term = self.exploration_constant * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
-        return exploitation_term + exploration_term
-
-
-
-    def search(self, n_sims=1000, n_futures=0, n_iter=100, lazy=False,  progress=False, reuse_samples=False):
-
-        if progress:
-            pbar = tqdm(total=n_sims, desc='MCTS search', position=0, leave=False, miniters=10, ascii=True, bar_format="{l_bar}{bar}")
-
-        ## root sampling of new posterior
-        # self.GP.root_sample(certainty_equivalent=True)
-
-        ## root sampling of new kernel
-        # K_inf = self.GP.sample_k()
-
-        ## if samples not provided, generate new set of root samples
-        if not reuse_samples:
-            self.agent.root_samples(obs = self.env.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy, CE=False)
-
-
-        ## debugging plot
-        # plt.figure()
-        # plot_r(posterior_mean_p_cost.reshape(self.N,self.N), ax = plt.subplot(), title='posterior sample')
-        # plt.show()
-        
-        ## loop through simulations
-        for t in range(n_sims):
-
-            if progress:
-                pbar.update(1)
-            
-            ## root sampling of new posterior
-            posterior_p_cost = self.agent.all_posterior_p_costs[t]
-            self.agent.dp(posterior_p_cost, expected_cost=True)
-            self.env.receive_predictions(posterior_p_cost)
-
-            ## debugging plot
-            # plt.figure()
-            # # plot_r(self.env.posterior_sample.reshape(self.N,self.N), ax = plt.subplot(), title='posterior sample')
-            # plot_action_tree(self.env.Q_inf, self.env.get_obs()['agent'], self.env.get_obs()['goal'], ax = plt.subplot(), title='DP_inf')
-
-            ## selection, expansion, simulation
-            action_leaf = self.tree_policy()
-            # initial_sim_cost = self.rollout_policy(action_leaf, real_rollout=True)
-            # initial_sim_cost = self.optimised_rollout_policy(action_leaf, real_rollout=True)
-            initial_sim_cost = self.rollout_policy(action_leaf.episode+1)
-            
-
-            ## loop through future imagined episodes
-            # future_sim_costs = self.rollout_policy(action_leaf, real_rollout=False, n_futures=n_futures)
-            
-            ##backup
-            sim_costs = [initial_sim_cost
-                        #  , future_sim_costs
-                         ]
-            self.backward(sim_costs)
-
-
-        if progress:
-            pbar.close()
-
-        
-        ## action selection
-        MCTS_estimates = np.full(4, np.nan)
-        for action, leaf in self.tree.root.action_leaves.items():
-            MCTS_estimates[action] = leaf.performance
-        assert not np.isnan(np.nansum(MCTS_estimates)), 'no MCTS estimates for {}'.format(self.tree.root)
-        max_MCTS = np.nanmax(MCTS_estimates)
-        action = argm(MCTS_estimates, max_MCTS)
-        
-        ## set root for next search
-        # next_state = self.tree.root.action_leaves[action].next_state
-        # next_root = self.tree.nodes[str(next_state)]
-
-        ## calculate the entropy over actions
-        # action_probs = np.exp(MCTS_estimates) / np.sum(np.exp(MCTS_estimates))
-        # entropy = -np.nansum(action_probs * np.log(action_probs))
-        # print('action probs:', action_probs)
-        # print('entropy:', entropy)
-
-        return action, MCTS_estimates
-    
-
 
 
 
