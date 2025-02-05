@@ -193,7 +193,7 @@ class MountainEnv(gym.Env):
                     elif expt=='2AFC':
                         # start = np.array([0,0])
                         # goal = np.array([3, 3])
-                        max_turns = 4
+                        max_turns = 3
                         path_actions, path_states = self.sample_paths(start, goal, max_turns)
                         self.starts.append(start)
                         self.goals.append(goal)

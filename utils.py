@@ -327,7 +327,7 @@ class Tree:
         for a in actions_to_delete:
             del self.root.action_leaves[a]
 
-        ## delete subtree for the other state reachable from the root-action pair
+        ## delete subtree for the other state children reachable from the root-action pair
         self.root.action_leaves[action].children = {tuple(next_state): self.root.action_leaves[action].children[tuple(next_state)]}
 
         ## update the root
@@ -546,7 +546,7 @@ data_keys = [
     'discounted_optimal_costs',
     'total_discounted_optimal_cost',
     'expected_LD',
-    'expected_KL'
+    'expected_KL',
 
     ## GP-specific
     # 'true_k',

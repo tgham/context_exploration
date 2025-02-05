@@ -613,6 +613,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
 
     ## loop through episodes (i.e. different start and goal states for the same mountain)
     print(' ') # for some reason need this to get the pbar to appear
+    tree_reset = True ## to determine whether tree is reset at the start of each episode
     for e in tqdm(range(n_episodes), desc='Mountain_'+str(m), position=m+1, leave=False):
 
         ## loop through agents
@@ -658,7 +659,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
             agent.get_env_info(env_copy)
 
             ## initiate tree (if not resetting the tree for each move, init here. otherwise, this should be inside the episode loop)
-            if (ag == 'BAMCP') or (ag == 'BAMCP w/ CE'):
+            if ((ag == 'BAMCP') or (ag == 'BAMCP w/ CE')) & tree_reset:
                 tree = Tree(N)
                 MCTS = MonteCarloTreeSearch(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
         
@@ -866,8 +867,9 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
                                     MCTS.tree.prune(action, next_node_id)
                                     # assert np.array_equal(MCTS.tree.root.state[:2], current), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action) ## probs need to get rid of this??
                                     assert np.array_equal(MCTS.tree.root.state[2:], costs), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action) 
+                                    tree_reset = False
                                 else:
-                                    print('failed to prune tree')
+                                    tree_reset = True
                         search_attempts = 0 # could do nan
 
 
@@ -1149,7 +1151,6 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
                     sim_out['expected_LD'].append(ELDs)
                     sim_out['expected_KL'].append(EKLs)
 
-
                     ### costs
 
                     ## actual costs
@@ -1201,5 +1202,5 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
 
                     end_episode = True
 
-    return sim_out,env_copy.p_costs
+    return sim_out,env_copy
     # return sim_out, _
