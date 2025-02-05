@@ -158,12 +158,36 @@ class MountainEnv(gym.Env):
                 #     self.goals.append(goal)
                 #     self.path_states.append(path_pair)
 
+                ## free movement
+                # if expt == 'free':
+                #     start, goal = self.sample_SG()
+                #     self.starts.append(start)
+                #     self.goals.append(goal)
+
+                # ## 2AFC
+                # elif expt=='2AFC':
+                #     # start = np.array([0,0])
+                #     # goal = np.array([3, 3])
+                #     max_turns = 4
+                #     path_actions, path_states = self.sample_paths(start, goal, max_turns)
+                #     self.starts.append(start)
+                #     self.goals.append(goal)
+                #     self.path_states.append(path_states)
+                #     self.path_actions.append(path_actions)
                 try:
                     ## free movement
                     if expt == 'free':
                         start, goal = self.sample_SG()
                         self.starts.append(start)
                         self.goals.append(goal)
+
+                        ## get info about optimal path
+                        o_traj, o_traj_costs, o_traj_total_cost, o_traj_actions = self.optimal_trajectory(start, goal)
+                        self.o_trajs.append(o_traj)
+                        self.o_traj_costs.append(o_traj_costs)
+                        self.o_traj_total_costs.append(o_traj_total_cost)
+                        self.o_traj_actions.append(o_traj_actions)
+
 
                     ## 2AFC
                     elif expt=='2AFC':
@@ -175,6 +199,15 @@ class MountainEnv(gym.Env):
                         self.goals.append(goal)
                         self.path_states.append(path_states)
                         self.path_actions.append(path_actions)
+
+                        ## get info about optimal path (WILL CHANGE THIS LATER SINCE THE NOTION OF OPTIMAL IS DIFFERENT FOR 2AFC)
+                        o_traj, o_traj_costs, o_traj_total_cost, o_traj_actions = self.optimal_trajectory(start, goal)
+                        self.o_trajs.append(o_traj)
+                        self.o_traj_costs.append(o_traj_costs)
+                        self.o_traj_total_costs.append(o_traj_total_cost)
+                        self.o_traj_actions.append(o_traj_actions)
+
+
                 except:
                     break
 
@@ -393,18 +426,13 @@ class MountainEnv(gym.Env):
             worth_it = (o_traj_total_cost/manhattan_costs[0]) <= route_optimality_tolerance and (o_traj_total_cost/manhattan_costs[1]) <= route_optimality_tolerance ## p(low cost)
 
             t+=1
-            if t>50:
+            if t>200:
                 raise ValueError('cant find start and end')
 
         ## for sanity check, just place agent and goal in opposite corners
         # self._agent_location = np.array(self.starts[self.n_eps%4])
         # self._goal_location = np.array(self.goals[self.n_eps%4])
         # self.n_eps += 1
-
-        self.o_trajs.append(o_traj)
-        self.o_traj_costs.append(o_traj_costs)
-        self.o_traj_total_costs.append(o_traj_total_cost)
-        self.o_traj_actions.append(o_traj_actions)
 
         return agent_location, goal_location
     
@@ -442,6 +470,9 @@ class MountainEnv(gym.Env):
                 n_common_across_eps = 0
             max_common_within_ep = (len(moves)-1)/2
             max_common_across_eps = (len(moves)-1)/1.2
+            # path_overlap_ratio = self.N /5
+            # max_common_within_ep = (len(moves)-1)/path_overlap_ratio
+            # max_common_across_eps = (len(moves)-1)/(path_overlap_ratio/2)
             t=0
             while (rel_cost_diff >= rel_cost_diff_tol) or (n_common_within_ep >= max_common_within_ep) or (n_common_across_eps >= max_common_across_eps):
 
@@ -506,8 +537,14 @@ class MountainEnv(gym.Env):
         #             print(n_common, max_common)
         #             raise ValueError('paths too similar')
 
-        path_states = [build_path(moves_1), build_path(moves_2)]
-        path_actions = [moves_1, moves_2]
+        ## reorder the pairs of moves and paths so that the first in the pair is always the one with the lower cost
+        if path_1_cost > path_2_cost:
+            path_states = [build_path(moves_1), build_path(moves_2)]
+            path_actions = [moves_1, moves_2]
+        else:
+            path_states = [build_path(moves_2), build_path(moves_1)]
+            path_actions = [moves_2, moves_1]
+
         return path_actions, path_states
 
 
@@ -570,6 +607,10 @@ class MountainEnv(gym.Env):
         # self.predicted_costs = predicted_costs.reshape(self.N, self.N)
         self.predicted_p_costs = predicted_p_costs.reshape(self.N, self.N)
 
+        ## fill in the grid with highs and lows based on predicted_p_costs
+        self.predicted_costs = np.array([self.high_cost if r>self.predicted_p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
+
+
     ## take a step in the environment
     def step(self, action):
 
@@ -599,11 +640,10 @@ class MountainEnv(gym.Env):
         # )
         self._agent_location = get_next_state(self._agent_location, direction, self.N)
 
-
         ## get the predicted cost of the new state
         # predicted_cost = self.predicted_costs[self._agent_location[0]*self.N + self._agent_location[1]]
-        # predicted_cost = self.predicted_costs[self._agent_location[0], self._agent_location[1]]
-        predicted_cost = self.get_pred_cost(self._agent_location)
+        predicted_cost = self.predicted_costs[self._agent_location[0], self._agent_location[1]]
+        # predicted_cost = self.get_pred_cost(self._agent_location)
         
         ## get the actual cost of the current state
         # current_cost = self.get_cost(self._agent_location)
@@ -644,7 +684,10 @@ class MountainEnv(gym.Env):
         # An episode is done iff the agent has reached the goal
         if np.array_equal(self._agent_location, self._goal_location):
             self.terminated = True
-            cost=0 ## cost of final state is 0
+            if self.expt=='free':
+                cost=0 ## cost of final state is 0 (MIGHT WANT TO CHANGE THIS...)
+            elif self.expt=='2AFC':
+                cost = current_cost
             # cost = self.expl_beta * np.sqrt(var_cost)
         
             ## update observation array only once the episode is complete
