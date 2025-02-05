@@ -12,7 +12,7 @@ from scipy import special
 from plotter import *
 from agents import GPAgent, Farmer
 
-
+## base class 
 class MonteCarloTreeSearch():
 
     def __init__(self, env, agent, tree, exploration_constant=2, discount_factor=0.99):
@@ -23,11 +23,7 @@ class MonteCarloTreeSearch():
         self.episode = self.env.episode
         self.agent = agent
         self.tree = tree
-        if self.expt == 'free':
-            self.action_space = self.env.action_space.n
-        elif self.expt == '2AFC':
-            # self.action_space = self.env.n_AFC
-            self.action_space = 2
+        self.n_afc = self.env.n_afc
         self.N = self.env.N
         self.exploration_constant = exploration_constant
         self.discount_factor = discount_factor
@@ -36,8 +32,7 @@ class MonteCarloTreeSearch():
         starting_cost = self.env.costs[self.actual_state[0], self.actual_state[1]]
 
         ## add state node to the tree
-        self.tree.add_state_node(state=self.actual_state, cost=starting_cost, goal = self.actual_goal, terminated=False, episode = self.episode, action_space = self.action_space, parent=None)
-
+        self.tree.add_state_node(state=self.actual_state, cost=starting_cost, goal = self.actual_goal, terminated=False, episode = self.episode, n_afc = self.n_afc, parent=None)
 
     ## expand the action space of a node
     def expand(self, node):
@@ -60,7 +55,11 @@ class MonteCarloTreeSearch():
         node.action_leaves[action].performance = 0
 
         return node.action_leaves[action]
+    
 
+    ## tree step
+    def tree_step(self, node):
+        raise NotImplementedError('tree step not implemented in subclass')
 
 
     ## take an action according to the tree policy, i.e. take the best UCT child and see where it takes you
@@ -80,12 +79,12 @@ class MonteCarloTreeSearch():
         self.node_id_path = []
 
         ## TEMPORARY FIX: if 2afc, create a copy of the env
-        if self.expt == '2AFC':
-            env_copy = copy.deepcopy(self.env)
-            assert env_copy.sim, 'env copy is not in sim mode'
+        # if self.expt == '2AFC':
+        env_copy = copy.deepcopy(self.env)
+        assert env_copy.sim, 'env copy is not in sim mode'
         
         ## loop until you reach a leaf node or terminal state
-        assert self.env.sim, 'env is not in sim mode'
+        # assert self.env.sim, 'env is not in sim mode'
         while not node.terminated:
             t+=1
 
@@ -103,7 +102,7 @@ class MonteCarloTreeSearch():
                 # node.n_state_visits += 1
 
                 ## revert env
-                self.env.set_state(self.actual_state)
+                # self.env.set_state(self.actual_state)
 
                 ## save tree obs for subsequent rollouts
                 # self.tree_obs = self.env.obs_tmp.copy()
@@ -124,7 +123,8 @@ class MonteCarloTreeSearch():
 
                 ## move in env (single action for free expt, whole path for 2AFC)
                 if self.expt == 'free':
-                    next_state, cost, terminated, _, _ = self.env.step(action_leaf.action)
+                    # next_state, cost, terminated, _, _ = self.env.step(action_leaf.action)
+                    next_state, cost, terminated, _, _ = env_copy.step(action_leaf.action)
                     self.tree_costs.append(cost)
                     node_episode = self.episode #??
 
@@ -133,7 +133,6 @@ class MonteCarloTreeSearch():
                     actions = self.env.path_actions[node.episode][path_id]
                     costs = []
                     for action in actions:
-                        # _, cost, _, _, _ = self.env.step(action)
                         _, cost, _, _, _ = env_copy.step(action)
                         costs.append(cost)
                     cost=costs ## rename for consistency
@@ -154,7 +153,7 @@ class MonteCarloTreeSearch():
                     # print(node)
                     # print()
                 else:
-                    node = self.tree.add_state_node(next_state, cost, goal, terminated, episode = node_episode, action_space = self.action_space, parent=action_leaf)
+                    node = self.tree.add_state_node(next_state, cost, goal, terminated, episode = node_episode, n_afc = self.n_afc, parent=action_leaf)
                 assert np.array_equal(node.state[:2], next_state), 'error in tree policy step {}\n started in {}\n supposed to take action {} to {}\n ended up moving  to {}'.format(t, state_tmp, action_leaf.action, node.state[:2], action_leaf.next_state)
 
                 ## update counts already?
@@ -167,7 +166,7 @@ class MonteCarloTreeSearch():
             action_leaf = None
 
         ## revert env
-        self.env.set_state(self.actual_state)
+        # self.env.set_state(self.actual_state)
 
         ## save tree obs for subsequent rollouts
         # self.tree_obs = self.env.obs_tmp.copy()
@@ -406,7 +405,7 @@ class MonteCarloTreeSearch():
 
                 ## OPTIMISED: get the total cost of the two paths and return the better one
                 path_costs = []
-                for path_id in range(self.action_space):
+                for path_id in range(self.n_afc):
                     path_states = self.env.path_states[ep][path_id]
                     ro_cost = 0
                     for state in path_states:
@@ -559,7 +558,7 @@ class MonteCarloTreeSearch():
 
         
         ## action selection
-        MCTS_estimates = np.full(self.action_space, np.nan)
+        MCTS_estimates = np.full(self.n_afc, np.nan)
         for action, leaf in self.tree.root.action_leaves.items():
             MCTS_estimates[action] = leaf.performance
         assert not np.isnan(np.nansum(MCTS_estimates)), 'no MCTS estimates for {}'.format(self.tree.root)
