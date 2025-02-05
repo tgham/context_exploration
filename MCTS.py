@@ -116,34 +116,8 @@ class MonteCarloTreeSearch():
                 self.tree_path.append(tuple([node.state, action_leaf.action]))
                 self.node_id_path.append(node.node_id)
 
-                ## move in env (as determined by .tree_step in subclass)
+                ## move in env
                 next_state, cost, terminated, node_episode, env_copy = self.tree_step(action_leaf, env_copy)
-
-
-                # (single action for free expt, whole path for 2AFC)
-                # if self.expt == 'free':
-                #     # next_state, cost, terminated, _, _ = self.env.step(action_leaf.action)
-                #     next_state, cost, terminated, _, _ = env_copy.step(action_leaf.action)
-                #     self.tree_costs.append(cost)
-                #     node_episode = self.episode #??
-
-                # elif self.expt == '2AFC':
-                #     path_id = action_leaf.action
-                #     actions = self.env.path_actions[node.episode][path_id]
-                #     costs = []
-                #     for action in actions:
-                #         _, cost, _, _, _ = env_copy.step(action)
-                #         costs.append(cost)
-                #     cost=costs ## rename for consistency
-                #     self.tree_costs.append(np.sum(cost)) ## might choose to discount this
-                #     next_state = node.state[:2] ## I think this is correct, since the agent always regenerates to the same start state
-                #     # terminated = node.episode == env_copy.n_episodes-1 ## i.e. having moved from this node, the agent has completed the final episode
-                #     terminated = action_leaf.terminated
-                #     node_episode += 1
-
-                #     ## since the agent has chosen a path to the goal, we need to move the environment to the next episode
-                #     env_copy.episode +=1 
-                #     env_copy.reset()
 
                 ## see if the next state node already exists as a child of this action leaf
                 next_node_id = tuple(np.append(next_state, cost))
@@ -422,8 +396,8 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         path_id = action_leaf.action
         starting_cost = 0
         for state in self.env.path_states[first_episode][path_id]:
-            # cost = self.env.get_pred_cost(state)
-            cost = self.env.predicted_costs[state[0], state[1]]
+            cost = self.env.get_pred_cost(state)
+            # cost = self.env.predicted_costs[state[0], state[1]]
             starting_cost += cost
         total_cost = starting_cost
 
@@ -443,8 +417,8 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
                 path_states = self.env.path_states[ep][path_id]
                 ro_cost = 0
                 for state in path_states:
-                    # cost = self.env.get_pred_cost(state)
-                    cost = self.env.predicted_costs[state[0], state[1]]
+                    cost = self.env.get_pred_cost(state)
+                    # cost = self.env.predicted_costs[state[0], state[1]]
                     ro_cost += cost ## NEED TO DISCOUNT HERE!!!??
                 path_costs.append(ro_cost)
             total_cost += np.max(path_costs) * self.discount_factor**depth
@@ -544,7 +518,10 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
             ## initiate tree (if not resetting the tree for each move, init here. otherwise, this should be inside the episode loop)
             if ((ag == 'BAMCP') or (ag == 'BAMCP w/ CE')) & tree_reset:
                 tree = Tree(N)
-                MCTS = MonteCarloTreeSearch(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
+                if expt == 'free':
+                    MCTS = MonteCarloTreeSearch_Free(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
+                elif expt == '2AFC':
+                    MCTS = MonteCarloTreeSearch_2AFC(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
         
             ## run episode until goal is reached
             end_episode = False
