@@ -343,6 +343,7 @@ class MonteCarloTreeSearch():
 
             ## rolling out from goal location, can just end here
             if action_leaf.terminated:
+                self.tree_costs.append(total_cost)
                 return total_cost
 
             # get the next state and goal
@@ -372,6 +373,7 @@ class MonteCarloTreeSearch():
                 
                 ## return cost once goal is reached (i.e. don't use the cost of the goal state)
                 if np.array_equal(current, self.actual_goal):
+                    self.tree_costs.append(total_cost)
                     return total_cost
                 
                 ## update costs
@@ -394,10 +396,13 @@ class MonteCarloTreeSearch():
 
             ## if final episode, just stop here
             if action_leaf.terminated:
+                self.tree_costs.append(total_cost)
                 return total_cost
             
             ## loop through remaining episodes
+            depth = 0
             for ep in range(action_leaf.episode+1, self.env.n_episodes):
+                depth+=1
 
                 ## OPTIMISED: get the total cost of the two paths and return the better one
                 path_costs = []
@@ -409,7 +414,7 @@ class MonteCarloTreeSearch():
                         cost = self.env.predicted_costs[state[0], state[1]]
                         ro_cost += cost ## NEED TO DISCOUNT HERE!!!??
                     path_costs.append(ro_cost)
-                total_cost += np.max(path_costs)
+                total_cost += np.max(path_costs) * self.discount_factor**depth
 
                 ## GREEDY: randomly choose between the two paths
                 # path_id = np.random.choice(self.n_AFC)
@@ -419,15 +424,13 @@ class MonteCarloTreeSearch():
                 #     cost = self.env.get_pred_cost(state)
                 #     ro_cost += cost
 
+            self.tree_costs.append(total_cost)
             return total_cost 
+
         
 
     ## backup costs until you reach the root
-    def backward(self, rollout_cost):
-
-        ## Append the rollout cost as the final traversal cost
-        if rollout_cost is not None:
-            self.tree_costs.append(rollout_cost)
+    def backward(self):
         tree_len = len(self.tree_costs)
         assert tree_len == len(self.tree_path), 'tree costs and path lengths do not match\n n tree costs: {} \n n tree path: {}\ntree path: {}\n tree costs: {}'.format(len(self.tree_costs), len(self.tree_path), self.tree_path, self.tree_costs)
 
@@ -528,6 +531,9 @@ class MonteCarloTreeSearch():
 
             if progress:
                 pbar.update(1)
+
+            ## CHEATING: give agent full knowledge of grid probabilities
+            # posterior_p_cost = self.env.p_costs
             
             ## root sampling of new posterior
             posterior_p_cost = self.agent.all_posterior_p_costs[t]
@@ -542,10 +548,10 @@ class MonteCarloTreeSearch():
             ## selection, expansion, simulation
             action_leaf = self.tree_policy()
             # initial_sim_cost = self.rollout_policy(action_leaf, real_rollout=True)
-            rollout_cost = self.optimised_rollout_policy(action_leaf, real_rollout=True)
+            self.optimised_rollout_policy(action_leaf, real_rollout=True)
             
             ##backup
-            self.backward(rollout_cost)
+            self.backward()
 
 
         if progress:
@@ -817,7 +823,18 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
 
                         ## take action
                         env_copy.set_sim(False)
-                        current, cost, terminated, _, _ = env_copy.step(action)
+                        if expt=='free':
+                            current, cost, terminated, _, _ = env_copy.step(action)
+                            next_node_id = np.append(current,cost)
+                        elif expt=='2AFC':
+                            action_sequence = env_copy.path_actions[e][steps]
+                            costs = []
+                            for ac in action_sequence:
+                                current, cost, terminated, _, _ = env_copy.step(ac)
+                                costs.append(cost)
+                            path_cost = np.sum(costs)
+                            next_node_id = np.append(start, costs)
+                            block_terminated = e == (n_episodes-1)
                         steps += 1
 
                         ## check for backtracking
@@ -833,10 +850,24 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
                         ## update observations
                         agent.get_env_info(env_copy)
 
-                        ## prune tree, i.e. remove all nodes that are not children of the new root
-                        if not terminated:
-                            MCTS.tree.prune(action, np.append(current, cost))
-                            assert np.array_equal(MCTS.tree.root.state[:2], current), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action)
+                        ### prune tree
+                        if expt=='free': 
+                            
+                            ## no need to prune at the end of the episode in free-choice expt, since the tree resets at this point
+                            if not terminated:
+                                MCTS.tree.prune(action, next_node_id)
+                                assert np.array_equal(MCTS.tree.root.state[:2], current), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action)
+
+                        elif expt=='2AFC':
+
+                            ## pruning not always successful due to high branching factor, in which case reset the tree
+                            if not block_terminated:
+                                if tuple(next_node_id) in MCTS.tree.root.action_leaves[action].children:
+                                    MCTS.tree.prune(action, next_node_id)
+                                    # assert np.array_equal(MCTS.tree.root.state[:2], current), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action) ## probs need to get rid of this??
+                                    assert np.array_equal(MCTS.tree.root.state[2:], costs), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action) 
+                                else:
+                                    print('failed to prune tree')
                         search_attempts = 0 # could do nan
 
 
