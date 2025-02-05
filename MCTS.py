@@ -58,7 +58,7 @@ class MonteCarloTreeSearch():
     
 
     ## tree step
-    def tree_step(self, node):
+    def tree_step(self, action_leaf, env_copy):
         raise NotImplementedError('tree step not implemented in subclass')
 
 
@@ -78,18 +78,13 @@ class MonteCarloTreeSearch():
         self.tree_path = [] ## i.e. the states and actions visited in the tree. This *does* include the root, because it is from the root that we move to the next leaf (and then next node). 
         self.node_id_path = []
 
-        ## TEMPORARY FIX: if 2afc, create a copy of the env
-        # if self.expt == '2AFC':
+        ## create a copy of the env
         env_copy = copy.deepcopy(self.env)
         assert env_copy.sim, 'env copy is not in sim mode'
         
         ## loop until you reach a leaf node or terminal state
-        # assert self.env.sim, 'env is not in sim mode'
         while not node.terminated:
             t+=1
-
-            ## update state node count
-            # node.n_state_visits += 1
 
             ## expansion step
             if self.tree.is_expandable(node):
@@ -104,10 +99,6 @@ class MonteCarloTreeSearch():
                 ## revert env
                 # self.env.set_state(self.actual_state)
 
-                ## save tree obs for subsequent rollouts
-                # self.tree_obs = self.env.obs_tmp.copy()
-                # self.env.flush_obs()
-
                 return action_leaf
                 
             ## selection step
@@ -121,30 +112,34 @@ class MonteCarloTreeSearch():
                 self.tree_path.append(tuple([node.state, action_leaf.action]))
                 self.node_id_path.append(node.node_id)
 
-                ## move in env (single action for free expt, whole path for 2AFC)
-                if self.expt == 'free':
-                    # next_state, cost, terminated, _, _ = self.env.step(action_leaf.action)
-                    next_state, cost, terminated, _, _ = env_copy.step(action_leaf.action)
-                    self.tree_costs.append(cost)
-                    node_episode = self.episode #??
+                ## move in env (as determined by .tree_step in subclass)
+                next_state, cost, terminated, node_episode, env_copy = self.tree_step(action_leaf, env_copy)
 
-                elif self.expt == '2AFC':
-                    path_id = action_leaf.action
-                    actions = self.env.path_actions[node.episode][path_id]
-                    costs = []
-                    for action in actions:
-                        _, cost, _, _, _ = env_copy.step(action)
-                        costs.append(cost)
-                    cost=costs ## rename for consistency
-                    self.tree_costs.append(np.sum(cost)) ## might choose to discount this
-                    next_state = node.state[:2] ## I think this is correct, since the agent always regenerates to the same start state
-                    # terminated = node.episode == env_copy.n_episodes-1 ## i.e. having moved from this node, the agent has completed the final episode
-                    terminated = action_leaf.terminated
-                    node_episode += 1
 
-                    ## since the agent has chosen a path to the goal, we need to move the environment to the next episode
-                    env_copy.episode +=1 
-                    env_copy.reset()
+                # (single action for free expt, whole path for 2AFC)
+                # if self.expt == 'free':
+                #     # next_state, cost, terminated, _, _ = self.env.step(action_leaf.action)
+                #     next_state, cost, terminated, _, _ = env_copy.step(action_leaf.action)
+                #     self.tree_costs.append(cost)
+                #     node_episode = self.episode #??
+
+                # elif self.expt == '2AFC':
+                #     path_id = action_leaf.action
+                #     actions = self.env.path_actions[node.episode][path_id]
+                #     costs = []
+                #     for action in actions:
+                #         _, cost, _, _, _ = env_copy.step(action)
+                #         costs.append(cost)
+                #     cost=costs ## rename for consistency
+                #     self.tree_costs.append(np.sum(cost)) ## might choose to discount this
+                #     next_state = node.state[:2] ## I think this is correct, since the agent always regenerates to the same start state
+                #     # terminated = node.episode == env_copy.n_episodes-1 ## i.e. having moved from this node, the agent has completed the final episode
+                #     terminated = action_leaf.terminated
+                #     node_episode += 1
+
+                #     ## since the agent has chosen a path to the goal, we need to move the environment to the next episode
+                #     env_copy.episode +=1 
+                #     env_copy.reset()
 
                 ## see if the next state node already exists as a child of this action leaf
                 next_node_id = tuple(np.append(next_state, cost))
@@ -576,6 +571,50 @@ class MonteCarloTreeSearch():
         # print('entropy:', entropy)
 
         return action, MCTS_estimates
+    
+
+### subclasses for different experiments
+
+## free exploration
+class MonteCarloTreeSearch_Free(MonteCarloTreeSearch):
+    
+    def __init__(self, env, agent, tree, exploration_constant=2, discount_factor=0.99):
+        super().__init__(env, agent, tree, exploration_constant, discount_factor)
+
+    ## tree step
+    def tree_step(self, action_leaf, env_copy):
+        action = action_leaf.action
+        next_state, cost, terminated, _, _ = env_copy.step(action)
+        self.tree_costs.append(cost)
+        node_episode = self.episode ##??
+        return next_state, cost, terminated, node_episode, env_copy
+    
+
+class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
+
+    def __init__(self, env, agent, tree, exploration_constant=2, discount_factor=0.99):
+        super().__init__(env, agent, tree, exploration_constant, discount_factor)
+
+    ## tree step
+    def tree_step(self, action_leaf, env_copy):
+        start_tmp = env_copy.current
+        path_id = action_leaf.action
+        actions = self.env.path_actions[env_copy.episode][path_id]
+        costs = []
+        for action in actions:
+            _, cost, _, _, _ = env_copy.step(action)
+            costs.append(cost)
+        cost = costs ## rename for consistency...
+        self.tree_costs.append(np.sum(cost))
+        next_state = start_tmp ## I think this is correct, since the agent always regenerates to the same start state
+        terminated = action_leaf.terminated
+
+        ## since the agent has chosen a path to the goal, we need to move the environment to the next episode
+        env_copy.episode +=1
+        node_episode = env_copy.episode
+        env_copy.reset()
+
+        return next_state, cost, terminated, node_episode, env_copy
 
 
 
