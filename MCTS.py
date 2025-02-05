@@ -553,31 +553,9 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
                     env_copy.set_sim(False)
 
                     ## get posterior mean grid
-                    # agent.root_sample(env_copy.obs, lazy=True, CE=True)
                     agent.root_samples(obs=env_copy.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy,CE=True)
                     env_copy.receive_predictions(agent.posterior_mean_p_cost)
 
-                    ## dynamic programming under this posterior mean
-                    agent.dp(agent.posterior_mean_p_cost, expected_cost=True)
-
-
-                    # all_posterior_p_costs = []
-                    # all_posterior_p = []
-                    # all_posterior_q = []
-                    # for t in range(100):
-                    #     agent.root_sample(env_copy.obs, lazy=True, CE=True)
-                    #     # all_posterior_p_costs.append(agent.posterior_p_cost)
-                    #     all_posterior_p.append(agent.posterior_p)
-                    #     all_posterior_q.append(agent.posterior_q)
-                    # # posterior_mean_p_cost = np.mean(all_posterior_p_costs, axis=0)
-                    # posterior_mean_p = np.mean(all_posterior_p, axis=0)
-                    # posterior_mean_q = np.mean(all_posterior_q, axis=0)
-                    # posterior_mean_p_cost = np.outer(posterior_mean_p, posterior_mean_q)
-                    # agent.posterior_p_cost = posterior_mean_p_cost
-                    # env_copy.receive_predictions(agent.posterior_p_cost)
-
-                    # ## dynamic programming under this posterior mean
-                    # agent.dp(expected_cost=True)
 
                     ## plot for debugging?
                     # _, axs = plt.subplots(1, 3, figsize=(10,5))
@@ -588,16 +566,45 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
                     # plt.show()
 
                     ## get and take action
-                    action = agent.optimal_policy(current, agent.Q_inf)
-                    actions.append(action)
-                    current, _, terminated, _, _ = env_copy.step(action)
-                    # current = observation['agent']
+                    if expt == 'free':
+
+                        ## dynamic programming under this posterior mean
+                        agent.dp(agent.posterior_mean_p_cost, expected_cost=True)
+
+                        ## best action as given by DP solution
+                        action = agent.optimal_policy(current, agent.Q_inf)
+                        actions.append(action)
+                        current, _, terminated, _, _ = env_copy.step(action)
+                        
+                    elif expt == '2AFC':
+
+                        ## get the cost of each path under the posterior mean
+                        path_costs = []
+                        for path_id in range(env_copy.n_afc):
+                            path_states = env_copy.path_states[e][path_id]
+                            path_cost = 0
+                            for state in path_states:
+                                # path_cost += env_copy.get_pred_cost(state) ## i.e. sample binary costs from the posterior pqs
+                                path_cost += agent.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-agent.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost ## or, use expected costs
+                            path_costs.append(path_cost)
+
+                        ## choose the path with the lowest total cost
+                        max_cost = np.max(path_costs)
+                        action = argm(path_costs, max_cost)
+                        actions.append(action)
+                        action_sequence = env_copy.path_actions[e][action]
+                        costs = []
+                        for ac in action_sequence:
+                            current, cost, terminated, _, _ = env_copy.step(ac)
+                            costs.append(cost)
+                        path_cost = np.sum(costs)
+                        block_terminated = e == (n_episodes-1)
                     steps += 1
+                    search_attempts = 0 # could do nan
 
                     ## update observations
                     agent.get_env_info(env_copy)
 
-                    search_attempts = 0 # could do nan
 
 
 
@@ -697,6 +704,8 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
                             next_node_id = np.append(start, costs)
                             block_terminated = e == (n_episodes-1)
                         steps += 1
+                        search_attempts = 0 # could do nan here
+
 
                         ## check for backtracking
                         if len(actions)>1:
@@ -730,7 +739,6 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
                                     tree_reset = False
                                 else:
                                     tree_reset = True
-                        search_attempts = 0 # could do nan
 
 
                     ## if offline planning (i.e. plan the full trajectory)
