@@ -59,7 +59,7 @@ class Node:
 
     # __slots__ = ['state', 'n_state_visits', 'cost', 'terminated', 'node_id', 'parent_node_ids', 'N', 'untried_actions', 'action_leaves']
 
-    def __init__(self, state, cost, goal, terminated, episode, action_space, N):
+    def __init__(self, state, cost, goal, terminated, episode, n_afc, N):
         
         ## state info
         self.state = np.append(state, cost) ## in the 2AFC case, this amounts to current state + costs that have just been observed on prior simulated episode
@@ -74,8 +74,8 @@ class Node:
 
 
         ## define valid actions
-        self.untried_actions = list(range(action_space))
-        if action_space == 4: # i.e. free choice, meaning we want to restrict wall movements
+        self.untried_actions = list(range(n_afc))
+        if n_afc == 4: # i.e. free choice, meaning we want to restrict wall movements
             row, col,_ = self.state
             if row == self.N-1:
                 self.untried_actions.remove(0)
@@ -146,7 +146,7 @@ class Tree:
         return not node.terminated and len(node.untried_actions) > 0
 
     ## attach action leaf to child state
-    def add_state_node(self, state, cost, goal, terminated, episode, action_space, parent=None):
+    def add_state_node(self, state, cost, goal, terminated, episode, n_afc, parent=None):
 
         # ## check for existing state node
         # node_id = str(history)
@@ -156,7 +156,7 @@ class Tree:
 
         
         ## create a new state node
-        node = Node(state=state, cost=cost, goal=goal, terminated=terminated, episode = episode, action_space=action_space, N=self.N)
+        node = Node(state=state, cost=cost, goal=goal, terminated=terminated, episode = episode, n_afc=n_afc, N=self.N)
         
         ## store parent-child relationships
         if parent is None:

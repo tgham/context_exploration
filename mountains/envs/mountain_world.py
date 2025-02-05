@@ -54,6 +54,7 @@ class MountainEnv(gym.Env):
         y = np.arange(N)
         X,Y = np.meshgrid(x,y)
         self.locations = np.column_stack([X.ravel(), Y.ravel()])
+        self.expt = expt
 
 
         ### misc gym inits
@@ -91,6 +92,11 @@ class MountainEnv(gym.Env):
 
             ## action labels (NB these deviate from env action space, bc axes are flipped for plotting
             self.action_labels = ['down', 'right', 'up', 'left']
+
+            if self.expt =='free':
+                self.n_afc = 4
+            elif self.expt == '2AFC':
+                self.n_afc = 2
         elif self.metric == 'chebyshev':
             self.action_space = spaces.Discrete(8)
             self.action_to_direction = {
@@ -128,7 +134,6 @@ class MountainEnv(gym.Env):
             
 
             ## init trial info, depending on the expt type
-            self.expt = expt
             self.starts = []
             self.goals = []
             self.path_states = []
@@ -642,8 +647,8 @@ class MountainEnv(gym.Env):
 
         ## get the predicted cost of the new state
         # predicted_cost = self.predicted_costs[self._agent_location[0]*self.N + self._agent_location[1]]
-        predicted_cost = self.predicted_costs[self._agent_location[0], self._agent_location[1]]
-        # predicted_cost = self.get_pred_cost(self._agent_location)
+        # predicted_cost = self.predicted_costs[self._agent_location[0], self._agent_location[1]]
+        predicted_cost = self.get_pred_cost(self._agent_location)
         
         ## get the actual cost of the current state
         # current_cost = self.get_cost(self._agent_location)
