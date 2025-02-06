@@ -18,12 +18,10 @@ class MonteCarloTreeSearch():
     def __init__(self, env, agent, tree, exploration_constant=2, discount_factor=0.99):
         self.env = env
         self.expt = env.expt
-        self.actual_state = self.env.current
-        self.actual_goal = self.env.goal
-        self.actual_episode = self.env.episode
-        self.agent = agent
-        self.tree = tree
         self.n_afc = self.env.n_afc
+        self.agent = agent
+        self.update_episode()
+        self.tree = tree
         self.N = self.env.N
         self.exploration_constant = exploration_constant
         self.discount_factor = discount_factor
@@ -33,6 +31,12 @@ class MonteCarloTreeSearch():
 
         ## add state node to the tree
         self.tree.add_state_node(state=self.actual_state, cost=starting_cost, goal = self.actual_goal, terminated=False, episode = self.actual_episode, n_afc = self.n_afc, parent=None)
+
+    ## update MCTS with episode info
+    def update_episode(self):
+        self.actual_state = self.env.current
+        self.actual_goal = self.env.goal
+        self.actual_episode = self.env.episode
 
     ## expand the action space of a node
     def expand(self, node):
@@ -44,7 +48,7 @@ class MonteCarloTreeSearch():
             next_state, _, terminated, _, _ = self.env.step(action)
 
             ## reset the environment to the actual state
-            self.env.set_state(self.actual_state)
+            # self.env.set_state(self.actual_state)
 
         elif self.expt == '2AFC':
             terminated = node.episode == self.env.n_episodes-1 ## i.e. this action leaf corresponds to the action made in the final episode, so it leads to termination of the block
@@ -58,7 +62,7 @@ class MonteCarloTreeSearch():
     
 
     ## tree step
-    def tree_step(self, action_leaf, env_tmp):
+    def tree_step(self, action_leaf):
         raise NotImplementedError('tree step not implemented in subclass')
     
     ## rollout policy
@@ -74,7 +78,7 @@ class MonteCarloTreeSearch():
         t = 0
         node_episode = self.env.episode
         goal = node.goal
-        assert node_episode == node.episode, 'episode mismatch between env and tree\n env: {} \n tree: {}'.format(node_episode, node.episode)
+        assert node_episode == node.episode, 'episode mismatch between env and tree\n env: {} \n tree: {}\n MCTS: {}'.format(node_episode, node.episode, self.actual_episode)
         assert np.array_equal(node.state[:2], self.actual_state), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.actual_state)
 
         ## create a record of the nodes/leaves visited in the tree
@@ -85,16 +89,17 @@ class MonteCarloTreeSearch():
         ## create a copy of the env
         # env_copy = copy.deepcopy(self.env)
         # assert env_copy.sim, 'env copy is not in sim mode'
-        if self.expt == '2AFC':
-            env_tmp = copy.deepcopy(self.env)
-            assert env_tmp.sim, 'env is not in sim mode'
-        elif self.expt == 'free':
-            env_tmp = self.env
+        # if self.expt == '2AFC':
+        #     # env_tmp = copy.deepcopy(self.env)
+        #     env_tmp = self.env
+        # elif self.expt == 'free':
+        #     env_tmp = self.env
         
         ## loop until you reach a leaf node or terminal state
-        assert env_tmp.sim, 'env is not in sim mode'
+        assert self.env.sim, 'env is not in sim mode'
         while not node.terminated:
             t+=1
+            assert np.array_equal(node.state[:2], self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.env.current)
 
             ## expansion step
             if self.tree.is_expandable(node):
@@ -107,8 +112,11 @@ class MonteCarloTreeSearch():
                 # node.n_state_visits += 1
 
                 ## revert env
-                # self.env.set_state(self.actual_state)
-                env_tmp.set_state(self.actual_state)
+                self.env.set_state(self.actual_state)
+                self.env.set_goal(self.actual_goal)
+                self.env.set_episode(self.actual_episode)
+                assert np.array_equal(self.env.current, self.actual_state), 'env state not reverted properly'
+                assert self.env.episode == self.actual_episode, 'env episode not reverted properly. should be in {}, but actually in {}'.format(self.actual_episode, self.env.episode)
 
                 return action_leaf
                 
@@ -124,7 +132,9 @@ class MonteCarloTreeSearch():
                 self.node_id_path.append(node.node_id)
 
                 ## move in env
-                next_state, cost, terminated, node_episode, env_tmp = self.tree_step(action_leaf, env_tmp)
+                # print('selection:',t, self.env.current)
+                next_state, cost, terminated, node_episode = self.tree_step(action_leaf)
+                assert np.array_equal(next_state, self.env.current)
 
                 ## see if the next state node already exists as a child of this action leaf
                 next_node_id = tuple(np.append(next_state, cost))
@@ -136,18 +146,16 @@ class MonteCarloTreeSearch():
                     node = self.tree.add_state_node(next_state, cost, goal, terminated, episode = node_episode, n_afc = self.n_afc, parent=action_leaf)
                 assert np.array_equal(node.state[:2], next_state), 'error in tree policy step {}\n started in {}\n supposed to take action {} to {}\n ended up moving  to {}'.format(t, state_tmp, action_leaf.action, node.state[:2], action_leaf.next_state)
 
-                ## update counts already?
-                # action_leaf.n_action_visits += 1
-                # node.n_state_visits += 1
-
-
         ## if terminal node, there are no mode action leaves to choose from
         if node.terminated:
             action_leaf = None
 
         ## revert env
-        # self.env.set_state(self.actual_state)
-        env_tmp.set_state(self.actual_state)
+        self.env.set_state(self.actual_state)
+        self.env.set_goal(self.actual_goal)
+        self.env.set_episode(self.actual_episode)
+        assert np.array_equal(self.env.current, self.actual_state), 'env state not reverted properly'
+        assert self.env.episode == self.actual_episode, 'env episode not reverted properly'
 
         ## save tree obs for subsequent rollouts
         # self.tree_obs = self.env.obs_tmp.copy()
@@ -275,7 +283,6 @@ class MonteCarloTreeSearch():
 
             ## selection, expansion, simulation
             action_leaf = self.tree_policy()
-            # initial_sim_cost = self.rollout_policy(action_leaf, real_rollout=True)
             self.rollout_policy(action_leaf)
             
             ##backup
@@ -316,12 +323,12 @@ class MonteCarloTreeSearch_Free(MonteCarloTreeSearch):
         super().__init__(env, agent, tree, exploration_constant, discount_factor)
 
     ## tree step
-    def tree_step(self, action_leaf, env_tmp):
+    def tree_step(self, action_leaf):
         action = action_leaf.action
-        next_state, cost, terminated, _, _ = env_tmp.step(action)
+        next_state, cost, terminated, _, _ = self.env.step(action)
         self.tree_costs.append(cost)
         node_episode = self.actual_episode ##??
-        return next_state, cost, terminated, node_episode, env_tmp
+        return next_state, cost, terminated, node_episode
     
     ## rollout policy
     def rollout_policy(self, action_leaf):
@@ -372,13 +379,14 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         super().__init__(env, agent, tree, exploration_constant, discount_factor)
 
     ## tree step
-    def tree_step(self, action_leaf, env_tmp):
-        start_tmp = env_tmp.current
+    def tree_step(self, action_leaf):
+        start_tmp = self.env.current
         path_id = action_leaf.action
-        actions = self.env.path_actions[env_tmp.episode][path_id]
+        step_ep = self.env.episode
+        actions = self.env.path_actions[step_ep][path_id]
         costs = []
         for action in actions:
-            _, cost, _, _, _ = env_tmp.step(action)
+            _, cost, _, _, _ = self.env.step(action)
             costs.append(cost)
         cost = costs ## rename for consistency...
         self.tree_costs.append(np.sum(cost))
@@ -386,11 +394,14 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         terminated = action_leaf.terminated
 
         ## since the agent has chosen a path to the goal, we need to move the environment to the next episode
-        env_tmp.episode +=1
-        node_episode = env_tmp.episode
-        env_tmp.reset()
+        node_episode = step_ep+1
+        self.env.soft_reset()
+        self.env.set_episode(node_episode)
 
-        return next_state, cost, terminated, node_episode, env_tmp
+        ## some checks
+        assert len(self.tree_costs)<=self.env.n_episodes, 'tree costs exceed number of episodes, tree len: {}, n_eps: {}'.format(len(self.tree_costs), self.env.n_episodes)
+
+        return next_state, cost, terminated, node_episode
     
     ## rollout policy
     def rollout_policy(self, action_leaf):
@@ -523,13 +534,19 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
                 agent = farmer
             agent.get_env_info(env_copy)
 
-            ## initiate tree (if not resetting the tree for each move, init here. otherwise, this should be inside the episode loop)
+            ## reset tree
             if ((ag == 'BAMCP') or (ag == 'BAMCP w/ CE')) & tree_reset:
                 tree = Tree(N)
                 if expt == 'free':
                     MCTS = MonteCarloTreeSearch_Free(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
                 elif expt == '2AFC':
                     MCTS = MonteCarloTreeSearch_2AFC(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
+                tree_reset = False
+            
+            ## if keeping the tree between episodes, need to update tree with new episode info
+            elif ((ag == 'BAMCP') or (ag == 'BAMCP w/ CE')) & (not tree_reset):
+                MCTS.update_episode()
+
         
             ## run episode until goal is reached
             end_episode = False
@@ -799,64 +816,65 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
                                     print('mountain {}, epsiode {}: search attempts exceeded'.format(m, e))
                                     break
 
+                
                 ### log determinant of covariance matrix
-                if (ag=='BAMCP') or (ag=='BAMCP w/ CE'):
+                # if (ag=='BAMCP') or (ag=='BAMCP w/ CE'):
 
-                    ## get prior p and q samples
-                    prior_p_samples = agent.all_posterior_ps
-                    prior_q_samples = agent.all_posterior_qs
-                    prior_samples = np.vstack([prior_p_samples.T, prior_q_samples.T])
+                #     ## get prior p and q samples
+                #     prior_p_samples = agent.all_posterior_ps
+                #     prior_q_samples = agent.all_posterior_qs
+                #     prior_samples = np.vstack([prior_p_samples.T, prior_q_samples.T])
 
-                    ## log det of prior covariance matrix 
-                    # prior_cov = np.cov(prior_samples)
-                    # prior_LD = np.linalg.slogdet(prior_cov)[1]
-                    # assert prior_cov.shape[0] == N*2, 'covariance matrix is wrong shape'
+                #     ## log det of prior covariance matrix 
+                #     # prior_cov = np.cov(prior_samples)
+                #     # prior_LD = np.linalg.slogdet(prior_cov)[1]
+                #     # assert prior_cov.shape[0] == N*2, 'covariance matrix is wrong shape'
                     
                     
-                    ## order the outcomes (counterfactual, then actual. This is to allow reuse of the posterior samples associated with the actual outcome on the next timestep)
-                    actual_outcome = env_copy.obs.copy()[-1, -1]
-                    if actual_outcome == env_copy.low_cost:
-                        ordered_outcomes = [env_copy.high_cost, env_copy.low_cost]
-                    else:
-                        ordered_outcomes = [env_copy.low_cost, env_copy.high_cost]
-                    posterior_LDs = []
-                    KLs = []
+                #     ## order the outcomes (counterfactual, then actual. This is to allow reuse of the posterior samples associated with the actual outcome on the next timestep)
+                #     actual_outcome = env_copy.obs.copy()[-1, -1]
+                #     if actual_outcome == env_copy.low_cost:
+                #         ordered_outcomes = [env_copy.high_cost, env_copy.low_cost]
+                #     else:
+                #         ordered_outcomes = [env_copy.low_cost, env_copy.high_cost]
+                #     posterior_LDs = []
+                #     KLs = []
 
-                    ## posterior samples under each of the possible outcomes of the action that was just taken
-                    for o, outcome in enumerate(ordered_outcomes):
-                        sim_obs = env_copy.obs.copy()
-                        sim_obs[-1, -1] = outcome
-                        agent.root_samples(sim_obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy, CE=False)
-                        posterior_samples = np.vstack([np.array(agent.all_posterior_ps).T, np.array(agent.all_posterior_qs).T])
+                #     ## posterior samples under each of the possible outcomes of the action that was just taken
+                #     for o, outcome in enumerate(ordered_outcomes):
+                #         sim_obs = env_copy.obs.copy()
+                #         sim_obs[-1, -1] = outcome
+                #         agent.root_samples(sim_obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy, CE=False)
+                #         posterior_samples = np.vstack([np.array(agent.all_posterior_ps).T, np.array(agent.all_posterior_qs).T])
                         
-                        ## posterior log det
-                        # posterior_cov = np.cov(posterior_samples)
-                        # assert posterior_cov.shape == prior_cov.shape, 'prior and posterior covariance matrices do not match: {} vs {}'.format(posterior_cov.shape, prior_cov.shape)
-                        # LD = np.linalg.slogdet(posterior_cov)[1]
-                        # posterior_LDs.append(LD)
+                #         ## posterior log det
+                #         # posterior_cov = np.cov(posterior_samples)
+                #         # assert posterior_cov.shape == prior_cov.shape, 'prior and posterior covariance matrices do not match: {} vs {}'.format(posterior_cov.shape, prior_cov.shape)
+                #         # LD = np.linalg.slogdet(posterior_cov)[1]
+                #         # posterior_LDs.append(LD)
 
-                        ## or, calculate the KL divergence between two multivariate gaussians
-                        KL = KL_divergence(prior_samples, posterior_samples)
-                        KLs.append(KL)
+                #         ## or, calculate the KL divergence between two multivariate gaussians
+                #         KL = KL_divergence(prior_samples, posterior_samples)
+                #         KLs.append(KL)
 
 
-                    ## expected log det, i.e. the difference between the prior and the expected posterior log dets, weighted by the probability of each outcome
-                    # p_low = np.mean(prior_p_samples * prior_q_samples)
-                    # p_high = 1 - p_low
-                    # if actual_outcome == env_copy.low_cost:
-                    #     expected_LD = p_low * (posterior_LDs[1] - prior_LD) + p_high * (posterior_LDs[0] - prior_LD)
-                    # else:
-                    #     expected_LD = p_low * (posterior_LDs[0] - prior_LD) + p_high * (posterior_LDs[1] - prior_LD)
-                    # ELDs.append(expected_LD)
+                #     ## expected log det, i.e. the difference between the prior and the expected posterior log dets, weighted by the probability of each outcome
+                #     # p_low = np.mean(prior_p_samples * prior_q_samples)
+                #     # p_high = 1 - p_low
+                #     # if actual_outcome == env_copy.low_cost:
+                #     #     expected_LD = p_low * (posterior_LDs[1] - prior_LD) + p_high * (posterior_LDs[0] - prior_LD)
+                #     # else:
+                #     #     expected_LD = p_low * (posterior_LDs[0] - prior_LD) + p_high * (posterior_LDs[1] - prior_LD)
+                #     # ELDs.append(expected_LD)
 
-                    ## expected KL divergence
-                    p_low = np.mean(prior_p_samples * prior_q_samples)
-                    p_high = 1 - p_low
-                    if actual_outcome == env_copy.low_cost:
-                        expected_KL = p_low * (KLs[1]) + p_high * (KLs[0])
-                    else:
-                        expected_KL = p_low * (KLs[0]) + p_high * (KLs[1])
-                    EKLs.append(expected_KL)
+                #     ## expected KL divergence
+                #     p_low = np.mean(prior_p_samples * prior_q_samples)
+                #     p_high = 1 - p_low
+                #     if actual_outcome == env_copy.low_cost:
+                #         expected_KL = p_low * (KLs[1]) + p_high * (KLs[0])
+                #     else:
+                #         expected_KL = p_low * (KLs[0]) + p_high * (KLs[1])
+                #     EKLs.append(expected_KL)
 
                     ## debugging
                     # print(ag)
