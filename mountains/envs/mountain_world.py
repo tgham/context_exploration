@@ -117,6 +117,8 @@ class MountainEnv(gym.Env):
         init_done = False
         t=0
         while not init_done:
+            SG_found = False
+            paths_found = False
             self.high_cost, self.low_cost = -0.9, -0.1
             self.alpha_row = beta_params['alpha_row']
             self.beta_row = beta_params['beta_row']
@@ -138,6 +140,7 @@ class MountainEnv(gym.Env):
             self.goals = []
             self.path_states = []
             self.path_actions = []
+            self.path_costs = []
             self.costss = []
             self.o_trajs = []
             self.o_traj_costs = []
@@ -149,42 +152,22 @@ class MountainEnv(gym.Env):
             if expt=='2AFC':
                 try:
                     start, goal = self.sample_SG()
+                    SG_found=True
                 except:
                     continue
 
             ## generate relevant trial info for each episode
             for e in range(n_episodes):
 
-                # if expt=='2AFC':
-                #     start = np.array([0,0])
-                #     goal = np.array([3, 3])
-                #     moves, path_pair = self.sample_paths(start, goal)
-                #     self.starts.append(start)
-                #     self.goals.append(goal)
-                #     self.path_states.append(path_pair)
-
-                ## free movement
-                # if expt == 'free':
-                #     start, goal = self.sample_SG()
-                #     self.starts.append(start)
-                #     self.goals.append(goal)
-
-                # ## 2AFC
-                # elif expt=='2AFC':
-                #     # start = np.array([0,0])
-                #     # goal = np.array([3, 3])
-                #     max_turns = 4
-                #     path_actions, path_states = self.sample_paths(start, goal, max_turns)
-                #     self.starts.append(start)
-                #     self.goals.append(goal)
-                #     self.path_states.append(path_states)
-                #     self.path_actions.append(path_actions)
                 try:
+                    
                     ## free movement
                     if expt == 'free':
                         start, goal = self.sample_SG()
                         self.starts.append(start)
                         self.goals.append(goal)
+                        SG_found=True
+                        paths_found=True
 
                         ## get info about optimal path
                         o_traj, o_traj_costs, o_traj_total_cost, o_traj_actions = self.optimal_trajectory(start, goal)
@@ -194,11 +177,11 @@ class MountainEnv(gym.Env):
                         self.o_traj_actions.append(o_traj_actions)
 
 
+
+
                     ## 2AFC
                     elif expt=='2AFC':
-                        # start = np.array([0,0])
-                        # goal = np.array([3, 3])
-                        max_turns = 3
+                        max_turns = 4
                         path_actions, path_states = self.sample_paths(start, goal, max_turns)
                         self.starts.append(start)
                         self.goals.append(goal)
@@ -212,6 +195,19 @@ class MountainEnv(gym.Env):
                         self.o_traj_total_costs.append(o_traj_total_cost)
                         self.o_traj_actions.append(o_traj_actions)
 
+                        ## save expected costs of the paths
+                        path_costs = []
+                        for path in self.path_states[e]:
+                            
+                            ## pq = p(high cost)
+                            # path_cost = np.sum([self.p_costs[x, y]*self.high_cost + (1-self.p_costs[x, y])*self.low_cost for x, y in path]) 
+
+                            ## pq = p(low cost)
+                            path_cost = np.sum([self.p_costs[x, y]*self.low_cost + (1-self.p_costs[x, y])*self.high_cost for x, y in path]) 
+                            path_costs.append(path_cost)
+
+                        self.path_costs.append(path_costs)
+                        paths_found = True
 
                 except:
                     break
@@ -229,10 +225,49 @@ class MountainEnv(gym.Env):
 
             if len(self.starts)==self.n_episodes:
                 init_done = True
-                self.episode = 0
+                self._episode = 0
             t+=1
             if t>500:
-                raise ValueError('couldnt initialise env')
+                raise ValueError('couldnt initialise env. SG: ', SG_found, 'paths: ', paths_found)
+        
+        ## get info on path overlaps in 2AFC expt
+        if self.expt == '2AFC':
+            self.most_overlap = []
+            self.path_future_overlaps = []
+            for e in range(self.n_episodes-1):
+
+                ### calculate the number of states in the current path that appear in the future set
+
+                ## no repeats (e.g. if [x,y] appears in episodes 2 and 3, only count it once)
+                # future_states = []
+                # for next_e in range(e+1, self.n_episodes):
+                #     for next_path in self.path_states[next_e]:
+                #         future_states.extend(next_path)
+                # n_intersections = []
+                # for path in self.path_states[e]:
+                #     intersections = set(path).intersection(set(future_states))
+                #     n_intersections.append(len(intersections) -2) ## -2 if start and end are shared
+                # self.path_n_intersections.append(n_intersections)
+
+                ## repeats (e.g. if [x,y] appears in episodes 2 and 3, count it twice)
+                n_overlaps = []
+                for path in self.path_states[e]:
+                    path = path
+                    intersections = []
+                    for next_e in range(e+1, self.n_episodes):
+                        for next_path in self.path_states[next_e]:
+                            next_path = next_path
+                            intersection = set(path).intersection(set(next_path))
+                            
+                            ## if path and next_path share start and end, remove them from the intersection
+                            if np.array_equal(path[0], next_path[0]):
+                                intersection = intersection - set([path[0]])
+                            if np.array_equal(path[-1], next_path[-1]):
+                                intersection = intersection - set([path[-1]])
+                            intersections.extend(intersection)
+                    n_overlaps.append(len(intersections))
+                self.path_future_overlaps.append(n_overlaps)
+                self.most_overlap.append(np.argmax(n_overlaps))
         self.sim = False
 
     ## get info from current state
@@ -257,6 +292,9 @@ class MountainEnv(gym.Env):
     def goal(self):
         return self._goal_location
     
+    @property
+    def episode(self):
+        return self._episode
 
 
     ## reset the environment
@@ -266,7 +304,7 @@ class MountainEnv(gym.Env):
 
         ## set costs, given p_costs
         # self.costs = np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
-        self.costs = self.costss[self.episode]
+        self.costs = self.costss[self._episode]
 
         ## set start and end
         if start_goal is not None: 
@@ -274,24 +312,23 @@ class MountainEnv(gym.Env):
             self._goal_location = np.array(start_goal[1], dtype=int)
         else:
             # self._agent_location, self._goal_location = self.sample_SG()
-            self._agent_location = np.array(self.starts[self.episode])
-            self._goal_location = np.array(self.goals[self.episode])
+            self._agent_location = np.array(self.starts[self._episode])
+            self._goal_location = np.array(self.goals[self._episode])
 
             
-            ## get true Q vals (PROBABLY only need to do this if we're interested in optimal paths, as in the free-choice expt, BUT LET'S KEEP FOR NOW)
-            # if self.expt=='free':
-            ## pq = p(high cost)
-            # dp_costs = self.p_costs*self.high_cost + (1-self.p_costs)*self.low_cost ## standard case (i.e. pq = p(high cost))
-            # dp_costs[self._goal_location[0], self._goal_location[1]] = 0
+            ## get true Q vals (PROBABLY only need to do this if we're interested in optimal paths, as in the free-choice expt)
+            if self.expt=='free':
+                
+                ## pq = p(high cost)
+                # dp_costs = self.p_costs*self.high_cost + (1-self.p_costs)*self.low_cost ## standard case (i.e. pq = p(high cost))
+                # dp_costs[self._goal_location[0], self._goal_location[1]] = 0
 
-            ## pq = p(low cost)
-            dp_costs = self.p_costs*self.low_cost + (1-self.p_costs)*self.high_cost
-            dp_costs[self._goal_location[0], self._goal_location[1]] = 0
+                ## pq = p(low cost)
+                dp_costs = self.p_costs*self.low_cost + (1-self.p_costs)*self.high_cost
+                dp_costs[self._goal_location[0], self._goal_location[1]] = 0
 
-            self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=self._goal_location)
-            self.optimal_trajectory(self._agent_location, self._goal_location)
-
-
+                self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=self._goal_location)
+                # self.optimal_trajectory(self._agent_location, self._goal_location)
 
         ## initialise trial info
         self.terminated = False
@@ -350,6 +387,12 @@ class MountainEnv(gym.Env):
             self.action_scores = []
         
         # return observation, info
+
+    ## soft reset (allows simulation of future episodes without full copying of env) - i.e. update only the start and goal locations
+    def soft_reset(self):
+        self._agent_location = np.array(self.starts[self._episode])
+        self._goal_location = np.array(self.goals[self._episode])
+        self.terminated=False
     
     ## get some S-G pairs
     def sample_SG(self):
@@ -365,7 +408,7 @@ class MountainEnv(gym.Env):
         worth_it = False
         new = False
         new_rc = False
-        route_optimality_tolerance = 0.75
+        route_optimality_tolerance = 0.8
         while (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (not worth_it) or (not new) or (not new_rc):
             agent_location = self.np_random.integers(0, self.N, size=2, dtype=int)
             goal_location = self.np_random.integers(
@@ -473,8 +516,8 @@ class MountainEnv(gym.Env):
                 n_common_across_eps = np.inf
             else:
                 n_common_across_eps = 0
-            max_common_within_ep = (len(moves)-1)/2
-            max_common_across_eps = (len(moves)-1)/1.2
+            max_common_within_ep = (len(moves)-1)/1.8
+            max_common_across_eps = (len(moves)-1)/1.25
             # path_overlap_ratio = self.N /5
             # max_common_within_ep = (len(moves)-1)/path_overlap_ratio
             # max_common_across_eps = (len(moves)-1)/(path_overlap_ratio/2)
@@ -499,7 +542,7 @@ class MountainEnv(gym.Env):
                     # print('rel cost diff:', rel_cost_diff, rel_cost_diff_tol)
 
                     ## check if too much overlap within episode
-                    n_common_within_ep = len(set(path_1).intersection(set(path_2)))
+                    n_common_within_ep = len(set(path_1).intersection(set(path_2)))-2 ## -2 if start and end are shared
                     # print('within ep:',n_common_within_ep, max_common_within_ep)
 
                     ## check if too much overlap across episodes
@@ -507,12 +550,11 @@ class MountainEnv(gym.Env):
                         common_across_eps = []
                         for paths in self.path_states:
                             p1, p2 = paths
-                            common_across_eps.append(len(set(p1).intersection(set(path_1))))
-                            common_across_eps.append(len(set(p2).intersection(set(path_2))))
-                            common_across_eps.append(len(set(p1).intersection(set(path_2))))
-                            common_across_eps.append(len(set(p2).intersection(set(path_1))))
+                            common_across_eps.append(len(set(p1).intersection(set(path_1)))-2)
+                            common_across_eps.append(len(set(p2).intersection(set(path_2)))-2)
+                            common_across_eps.append(len(set(p1).intersection(set(path_2)))-2)
+                            common_across_eps.append(len(set(p2).intersection(set(path_1)))-2)
                         n_common_across_eps = np.max(common_across_eps)
-                        # print('across eps:', n_common_across_eps, max_common_across_eps)
                             
                 t+=1
                 if t>100:
@@ -575,6 +617,10 @@ class MountainEnv(gym.Env):
     ## custom functions for manually editing the env
     def set_state(self, state):
         self._agent_location = state
+    def set_goal(self, goal):
+        self._goal_location = goal
+    def set_episode(self, episode):
+        self._episode = episode
     def set_sim(self, sim):
         self.sim = sim
     def set_obs(self, obs):
@@ -621,20 +667,28 @@ class MountainEnv(gym.Env):
 
         self.terminated = False
         
-        ## get the current Q-values (only necessary if not simulating)
+        ## get the score of the current action (only necessary if not simulating)
         if not self.sim:
-            current_Q_vals = self.Q_true[self._agent_location[0], self._agent_location[1], :]
 
-            ## get the ranking of the best actions to take under the *true* optimal policy, given the agent's current position
-            # action_ranking = rankdata(current_Q_vals, method='max') - 1
+            ## action score given by true Q-values, as defined by DP solution
+            if self.expt == 'free': 
+                current_Q_vals = self.Q_true[self._agent_location[0], self._agent_location[1], :]
+                
+                ## get the ranking of the best actions to take under the *true* optimal policy, given the agent's current position
+                # action_ranking = rankdata(current_Q_vals, method='max') - 1
 
-            # ## get the score of the action that will  actually be taken, given the ranking of the optimal actions
-            # action_score = action_ranking[action] + 1
-            # action_score /= self.n_actions ## may be more suitable to divide by len(actions) in case of wall states
+                # ## get the score of the action that will  actually be taken, given the ranking of the optimal actions
+                # action_score = action_ranking[action] + 1
+                # action_score /= self.n_actions ## may be more suitable to divide by len(actions) in case of wall states
 
-            ## or, score the action based on the normalised Q-values of the available actions
-            norm_Q_vals = (current_Q_vals - np.nanmin(current_Q_vals)) / (np.nanmax(current_Q_vals) - np.nanmin(current_Q_vals))
-            action_score = norm_Q_vals[action]
+                ## or, score the action based on the normalised Q-values of the available actions
+                norm_Q_vals = (current_Q_vals - np.nanmin(current_Q_vals)) / (np.nanmax(current_Q_vals) - np.nanmin(current_Q_vals))
+                action_score = norm_Q_vals[action]
+
+            ## action score is for the whole path (need to do this later...)
+            elif self.expt == '2AFC':
+                action_score = 1
+
         
         ## take the actual action 
         direction = self.action_to_direction[action] 
@@ -709,10 +763,10 @@ class MountainEnv(gym.Env):
 
                 ## scores for the trial
                 self.action_score = np.nanmean(self.action_scores)
-                self.cost_ratio = self.o_traj_total_costs[self.episode] / self.a_traj_total_cost
+                self.cost_ratio = self.o_traj_total_costs[self._episode] / self.a_traj_total_cost
 
                 ## update ep counter
-                self.episode += 1
+                self._episode += 1
 
         # observation = self.get_obs()
         # info = self._get_info()
