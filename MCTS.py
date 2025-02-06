@@ -20,7 +20,7 @@ class MonteCarloTreeSearch():
         self.expt = env.expt
         self.actual_state = self.env.current
         self.actual_goal = self.env.goal
-        self.episode = self.env.episode
+        self.actual_episode = self.env.episode
         self.agent = agent
         self.tree = tree
         self.n_afc = self.env.n_afc
@@ -32,7 +32,7 @@ class MonteCarloTreeSearch():
         starting_cost = self.env.costs[self.actual_state[0], self.actual_state[1]]
 
         ## add state node to the tree
-        self.tree.add_state_node(state=self.actual_state, cost=starting_cost, goal = self.actual_goal, terminated=False, episode = self.episode, n_afc = self.n_afc, parent=None)
+        self.tree.add_state_node(state=self.actual_state, cost=starting_cost, goal = self.actual_goal, terminated=False, episode = self.actual_episode, n_afc = self.n_afc, parent=None)
 
     ## expand the action space of a node
     def expand(self, node):
@@ -58,7 +58,7 @@ class MonteCarloTreeSearch():
     
 
     ## tree step
-    def tree_step(self, action_leaf, env_copy):
+    def tree_step(self, action_leaf, env_tmp):
         raise NotImplementedError('tree step not implemented in subclass')
     
     ## rollout policy
@@ -83,10 +83,16 @@ class MonteCarloTreeSearch():
         self.node_id_path = []
 
         ## create a copy of the env
-        env_copy = copy.deepcopy(self.env)
-        assert env_copy.sim, 'env copy is not in sim mode'
+        # env_copy = copy.deepcopy(self.env)
+        # assert env_copy.sim, 'env copy is not in sim mode'
+        if self.expt == '2AFC':
+            env_tmp = copy.deepcopy(self.env)
+            assert env_tmp.sim, 'env is not in sim mode'
+        elif self.expt == 'free':
+            env_tmp = self.env
         
         ## loop until you reach a leaf node or terminal state
+        assert env_tmp.sim, 'env is not in sim mode'
         while not node.terminated:
             t+=1
 
@@ -102,6 +108,7 @@ class MonteCarloTreeSearch():
 
                 ## revert env
                 # self.env.set_state(self.actual_state)
+                env_tmp.set_state(self.actual_state)
 
                 return action_leaf
                 
@@ -117,7 +124,7 @@ class MonteCarloTreeSearch():
                 self.node_id_path.append(node.node_id)
 
                 ## move in env
-                next_state, cost, terminated, node_episode, env_copy = self.tree_step(action_leaf, env_copy)
+                next_state, cost, terminated, node_episode, env_tmp = self.tree_step(action_leaf, env_tmp)
 
                 ## see if the next state node already exists as a child of this action leaf
                 next_node_id = tuple(np.append(next_state, cost))
@@ -140,6 +147,7 @@ class MonteCarloTreeSearch():
 
         ## revert env
         # self.env.set_state(self.actual_state)
+        env_tmp.set_state(self.actual_state)
 
         ## save tree obs for subsequent rollouts
         # self.tree_obs = self.env.obs_tmp.copy()
@@ -308,12 +316,12 @@ class MonteCarloTreeSearch_Free(MonteCarloTreeSearch):
         super().__init__(env, agent, tree, exploration_constant, discount_factor)
 
     ## tree step
-    def tree_step(self, action_leaf, env_copy):
+    def tree_step(self, action_leaf, env_tmp):
         action = action_leaf.action
-        next_state, cost, terminated, _, _ = env_copy.step(action)
+        next_state, cost, terminated, _, _ = env_tmp.step(action)
         self.tree_costs.append(cost)
-        node_episode = self.episode ##??
-        return next_state, cost, terminated, node_episode, env_copy
+        node_episode = self.actual_episode ##??
+        return next_state, cost, terminated, node_episode, env_tmp
     
     ## rollout policy
     def rollout_policy(self, action_leaf):
@@ -364,13 +372,13 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         super().__init__(env, agent, tree, exploration_constant, discount_factor)
 
     ## tree step
-    def tree_step(self, action_leaf, env_copy):
-        start_tmp = env_copy.current
+    def tree_step(self, action_leaf, env_tmp):
+        start_tmp = env_tmp.current
         path_id = action_leaf.action
-        actions = self.env.path_actions[env_copy.episode][path_id]
+        actions = self.env.path_actions[env_tmp.episode][path_id]
         costs = []
         for action in actions:
-            _, cost, _, _, _ = env_copy.step(action)
+            _, cost, _, _, _ = env_tmp.step(action)
             costs.append(cost)
         cost = costs ## rename for consistency...
         self.tree_costs.append(np.sum(cost))
@@ -378,11 +386,11 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         terminated = action_leaf.terminated
 
         ## since the agent has chosen a path to the goal, we need to move the environment to the next episode
-        env_copy.episode +=1
-        node_episode = env_copy.episode
-        env_copy.reset()
+        env_tmp.episode +=1
+        node_episode = env_tmp.episode
+        env_tmp.reset()
 
-        return next_state, cost, terminated, node_episode, env_copy
+        return next_state, cost, terminated, node_episode, env_tmp
     
     ## rollout policy
     def rollout_policy(self, action_leaf):
