@@ -59,7 +59,7 @@ class Node:
 
     # __slots__ = ['state', 'n_state_visits', 'cost', 'terminated', 'node_id', 'parent_node_ids', 'N', 'untried_actions', 'action_leaves']
 
-    def __init__(self, state, cost, goal, terminated, episode, n_afc, N):
+    def __init__(self, state, cost, node_id, goal, terminated, episode, n_afc, N):
         
         ## state info
         self.state = np.append(state, cost) ## in the 2AFC case, this amounts to current state + costs that have just been observed on prior simulated episode
@@ -68,7 +68,8 @@ class Node:
         self.episode = episode
         self.terminated = terminated
         self.goal = goal
-        self.node_id = tuple(self.state)
+        # self.node_id = tuple(self.state)
+        self.node_id = node_id
         self.parent_node_ids = []
         self.N = N
 
@@ -109,7 +110,7 @@ class Node:
     
 class Action_Node:
 
-    def __init__(self, prev_state, action, next_state, terminated, episode):
+    def __init__(self, prev_state, action, next_state, terminated, episode, parent_id):
         self.prev_state = prev_state
         self.action = action ## in 2AFC, this specifies the path ID (i.e. 0 or 1)
         self.total_simulation_cost = 0
@@ -119,6 +120,7 @@ class Action_Node:
         self.terminated = terminated
         self.episode = episode
         self.node_id = (self.prev_state, self.action) #+ str(self.next_state)
+        self.parent_id = parent_id
         self.children={}
         self.children_ids = []
 
@@ -146,7 +148,7 @@ class Tree:
         return not node.terminated and len(node.untried_actions) > 0
 
     ## attach action leaf to child state
-    def add_state_node(self, state, cost, goal, terminated, episode, n_afc, parent=None):
+    def add_state_node(self, state, cost, node_id, goal, terminated, episode, n_afc, parent=None):
 
         # ## check for existing state node
         # node_id = str(history)
@@ -156,7 +158,7 @@ class Tree:
 
         
         ## create a new state node
-        node = Node(state=state, cost=cost, goal=goal, terminated=terminated, episode = episode, n_afc=n_afc, N=self.N)
+        node = Node(state=state, cost=cost, node_id=node_id, goal=goal, terminated=terminated, episode = episode, n_afc=n_afc, N=self.N)
         
         ## store parent-child relationships
         if parent is None:
@@ -167,8 +169,8 @@ class Tree:
             
             ## add this state node to the children of the previous action leaf
             parent.children_ids.append(node.node_id)
-            child_key = tuple(np.append(state, cost))
-            parent.children[child_key] = node
+            # child_key = tuple(np.append(state, cost))
+            parent.children[node.node_id] = node
             # parent.children[str(np.append(state, cost))] = node
 
         return node

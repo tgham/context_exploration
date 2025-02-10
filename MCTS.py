@@ -25,12 +25,16 @@ class MonteCarloTreeSearch():
         self.N = self.env.N
         self.exploration_constant = exploration_constant
         self.discount_factor = discount_factor
-
-        ## cost of current state?
         starting_cost = self.env.costs[self.actual_state[0], self.actual_state[1]]
 
+        ## create id for root node
+        node_id = self.init_node_id(self.env.obs)
+
         ## add state node to the tree
-        self.tree.add_state_node(state=self.actual_state, cost=starting_cost, goal = self.actual_goal, terminated=False, episode = self.actual_episode, n_afc = self.n_afc, parent=None)
+        self.tree.add_state_node(state=self.actual_state, cost=starting_cost, node_id=node_id, goal = self.actual_goal, terminated=False, episode = self.actual_episode, n_afc = self.n_afc, parent=None)
+
+    def init_node_id(self, obs=None):
+        raise NotImplementedError('init_node_id not implemented in subclass')
 
     ## update MCTS with episode info
     def update_episode(self):
@@ -55,7 +59,7 @@ class MonteCarloTreeSearch():
             next_state = node.state[:2] #i.e. this stays the same since agent always regens to the same start state. may instead choose to fill this with the states that are actually traversed
             
         ## update info for s-a leaf - i.e. the state-action pair
-        node.action_leaves[action] = Action_Node(prev_state = node.state, action=action, next_state = next_state, terminated=terminated, episode=node.episode)
+        node.action_leaves[action] = Action_Node(prev_state = node.state, action=action, next_state = next_state, terminated=terminated, episode=node.episode, parent_id=node.node_id)
         node.action_leaves[action].performance = 0
 
         return node.action_leaves[action]
@@ -133,17 +137,15 @@ class MonteCarloTreeSearch():
 
                 ## move in env
                 # print('selection:',t, self.env.current)
-                next_state, cost, terminated, node_episode = self.tree_step(action_leaf)
+                next_state, cost, terminated, node_episode, next_node_id = self.tree_step(action_leaf)
                 assert np.array_equal(next_state, self.env.current)
 
-                ## see if the next state node already exists as a child of this action leaf
-                next_node_id = tuple(np.append(next_state, cost))
+                # see if the next state node already exists as a child of this action leaf
+                # next_node_id = tuple(np.append(next_state, cost))
                 if next_node_id in action_leaf.children:
                     node = action_leaf.children[next_node_id]
-                    # print(node)
-                    # print()
                 else:
-                    node = self.tree.add_state_node(next_state, cost, goal, terminated, episode = node_episode, n_afc = self.n_afc, parent=action_leaf)
+                    node = self.tree.add_state_node(next_state, cost, next_node_id, goal, terminated, episode = node_episode, n_afc = self.n_afc, parent=action_leaf)
                 assert np.array_equal(node.state[:2], next_state), 'error in tree policy step {}\n started in {}\n supposed to take action {} to {}\n ended up moving  to {}'.format(t, state_tmp, action_leaf.action, node.state[:2], action_leaf.next_state)
 
         ## if terminal node, there are no mode action leaves to choose from
@@ -202,8 +204,9 @@ class MonteCarloTreeSearch():
 
             ## Move to the next node in the path if not at the end
             if depth < tree_len - 1:
-                next_state = tuple(self.tree_path[depth + 1][0])
-                node = action_leaf.children[next_state]
+                # next_state = tuple(self.tree_path[depth + 1][0])
+                next_node_id = self.node_id_path[depth+1]
+                node = action_leaf.children[next_node_id]
 
 
     ## calculate E-E value
@@ -322,13 +325,18 @@ class MonteCarloTreeSearch_Free(MonteCarloTreeSearch):
     def __init__(self, env, agent, tree, exploration_constant=2, discount_factor=0.99):
         super().__init__(env, agent, tree, exploration_constant, discount_factor)
 
+    def init_node_id(self, obs=None):
+        node_id = tuple(np.append(self.actual_state, self.env.costs[self.actual_state[0], self.actual_state[1]]))
+        return node_id
+
     ## tree step
     def tree_step(self, action_leaf):
         action = action_leaf.action
         next_state, cost, terminated, _, _ = self.env.step(action)
         self.tree_costs.append(cost)
         node_episode = self.actual_episode ##??
-        return next_state, cost, terminated, node_episode
+        next_node_id = tuple(np.append(next_state, cost))
+        return next_state, cost, terminated, node_episode, next_node_id
     
     ## rollout policy
     def rollout_policy(self, action_leaf):
@@ -378,20 +386,44 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
     def __init__(self, env, agent, tree, exploration_constant=2, discount_factor=0.99):
         super().__init__(env, agent, tree, exploration_constant, discount_factor)
 
+    ## node_ids are defined by the informational state, i.e. the counts of low and high cost states in each cell
+    def init_node_id(self, obs=None):
+        info_state = np.zeros((self.N, self.N, 2))
+        for i,j,c in obs:
+            i = int(i)
+            j = int(j)
+            cost_idx = 1 if c == self.env.high_cost else 0
+            info_state[i,j,cost_idx] += 1
+        node_id = tuple(info_state.flatten())
+        return node_id
+
     ## tree step
     def tree_step(self, action_leaf):
         start_tmp = self.env.current
         path_id = action_leaf.action
-        step_ep = self.env.episode
+        assert self.env.episode == action_leaf.episode, 'episode mismatch between env and tree\n env: {} \n tree: {}\n MCTS: {}'.format(self.env.episode, action_leaf.episode, self.actual_episode)
+        step_ep = action_leaf.episode
         actions = self.env.path_actions[step_ep][path_id]
+        simulated_obs = []
         costs = []
         for action in actions:
-            _, cost, _, _, _ = self.env.step(action)
+            next_state, cost, _, _, _ = self.env.step(action)
             costs.append(cost)
+            simulated_obs.append(np.append(next_state, cost))
         cost = costs ## rename for consistency...
         self.tree_costs.append(np.sum(cost))
         next_state = start_tmp ## I think this is correct, since the agent always regenerates to the same start state
         terminated = action_leaf.terminated
+
+        ## get the next node id, i.e. the informational state after taking this path
+        next_node_id = self.init_node_id(simulated_obs)
+        # info_state = np.array(action_leaf.parent_id).reshape(self.N, self.N, 2)
+        # for i,j,c in simulated_obs:
+        #     i = int(i)
+        #     j = int(j)
+        #     cost_idx = 1 if c == self.env.high_cost else 0
+        #     info_state[i,j,cost_idx] += 1
+        # next_node_id = tuple(info_state.flatten())
 
         ## since the agent has chosen a path to the goal, we need to move the environment to the next episode
         node_episode = step_ep+1
@@ -401,7 +433,7 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         ## some checks
         assert len(self.tree_costs)<=self.env.n_episodes, 'tree costs exceed number of episodes, tree len: {}, n_eps: {}'.format(len(self.tree_costs), self.env.n_episodes)
 
-        return next_state, cost, terminated, node_episode
+        return next_state, cost, terminated, node_episode, next_node_id
     
     ## rollout policy
     def rollout_policy(self, action_leaf):
@@ -720,13 +752,13 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
                             current, cost, terminated, _, _ = env_copy.step(action)
                             next_node_id = np.append(current,cost)
                         elif expt=='2AFC':
-                            action_sequence = env_copy.path_actions[e][steps]
+                            action_sequence = env_copy.path_actions[e][action]
                             costs = []
                             for ac in action_sequence:
                                 current, cost, terminated, _, _ = env_copy.step(ac)
                                 costs.append(cost)
                             path_cost = np.sum(costs)
-                            next_node_id = np.append(start, costs)
+                            next_node_id = np.append(start, costs) ## need to change this!!
                             block_terminated = e == (n_episodes-1)
                         steps += 1
                         search_attempts = 0 # could do nan here
