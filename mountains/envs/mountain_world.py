@@ -399,7 +399,7 @@ class MountainEnv(gym.Env):
 
         ## sample start and goal locations
         dist = 0
-        min_dist = self.N*0.75
+        min_dist = self.N*0.6
         angle = 0
         angle_tolerance = 0.5
         angle_bounds = [45*(1+angle_tolerance), 45*(1-angle_tolerance)]
@@ -517,7 +517,7 @@ class MountainEnv(gym.Env):
             else:
                 n_common_across_eps = 0
             max_common_within_ep = (len(moves)-1)/1.8
-            max_common_across_eps = (len(moves)-1)/3.5
+            max_common_across_eps = (len(moves)-1)/3
 
             t=0
             while (rel_cost_diff >= rel_cost_diff_tol) or (n_common_within_ep >= max_common_within_ep) or (n_common_across_eps >= max_common_across_eps):
@@ -701,7 +701,6 @@ class MountainEnv(gym.Env):
         self._agent_location = get_next_state(self._agent_location, direction, self.N)
 
         ## get the predicted cost of the new state
-        # predicted_cost = self.predicted_costs[self._agent_location[0]*self.N + self._agent_location[1]]
         # predicted_cost = self.predicted_costs[self._agent_location[0], self._agent_location[1]]
         predicted_cost = self.get_pred_cost(self._agent_location)
         
@@ -716,7 +715,10 @@ class MountainEnv(gym.Env):
             
             ## update observation and trajectory arrays - i.e. agent observes along the way
             self.a_traj.append(tuple(self._agent_location))
-            self.obs = np.vstack([self.obs, [self._agent_location[0], self._agent_location[1], current_cost]])
+            if len(self.obs)==0:
+                self.obs = np.array([[self._agent_location[0], self._agent_location[1], current_cost]])
+            else:
+                self.obs = np.vstack([self.obs, [self._agent_location[0], self._agent_location[1], current_cost]])
             self.obs_tmp = np.vstack([self.obs_tmp, [self._agent_location[0], self._agent_location[1], current_cost]])
             
             ## calculate new posterior for next trial
