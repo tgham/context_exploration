@@ -30,6 +30,10 @@ class MonteCarloTreeSearch():
         ## create id for root node
         node_id = self.init_node_id(self.env.obs)
 
+        ## some debugging metrics
+        self.exploratory_steps = 0
+        self.exploitative_steps = 0
+
         ## add state node to the tree
         self.tree.add_state_node(state=self.actual_state, cost=starting_cost, node_id=node_id, goal = self.actual_goal, terminated=False, episode = self.actual_episode, n_afc = self.n_afc, parent=None)
 
@@ -168,7 +172,7 @@ class MonteCarloTreeSearch():
 
 
     ## backup costs until you reach the root
-    def backward(self):
+    def backup(self):
         tree_len = len(self.tree_costs)
         assert tree_len == len(self.tree_path), 'tree costs and path lengths do not match\n n tree costs: {} \n n tree path: {}\ntree path: {}\n tree costs: {}'.format(len(self.tree_costs), len(self.tree_path), self.tree_path, self.tree_costs)
 
@@ -204,16 +208,16 @@ class MonteCarloTreeSearch():
 
             ## Move to the next node in the path if not at the end
             if depth < tree_len - 1:
-                # next_state = tuple(self.tree_path[depth + 1][0])
                 next_node_id = self.node_id_path[depth+1]
                 node = action_leaf.children[next_node_id]
 
 
     ## calculate E-E value
     def compute_UCT(self, node, action_leaf): 
-        exploitation_term = action_leaf.performance 
+        exploitation_term = action_leaf.performance
         assert action_leaf.n_action_visits > 0 or action_leaf.terminated, 'action leaf has not been visited: {}'.format(action_leaf)
         exploration_term = self.exploration_constant * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
+        # print('exploration term:', exploration_term, 'exploitation term:', exploitation_term)
         return exploitation_term + exploration_term
 
     
@@ -234,11 +238,26 @@ class MonteCarloTreeSearch():
                 prev_state = self.tree_path[-1][0]
                 action_leaves = [leaf for leaf in action_leaves if not np.array_equal(leaf.next_state, prev_state)]
 
+        ## calculate Q-normalisation term??
+        leaf_perfs = [leaf.performance for leaf in action_leaves]
+        # norm_term = np.max(leaf_perfs) - np.min(leaf_perfs)
+        # Q_diff = np.abs(np.max(leaf_perfs) - np.min(leaf_perfs))
+        # norm_term = np.max([Q_diff, 1])
+        # norm_term = np.min(leaf_perfs)
+        # norm_term = 1
+
         ## calculate UCT for each action leaf
         UCTs = [self.compute_UCT(node, leaf) for leaf in action_leaves]
+        # print('node ep:', node.episode, ', diff in UCTs:', np.max(UCTs) - np.min(UCTs))
         max_UCT = np.max(UCTs)
         max_idx = argm(UCTs, max_UCT)
         best_child = action_leaves[max_idx]
+
+        ## check if the chosen leaf is the one with the highest performance, or is exploratory
+        if best_child.performance == np.max(leaf_perfs):
+            self.exploitative_steps += 1
+        else:
+            self.exploratory_steps += 1
 
         return best_child
 
@@ -264,6 +283,9 @@ class MonteCarloTreeSearch():
         # plt.figure()
         # plot_r(posterior_mean_p_cost.reshape(self.N,self.N), ax = plt.subplot(), title='posterior sample')
         # plt.show()
+
+        ## debugging Q-vals
+        self.Q_tracker = []
         
         ## loop through simulations
         for t in range(n_sims):
@@ -276,7 +298,8 @@ class MonteCarloTreeSearch():
             
             ## root sampling of new posterior
             posterior_p_cost = self.agent.all_posterior_p_costs[t]
-            self.agent.dp(posterior_p_cost, expected_cost=True)
+            if self.expt=='free': ## only need to do this in the free-choice expt
+                self.agent.dp(posterior_p_cost, expected_cost=True)
             self.env.receive_predictions(posterior_p_cost)
 
             ## debugging plot
@@ -289,7 +312,14 @@ class MonteCarloTreeSearch():
             self.rollout_policy(action_leaf)
             
             ##backup
-            self.backward()
+            self.backup()
+
+            ## update Q tracker
+            try:
+                Qs = [self.tree.root.action_leaves[a].performance for a in self.tree.root.action_leaves.keys()]
+                self.Q_tracker.append(Qs)
+            except:
+                pass
 
 
         if progress:
@@ -417,13 +447,6 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
 
         ## get the next node id, i.e. the informational state after taking this path
         next_node_id = self.init_node_id(simulated_obs)
-        # info_state = np.array(action_leaf.parent_id).reshape(self.N, self.N, 2)
-        # for i,j,c in simulated_obs:
-        #     i = int(i)
-        #     j = int(j)
-        #     cost_idx = 1 if c == self.env.high_cost else 0
-        #     info_state[i,j,cost_idx] += 1
-        # next_node_id = tuple(info_state.flatten())
 
         ## since the agent has chosen a path to the goal, we need to move the environment to the next episode
         node_episode = step_ep+1
