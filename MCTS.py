@@ -65,6 +65,7 @@ class MonteCarloTreeSearch():
         ## update info for s-a leaf - i.e. the state-action pair
         node.action_leaves[action] = Action_Node(prev_state = node.state, action=action, next_state = next_state, terminated=terminated, episode=node.episode, parent_id=node.node_id)
         node.action_leaves[action].performance = 0
+        node.action_leaves[action].norm_performance = 0
 
         return node.action_leaves[action]
     
@@ -206,6 +207,32 @@ class MonteCarloTreeSearch():
                 (discounted_cost - action_leaf.performance) / action_leaf.n_action_visits
             )
 
+            ## update norm performance
+            action_leaves = [leaf for leaf in node.action_leaves.values() if leaf is not None]
+
+            if len(action_leaves) == 2:
+                leaf1, leaf2 = action_leaves
+                if leaf1.performance > leaf2.performance:
+                    leaf1.norm_performance = 1
+                    leaf2.norm_performance = 0
+                else:
+                    leaf1.norm_performance = 0
+                    leaf2.norm_performance = 1
+            # elif len(action_leaves) == 1:
+            #     # If there is only one leaf, set its norm_performance to 1
+            #     action_leaves[0].norm_performance = 0
+            # else:
+            #     pass
+            # max_perf = np.max([child.performance for child in node.action_leaves.values() if child is not None])
+            # min_perf = np.min([child.performance for child in node.action_leaves.values() if child is not None])
+            # norm_term = max_perf - min_perf
+            # for leaf in node.action_leaves.values():
+            #     if leaf is not None:
+            #         if norm_term == 0:
+            #             leaf.norm_performance = 0
+            #         else:
+            #             leaf.norm_performance = (leaf.performance - min_perf) / norm_term
+
             ## Move to the next node in the path if not at the end
             if depth < tree_len - 1:
                 next_node_id = self.node_id_path[depth+1]
@@ -214,7 +241,8 @@ class MonteCarloTreeSearch():
 
     ## calculate E-E value
     def compute_UCT(self, node, action_leaf): 
-        exploitation_term = action_leaf.performance
+        # exploitation_term = action_leaf.performance
+        exploitation_term = action_leaf.norm_performance
         assert action_leaf.n_action_visits > 0 or action_leaf.terminated, 'action leaf has not been visited: {}'.format(action_leaf)
         exploration_term = self.exploration_constant * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
         # print('exploration term:', exploration_term, 'exploitation term:', exploitation_term)
@@ -226,6 +254,10 @@ class MonteCarloTreeSearch():
     
         ## get action children
         action_leaves = [node.action_leaves[a] for a in node.action_leaves.keys()]
+
+        ## create deep copy of action leaves
+        # action_leaves = [copy.deepcopy(node.action_leaves[a]) for a in node.action_leaves.keys()]
+        # print(action_leaves[0])
 
         ## some hacky fixes for free expt to prevent backtracking
         if self.expt == 'free':
@@ -239,7 +271,13 @@ class MonteCarloTreeSearch():
                 action_leaves = [leaf for leaf in action_leaves if not np.array_equal(leaf.next_state, prev_state)]
 
         ## calculate Q-normalisation term??
-        leaf_perfs = [leaf.performance for leaf in action_leaves]
+        # leaf_perfs = [leaf.performance for leaf in action_leaves]
+        # norm_term = np.max(leaf_perfs) - np.min(leaf_perfs)
+        # for a, leaf in enumerate(action_leaves):
+        #     if norm_term == 0:
+        #         action_leaves[a].performance = 0
+        #     else:
+        #         action_leaves[a].performance = (leaf.performance - np.min(leaf_perfs)) / norm_term
         # norm_term = np.max(leaf_perfs) - np.min(leaf_perfs)
         # Q_diff = np.abs(np.max(leaf_perfs) - np.min(leaf_perfs))
         # norm_term = np.max([Q_diff, 1])
@@ -254,10 +292,10 @@ class MonteCarloTreeSearch():
         best_child = action_leaves[max_idx]
 
         ## check if the chosen leaf is the one with the highest performance, or is exploratory
-        if best_child.performance == np.max(leaf_perfs):
-            self.exploitative_steps += 1
-        else:
-            self.exploratory_steps += 1
+        # if best_child.performance == np.max(leaf_perfs):
+        #     self.exploitative_steps += 1
+        # else:
+        #     self.exploratory_steps += 1
 
         return best_child
 
