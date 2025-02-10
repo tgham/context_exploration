@@ -400,20 +400,29 @@ class Farmer:
         self.all_posterior_qs = np.zeros((n_samples, self.N))
         self.all_posterior_p_costs = np.zeros((n_samples, self.N, self.N))
 
-        ## lazy
-        if lazy:
+        if len(obs) > 0:
 
-            ## loop through samples
-            for s in range(n_samples):
-                self.all_posterior_ps[s,:], self.all_posterior_qs[s,:] = sampler.lazy_sample(n_iter = n_iter)
-                self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
+            ## lazy
+            if lazy:
 
-        ## full 
+                ## loop through samples
+                for s in range(n_samples):
+                    self.all_posterior_ps[s,:], self.all_posterior_qs[s,:] = sampler.lazy_sample(n_iter = n_iter)
+                    self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
+
+            ## full 
+            else:
+
+                ## loop through samples
+                for s in range(n_samples):
+                    self.all_posterior_ps[s,:], self.all_posterior_qs[s,:] = sampler.full_sample(n_iter = n_iter)
+                    self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
+
+        ## if no obs, just sample from prior
         else:
-
-            ## loop through samples
             for s in range(n_samples):
-                self.all_posterior_ps[s,:], self.all_posterior_qs[s,:] = sampler.full_sample(n_iter = n_iter)
+                self.all_posterior_ps[s,:] = np.random.beta(self.alpha_row, self.beta_row, size=self.N)
+                self.all_posterior_qs[s,:] = np.random.beta(self.alpha_col, self.beta_col, size=self.N)
                 self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
 
 

@@ -341,25 +341,25 @@ class MountainEnv(gym.Env):
         # self.obs = np.array([self._agent_location[0], self._agent_location[1], current_cost], ndmin=2)
 
         ## or, observations accumulate over trials, and agent observes starting position
-        if not self.sim:
-            if not hasattr(self, 'obs') or self.obs is None:
-                self.obs = np.array([[self._agent_location[0], self._agent_location[1], current_cost]]) 
-            else:
-                # print(len(self.obs))
-                self.obs = np.vstack([self.obs, [self._agent_location[0], self._agent_location[1], current_cost]])
-            self.obs_tmp = self.obs.copy()
-
-        ## or, observations accumulate over trials, but agent doesn't observe starting position
         # if not self.sim:
         #     if not hasattr(self, 'obs') or self.obs is None:
-        #         self.obs = np.array([])
-        #         self.obs_tmp = np.array([[self._agent_location[0], self._agent_location[1], current_cost]])
-        #         self.obs_start_tmp = self.obs_tmp.copy()
+        #         self.obs = np.array([[self._agent_location[0], self._agent_location[1], current_cost]]) 
         #     else:
-        #     ####     self.obs = np.vstack([self.obs, [self._agent_location[0], self._agent_location[1], current_cost]])
-        #         self.obs_tmp = self.obs.copy()
-        #         self.obs_tmp = np.vstack([self.obs_tmp, [self._agent_location[0], self._agent_location[1], current_cost]])
-        #         self.obs_start_tmp = self.obs_tmp.copy()
+        #         # print(len(self.obs))
+        #         self.obs = np.vstack([self.obs, [self._agent_location[0], self._agent_location[1], current_cost]])
+        #     self.obs_tmp = self.obs.copy()
+
+        ## or, observations accumulate over trials, but agent doesn't observe starting position
+        if not self.sim:
+            if not hasattr(self, 'obs') or self.obs is None:
+                self.obs = np.array([])
+                self.obs_tmp = np.array([[self._agent_location[0], self._agent_location[1], current_cost]])
+                self.obs_start_tmp = self.obs_tmp.copy()
+            else:
+            ####     self.obs = np.vstack([self.obs, [self._agent_location[0], self._agent_location[1], current_cost]])
+                self.obs_tmp = self.obs.copy()
+                self.obs_tmp = np.vstack([self.obs_tmp, [self._agent_location[0], self._agent_location[1], current_cost]])
+                self.obs_start_tmp = self.obs_tmp.copy()
 
         ## or, if simulating some unknown future environment, the observations are given by the previous tree, so we trivially have obs already
         elif self.sim:
@@ -399,7 +399,7 @@ class MountainEnv(gym.Env):
 
         ## sample start and goal locations
         dist = 0
-        min_dist = self.N*0.6
+        min_dist = self.N*0.75
         angle = 0
         angle_tolerance = 0.5
         angle_bounds = [45*(1+angle_tolerance), 45*(1-angle_tolerance)]
@@ -517,16 +517,17 @@ class MountainEnv(gym.Env):
             else:
                 n_common_across_eps = 0
             max_common_within_ep = (len(moves)-1)/1.8
-            max_common_across_eps = (len(moves)-1)/1.25
-            # path_overlap_ratio = self.N /5
-            # max_common_within_ep = (len(moves)-1)/path_overlap_ratio
-            # max_common_across_eps = (len(moves)-1)/(path_overlap_ratio/2)
+            max_common_across_eps = (len(moves)-1)/3.5
+
             t=0
             while (rel_cost_diff >= rel_cost_diff_tol) or (n_common_within_ep >= max_common_within_ep) or (n_common_across_eps >= max_common_across_eps):
 
                 ## generate random permutations of the moves
                 moves_1 = np.random.permutation(moves)
                 moves_2 = np.random.permutation(moves)
+
+                ## SANITY CHECK: always define path_1 as one of the simplest manhattan paths
+                moves_1 = np.concatenate([x_actions, y_actions])
 
                 ## check number of turns
                 def count_turns(moves_seq):
@@ -550,10 +551,10 @@ class MountainEnv(gym.Env):
                         common_across_eps = []
                         for paths in self.path_states:
                             p1, p2 = paths
-                            common_across_eps.append(len(set(p1).intersection(set(path_1)))-2)
+                            # common_across_eps.append(len(set(p1).intersection(set(path_1)))-2)
                             common_across_eps.append(len(set(p2).intersection(set(path_2)))-2)
                             common_across_eps.append(len(set(p1).intersection(set(path_2)))-2)
-                            common_across_eps.append(len(set(p2).intersection(set(path_1)))-2)
+                            # common_across_eps.append(len(set(p2).intersection(set(path_1)))-2)
                         n_common_across_eps = np.max(common_across_eps)
                             
                 t+=1
@@ -584,8 +585,8 @@ class MountainEnv(gym.Env):
         #             print(n_common, max_common)
         #             raise ValueError('paths too similar')
 
-        ## reorder the pairs of moves and paths so that the first in the pair is always the one with the lower cost
-        if path_1_cost > path_2_cost:
+        ## reorder the pairs of moves and paths so that the first in the pair is always the one with the higher cost
+        if path_1_cost < path_2_cost:
             path_states = [build_path(moves_1), build_path(moves_2)]
             path_actions = [moves_1, moves_2]
         else:
