@@ -511,8 +511,8 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         path_id = action_leaf.action
         starting_cost = 0
         for state in self.env.path_states[first_episode][path_id]:
-            # cost = self.env.get_pred_cost(state)
-            cost = self.env.predicted_costs[state[0], state[1]]
+            cost = self.env.get_pred_cost(state)
+            # cost = self.env.predicted_costs[state[0], state[1]]
             starting_cost += cost
         total_cost = starting_cost
 
@@ -534,8 +534,8 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
                 path_states = self.env.path_states[ep][path_id]
                 ro_cost = 0
                 for state in path_states:
-                    # cost = self.env.get_pred_cost(state)
-                    cost = self.env.predicted_costs[state[0], state[1]]
+                    cost = self.env.get_pred_cost(state)
+                    # cost = self.env.predicted_costs[state[0], state[1]]
                     ro_cost += cost
                 path_costs.append(ro_cost)
             # first_step_action = self.tree_path[0][1]
@@ -715,8 +715,8 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
                             path_states = env_copy.path_states[e][path_id]
                             path_cost = 0
                             for state in path_states:
-                                # path_cost += env_copy.get_pred_cost(state) ## i.e. sample binary costs from the posterior pqs
-                                path_cost += agent.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-agent.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost ## or, use expected costs
+                                path_cost += env_copy.get_pred_cost(state) ## i.e. sample binary costs from the posterior pqs
+                                # path_cost += agent.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-agent.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost ## or, use expected costs
                             path_costs.append(path_cost)
 
                         ## choose the path with the lowest total cost
@@ -827,13 +827,19 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
                             next_node_id = np.append(current,cost)
                         elif expt=='2AFC':
                             action_sequence = env_copy.path_actions[e][action]
-                            costs = []
-                            for ac in action_sequence:
-                                current, cost, terminated, _, _ = env_copy.step(ac)
-                                costs.append(cost)
-                            path_cost = np.sum(costs)
-                            next_node_id = np.append(start, costs) ## need to change this!!
+                            # costs = []
+                            # for ac in action_sequence:
+                            #     current, cost, terminated, _, _ = env_copy.step(ac)
+                            #     costs.append(cost)
+                            # path_cost = np.sum(costs)
+                            current, path_cost = env_copy.take_path(action_sequence)
                             block_terminated = e == (n_episodes-1)
+
+                            ## update next node id
+                            init_info_state = np.array(MCTS.tree.root.node_id).reshape(N,N,2)
+                            next_node_id = MCTS.init_node_id(env_copy.obs, init_info_state)
+                            # next_node_id = np.append(start, costs) ## need to change this!!
+                            
                         steps += 1
                         search_attempts = 0 # could do nan here
 

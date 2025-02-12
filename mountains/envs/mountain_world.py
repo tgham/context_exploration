@@ -691,8 +691,8 @@ class MountainEnv(gym.Env):
         self._agent_location = get_next_state(self._agent_location, direction, self.N)
 
         ## get the predicted cost of the new state
-        predicted_cost = self.predicted_costs[self._agent_location[0], self._agent_location[1]]
-        # predicted_cost = self.get_pred_cost(self._agent_location)
+        # predicted_cost = self.predicted_costs[self._agent_location[0], self._agent_location[1]]
+        predicted_cost = self.get_pred_cost(self._agent_location)
 
         ## get the actual cost of the current state
         # current_cost = self.get_cost(self._agent_location)
@@ -767,6 +767,16 @@ class MountainEnv(gym.Env):
         agent_loc = self._agent_location
         info = {} ## make this empty since gym requires it
         return agent_loc, cost, self.terminated, truncated, info 
+    
+    ## take path
+    def take_path(self, action_sequence):
+        costs = []
+        for action in action_sequence:
+            current, cost, terminated, _, _ = self.step(action)
+            costs.append(cost)
+        path_cost = np.sum(costs)
+        return current, path_cost
+        
 
 
     ## calculate the optimal trajectory between the two points, as given by the true DP solution
