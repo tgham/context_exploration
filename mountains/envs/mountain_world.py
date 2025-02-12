@@ -399,7 +399,7 @@ class MountainEnv(gym.Env):
 
         ## sample start and goal locations
         dist = 0
-        min_dist = self.N*0.6
+        min_dist = self.N*0.75
         angle = 0
         angle_tolerance = 0.5
         angle_bounds = [45*(1+angle_tolerance), 45*(1-angle_tolerance)]
@@ -408,7 +408,7 @@ class MountainEnv(gym.Env):
         worth_it = False
         new = False
         new_rc = False
-        route_optimality_tolerance = 0.8
+        route_optimality_tolerance = 1
         while (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (not worth_it) or (not new) or (not new_rc):
             agent_location = self.np_random.integers(0, self.N, size=2, dtype=int)
             goal_location = self.np_random.integers(
@@ -517,7 +517,7 @@ class MountainEnv(gym.Env):
             else:
                 n_common_across_eps = 0
             max_common_within_ep = (len(moves)-1)/1.8
-            max_common_across_eps = (len(moves)-1)/3
+            max_common_across_eps = (len(moves)-1)/1.5
 
             t=0
             while (rel_cost_diff >= rel_cost_diff_tol) or (n_common_within_ep >= max_common_within_ep) or (n_common_across_eps >= max_common_across_eps):
@@ -526,7 +526,7 @@ class MountainEnv(gym.Env):
                 moves_1 = np.random.permutation(moves)
                 moves_2 = np.random.permutation(moves)
 
-                ## SANITY CHECK: always define path_1 as one of the simplest manhattan paths
+                ## sanity check: always define path_1 as one of the simplest manhattan paths
                 moves_1 = np.concatenate([x_actions, y_actions])
 
                 ## check number of turns
@@ -561,37 +561,27 @@ class MountainEnv(gym.Env):
                 if t>100:
                     raise ValueError('cant find paths')
 
+        ## insane sanity check
+        # if len(self.starts)>0:
 
+        #     ## the first 3 moves in moves_2 are the same as the first 3 moves in moves_1, and then otherwise shuffled
+        #     moves_2 = np.concatenate([moves_1[:3], np.random.permutation(moves_1[3:])])
+        # elif len(self.starts)==0:
+        #     moves_2 = np.concatenate([y_actions, x_actions])
+        #     path_states = [build_path(moves_1), build_path(moves_2)]
+        #     path_actions = [moves_1, moves_2]
 
-
-        ## compare with previous paths
-        # max_common = len(moves)/1.25
-        # if len(self.path_states)>0:
-        #     # for p1, p2 in zip(self.path_states, self.path_states):
-        #     for paths in self.path_states:
-        #         p1, p2 = paths
-
-        #         ## check if these paths have appeared before
-        #         if np.array_equal(p1, path_1) or np.array_equal(p2, path_2) or np.array_equal(p1, path_2) or np.array_equal(p2, path_1):
-        #             raise ValueError('paths already exist')
-                
-        #         ## check if these paths are too similar to previous paths
-        #         # n_common = (len(set(p1).intersection(set(path_1))) + len(set(p2).intersection(set(path_2))) + len(set(p1).intersection(set(path_2))) + len(set(p2).intersection(set(path_1))))
-        #         n_common_across_eps = [len(set(p1).intersection(set(path_1))),
-        #                      len(set(p2).intersection(set(path_2))),
-        #                      len(set(p1).intersection(set(path_2))),
-        #                      len(set(p2).intersection(set(path_1)))]
-        #         if np.max(n_common) > max_common:
-        #             print(n_common, max_common)
-        #             raise ValueError('paths too similar')
 
         ## reorder the pairs of moves and paths so that the first in the pair is always the one with the higher cost
-        if path_1_cost < path_2_cost:
-            path_states = [build_path(moves_1), build_path(moves_2)]
-            path_actions = [moves_1, moves_2]
-        else:
-            path_states = [build_path(moves_2), build_path(moves_1)]
-            path_actions = [moves_2, moves_1]
+        # if path_1_cost < path_2_cost:
+        #     path_states = [build_path(moves_1), build_path(moves_2)]
+        #     path_actions = [moves_1, moves_2]
+        # else:
+        #     path_states = [build_path(moves_2), build_path(moves_1)]
+        #     path_actions = [moves_2, moves_1]
+        path_states = [build_path(moves_1), build_path(moves_2)]
+        path_actions = [moves_1, moves_2]
+
 
         return path_actions, path_states
 
@@ -701,9 +691,9 @@ class MountainEnv(gym.Env):
         self._agent_location = get_next_state(self._agent_location, direction, self.N)
 
         ## get the predicted cost of the new state
-        # predicted_cost = self.predicted_costs[self._agent_location[0], self._agent_location[1]]
-        predicted_cost = self.get_pred_cost(self._agent_location)
-        
+        predicted_cost = self.predicted_costs[self._agent_location[0], self._agent_location[1]]
+        # predicted_cost = self.get_pred_cost(self._agent_location)
+
         ## get the actual cost of the current state
         # current_cost = self.get_cost(self._agent_location)
         current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
