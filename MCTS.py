@@ -28,7 +28,7 @@ class MonteCarloTreeSearch():
         starting_cost = self.env.costs[self.actual_state[0], self.actual_state[1]]
 
         ## create id for root node
-        node_id = self.init_node_id(self.env.obs)
+        node_id = self.init_node_id(self.env.obs, None)
 
         ## some debugging metrics
         self.exploratory_steps = 0
@@ -37,7 +37,7 @@ class MonteCarloTreeSearch():
         ## add state node to the tree
         self.tree.add_state_node(state=self.actual_state, cost=starting_cost, node_id=node_id, goal = self.actual_goal, terminated=False, episode = self.actual_episode, n_afc = self.n_afc, parent=None)
 
-    def init_node_id(self, obs=None):
+    def init_node_id(self, obs=None, init_info_state=None):
         raise NotImplementedError('init_node_id not implemented in subclass')
 
     ## update MCTS with episode info
@@ -207,17 +207,17 @@ class MonteCarloTreeSearch():
                 (discounted_cost - action_leaf.performance) / action_leaf.n_action_visits
             )
 
+            ## debugging: save updates applied to the first node
+            # if depth == 0:
+            #     if action==0:
+            #         self.first_node_updates.append([discounted_cost, 0])
+            #     elif action==1:
+            #         self.first_node_updates.append([0, discounted_cost])
+
+
             ## update norm performance
             action_leaves = [leaf for leaf in node.action_leaves.values() if leaf is not None]
 
-            if len(action_leaves) == 2:
-                leaf1, leaf2 = action_leaves
-                if leaf1.performance > leaf2.performance:
-                    leaf1.norm_performance = 1
-                    leaf2.norm_performance = 0
-                else:
-                    leaf1.norm_performance = 0
-                    leaf2.norm_performance = 1
             # elif len(action_leaves) == 1:
             #     # If there is only one leaf, set its norm_performance to 1
             #     action_leaves[0].norm_performance = 0
@@ -241,8 +241,7 @@ class MonteCarloTreeSearch():
 
     ## calculate E-E value
     def compute_UCT(self, node, action_leaf): 
-        # exploitation_term = action_leaf.performance
-        exploitation_term = action_leaf.norm_performance
+        exploitation_term = action_leaf.performance
         assert action_leaf.n_action_visits > 0 or action_leaf.terminated, 'action leaf has not been visited: {}'.format(action_leaf)
         exploration_term = self.exploration_constant * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
         # print('exploration term:', exploration_term, 'exploitation term:', exploitation_term)
@@ -324,6 +323,7 @@ class MonteCarloTreeSearch():
 
         ## debugging Q-vals
         self.Q_tracker = []
+        self.first_node_updates = []
         
         ## loop through simulations
         for t in range(n_sims):
@@ -393,7 +393,7 @@ class MonteCarloTreeSearch_Free(MonteCarloTreeSearch):
     def __init__(self, env, agent, tree, exploration_constant=2, discount_factor=0.99):
         super().__init__(env, agent, tree, exploration_constant, discount_factor)
 
-    def init_node_id(self, obs=None):
+    def init_node_id(self, obs=None, init_info_state = None):
         node_id = tuple(np.append(self.actual_state, self.env.costs[self.actual_state[0], self.actual_state[1]]))
         return node_id
 
@@ -455,14 +455,16 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         super().__init__(env, agent, tree, exploration_constant, discount_factor)
 
     ## node_ids are defined by the informational state, i.e. the counts of low and high cost states in each cell
-    def init_node_id(self, obs=None):
-        info_state = np.zeros((self.N, self.N, 2))
+    def init_node_id(self, obs=None, init_info_state = None):
+        # info_state = np.zeros((self.N, self.N, 2))
+        if init_info_state is None:
+            init_info_state = np.zeros((self.N, self.N, 2))
         for i,j,c in obs:
             i = int(i)
             j = int(j)
             cost_idx = 1 if c == self.env.high_cost else 0
-            info_state[i,j,cost_idx] += 1
-        node_id = tuple(info_state.flatten())
+            init_info_state[i,j,cost_idx] += 1
+        node_id = tuple(init_info_state.flatten())
         return node_id
 
     ## tree step
@@ -484,7 +486,8 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         terminated = action_leaf.terminated
 
         ## get the next node id, i.e. the informational state after taking this path
-        next_node_id = self.init_node_id(simulated_obs)
+        init_info_state = np.array(action_leaf.parent_id).reshape(self.N, self.N, 2)
+        next_node_id = self.init_node_id(simulated_obs, init_info_state)
 
         ## since the agent has chosen a path to the goal, we need to move the environment to the next episode
         node_episode = step_ep+1
@@ -508,8 +511,8 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         path_id = action_leaf.action
         starting_cost = 0
         for state in self.env.path_states[first_episode][path_id]:
-            cost = self.env.get_pred_cost(state)
-            # cost = self.env.predicted_costs[state[0], state[1]]
+            # cost = self.env.get_pred_cost(state)
+            cost = self.env.predicted_costs[state[0], state[1]]
             starting_cost += cost
         total_cost = starting_cost
 
@@ -520,7 +523,9 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         
         ## loop through remaining episodes
         depth = 0
-        for ep in range(action_leaf.episode+1, self.env.n_episodes):
+        remaining_ro_costs = []
+        ro_choices=[]
+        for ep in range(first_episode+1, self.env.n_episodes):
             depth+=1
 
             ## GREEDY: get the total cost of the two paths and return the better one
@@ -529,10 +534,17 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
                 path_states = self.env.path_states[ep][path_id]
                 ro_cost = 0
                 for state in path_states:
-                    cost = self.env.get_pred_cost(state)
-                    # cost = self.env.predicted_costs[state[0], state[1]]
-                    ro_cost += cost ## NEED TO DISCOUNT HERE!!!??
+                    # cost = self.env.get_pred_cost(state)
+                    cost = self.env.predicted_costs[state[0], state[1]]
+                    ro_cost += cost
                 path_costs.append(ro_cost)
+            # first_step_action = self.tree_path[0][1]
+            # if first_step_action == 0:
+            #     first_step_cost = path_costs[0]
+            #     print('first step cost:', first_step_cost)
+            #     print('RO ep:', ep,', costs:',path_costs)
+            remaining_ro_costs.append(np.max(path_costs))
+            ro_choices.append(np.argmax(path_costs))
             total_cost += np.max(path_costs) * self.discount_factor**depth
 
             ## RANDOM: randomly choose between the two paths
@@ -544,6 +556,7 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
             #     ro_cost += cost
 
         self.tree_costs.append(total_cost)
+        assert len(remaining_ro_costs)+first_episode+1 == self.env.n_episodes, 'remaining RO costs do not match number of episodes\n n remaining RO costs: {}, n episodes: {}'.format(len(remaining_ro_costs), self.env.n_episodes)
         return total_cost 
 
 
