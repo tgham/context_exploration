@@ -691,8 +691,8 @@ class MountainEnv(gym.Env):
         self._agent_location = get_next_state(self._agent_location, direction, self.N)
 
         ## get the predicted cost of the new state
-        # predicted_cost = self.predicted_costs[self._agent_location[0], self._agent_location[1]]
-        predicted_cost = self.get_pred_cost(self._agent_location)
+        predicted_cost = self.predicted_costs[self._agent_location[0], self._agent_location[1]]
+        # predicted_cost = self.get_pred_cost(self._agent_location)
 
         ## get the actual cost of the current state
         # current_cost = self.get_cost(self._agent_location)
@@ -770,12 +770,13 @@ class MountainEnv(gym.Env):
     
     ## take path
     def take_path(self, action_sequence):
+        states = []
         costs = []
         for action in action_sequence:
             current, cost, terminated, _, _ = self.step(action)
+            states.append(current)
             costs.append(cost)
-        path_cost = np.sum(costs)
-        return current, path_cost
+        return states, costs
         
 
 
