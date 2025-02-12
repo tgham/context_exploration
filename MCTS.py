@@ -473,15 +473,16 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         path_id = action_leaf.action
         assert self.env.episode == action_leaf.episode, 'episode mismatch between env and tree\n env: {} \n tree: {}\n MCTS: {}'.format(self.env.episode, action_leaf.episode, self.actual_episode)
         step_ep = action_leaf.episode
-        actions = self.env.path_actions[step_ep][path_id]
-        simulated_obs = []
-        costs = []
-        for action in actions:
-            next_state, cost, _, _, _ = self.env.step(action)
-            costs.append(cost)
-            simulated_obs.append(np.append(next_state, cost))
-        cost = costs ## rename for consistency...
-        self.tree_costs.append(np.sum(cost))
+        action_sequence = self.env.path_actions[step_ep][path_id]
+
+        ## initialise costs and observations for this path
+        # simulated_obs = []
+        simulated_obs = [np.append(start_tmp, self.env.predicted_costs[start_tmp[0], start_tmp[1]])] ## if the agent hasn't already observed the start state
+
+        ## take path
+        states, costs = self.env.take_path(action_sequence)
+        simulated_obs += [np.append(s, c) for s, c in zip(states, costs)]
+        self.tree_costs.append(np.sum(costs))
         next_state = start_tmp ## I think this is correct, since the agent always regenerates to the same start state
         terminated = action_leaf.terminated
 
@@ -497,7 +498,7 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         ## some checks
         assert len(self.tree_costs)<=self.env.n_episodes, 'tree costs exceed number of episodes, tree len: {}, n_eps: {}'.format(len(self.tree_costs), self.env.n_episodes)
 
-        return next_state, cost, terminated, node_episode, next_node_id
+        return next_state, costs, terminated, node_episode, next_node_id
     
     ## rollout policy
     def rollout_policy(self, action_leaf):
@@ -511,8 +512,8 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         path_id = action_leaf.action
         starting_cost = 0
         for state in self.env.path_states[first_episode][path_id]:
-            cost = self.env.get_pred_cost(state)
-            # cost = self.env.predicted_costs[state[0], state[1]]
+            # cost = self.env.get_pred_cost(state)
+            cost = self.env.predicted_costs[state[0], state[1]]
             starting_cost += cost
         total_cost = starting_cost
 
@@ -534,8 +535,8 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
                 path_states = self.env.path_states[ep][path_id]
                 ro_cost = 0
                 for state in path_states:
-                    cost = self.env.get_pred_cost(state)
-                    # cost = self.env.predicted_costs[state[0], state[1]]
+                    # cost = self.env.get_pred_cost(state)
+                    cost = self.env.predicted_costs[state[0], state[1]]
                     ro_cost += cost
                 path_costs.append(ro_cost)
             # first_step_action = self.tree_path[0][1]
@@ -564,6 +565,7 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
 
 ## parallel function for simulating many episodes within the same mountain env
 def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episodes=10, agents = ['GP', 'GP-MCTS', 'BAMCP','CE'], n_sims=1000, n_futures=0, n_iter=10, lazy=False, exploration_constant=2, discount_factor=0.95, progress=False, offline=False):
+    print(' ') # for some reason need this to get the pbar to appear
     
     ## initiate dictionary to store the results
     sim_out = {}
@@ -593,8 +595,9 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
     ## initialise farmer
     farmer = Farmer(N)
 
+    ## number of iterations of the same mountain? IN THIS CASE, PROBS EASIER TO USE GET_COST RATHER THAN COSTS[X,Y] TO ALLOW FOR STOCHASTICITY ACROSS ENVS?
+
     ## loop through episodes (i.e. different start and goal states for the same mountain)
-    print(' ') # for some reason need this to get the pbar to appear
     tree_reset = True ## to determine whether tree is reset at the start of each episode
     for e in tqdm(range(n_episodes), desc='Mountain_'+str(m), position=m+1, leave=False):
 
@@ -627,6 +630,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
             goal = env_copy.goal
             actions = []
             CE_actions = []
+            Q_values = []
             ELDs = []
             EKLs = []
             
@@ -647,11 +651,13 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
                     MCTS = MonteCarloTreeSearch_Free(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
                 elif expt == '2AFC':
                     MCTS = MonteCarloTreeSearch_2AFC(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
-                tree_reset = False
             
             ## if keeping the tree between episodes, need to update tree with new episode info
             elif ((ag == 'BAMCP') or (ag == 'BAMCP w/ CE')) & (not tree_reset):
                 MCTS.update_episode()
+                tree_reset = True
+            assert e == env_copy.episode, 'episode mismatch between simulation and env\n simulation: {} \n env: {}'.format(e, MCTS.env.episode)
+            assert e == MCTS.actual_episode, 'episode mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(e, MCTS.env.episode)
 
         
             ## run episode until goal is reached
@@ -753,27 +759,26 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
                     if not offline:
 
                         ## search
-                        # action = MCTS.search(n_sims, n_futures, progress=progress)
+                        n_sims_tmp = n_sims
+                        action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures, n_iter=n_iter, lazy=lazy, progress=progress, reuse_samples=reuse_samples)
 
                         ## reduce number of sims if near to the goal (A BETTER IDEA WLD BE TO REDUCE THE DISTANCE IF THE TREE HAS REACHED THE GOAL)
-                        dist_to_goal = np.max(cdist([current, goal], [current, goal], metric='cityblock')) 
-                        if dist_to_goal > (N/2):
-                            n_sims_tmp = n_sims
-                            action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures, n_iter=n_iter, lazy=lazy, progress=progress, reuse_samples=reuse_samples)
-                        elif (dist_to_goal <= (N/2)) & (dist_to_goal > (N/4)):
-                            # n_sims_tmp = int(n_sims/2)
-                            n_sims_tmp = n_sims
-                            action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures, n_iter=n_iter, lazy=lazy, progress=progress, reuse_samples=reuse_samples)
-                        else:
-                            # n_sims_tmp = int(n_sims/4)
-                            n_sims_tmp = n_sims
-                            action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures,n_iter=n_iter, lazy=lazy,  progress=progress, reuse_samples=reuse_samples)
+                        # dist_to_goal = np.max(cdist([current, goal], [current, goal], metric='cityblock')) 
+                        # if dist_to_goal > (N/2):
+                        #     n_sims_tmp = n_sims
+                        #     action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures, n_iter=n_iter, lazy=lazy, progress=progress, reuse_samples=reuse_samples)
+                        # elif (dist_to_goal <= (N/2)) & (dist_to_goal > (N/4)):
+                        #     # n_sims_tmp = int(n_sims/2)
+                        #     n_sims_tmp = n_sims
+                        #     action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures, n_iter=n_iter, lazy=lazy, progress=progress, reuse_samples=reuse_samples)
+                        # else:
+                        #     # n_sims_tmp = int(n_sims/4)
+                        #     n_sims_tmp = n_sims
+                        #     action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures,n_iter=n_iter, lazy=lazy,  progress=progress, reuse_samples=reuse_samples)
                         actions.append(action)
+                        Q_values.append(MCTS_Q)
 
                         ### optional: check what the CE agent would have done with the mean of this set of samples
-                        # agent.dp(agent.posterior_mean_p_cost, expected_cost=True)
-                        # action_CE = agent.optimal_policy(current, agent.Q_inf)
-                        # CE_actions.append(action_CE)
 
                         ## ensure that all unobserved row and columns are set to the prior mean (i.e. proper CE)
                         all_posterior_ps_tmp = agent.all_posterior_ps.copy()
@@ -832,14 +837,15 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
                             #     current, cost, terminated, _, _ = env_copy.step(ac)
                             #     costs.append(cost)
                             # path_cost = np.sum(costs)
-                            current, path_cost = env_copy.take_path(action_sequence)
+                            states, costs = env_copy.take_path(action_sequence)
+                            current = states[-1]
+                            path_cost = np.sum(costs)
+                            terminated = True ## trivially true in 2AFC
                             block_terminated = e == (n_episodes-1)
 
                             ## update next node id
-                            init_info_state = np.array(MCTS.tree.root.node_id).reshape(N,N,2)
-                            next_node_id = MCTS.init_node_id(env_copy.obs, init_info_state)
-                            # next_node_id = np.append(start, costs) ## need to change this!!
-                            
+                            next_node_id = MCTS.init_node_id(env_copy.obs.copy(), None)
+
                         steps += 1
                         search_attempts = 0 # could do nan here
 
@@ -869,12 +875,24 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
 
                             ## pruning not always successful due to high branching factor, in which case reset the tree
                             if not block_terminated:
-                                if tuple(next_node_id) in MCTS.tree.root.action_leaves[action].children:
+
+                                if next_node_id in MCTS.tree.root.action_leaves[action].children:
                                     MCTS.tree.prune(action, next_node_id)
-                                    # assert np.array_equal(MCTS.tree.root.state[:2], current), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action) ## probs need to get rid of this??
                                     assert np.array_equal(MCTS.tree.root.state[2:], costs), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action) 
                                     tree_reset = False
+                                    # print('successful prune after action {}. new root has two leaves with a total of {} children'.format(action, np.sum(len(MCTS.tree.root.action_leaves[a].children) for a in MCTS.tree.root.action_leaves.keys())))
+                                    # for a in MCTS.tree.root.action_leaves.keys():
+                                    #     print('action:', a, ', n_children:', len(MCTS.tree.root.action_leaves[a].children))
+                                    #     for child in MCTS.tree.root.action_leaves[a].children:
+                                    #         print(np.sum(np.array(child).reshape(N,N,2), axis=2))
+                                    #         print()
                                 else:
+                                    # print('n_children:', len(MCTS.tree.root.action_leaves[action].children))
+                                    # for child in MCTS.tree.root.action_leaves[action].children.values():
+                                    #     print(child.node_id)
+                                    # print('unsuccessful prune after action {}'.format(action))
+                                    # print('failed to find:\n', next_node_id)
+                                    # print('next node id:', np.sum(np.array(next_node_id).reshape(N,N,2), axis=2))
                                     tree_reset = True
 
 
@@ -1014,7 +1032,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
                     # print()
 
                     ## reuse samples associated with the actual outcome on the next timestep
-                    reuse_samples = True
+                    # reuse_samples = True
 
 
 
@@ -1094,6 +1112,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
                     sim_out['start'].append(start)
                     sim_out['goal'].append(goal)
                     sim_out['actions'].append(actions)
+                    sim_out['Q_values'].append(Q_values)
                     sim_out['CE_actions'].append(CE_actions)
                     sim_out['optimal_actions'].append(env_copy.o_traj_actions[e])
                     sim_out['costs'].append(np.nan)
@@ -1139,6 +1158,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
                     sim_out['start'].append(start)
                     sim_out['goal'].append(goal)
                     sim_out['actions'].append(actions)
+                    sim_out['Q_values'].append(Q_values)
                     sim_out['CE_actions'].append(CE_actions)
                     sim_out['optimal_actions'].append(env_copy.o_traj_actions[e])
                     # if np.round(env_copy.optimal_cost,4) < np.round(env_copy.accrued_cost,4):
