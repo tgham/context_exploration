@@ -564,7 +564,7 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
 
 
 ## parallel function for simulating many episodes within the same mountain env
-def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episodes=10, agents = ['GP', 'GP-MCTS', 'BAMCP','CE'], n_sims=1000, n_futures=0, n_iter=10, lazy=False, exploration_constant=2, discount_factor=0.95, progress=False, offline=False):
+def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episodes=10, agents = ['GP', 'GP-MCTS', 'BAMCP','CE'], n_sims=1000,n_runs=1, n_futures=0, n_iter=10, lazy=False, exploration_constant=2, discount_factor=0.95, progress=False, offline=False):
     print(' ') # for some reason need this to get the pbar to appear
     
     ## initiate dictionary to store the results
@@ -585,648 +585,647 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
     # plot_r(env.p_costs, ax = ax, title=m)
     # plt.show()
 
-    ## copy env so that each agent makes its own observations 
-    # agent_envs = [copy.deepcopy(env) for _ in agents]
-    agent_envs = {}
-    for a in agents:
-        agent_envs[a] = copy.deepcopy(env)
+    ## loop through runs of the same mountain-episode set
+    for run in range(n_runs):
+
+        ## copy env so that each agent makes its own observations 
+        agent_envs = {}
+        for a in agents:
+            agent_envs[a] = copy.deepcopy(env)
 
 
-    ## initialise farmer
-    farmer = Farmer(N)
+        ## initialise farmer
+        farmer = Farmer(N)
 
-    ## number of iterations of the same mountain? IN THIS CASE, PROBS EASIER TO USE GET_COST RATHER THAN COSTS[X,Y] TO ALLOW FOR STOCHASTICITY ACROSS ENVS?
+        ## number of iterations of the same mountain? IN THIS CASE, PROBS EASIER TO USE GET_COST RATHER THAN COSTS[X,Y] TO ALLOW FOR STOCHASTICITY ACROSS ENVS?
 
-    ## loop through episodes (i.e. different start and goal states for the same mountain)
-    tree_reset = True ## to determine whether tree is reset at the start of each episode
-    for e in tqdm(range(n_episodes), desc='Mountain_'+str(m), position=m+1, leave=False):
+        ## loop through episodes (i.e. different start and goal states for the same mountain)
+        tree_reset = True ## to determine whether tree is reset at the start of each episode
+        for e in tqdm(range(n_episodes), desc='Mountain_'+str(m)+', run '+str(run+1)+'/'+str(n_runs), position=m+1, leave=False):
 
-        ## loop through agents
-        for a, ag in enumerate(agents):
-            
-            ### reset episode 
-
-            ## copy env for our base agents
-            if (ag=='BAMCP') or (ag=='CE'):
-                env_copy = agent_envs[ag]
-                env_copy.reset()
-                env_copy.set_sim(True)
-
-                ## save the state of these envs for our checker agents, so that we can imbue them with the same knowledge later on 
-                if (ag=='BAMCP') & ('CE w/ BAMCP' in agents):
-                    agent_envs['CE w/ BAMCP'] = copy.deepcopy(env_copy)
-                    assert np.array_equal(agent_envs['CE w/ BAMCP'].obs, env_copy.obs), 'obs do not match'
-                elif (ag=='CE') & ('BAMCP w/ CE' in agents):
-                    agent_envs['BAMCP w/ CE'] = copy.deepcopy(env_copy)
-                    assert np.array_equal(agent_envs['BAMCP w/ CE'].obs, env_copy.obs), 'obs do not match'
-
-            ## or, load env for our checker agents
-            else:
-                env_copy = agent_envs[ag]
-                env_copy.set_sim(True)
-
-            start = env_copy.current
-            current = start
-            goal = env_copy.goal
-            actions = []
-            CE_actions = []
-            Q_values = []
-            ELDs = []
-            EKLs = []
-            
-
-            ## GP-MCTS agent receives info from env
-            if ag =='GP-MCTS':
-                # K_inf = env_copy.K_gen.copy()
-                # K_inf = None
-                agent = GP
-            elif (ag == 'BAMCP') or (ag == 'CE') or (ag=='BAMCP w/ CE') or (ag=='CE w/ BAMCP'):
-                agent = farmer
-            agent.get_env_info(env_copy)
-
-            ## reset tree
-            if ((ag == 'BAMCP') or (ag == 'BAMCP w/ CE')) & tree_reset:
-                tree = Tree(N)
-                if expt == 'free':
-                    MCTS = MonteCarloTreeSearch_Free(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
-                elif expt == '2AFC':
-                    MCTS = MonteCarloTreeSearch_2AFC(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
-            
-            ## if keeping the tree between episodes, need to update tree with new episode info
-            elif ((ag == 'BAMCP') or (ag == 'BAMCP w/ CE')) & (not tree_reset):
-                MCTS.update_episode()
-                tree_reset = True
-            assert e == env_copy.episode, 'episode mismatch between simulation and env\n simulation: {} \n env: {}'.format(e, MCTS.env.episode)
-            assert e == MCTS.actual_episode, 'episode mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(e, MCTS.env.episode)
-
-        
-            ## run episode until goal is reached
-            end_episode = False
-            terminated=False
-            early_terminate = False
-            reuse_samples = False
-            steps = 0
-            max_steps = len(env_copy.o_trajs[e])*1.75
-            max_search_attempts = 3
-
-            while not end_episode:
-
-                ## plain balanced GP
-                if ag == 'GP':
-                    eps = 0.05
-                    alpha = 0.4
-                    action = env_copy.balanced_policy(current, goal, eps, alpha)
-                    actions.append(action)
-
-                    ## action
-                    current, _, terminated, truncated, _ = env_copy.step(action)
-                    # current = observation['agent']
-                    steps += 1
-
-                    search_attempts = 0 # could do nan
-
-                ## certainty-equivalent
-                elif (ag == 'CE') or (ag == 'CE w/ BAMCP'):
-                    env_copy.set_sim(False)
-
-                    ## get posterior mean grid
-                    agent.root_samples(obs=env_copy.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy,CE=True)
-                    env_copy.receive_predictions(agent.posterior_mean_p_cost)
-
-
-                    ## plot for debugging?
-                    # _, axs = plt.subplots(1, 3, figsize=(10,5))
-                    # plot_r(env_copy.p_costs.reshape(N,N), ax=axs[0], title = 'costs')
-                    # plot_traj([env_copy.o_trajs[e], env_copy.a_traj], ax=axs[0])
-                    # plot_r(env_copy.predicted_p_costs, ax=axs[1], title = 'posterior mean p cost')
-                    # plot_action_tree(agent.Q_inf, current, goal, ax=axs[2], title = 'DP_inf')
-                    # plt.show()
-
-                    ## get and take action
-                    if expt == 'free':
-
-                        ## dynamic programming under this posterior mean
-                        agent.dp(agent.posterior_mean_p_cost, expected_cost=True)
-
-                        ## best action as given by DP solution
-                        action = agent.optimal_policy(current, agent.Q_inf)
-                        actions.append(action)
-                        current, _, terminated, _, _ = env_copy.step(action)
-                        
-                    elif expt == '2AFC':
-
-                        ## get the cost of each path under the posterior mean
-                        path_costs = []
-                        for path_id in range(env_copy.n_afc):
-                            path_states = env_copy.path_states[e][path_id]
-                            path_cost = 0
-                            for state in path_states:
-                                path_cost += env_copy.get_pred_cost(state) ## i.e. sample binary costs from the posterior pqs
-                                # path_cost += agent.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-agent.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost ## or, use expected costs
-                            path_costs.append(path_cost)
-
-                        ## choose the path with the lowest total cost
-                        max_cost = np.max(path_costs)
-                        action = argm(path_costs, max_cost)
-                        actions.append(action)
-                        action_sequence = env_copy.path_actions[e][action]
-                        costs = []
-                        for ac in action_sequence:
-                            current, cost, terminated, _, _ = env_copy.step(ac)
-                            costs.append(cost)
-                        path_cost = np.sum(costs)
-                        block_terminated = e == (n_episodes-1)
-                    steps += 1
-                    search_attempts = 0 # could do nan
-
-                    ## update observations
-                    agent.get_env_info(env_copy)
-
-
-
-
-                ## bamcp
-                elif (ag == 'BAMCP') or (ag == 'BAMCP w/ CE'):
-                    env_copy.set_sim(True)
-                    MCTS.actual_state = current
-                    
-                    ## init MCTS (if resetting the tree for each move, init here. otherwise, this should be outside the episode loop)
-                    # tree = Tree(N)
-                    # MCTS = MonteCarloTreeSearch(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
-                    assert MCTS.env.sim == True, 'env not in sim mode'
+            ## loop through agents
+            for a, ag in enumerate(agents):
                 
-                    ## if online planning (i.e. replan after each step)
-                    if not offline:
+                ### reset episode 
 
-                        ## search
-                        n_sims_tmp = n_sims
-                        action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures, n_iter=n_iter, lazy=lazy, progress=progress, reuse_samples=reuse_samples)
+                ## copy env for our base agents
+                if (ag=='BAMCP') or (ag=='CE'):
+                    env_copy = agent_envs[ag]
+                    env_copy.reset()
+                    env_copy.set_sim(True)
 
-                        ## reduce number of sims if near to the goal (A BETTER IDEA WLD BE TO REDUCE THE DISTANCE IF THE TREE HAS REACHED THE GOAL)
-                        # dist_to_goal = np.max(cdist([current, goal], [current, goal], metric='cityblock')) 
-                        # if dist_to_goal > (N/2):
-                        #     n_sims_tmp = n_sims
-                        #     action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures, n_iter=n_iter, lazy=lazy, progress=progress, reuse_samples=reuse_samples)
-                        # elif (dist_to_goal <= (N/2)) & (dist_to_goal > (N/4)):
-                        #     # n_sims_tmp = int(n_sims/2)
-                        #     n_sims_tmp = n_sims
-                        #     action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures, n_iter=n_iter, lazy=lazy, progress=progress, reuse_samples=reuse_samples)
-                        # else:
-                        #     # n_sims_tmp = int(n_sims/4)
-                        #     n_sims_tmp = n_sims
-                        #     action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures,n_iter=n_iter, lazy=lazy,  progress=progress, reuse_samples=reuse_samples)
+                    ## save the state of these envs for our checker agents, so that we can imbue them with the same knowledge later on 
+                    if (ag=='BAMCP') & ('CE w/ BAMCP' in agents):
+                        agent_envs['CE w/ BAMCP'] = copy.deepcopy(env_copy)
+                        assert np.array_equal(agent_envs['CE w/ BAMCP'].obs, env_copy.obs), 'obs do not match'
+                    elif (ag=='CE') & ('BAMCP w/ CE' in agents):
+                        agent_envs['BAMCP w/ CE'] = copy.deepcopy(env_copy)
+                        assert np.array_equal(agent_envs['BAMCP w/ CE'].obs, env_copy.obs), 'obs do not match'
+
+                ## or, load env for our checker agents
+                else:
+                    env_copy = agent_envs[ag]
+                    env_copy.set_sim(True)
+
+                start = env_copy.current
+                current = start
+                goal = env_copy.goal
+                actions = []
+                CE_actions = []
+                Q_values = []
+                ELDs = []
+                EKLs = []
+                
+
+                ## GP-MCTS agent receives info from env
+                if ag =='GP-MCTS':
+                    # K_inf = env_copy.K_gen.copy()
+                    # K_inf = None
+                    agent = GP
+                elif (ag == 'BAMCP') or (ag == 'CE') or (ag=='BAMCP w/ CE') or (ag=='CE w/ BAMCP'):
+                    agent = farmer
+                agent.get_env_info(env_copy)
+
+                ## reset tree
+                if ((ag == 'BAMCP') or (ag == 'BAMCP w/ CE')) & tree_reset:
+                    tree = Tree(N)
+                    if expt == 'free':
+                        MCTS = MonteCarloTreeSearch_Free(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
+                    elif expt == '2AFC':
+                        MCTS = MonteCarloTreeSearch_2AFC(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
+                
+                ## if keeping the tree between episodes, need to update tree with new episode info
+                elif ((ag == 'BAMCP') or (ag == 'BAMCP w/ CE')) & (not tree_reset):
+                    MCTS.update_episode()
+                    tree_reset = True
+                assert e == env_copy.episode, 'episode mismatch between simulation and env\n simulation: {} \n env: {}'.format(e, MCTS.env.episode)
+                assert e == MCTS.actual_episode, 'episode mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(e, MCTS.env.episode)
+
+            
+                ## run episode until goal is reached
+                end_episode = False
+                terminated=False
+                early_terminate = False
+                reuse_samples = False
+                steps = 0
+                max_steps = len(env_copy.o_trajs[e])*1.75
+                max_search_attempts = 3
+
+                while not end_episode:
+
+                    ## plain balanced GP
+                    if ag == 'GP':
+                        eps = 0.05
+                        alpha = 0.4
+                        action = env_copy.balanced_policy(current, goal, eps, alpha)
                         actions.append(action)
-                        Q_values.append(MCTS_Q)
 
-                        ### optional: check what the CE agent would have done with the mean of this set of samples
+                        ## action
+                        current, _, terminated, truncated, _ = env_copy.step(action)
+                        # current = observation['agent']
+                        steps += 1
 
-                        ## ensure that all unobserved row and columns are set to the prior mean (i.e. proper CE)
-                        all_posterior_ps_tmp = agent.all_posterior_ps.copy()
-                        all_posterior_qs_tmp = agent.all_posterior_qs.copy()
-                        for i in range(N):
-                            for o in env_copy.obs:
-                                if o[0] == i:
-                                    break
-                            else:
-                                all_posterior_ps_tmp[:,i] = env_copy.alpha_row / (env_copy.alpha_row + env_copy.beta_row)
-                        for j in range(N):
-                            for o in env_copy.obs:
-                                if o[1] == j:
-                                    break
-                            else:
-                                all_posterior_qs_tmp[:,j] = env_copy.alpha_col / (env_copy.alpha_col + env_copy.beta_col)
-                        all_posterior_p_costs_tmp = np.zeros((n_sims_tmp, N,N))
-                        for s in range(n_sims_tmp):
-                            all_posterior_p_costs_tmp[s] = np.outer(all_posterior_ps_tmp[s], all_posterior_qs_tmp[s])
-                        posterior_mean_p_cost_tmp = np.mean(all_posterior_p_costs_tmp, axis=0)
+                        search_attempts = 0 # could do nan
 
-                        ## get CE's action
-                        agent.dp(posterior_mean_p_cost_tmp, expected_cost=True)
-                        action_CE = agent.optimal_policy(current, agent.Q_inf)
-                        CE_actions.append(action_CE)
+                    ## certainty-equivalent
+                    elif (ag == 'CE') or (ag == 'CE w/ BAMCP'):
+                        env_copy.set_sim(False)
 
+                        ## get posterior mean grid
+                        agent.root_samples(obs=env_copy.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy,CE=True)
+                        env_copy.receive_predictions(agent.posterior_mean_p_cost)
 
 
                         ## plot for debugging?
-                        # print('next action: BAMCP action:', env_copy.action_labels[action],', CE action:', env_copy.action_labels[action_CE])
-                        # _, axs = plt.subplots(1, 3, figsize=(21,7))
-                        # plot_r(env_copy.p_costs.reshape(N,N), ax=axs[0], title = 'p_costs')
-                        # a_traj = np.zeros((len(env_copy.a_traj),3))
-                        # for i, a in enumerate(env_copy.a_traj):
-                        #     a_traj[i,:2] = a
-                        #     a_traj[i,2] = env_copy.costs[a[0], a[1]]
-                        # # plot_traj([env_copy.o_trajs[e], env_copy.a_traj], ax=axs[0])
-                        # plot_traj([env_copy.o_trajs[e], a_traj], ax=axs[0])
-                        # plot_r(agent.posterior_mean_p_cost, ax=axs[1], title = 'average posterior p cost')
-                        # plot_action_tree(agent.Q_inf, current, goal, ax=axs[2], title = 'CE_DP_inf')
+                        # _, axs = plt.subplots(1, 3, figsize=(10,5))
+                        # plot_r(env_copy.p_costs.reshape(N,N), ax=axs[0], title = 'costs')
+                        # plot_traj([env_copy.o_trajs[e], env_copy.a_traj], ax=axs[0])
+                        # plot_r(env_copy.predicted_p_costs, ax=axs[1], title = 'posterior mean p cost')
+                        # plot_action_tree(agent.Q_inf, current, goal, ax=axs[2], title = 'DP_inf')
                         # plt.show()
-                        # MCTS_Q_labelled = {env_copy.action_labels[k]:v for k,v in enumerate(MCTS_Q)}
-                        # if action != action_CE:
-                        #     print('MCTS Q:', MCTS_Q_labelled)
-                        #     print('n_visits of action leaves:',{env_copy.action_labels[k]:v.n_action_visits for k,v in MCTS.tree.root.action_leaves.items()})
 
-                        ## take action
-                        env_copy.set_sim(False)
-                        if expt=='free':
-                            current, cost, terminated, _, _ = env_copy.step(action)
-                            next_node_id = np.append(current,cost)
-                        elif expt=='2AFC':
+                        ## get and take action
+                        if expt == 'free':
+
+                            ## dynamic programming under this posterior mean
+                            agent.dp(agent.posterior_mean_p_cost, expected_cost=True)
+
+                            ## best action as given by DP solution
+                            action = agent.optimal_policy(current, agent.Q_inf)
+                            actions.append(action)
+                            current, _, terminated, _, _ = env_copy.step(action)
+                            
+                        elif expt == '2AFC':
+
+                            ## get the cost of each path under the posterior mean
+                            path_costs = []
+                            for path_id in range(env_copy.n_afc):
+                                path_states = env_copy.path_states[e][path_id]
+                                path_cost = 0
+                                for state in path_states:
+                                    # path_cost += env_copy.get_pred_cost(state) ## i.e. sample binary costs from the posterior pqs
+                                    path_cost += agent.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-agent.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost ## or, use expected costs
+                                path_costs.append(path_cost)
+
+                            ## choose the path with the lowest total cost
+                            max_cost = np.max(path_costs)
+                            action = argm(path_costs, max_cost)
+                            actions.append(action)
                             action_sequence = env_copy.path_actions[e][action]
-                            # costs = []
-                            # for ac in action_sequence:
-                            #     current, cost, terminated, _, _ = env_copy.step(ac)
-                            #     costs.append(cost)
-                            # path_cost = np.sum(costs)
-                            states, costs = env_copy.take_path(action_sequence)
-                            current = states[-1]
+                            costs = []
+                            for ac in action_sequence:
+                                current, cost, terminated, _, _ = env_copy.step(ac)
+                                costs.append(cost)
                             path_cost = np.sum(costs)
-                            terminated = True ## trivially true in 2AFC
                             block_terminated = e == (n_episodes-1)
-
-                            ## update next node id
-                            next_node_id = MCTS.init_node_id(env_copy.obs.copy(), None)
-
                         steps += 1
-                        search_attempts = 0 # could do nan here
-
-
-                        ## check for backtracking
-                        if len(actions)>1:
-                            # backtracked = np.abs(action-actions[-2]) ==2
-                            backtracked = np.array_equal(current, env_copy.a_traj[-3])
-                            if backtracked:
-                                # print(MCTS.tree.print_tree(MCTS.tree.root))
-                                # print('backtracked in state:', current,' back from ', env_copy.a_traj[-2])
-                                raise ValueError('backtracked in state:', current,' back from ', env_copy.a_traj[-2], ', en route to ', goal)
-                        
+                        search_attempts = 0 # could do nan
 
                         ## update observations
                         agent.get_env_info(env_copy)
 
-                        ### prune tree
-                        if expt=='free': 
-                            
-                            ## no need to prune at the end of the episode in free-choice expt, since the tree resets at this point
-                            if not terminated:
-                                MCTS.tree.prune(action, next_node_id)
-                                assert np.array_equal(MCTS.tree.root.state[:2], current), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action)
-
-                        elif expt=='2AFC':
-
-                            ## pruning not always successful due to high branching factor, in which case reset the tree
-                            if not block_terminated:
-
-                                if next_node_id in MCTS.tree.root.action_leaves[action].children:
-                                    MCTS.tree.prune(action, next_node_id)
-                                    assert np.array_equal(MCTS.tree.root.state[2:], costs), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action) 
-                                    tree_reset = False
-                                    # print('successful prune after action {}. new root has two leaves with a total of {} children'.format(action, np.sum(len(MCTS.tree.root.action_leaves[a].children) for a in MCTS.tree.root.action_leaves.keys())))
-                                    # for a in MCTS.tree.root.action_leaves.keys():
-                                    #     print('action:', a, ', n_children:', len(MCTS.tree.root.action_leaves[a].children))
-                                    #     for child in MCTS.tree.root.action_leaves[a].children:
-                                    #         print(np.sum(np.array(child).reshape(N,N,2), axis=2))
-                                    #         print()
-                                else:
-                                    # print('n_children:', len(MCTS.tree.root.action_leaves[action].children))
-                                    # for child in MCTS.tree.root.action_leaves[action].children.values():
-                                    #     print(child.node_id)
-                                    # print('unsuccessful prune after action {}'.format(action))
-                                    # print('failed to find:\n', next_node_id)
-                                    # print('next node id:', np.sum(np.array(next_node_id).reshape(N,N,2), axis=2))
-                                    tree_reset = True
 
 
-                    ## if offline planning (i.e. plan the full trajectory)
-                    elif offline:
-                        non_stuck_route=False
-                        search_attempts = 0
-                        while not non_stuck_route:
-                            search_attempts += 1
+
+                    ## bamcp
+                    elif (ag == 'BAMCP') or (ag == 'BAMCP w/ CE'):
+                        env_copy.set_sim(True)
+                        MCTS.actual_state = current
+                        
+                        ## init MCTS (if resetting the tree for each move, init here. otherwise, this should be outside the episode loop)
+                        # tree = Tree(N)
+                        # MCTS = MonteCarloTreeSearch(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
+                        assert MCTS.env.sim == True, 'env not in sim mode'
+                    
+                        ## if online planning (i.e. replan after each step)
+                        if not offline:
 
                             ## search
-                            action, MCTS_Q = MCTS.search(n_sims, n_futures, progress=progress, reuse_samples=reuse_samples)
+                            n_sims_tmp = n_sims
+                            action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures, n_iter=n_iter, lazy=lazy, progress=progress, reuse_samples=reuse_samples)
+
+                            ## reduce number of sims if near to the goal (A BETTER IDEA WLD BE TO REDUCE THE DISTANCE IF THE TREE HAS REACHED THE GOAL)
+                            # dist_to_goal = np.max(cdist([current, goal], [current, goal], metric='cityblock')) 
+                            # if dist_to_goal > (N/2):
+                            #     n_sims_tmp = n_sims
+                            #     action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures, n_iter=n_iter, lazy=lazy, progress=progress, reuse_samples=reuse_samples)
+                            # elif (dist_to_goal <= (N/2)) & (dist_to_goal > (N/4)):
+                            #     # n_sims_tmp = int(n_sims/2)
+                            #     n_sims_tmp = n_sims
+                            #     action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures, n_iter=n_iter, lazy=lazy, progress=progress, reuse_samples=reuse_samples)
+                            # else:
+                            #     # n_sims_tmp = int(n_sims/4)
+                            #     n_sims_tmp = n_sims
+                            #     action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures,n_iter=n_iter, lazy=lazy,  progress=progress, reuse_samples=reuse_samples)
                             actions.append(action)
+                            Q_values.append(MCTS_Q)
 
-                            ## get the trajectory from the tree
-                            MCTS.tree.action_tree()
-                            traj_states, traj_actions = MCTS.tree.best_traj(start, goal)
+                            ### optional: check what the CE agent would have done with the mean of this set of samples
 
-                            ## take the trajectory if it leads you to the goal
-                            if np.array_equal(traj_states[-1], goal):
-                                env_copy.set_sim(False)
-                                for state, action in zip(traj_states, traj_actions):
-                                    assert np.array_equal(state, current), 'error in trajectory execution\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, state, action)
-                                    current, _, terminated, _, _ = env_copy.step(action)
-                                    # current = observation['agent']
-                                    steps += 1
-                                    # if terminated:
-                                    #     break
-                                assert terminated
-                                non_stuck_route = True
+                            ## ensure that all unobserved row and columns are set to the prior mean (i.e. proper CE)
+                            all_posterior_ps_tmp = agent.all_posterior_ps.copy()
+                            all_posterior_qs_tmp = agent.all_posterior_qs.copy()
+                            for i in range(N):
+                                for o in env_copy.obs:
+                                    if o[0] == i:
+                                        break
+                                else:
+                                    all_posterior_ps_tmp[:,i] = env_copy.alpha_row / (env_copy.alpha_row + env_copy.beta_row)
+                            for j in range(N):
+                                for o in env_copy.obs:
+                                    if o[1] == j:
+                                        break
+                                else:
+                                    all_posterior_qs_tmp[:,j] = env_copy.alpha_col / (env_copy.alpha_col + env_copy.beta_col)
+                            all_posterior_p_costs_tmp = np.zeros((n_sims_tmp, N,N))
+                            for s in range(n_sims_tmp):
+                                all_posterior_p_costs_tmp[s] = np.outer(all_posterior_ps_tmp[s], all_posterior_qs_tmp[s])
+                            posterior_mean_p_cost_tmp = np.mean(all_posterior_p_costs_tmp, axis=0)
 
-                            ## if stuck, repeat the search
-                            else:
-                                print('mountain {}, episode {}: MCTS failed to find a path on search attempt {}'.format(m, e, search_attempts))
-                                ## plot the tree???
+                            ## get CE's action
+                            agent.dp(posterior_mean_p_cost_tmp, expected_cost=True)
+                            action_CE = agent.optimal_policy(current, agent.Q_inf)
+                            CE_actions.append(action_CE)
 
-                                # ## execute the path anyway?
-                                # env_copy.set_sim(False)
-                                # for state, action in zip(traj_states, traj_actions):
-                                #     assert np.array_equal(state, current), 'error in trajectory execution\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, state, action)
-                                #     observation, _, terminated, truncated = env_copy.step(action)
-                                #     current = observation['agent']
-                                #     steps += 1
-                                # MCTS.tree.root = MCTS.tree.nodes[str(current)]
-                                # env_copy.set_sim(True)
 
-                                ## give up if too many searches
-                                print('restarting search from ', MCTS.tree.root.state)
-                                if search_attempts>max_search_attempts:
-                                    early_terminate = True
-                                    print('mountain {}, epsiode {}: search attempts exceeded'.format(m, e))
-                                    break
 
-                
-                ### log determinant of covariance matrix
-                # if (ag=='BAMCP') or (ag=='BAMCP w/ CE'):
+                            ## plot for debugging?
+                            # print('next action: BAMCP action:', env_copy.action_labels[action],', CE action:', env_copy.action_labels[action_CE])
+                            # _, axs = plt.subplots(1, 3, figsize=(21,7))
+                            # plot_r(env_copy.p_costs.reshape(N,N), ax=axs[0], title = 'p_costs')
+                            # a_traj = np.zeros((len(env_copy.a_traj),3))
+                            # for i, a in enumerate(env_copy.a_traj):
+                            #     a_traj[i,:2] = a
+                            #     a_traj[i,2] = env_copy.costs[a[0], a[1]]
+                            # # plot_traj([env_copy.o_trajs[e], env_copy.a_traj], ax=axs[0])
+                            # plot_traj([env_copy.o_trajs[e], a_traj], ax=axs[0])
+                            # plot_r(agent.posterior_mean_p_cost, ax=axs[1], title = 'average posterior p cost')
+                            # plot_action_tree(agent.Q_inf, current, goal, ax=axs[2], title = 'CE_DP_inf')
+                            # plt.show()
+                            # MCTS_Q_labelled = {env_copy.action_labels[k]:v for k,v in enumerate(MCTS_Q)}
+                            # if action != action_CE:
+                            #     print('MCTS Q:', MCTS_Q_labelled)
+                            #     print('n_visits of action leaves:',{env_copy.action_labels[k]:v.n_action_visits for k,v in MCTS.tree.root.action_leaves.items()})
 
-                #     ## get prior p and q samples
-                #     prior_p_samples = agent.all_posterior_ps
-                #     prior_q_samples = agent.all_posterior_qs
-                #     prior_samples = np.vstack([prior_p_samples.T, prior_q_samples.T])
+                            ## take action
+                            env_copy.set_sim(False)
+                            if expt=='free':
+                                current, cost, terminated, _, _ = env_copy.step(action)
+                                next_node_id = np.append(current,cost)
+                            elif expt=='2AFC':
+                                action_sequence = env_copy.path_actions[e][action]
+                                states, costs = env_copy.take_path(action_sequence)
+                                current = states[-1]
+                                path_cost = np.sum(costs)
+                                terminated = True ## trivially true in 2AFC
+                                block_terminated = e == (n_episodes-1)
 
-                #     ## log det of prior covariance matrix 
-                #     # prior_cov = np.cov(prior_samples)
-                #     # prior_LD = np.linalg.slogdet(prior_cov)[1]
-                #     # assert prior_cov.shape[0] == N*2, 'covariance matrix is wrong shape'
+                                ## update next node id
+                                next_node_id = MCTS.init_node_id(env_copy.obs.copy(), None)
+
+                            steps += 1
+                            search_attempts = 0 # could do nan here
+
+
+                            ## check for backtracking
+                            if len(actions)>1:
+                                # backtracked = np.abs(action-actions[-2]) ==2
+                                backtracked = np.array_equal(current, env_copy.a_traj[-3])
+                                if backtracked:
+                                    # print(MCTS.tree.print_tree(MCTS.tree.root))
+                                    # print('backtracked in state:', current,' back from ', env_copy.a_traj[-2])
+                                    raise ValueError('backtracked in state:', current,' back from ', env_copy.a_traj[-2], ', en route to ', goal)
+                            
+
+                            ## update observations
+                            agent.get_env_info(env_copy)
+
+                            ### prune tree
+                            if expt=='free': 
+                                
+                                ## no need to prune at the end of the episode in free-choice expt, since the tree resets at this point
+                                if not terminated:
+                                    MCTS.tree.prune(action, next_node_id)
+                                    assert np.array_equal(MCTS.tree.root.state[:2], current), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action)
+
+                            elif expt=='2AFC':
+
+                                ## pruning not always successful due to high branching factor, in which case reset the tree
+                                if not block_terminated:
+
+                                    if next_node_id in MCTS.tree.root.action_leaves[action].children:
+                                        MCTS.tree.prune(action, next_node_id)
+                                        assert np.array_equal(MCTS.tree.root.state[2:], costs), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action) 
+                                        tree_reset = False
+                                        # print('successful prune after action {}. new root has two leaves with a total of {} children'.format(action, np.sum(len(MCTS.tree.root.action_leaves[a].children) for a in MCTS.tree.root.action_leaves.keys())))
+                                        # for a in MCTS.tree.root.action_leaves.keys():
+                                        #     print('action:', a, ', n_children:', len(MCTS.tree.root.action_leaves[a].children))
+                                        #     for child in MCTS.tree.root.action_leaves[a].children:
+                                        #         print(np.sum(np.array(child).reshape(N,N,2), axis=2))
+                                        #         print()
+                                    else:
+                                        # print('n_children:', len(MCTS.tree.root.action_leaves[action].children))
+                                        # for child in MCTS.tree.root.action_leaves[action].children.values():
+                                        #     print(child.node_id)
+                                        # print('unsuccessful prune after action {}'.format(action))
+                                        # print('failed to find:\n', next_node_id)
+                                        # print('next node id:', np.sum(np.array(next_node_id).reshape(N,N,2), axis=2))
+                                        tree_reset = True
+
+
+                        ## if offline planning (i.e. plan the full trajectory)
+                        elif offline:
+                            non_stuck_route=False
+                            search_attempts = 0
+                            while not non_stuck_route:
+                                search_attempts += 1
+
+                                ## search
+                                action, MCTS_Q = MCTS.search(n_sims, n_futures, progress=progress, reuse_samples=reuse_samples)
+                                actions.append(action)
+
+                                ## get the trajectory from the tree
+                                MCTS.tree.action_tree()
+                                traj_states, traj_actions = MCTS.tree.best_traj(start, goal)
+
+                                ## take the trajectory if it leads you to the goal
+                                if np.array_equal(traj_states[-1], goal):
+                                    env_copy.set_sim(False)
+                                    for state, action in zip(traj_states, traj_actions):
+                                        assert np.array_equal(state, current), 'error in trajectory execution\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, state, action)
+                                        current, _, terminated, _, _ = env_copy.step(action)
+                                        # current = observation['agent']
+                                        steps += 1
+                                        # if terminated:
+                                        #     break
+                                    assert terminated
+                                    non_stuck_route = True
+
+                                ## if stuck, repeat the search
+                                else:
+                                    print('mountain {}, episode {}: MCTS failed to find a path on search attempt {}'.format(m, e, search_attempts))
+                                    ## plot the tree???
+
+                                    # ## execute the path anyway?
+                                    # env_copy.set_sim(False)
+                                    # for state, action in zip(traj_states, traj_actions):
+                                    #     assert np.array_equal(state, current), 'error in trajectory execution\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, state, action)
+                                    #     observation, _, terminated, truncated = env_copy.step(action)
+                                    #     current = observation['agent']
+                                    #     steps += 1
+                                    # MCTS.tree.root = MCTS.tree.nodes[str(current)]
+                                    # env_copy.set_sim(True)
+
+                                    ## give up if too many searches
+                                    print('restarting search from ', MCTS.tree.root.state)
+                                    if search_attempts>max_search_attempts:
+                                        early_terminate = True
+                                        print('mountain {}, epsiode {}: search attempts exceeded'.format(m, e))
+                                        break
+
                     
-                    
-                #     ## order the outcomes (counterfactual, then actual. This is to allow reuse of the posterior samples associated with the actual outcome on the next timestep)
-                #     actual_outcome = env_copy.obs.copy()[-1, -1]
-                #     if actual_outcome == env_copy.low_cost:
-                #         ordered_outcomes = [env_copy.high_cost, env_copy.low_cost]
-                #     else:
-                #         ordered_outcomes = [env_copy.low_cost, env_copy.high_cost]
-                #     posterior_LDs = []
-                #     KLs = []
+                    ### log determinant of covariance matrix
+                    # if (ag=='BAMCP') or (ag=='BAMCP w/ CE'):
 
-                #     ## posterior samples under each of the possible outcomes of the action that was just taken
-                #     for o, outcome in enumerate(ordered_outcomes):
-                #         sim_obs = env_copy.obs.copy()
-                #         sim_obs[-1, -1] = outcome
-                #         agent.root_samples(sim_obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy, CE=False)
-                #         posterior_samples = np.vstack([np.array(agent.all_posterior_ps).T, np.array(agent.all_posterior_qs).T])
+                    #     ## get prior p and q samples
+                    #     prior_p_samples = agent.all_posterior_ps
+                    #     prior_q_samples = agent.all_posterior_qs
+                    #     prior_samples = np.vstack([prior_p_samples.T, prior_q_samples.T])
+
+                    #     ## log det of prior covariance matrix 
+                    #     # prior_cov = np.cov(prior_samples)
+                    #     # prior_LD = np.linalg.slogdet(prior_cov)[1]
+                    #     # assert prior_cov.shape[0] == N*2, 'covariance matrix is wrong shape'
                         
-                #         ## posterior log det
-                #         # posterior_cov = np.cov(posterior_samples)
-                #         # assert posterior_cov.shape == prior_cov.shape, 'prior and posterior covariance matrices do not match: {} vs {}'.format(posterior_cov.shape, prior_cov.shape)
-                #         # LD = np.linalg.slogdet(posterior_cov)[1]
-                #         # posterior_LDs.append(LD)
+                        
+                    #     ## order the outcomes (counterfactual, then actual. This is to allow reuse of the posterior samples associated with the actual outcome on the next timestep)
+                    #     actual_outcome = env_copy.obs.copy()[-1, -1]
+                    #     if actual_outcome == env_copy.low_cost:
+                    #         ordered_outcomes = [env_copy.high_cost, env_copy.low_cost]
+                    #     else:
+                    #         ordered_outcomes = [env_copy.low_cost, env_copy.high_cost]
+                    #     posterior_LDs = []
+                    #     KLs = []
 
-                #         ## or, calculate the KL divergence between two multivariate gaussians
-                #         KL = KL_divergence(prior_samples, posterior_samples)
-                #         KLs.append(KL)
+                    #     ## posterior samples under each of the possible outcomes of the action that was just taken
+                    #     for o, outcome in enumerate(ordered_outcomes):
+                    #         sim_obs = env_copy.obs.copy()
+                    #         sim_obs[-1, -1] = outcome
+                    #         agent.root_samples(sim_obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy, CE=False)
+                    #         posterior_samples = np.vstack([np.array(agent.all_posterior_ps).T, np.array(agent.all_posterior_qs).T])
+                            
+                    #         ## posterior log det
+                    #         # posterior_cov = np.cov(posterior_samples)
+                    #         # assert posterior_cov.shape == prior_cov.shape, 'prior and posterior covariance matrices do not match: {} vs {}'.format(posterior_cov.shape, prior_cov.shape)
+                    #         # LD = np.linalg.slogdet(posterior_cov)[1]
+                    #         # posterior_LDs.append(LD)
 
-
-                #     ## expected log det, i.e. the difference between the prior and the expected posterior log dets, weighted by the probability of each outcome
-                #     # p_low = np.mean(prior_p_samples * prior_q_samples)
-                #     # p_high = 1 - p_low
-                #     # if actual_outcome == env_copy.low_cost:
-                #     #     expected_LD = p_low * (posterior_LDs[1] - prior_LD) + p_high * (posterior_LDs[0] - prior_LD)
-                #     # else:
-                #     #     expected_LD = p_low * (posterior_LDs[0] - prior_LD) + p_high * (posterior_LDs[1] - prior_LD)
-                #     # ELDs.append(expected_LD)
-
-                #     ## expected KL divergence
-                #     p_low = np.mean(prior_p_samples * prior_q_samples)
-                #     p_high = 1 - p_low
-                #     if actual_outcome == env_copy.low_cost:
-                #         expected_KL = p_low * (KLs[1]) + p_high * (KLs[0])
-                #     else:
-                #         expected_KL = p_low * (KLs[0]) + p_high * (KLs[1])
-                #     EKLs.append(expected_KL)
-
-                    ## debugging
-                    # print(ag)
-                    # if actual_outcome == env_copy.low_cost:
-                    #     print('posterior KLs: low = ',KLs[1], ', high = ',KLs[0], ', probs: ',p_low, p_high)
-                    # else:
-                    #     print('posterior KLs: low = ',KLs[0], ', high = ',KLs[1], ', probs: ',p_low, p_high)
-                    # print('expected KL: ',expected_KL)
-                    # print()
-
-                    ## reorder the posterior LDs to match low and high cost outcomes (i.e. 0th element is the low cost outcome)
-                    # if ordered_outcomes[1] == env_copy.low_cost:
-                    #     posterior_LDs = [posterior_LDs[1], posterior_LDs[0]]
-                    # expected_LD2 = p_low * (posterior_LDs[0] - prior_LD) + p_high * (posterior_LDs[1] - prior_LD)
-                    # assert expected_LD==expected_LD2, 'expected LDs when actual outcome is {} do not match: {} vs {}'.format(actual_outcome, expected_LD, expected_LD2)
-
-                    # CE_deviation = action==action_CE
-                    # print('action {} deviate from CE'.format(['did','did not'][CE_deviation]))
-                    # print('prior LD: ',prior_LD)
-                    # if actual_outcome == env_copy.low_cost:
-                    #     print('posterior LDs: low = ',posterior_LDs[1], ', high = ',posterior_LDs[0], ', probs: ',p_low, p_high)
-                    # else:
-                    #     print('posterior LDs: low = ',posterior_LDs[0], ', high = ',posterior_LDs[1], ', probs: ',p_low, p_high)
-                    # print('expected change in LD: ',expected_LD)
-                    # print()
-
-                    ## reuse samples associated with the actual outcome on the next timestep
-                    # reuse_samples = True
+                    #         ## or, calculate the KL divergence between two multivariate gaussians
+                    #         KL = KL_divergence(prior_samples, posterior_samples)
+                    #         KLs.append(KL)
 
 
+                    #     ## expected log det, i.e. the difference between the prior and the expected posterior log dets, weighted by the probability of each outcome
+                    #     # p_low = np.mean(prior_p_samples * prior_q_samples)
+                    #     # p_high = 1 - p_low
+                    #     # if actual_outcome == env_copy.low_cost:
+                    #     #     expected_LD = p_low * (posterior_LDs[1] - prior_LD) + p_high * (posterior_LDs[0] - prior_LD)
+                    #     # else:
+                    #     #     expected_LD = p_low * (posterior_LDs[0] - prior_LD) + p_high * (posterior_LDs[1] - prior_LD)
+                    #     # ELDs.append(expected_LD)
 
-                ### KL divergence
-                # if (ag=='BAMCP') or (ag=='BAMCP w/ CE'):
+                    #     ## expected KL divergence
+                    #     p_low = np.mean(prior_p_samples * prior_q_samples)
+                    #     p_high = 1 - p_low
+                    #     if actual_outcome == env_copy.low_cost:
+                    #         expected_KL = p_low * (KLs[1]) + p_high * (KLs[0])
+                    #     else:
+                    #         expected_KL = p_low * (KLs[0]) + p_high * (KLs[1])
+                    #     EKLs.append(expected_KL)
 
-                #     ## get the relevant prior samples, i.e. the p and q samples for the state that has just been reached
-                #     i, j = current
-                #     prior_p_samples = MCTS.all_posterior_p[:,i]
-                #     prior_q_samples = MCTS.all_posterior_q[:,j]
+                        ## debugging
+                        # print(ag)
+                        # if actual_outcome == env_copy.low_cost:
+                        #     print('posterior KLs: low = ',KLs[1], ', high = ',KLs[0], ', probs: ',p_low, p_high)
+                        # else:
+                        #     print('posterior KLs: low = ',KLs[0], ', high = ',KLs[1], ', probs: ',p_low, p_high)
+                        # print('expected KL: ',expected_KL)
+                        # print()
 
-                #     ##clipping
-                #     prior_joint = np.vstack([prior_p_samples, prior_q_samples])
+                        ## reorder the posterior LDs to match low and high cost outcomes (i.e. 0th element is the low cost outcome)
+                        # if ordered_outcomes[1] == env_copy.low_cost:
+                        #     posterior_LDs = [posterior_LDs[1], posterior_LDs[0]]
+                        # expected_LD2 = p_low * (posterior_LDs[0] - prior_LD) + p_high * (posterior_LDs[1] - prior_LD)
+                        # assert expected_LD==expected_LD2, 'expected LDs when actual outcome is {} do not match: {} vs {}'.format(actual_outcome, expected_LD, expected_LD2)
 
-                #     ## debugging: plot kde of prior p and q samples
-                #     # fig, axs = plt.subplots(1, 3, figsize=(15,5))
-                #     # sns.kdeplot(prior_p_samples, ax=axs[0], label='prior p')
-                #     # sns.kdeplot(prior_q_samples, ax=axs[0], label='prior q')
-                #     # axs[0].set_title('prior')
-                #     # axs[0].legend()
+                        # CE_deviation = action==action_CE
+                        # print('action {} deviate from CE'.format(['did','did not'][CE_deviation]))
+                        # print('prior LD: ',prior_LD)
+                        # if actual_outcome == env_copy.low_cost:
+                        #     print('posterior LDs: low = ',posterior_LDs[1], ', high = ',posterior_LDs[0], ', probs: ',p_low, p_high)
+                        # else:
+                        #     print('posterior LDs: low = ',posterior_LDs[0], ', high = ',posterior_LDs[1], ', probs: ',p_low, p_high)
+                        # print('expected change in LD: ',expected_LD)
+                        # print()
 
-                #     ### simulate a set of posterior (root) samples under each of the possible outcomes of the action that was just taken
-                #     kl_divs = []
-                #     for o, outcome in enumerate([env_copy.low_cost, env_copy.high_cost]):
-                #         farmer_copy = copy.deepcopy(agent)
-                #         posterior_p_samples = []
-                #         posterior_q_samples = []
-                #         sim_obs = env_copy.obs.copy()
-                #         sim_obs[-1, -1] = outcome
-                #         state_to_update = np.array([i, j, outcome])
-                #         for t in range(n_sims):
-                #             farmer_copy.root_sample(sim_obs, lazy=True, CE=False, state=state_to_update)
-                #             posterior_p_samples.append(farmer_copy.posterior_p[i])
-                #             posterior_q_samples.append(farmer_copy.posterior_q[j])
-                #         posterior_joint = np.vstack([posterior_p_samples, posterior_q_samples])
-
-                #         # KL = KL_divergence(prior_joint, posterior_joint)
-
-                #         ## calculate KL divergence
-                #         kde_prior = gaussian_kde(prior_joint)
-                #         kde_posterior = gaussian_kde(posterior_joint)
-                #         eval_points = posterior_joint
-                #         p_posterior = kde_posterior.evaluate(eval_points)
-                #         p_prior = kde_prior.evaluate(eval_points)
-                #         kl_div = np.mean(np.log(p_posterior / p_prior))
-                #         kl_divs.append(kl_div)
-
-                #         ## debugging: plot kde of prior p and q samples
-                #         # sns.kdeplot(posterior_p_samples, ax=axs[o+1], label='posterior p')
-                #         # sns.kdeplot(posterior_q_samples, ax=axs[o+1], label='posterior q')
-                #         # axs[o+1].legend()
-                #         # axs[o+1].set_title('posterior for outcome {}'.format(outcome))
-                #     # plt.show()
-                    
-                #     # ## compute the expected KL divergence
-                #     p_low = np.mean(prior_p_samples * prior_q_samples) 
-                #     # p_low2 = np.mean(prior_p_samples) * np.mean(prior_q_samples)
-                #     p_high = 1 - p_low
-                #     expected_kl_div = p_low * kl_divs[0] + p_high * kl_divs[1]
-                #     EKLs.append(expected_kl_div)
+                        ## reuse samples associated with the actual outcome on the next timestep
+                        # reuse_samples = True
 
 
 
-                
-                ## prevent endless episode 
-                if steps >= max_steps:
-                    early_terminate = True
+                    ### KL divergence
+                    # if (ag=='BAMCP') or (ag=='BAMCP w/ CE'):
 
-                if early_terminate:
-                    print('mountain ',m,': episode ',e,' terminated for agent ',ag,' after ',steps,' steps')
-                    # raise ValueError('mountain ',m,': episode ',e,' terminated for agent ',ag,' after ',steps,' steps')
+                    #     ## get the relevant prior samples, i.e. the p and q samples for the state that has just been reached
+                    #     i, j = current
+                    #     prior_p_samples = MCTS.all_posterior_p[:,i]
+                    #     prior_q_samples = MCTS.all_posterior_q[:,j]
 
-                    ## or just skip to the next episode
-                    sim_out['agent'].append(agent)
-                    sim_out['episode'].append(e)
-                    sim_out['mountain'].append(m)
-                    sim_out['start'].append(start)
-                    sim_out['goal'].append(goal)
-                    sim_out['actions'].append(actions)
-                    sim_out['Q_values'].append(Q_values)
-                    sim_out['CE_actions'].append(CE_actions)
-                    sim_out['optimal_actions'].append(env_copy.o_traj_actions[e])
-                    sim_out['costs'].append(np.nan)
-                    sim_out['optimal_costs'].append(env_copy.o_traj_costs[e])
-                    sim_out['total_cost'].append(np.nan)
-                    sim_out['total_optimal_cost'].append(env_copy.o_traj_total_costs[e])
-                    sim_out['action_score'].append(np.nan)
-                    sim_out['cost_ratio'].append(np.nan)
-                    sim_out['n_steps'].append(steps)
-                    sim_out['actual_trajectory'].append(env_copy.a_traj)
-                    sim_out['optimal_trajectory'].append(env_copy.o_trajs[e])
-                    sim_out['observations'].append(env_copy.obs)
-                    sim_out['search_attempts'].append(search_attempts)
-                    # sim_out['action_tree'].append(MCTS.tree.action_tree())
-                    sim_out['action_tree'].append(np.nan)
-                    sim_out['expected_LD'].append(ELDs)
-                    sim_out['expected_KL'].append(EKLs)
+                    #     ##clipping
+                    #     prior_joint = np.vstack([prior_p_samples, prior_q_samples])
 
-                    ## discounts
-                    sim_out['discounted_costs'].append(np.nan)
-                    sim_out['total_discounted_cost'].append(np.nan)
-                    discounts = [discount_factor**d for d in range(len(env_copy.o_trajs[e]))] ## NEED TO FIX THIS BUT DON'T HAVE TIME
-                    discounted_costs = [c*d for c,d in zip(env_copy.o_traj_costs[e], discounts)]
-                    sim_out['discounted_optimal_costs'].append(discounted_costs)
-                    sim_out['total_discounted_optimal_cost'].append(np.sum(discounted_costs))
-                    
-                    ## GP-specific
-                    # sim_out['true_k'].append(true_k)
-                    # sim_out['RPE'].append(np.nan)
-                    # sim_out['posterior_mean'].append(np.nan)
-                    # sim_out['theta_MLE'].append(best_theta)
+                    #     ## debugging: plot kde of prior p and q samples
+                    #     # fig, axs = plt.subplots(1, 3, figsize=(15,5))
+                    #     # sns.kdeplot(prior_p_samples, ax=axs[0], label='prior p')
+                    #     # sns.kdeplot(prior_q_samples, ax=axs[0], label='prior q')
+                    #     # axs[0].set_title('prior')
+                    #     # axs[0].legend()
 
-                    end_episode = True
+                    #     ### simulate a set of posterior (root) samples under each of the possible outcomes of the action that was just taken
+                    #     kl_divs = []
+                    #     for o, outcome in enumerate([env_copy.low_cost, env_copy.high_cost]):
+                    #         farmer_copy = copy.deepcopy(agent)
+                    #         posterior_p_samples = []
+                    #         posterior_q_samples = []
+                    #         sim_obs = env_copy.obs.copy()
+                    #         sim_obs[-1, -1] = outcome
+                    #         state_to_update = np.array([i, j, outcome])
+                    #         for t in range(n_sims):
+                    #             farmer_copy.root_sample(sim_obs, lazy=True, CE=False, state=state_to_update)
+                    #             posterior_p_samples.append(farmer_copy.posterior_p[i])
+                    #             posterior_q_samples.append(farmer_copy.posterior_q[j])
+                    #         posterior_joint = np.vstack([posterior_p_samples, posterior_q_samples])
 
-                    ## stop the sim here!
-                    return sim_out, env_copy.p_costs
+                    #         # KL = KL_divergence(prior_joint, posterior_joint)
 
-                ## save data and end the episode
-                elif terminated:
-                    sim_out['agent'].append(ag)
-                    sim_out['episode'].append(e)
-                    sim_out['mountain'].append(m)
-                    sim_out['start'].append(start)
-                    sim_out['goal'].append(goal)
-                    sim_out['actions'].append(actions)
-                    sim_out['Q_values'].append(Q_values)
-                    sim_out['CE_actions'].append(CE_actions)
-                    sim_out['optimal_actions'].append(env_copy.o_traj_actions[e])
-                    # if np.round(env_copy.optimal_cost,4) < np.round(env_copy.accrued_cost,4):
-                    #     print(env_copy.optimal_cost, env_copy.accrued_cost)
-                    # assert np.round(env_copy.optimal_cost,4) >= np.round(env_copy.accrued_cost,4), 'accrued cost higher than optimal cost'
-                    # sim_out['action_score'].append(env_copy.optimal_cost/env_copy.accrued_cost)
-                    sim_out['action_score'].append(env_copy.action_score)
-                    sim_out['cost_ratio'].append(env_copy.cost_ratio)
-                    sim_out['n_steps'].append(steps)
-                    sim_out['actual_trajectory'].append(env_copy.a_traj)
-                    sim_out['optimal_trajectory'].append(env_copy.o_trajs[e])
-                    sim_out['observations'].append(env_copy.obs)
-                    sim_out['search_attempts'].append(search_attempts)
-                    # sim_out['action_tree'].append(MCTS.tree.action_tree())
-                    sim_out['action_tree'].append(np.nan)
-                    sim_out['expected_LD'].append(ELDs)
-                    sim_out['expected_KL'].append(EKLs)
+                    #         ## calculate KL divergence
+                    #         kde_prior = gaussian_kde(prior_joint)
+                    #         kde_posterior = gaussian_kde(posterior_joint)
+                    #         eval_points = posterior_joint
+                    #         p_posterior = kde_posterior.evaluate(eval_points)
+                    #         p_prior = kde_prior.evaluate(eval_points)
+                    #         kl_div = np.mean(np.log(p_posterior / p_prior))
+                    #         kl_divs.append(kl_div)
 
-                    ### costs
-
-                    ## actual costs
-                    sim_out['costs'].append(env_copy.a_traj_costs)
-                    sim_out['optimal_costs'].append(env_copy.o_traj_costs[e])
-                   
-                    # INC START AND END COSTS
-                    # sim_out['total_cost'].append(env_copy.a_traj_total_cost) 
-                    # sim_out['total_optimal_cost'].append(env_copy.o_traj_total_costs[e])
-
-                    # EXC START AND END COSTS
-                    sim_out['total_cost'].append(np.sum(env_copy.a_traj_costs[1:-1]))
-                    sim_out['total_optimal_cost'].append(np.sum(env_copy.o_traj_costs[e][1:-1]))
+                    #         ## debugging: plot kde of prior p and q samples
+                    #         # sns.kdeplot(posterior_p_samples, ax=axs[o+1], label='posterior p')
+                    #         # sns.kdeplot(posterior_q_samples, ax=axs[o+1], label='posterior q')
+                    #         # axs[o+1].legend()
+                    #         # axs[o+1].set_title('posterior for outcome {}'.format(outcome))
+                    #     # plt.show()
+                        
+                    #     # ## compute the expected KL divergence
+                    #     p_low = np.mean(prior_p_samples * prior_q_samples) 
+                    #     # p_low2 = np.mean(prior_p_samples) * np.mean(prior_q_samples)
+                    #     p_high = 1 - p_low
+                    #     expected_kl_div = p_low * kl_divs[0] + p_high * kl_divs[1]
+                    #     EKLs.append(expected_kl_div)
 
 
-
-                    ## calculate discounted actual and optimal costs
-
-                    ## INC START AND END COSTS
-                    # discounts = [discount_factor**d for d in range(len(env_copy.a_traj_costs))] 
-                    # discounted_costs = [c*d for c,d in zip(env_copy.a_traj_costs, discounts)]
-                    # sim_out['discounted_costs'].append(discounted_costs)
-                    # sim_out['total_discounted_cost'].append(np.sum(discounted_costs))
-                    # discounts = [discount_factor**d for d in range(len(env_copy.o_trajs[e]))]
-                    # discounted_costs = [c*d for c,d in zip(env_copy.o_traj_costs[e], discounts)]
-                    # sim_out['discounted_optimal_costs'].append(discounted_costs)
-                    # sim_out['total_discounted_optimal_cost'].append(np.sum(discounted_costs))
-
-                    ## EXC START AND END COSTS
-                    discounts = [discount_factor**d for d in range(len(env_copy.a_traj_costs)-2)]
-                    discounted_costs = [c*d for c,d in zip(env_copy.a_traj_costs[1:-1], discounts)]
-                    sim_out['discounted_costs'].append(discounted_costs)
-                    sim_out['total_discounted_cost'].append(np.sum(discounted_costs))
-                    discounts = [discount_factor**d for d in range(len(env_copy.o_trajs[e])-2)]
-                    discounted_costs = [c*d for c,d in zip(env_copy.o_traj_costs[e][1:-1], discounts)]
-                    sim_out['discounted_optimal_costs'].append(discounted_costs)
-                    sim_out['total_discounted_optimal_cost'].append(np.sum(discounted_costs))
 
                     
-                    ## GP-specific
-                    # sim_out['true_k'].append(true_k)
-                    # sim_out['RPE'].append(np.mean(np.abs(GP.posterior_mean.reshape(N,N) - env_copy.costs)))
-                    # sim_out['posterior_mean'].append(GP.posterior_mean)
-                    # sim_out['theta_MLE'].append(best_theta)
-                    
-                    ## update the agent env
-                    # agent_envs[a] = copy.deepcopy(env_copy)
-                    agent_envs[ag] = env_copy
+                    ## prevent endless episode 
+                    if steps >= max_steps:
+                        early_terminate = True
 
-                    end_episode = True
+                    if early_terminate:
+                        print('mountain ',m,': episode ',e,' terminated for agent ',ag,' after ',steps,' steps')
+                        # raise ValueError('mountain ',m,': episode ',e,' terminated for agent ',ag,' after ',steps,' steps')
+
+                        ## or just skip to the next episode
+                        sim_out['agent'].append(agent)
+                        sim_out['run'].append(run)
+                        sim_out['episode'].append(e)
+                        sim_out['mountain'].append(m)
+                        sim_out['start'].append(start)
+                        sim_out['goal'].append(goal)
+                        sim_out['actions'].append(actions)
+                        sim_out['Q_values'].append(Q_values)
+                        sim_out['CE_actions'].append(CE_actions)
+                        sim_out['optimal_actions'].append(env_copy.o_traj_actions[e])
+                        sim_out['costs'].append(np.nan)
+                        sim_out['optimal_costs'].append(env_copy.o_traj_costs[e])
+                        sim_out['total_cost'].append(np.nan)
+                        sim_out['total_optimal_cost'].append(env_copy.o_traj_total_costs[e])
+                        sim_out['action_score'].append(np.nan)
+                        sim_out['cost_ratio'].append(np.nan)
+                        sim_out['n_steps'].append(steps)
+                        sim_out['actual_trajectory'].append(env_copy.a_traj)
+                        sim_out['optimal_trajectory'].append(env_copy.o_trajs[e])
+                        sim_out['observations'].append(env_copy.obs)
+                        sim_out['search_attempts'].append(search_attempts)
+                        # sim_out['action_tree'].append(MCTS.tree.action_tree())
+                        sim_out['action_tree'].append(np.nan)
+                        sim_out['expected_LD'].append(ELDs)
+                        sim_out['expected_KL'].append(EKLs)
+
+                        ## discounts
+                        sim_out['discounted_costs'].append(np.nan)
+                        sim_out['total_discounted_cost'].append(np.nan)
+                        discounts = [discount_factor**d for d in range(len(env_copy.o_trajs[e]))] ## NEED TO FIX THIS BUT DON'T HAVE TIME
+                        discounted_costs = [c*d for c,d in zip(env_copy.o_traj_costs[e], discounts)]
+                        sim_out['discounted_optimal_costs'].append(discounted_costs)
+                        sim_out['total_discounted_optimal_cost'].append(np.sum(discounted_costs))
+                        
+                        ## GP-specific
+                        # sim_out['true_k'].append(true_k)
+                        # sim_out['RPE'].append(np.nan)
+                        # sim_out['posterior_mean'].append(np.nan)
+                        # sim_out['theta_MLE'].append(best_theta)
+
+                        end_episode = True
+
+                        ## stop the sim here!
+                        return sim_out, env_copy.p_costs
+
+                    ## save data and end the episode
+                    elif terminated:
+                        sim_out['agent'].append(ag)
+                        sim_out['run'].append(run)
+                        sim_out['episode'].append(e)
+                        sim_out['mountain'].append(m)
+                        sim_out['start'].append(start)
+                        sim_out['goal'].append(goal)
+                        sim_out['actions'].append(actions)
+                        sim_out['Q_values'].append(Q_values)
+                        sim_out['CE_actions'].append(CE_actions)
+                        sim_out['optimal_actions'].append(env_copy.o_traj_actions[e])
+                        # if np.round(env_copy.optimal_cost,4) < np.round(env_copy.accrued_cost,4):
+                        #     print(env_copy.optimal_cost, env_copy.accrued_cost)
+                        # assert np.round(env_copy.optimal_cost,4) >= np.round(env_copy.accrued_cost,4), 'accrued cost higher than optimal cost'
+                        # sim_out['action_score'].append(env_copy.optimal_cost/env_copy.accrued_cost)
+                        sim_out['action_score'].append(env_copy.action_score)
+                        sim_out['cost_ratio'].append(env_copy.cost_ratio)
+                        sim_out['n_steps'].append(steps)
+                        sim_out['actual_trajectory'].append(env_copy.a_traj)
+                        sim_out['optimal_trajectory'].append(env_copy.o_trajs[e])
+                        sim_out['observations'].append(env_copy.obs)
+                        sim_out['search_attempts'].append(search_attempts)
+                        # sim_out['action_tree'].append(MCTS.tree.action_tree())
+                        sim_out['action_tree'].append(np.nan)
+                        sim_out['expected_LD'].append(ELDs)
+                        sim_out['expected_KL'].append(EKLs)
+
+                        ### costs
+
+                        ## actual costs
+                        sim_out['costs'].append(env_copy.a_traj_costs)
+                        sim_out['optimal_costs'].append(env_copy.o_traj_costs[e])
+                    
+                        # INC START AND END COSTS
+                        # sim_out['total_cost'].append(env_copy.a_traj_total_cost) 
+                        # sim_out['total_optimal_cost'].append(env_copy.o_traj_total_costs[e])
+
+                        # EXC START AND END COSTS
+                        sim_out['total_cost'].append(np.sum(env_copy.a_traj_costs[1:-1]))
+                        sim_out['total_optimal_cost'].append(np.sum(env_copy.o_traj_costs[e][1:-1]))
+
+
+
+                        ## calculate discounted actual and optimal costs
+
+                        ## INC START AND END COSTS
+                        # discounts = [discount_factor**d for d in range(len(env_copy.a_traj_costs))] 
+                        # discounted_costs = [c*d for c,d in zip(env_copy.a_traj_costs, discounts)]
+                        # sim_out['discounted_costs'].append(discounted_costs)
+                        # sim_out['total_discounted_cost'].append(np.sum(discounted_costs))
+                        # discounts = [discount_factor**d for d in range(len(env_copy.o_trajs[e]))]
+                        # discounted_costs = [c*d for c,d in zip(env_copy.o_traj_costs[e], discounts)]
+                        # sim_out['discounted_optimal_costs'].append(discounted_costs)
+                        # sim_out['total_discounted_optimal_cost'].append(np.sum(discounted_costs))
+
+                        ## EXC START AND END COSTS
+                        discounts = [discount_factor**d for d in range(len(env_copy.a_traj_costs)-2)]
+                        discounted_costs = [c*d for c,d in zip(env_copy.a_traj_costs[1:-1], discounts)]
+                        sim_out['discounted_costs'].append(discounted_costs)
+                        sim_out['total_discounted_cost'].append(np.sum(discounted_costs))
+                        discounts = [discount_factor**d for d in range(len(env_copy.o_trajs[e])-2)]
+                        discounted_costs = [c*d for c,d in zip(env_copy.o_traj_costs[e][1:-1], discounts)]
+                        sim_out['discounted_optimal_costs'].append(discounted_costs)
+                        sim_out['total_discounted_optimal_cost'].append(np.sum(discounted_costs))
+
+                        
+                        ## GP-specific
+                        # sim_out['true_k'].append(true_k)
+                        # sim_out['RPE'].append(np.mean(np.abs(GP.posterior_mean.reshape(N,N) - env_copy.costs)))
+                        # sim_out['posterior_mean'].append(GP.posterior_mean)
+                        # sim_out['theta_MLE'].append(best_theta)
+                        
+                        ## update the agent env
+                        # agent_envs[a] = copy.deepcopy(env_copy)
+                        agent_envs[ag] = env_copy
+
+                        end_episode = True
 
     return sim_out,env_copy
     # return sim_out, _
