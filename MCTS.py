@@ -586,7 +586,9 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
     # plt.show()
 
     ## loop through runs of the same mountain-episode set
-    for run in range(n_runs):
+    if n_runs > 1:
+        pbar = tqdm(total=n_runs*n_episodes, desc='Mountain_'+str(m)+', '+str(n_runs)+' runs, '+str(n_episodes)+' episodes', position=0, leave=False, ascii=True)
+    for run in range(n_runs):   
 
         ## copy env so that each agent makes its own observations 
         agent_envs = {}
@@ -597,11 +599,11 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
         ## initialise farmer
         farmer = Farmer(N)
 
-        ## number of iterations of the same mountain? IN THIS CASE, PROBS EASIER TO USE GET_COST RATHER THAN COSTS[X,Y] TO ALLOW FOR STOCHASTICITY ACROSS ENVS?
-
         ## loop through episodes (i.e. different start and goal states for the same mountain)
         tree_reset = True ## to determine whether tree is reset at the start of each episode
-        for e in tqdm(range(n_episodes), desc='Mountain_'+str(m)+', run '+str(run+1)+'/'+str(n_runs), position=m+1, leave=False):
+        if n_runs <= 1:
+            pbar = tqdm(total=n_episodes, desc='Mountain_'+str(m)+', run '+str(run+1)+'/'+str(n_runs), position=m+1, leave=False)
+        for e in range(n_episodes):
 
             ## loop through agents
             for a, ag in enumerate(agents):
@@ -1226,6 +1228,12 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
                         agent_envs[ag] = env_copy
 
                         end_episode = True
+            pbar.update(1)
+        if n_runs <= 1:
+            pbar.close()
+    if n_runs > 1:
+        pbar.close()
+                    
 
     return sim_out,env_copy
     # return sim_out, _
