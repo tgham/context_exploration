@@ -547,30 +547,65 @@ class MountainEnv(gym.Env):
                 # moves_1 = np.concatenate([x_actions, y_actions])
 
                 ## sanity check 2: at least the first n moves in x_direction of both paths are the same, and then otherwise shuffled
+                # n_min_same = 2
+                # if len(self.starts)>0:
+                #     n_same = np.random.randint(n_min_same, len(x_actions)-1)
+                #     first_moves = x_actions[:n_same] ## IN THE UNKNOWN CONTEXT VERSION, WE WOULD RANDOMLY SELECT X OR Y
+                #     remaining_moves = np.concatenate([x_actions[n_same:], y_actions])
+                #     moves_1 = np.concatenate([first_moves, np.random.permutation(remaining_moves)])
+
+                #     n_same = np.random.randint(n_min_same, len(y_actions)-1)
+                #     first_moves = x_actions[:n_same]
+                #     remaining_moves = np.concatenate([x_actions[n_same:], y_actions])
+                #     moves_2 = np.concatenate([first_moves, np.random.permutation(remaining_moves)])
+
+                
+                #     ## additional restriction: the final move cannot be the same as the initial move (i.e. preventing excessive overlap with the distal row/column path_2[0])
+                #     if (moves_1[-1] == moves_1[0]) or (moves_2[-1] == moves_2[0]):
+                #         continue
+                
+                
+                ## or,  as above but with the last n moves in the opposite direction
                 n_min_same = 2
                 if len(self.starts)>0:
-                    n_same = np.random.randint(n_min_same, len(x_actions)-1)
-                    first_moves = x_actions[:n_same]
-                    remaining_moves = np.concatenate([x_actions[n_same:], y_actions])
-                    moves_1 = np.concatenate([first_moves, np.random.permutation(remaining_moves)])
+                    n_same = np.random.randint(n_min_same, len(y_actions)-1)
+                    last_moves = y_actions[:n_same] ## IN THE UNKNOWN CONTEXT VERSION, WE WOULD RANDOMLY SELECT X OR Y
+                    remaining_moves = np.concatenate([y_actions[n_same:], x_actions])
+                    moves_1 = np.concatenate([np.random.permutation(remaining_moves), last_moves])
 
                     n_same = np.random.randint(n_min_same, len(y_actions)-1)
-                    first_moves = x_actions[:n_same]
-                    remaining_moves = np.concatenate([x_actions[n_same:], y_actions])
-                    moves_2 = np.concatenate([first_moves, np.random.permutation(remaining_moves)])
-                    # print('moves_1:', moves_1)
-                
+                    last_moves = y_actions[:n_same]
+                    remaining_moves = np.concatenate([y_actions[n_same:], x_actions])
+                    moves_2 = np.concatenate([np.random.permutation(remaining_moves), last_moves])
+
                     ## additional restriction: the final move cannot be the same as the initial move (i.e. preventing excessive overlap with the distal row/column path_2[0])
                     if (moves_1[-1] == moves_1[0]) or (moves_2[-1] == moves_2[0]):
                         continue
 
 
 
-                ## sanity check 3: the first n moves in moves_2 are the same as the first n moves in moves_1, and then otherwise shuffled
+                # n_min_same = 2
+
+                ## sanity check 3: for path 1, the first n moves are in the x direction, whereas for path 2, both the first n and last n moves are in the x direction
+                # n_min_same = 2
+                # n_same = np.random.randint(n_min_same, len(x_actions)-1)
                 # if len(self.starts)>0:
-                #     n_same = 2
-                #     moves_2 = np.concatenate([moves_1[:n_same], np.random.permutation(moves_1[n_same:])])
-                # elif len(self.starts)==0:
+                #     first_moves = x_actions[:n_same]
+                #     remaining_moves = np.concatenate([x_actions[n_same:], y_actions])
+                #     moves_1 = np.concatenate([first_moves, np.random.permutation(remaining_moves)])
+
+                #     last_moves = first_moves.copy()
+                #     # remaining_moves = np.concatenate([x_actions[n_same:], y_actions])
+                #     # moves_2 = np.concatenate([np.random.permutation(remaining_moves), last_moves])
+                #     remaining_moves = np.concatenate([x_actions[n_same*2:], y_actions])
+                #     moves_2 = np.concatenate([first_moves, np.random.permutation(remaining_moves), last_moves])
+
+                #     ## additional restriction: the final move cannot be the same as the initial move (i.e. preventing excessive overlap with the distal row/column path_2[0])
+                #     # if (moves_1[-1] == moves_1[0]) or (moves_2[-1] == moves_2[0]):
+                #     #     continue
+
+                if len(moves_1) != len(moves_2):
+                    print('moves_1 and moves_2 are not the same length: %s, %s' % (len(moves_1), len(moves_2)))
 
 
                 if count_turns(moves_1) <= max_turns and count_turns(moves_2) <= max_turns:
