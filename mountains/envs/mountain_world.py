@@ -498,6 +498,7 @@ class MountainEnv(gym.Env):
         dy = goal[1] - start[1]
         x_actions = np.repeat(0, abs(dx)) if dx > 0 else np.repeat(2, abs(dx))
         y_actions = np.repeat(1, abs(dy)) if dy > 0 else np.repeat(3, abs(dy))
+        total_manhattan = len(x_actions) + len(y_actions)
 
         def build_path(order):
             path = [tuple(start)]
@@ -527,7 +528,12 @@ class MountainEnv(gym.Env):
             else:
                 n_common_across_eps = 0
             max_common_within_ep = (len(moves)-1)/1.5
-            max_common_across_eps = (len(moves)-1)/1.2
+            max_common_across_eps = (len(moves)-1)/1
+
+            ## sanity check: remove all these constraints
+            # rel_cost_diff_tol = 1
+            # max_common_within_ep = np.inf
+            # max_common_across_eps = np.inf
 
             t=0
             while (rel_cost_diff >= rel_cost_diff_tol) or (n_common_within_ep >= max_common_within_ep) or (n_common_across_eps >= max_common_across_eps):
@@ -566,27 +572,45 @@ class MountainEnv(gym.Env):
                 
                 
                 ## or,  as above but with the last n moves in the opposite direction
-                n_min_same = 2
-                if len(self.starts)>0:
-                    n_same = np.random.randint(n_min_same, len(y_actions)-1)
-                    last_moves = y_actions[:n_same] ## IN THE UNKNOWN CONTEXT VERSION, WE WOULD RANDOMLY SELECT X OR Y
-                    remaining_moves = np.concatenate([y_actions[n_same:], x_actions])
-                    moves_1 = np.concatenate([np.random.permutation(remaining_moves), last_moves])
-
-                    n_same = np.random.randint(n_min_same, len(y_actions)-1)
-                    last_moves = y_actions[:n_same]
-                    remaining_moves = np.concatenate([y_actions[n_same:], x_actions])
-                    moves_2 = np.concatenate([np.random.permutation(remaining_moves), last_moves])
-
-                    ## additional restriction: the final move cannot be the same as the initial move (i.e. preventing excessive overlap with the distal row/column path_2[0])
-                    if (moves_1[-1] == moves_1[0]) or (moves_2[-1] == moves_2[0]):
-                        continue
-
-
-
                 # n_min_same = 2
+                # if len(self.starts)>0:
+                #     n_same = np.random.randint(n_min_same, len(y_actions)-1)
+                #     last_moves = y_actions[:n_same] ## IN THE UNKNOWN CONTEXT VERSION, WE WOULD RANDOMLY SELECT X OR Y
+                #     remaining_moves = np.concatenate([y_actions[n_same:], x_actions])
+                #     moves_1 = np.concatenate([np.random.permutation(remaining_moves), last_moves])
 
-                ## sanity check 3: for path 1, the first n moves are in the x direction, whereas for path 2, both the first n and last n moves are in the x direction
+                #     n_same = np.random.randint(n_min_same, len(y_actions)-1)
+                #     last_moves = y_actions[:n_same]
+                #     remaining_moves = np.concatenate([y_actions[n_same:], x_actions])
+                #     moves_2 = np.concatenate([np.random.permutation(remaining_moves), last_moves])
+
+                #     ## additional restriction: the final move cannot be the same as the initial move (i.e. preventing excessive overlap with the distal row/column path_2[0])
+                #     if (moves_1[-1] == moves_1[0]) or (moves_2[-1] == moves_2[0]):
+                #         continue
+
+
+                ## sanity check 3: both paths have a total of N=nA + nB overlap, where nA is the overlap with the initial x_actions of path A, and nB is the overlap with the final x_actions of path B
+                max_overlap = len(x_actions)
+                # n_overlap = np.random.randint(2, max_overlap)
+                if len(self.starts)>0:
+
+                    ## random split of max_overlap into nA and nB
+                    nA = np.random.randint(2, max_overlap-1)
+                    nB = max_overlap - nA
+
+                    ## first nA moves of path 1 are in the x direction, and last nB moves of path 2 are in the x direction
+                    first_moves = x_actions[:nA]
+                    last_moves = x_actions[:nB]
+                    remaining_moves = y_actions.copy()
+                    moves_1 = np.concatenate([first_moves, remaining_moves, last_moves])
+
+                    first_moves = x_actions[:nB]
+                    last_moves = x_actions[:nA]
+                    remaining_moves = y_actions.copy()
+                    moves_2 = np.concatenate([first_moves, remaining_moves, last_moves])
+
+
+                ## sanity check 4: for path 1, the first n moves are in the x direction, whereas for path 2, both the first n and last n moves are in the x direction
                 # n_min_same = 2
                 # n_same = np.random.randint(n_min_same, len(x_actions)-1)
                 # if len(self.starts)>0:
