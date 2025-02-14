@@ -119,7 +119,8 @@ class MountainEnv(gym.Env):
         while not init_done:
             SG_found = False
             paths_found = False
-            self.high_cost, self.low_cost = -0.9, -0.1
+            # self.high_cost, self.low_cost = -0.9, -0.1
+            self.high_cost, self.low_cost = -1, -0
             self.alpha_row = beta_params['alpha_row']
             self.beta_row = beta_params['beta_row']
             self.alpha_col = beta_params['alpha_col']
@@ -181,7 +182,7 @@ class MountainEnv(gym.Env):
 
                     ## 2AFC
                     elif expt=='2AFC':
-                        max_turns = 4
+                        max_turns = 3
                         path_actions, path_states = self.sample_paths(start, goal, max_turns)
                         self.starts.append(start)
                         self.goals.append(goal)
@@ -189,11 +190,11 @@ class MountainEnv(gym.Env):
                         self.path_actions.append(path_actions)
 
                         ## get info about optimal path (WILL CHANGE THIS LATER SINCE THE NOTION OF OPTIMAL IS DIFFERENT FOR 2AFC)
-                        o_traj, o_traj_costs, o_traj_total_cost, o_traj_actions = self.optimal_trajectory(start, goal)
-                        self.o_trajs.append(o_traj)
-                        self.o_traj_costs.append(o_traj_costs)
-                        self.o_traj_total_costs.append(o_traj_total_cost)
-                        self.o_traj_actions.append(o_traj_actions)
+                        # o_traj, o_traj_costs, o_traj_total_cost, o_traj_actions = self.optimal_trajectory(start, goal)
+                        self.o_trajs.append([])
+                        self.o_traj_costs.append([])
+                        self.o_traj_total_costs.append(np.nan)
+                        self.o_traj_actions.append([])
 
                         ## save expected costs of the paths
                         path_costs = []
@@ -399,7 +400,7 @@ class MountainEnv(gym.Env):
 
         ## sample start and goal locations
         dist = 0
-        min_dist = self.N*0.75
+        min_dist = self.N*0.8
         angle = 0
         angle_tolerance = 0.5
         angle_bounds = [45*(1+angle_tolerance), 45*(1-angle_tolerance)]
@@ -449,29 +450,34 @@ class MountainEnv(gym.Env):
             if (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (not new) or (not new_rc):
                 continue
 
-            ### comparison of optimal vs manhattan routes
+            ### comparison of optimal vs manhattan routes (only necessary if we're interested in the optimal path, as in the free-choice expt)
+            if self.expt == 'free':
 
-            # ## standard case (i.e. pq = p(high cost))
-            # dp_costs = self.p_costs*self.high_cost + (1-self.p_costs)*self.low_cost 
-            # dp_costs[goal_location[0], goal_location[1]] = 0
-            
-            ## alternative case (i.e. pq = p(low cost))
-            dp_costs = self.p_costs*self.low_cost + (1-self.p_costs)*self.high_cost
-            dp_costs[goal_location[0], goal_location[1]] = 0
+                # ## standard case (i.e. pq = p(high cost))
+                # dp_costs = self.p_costs*self.high_cost + (1-self.p_costs)*self.low_cost 
+                # dp_costs[goal_location[0], goal_location[1]] = 0
+                
+                ## alternative case (i.e. pq = p(low cost))
+                dp_costs = self.p_costs*self.low_cost + (1-self.p_costs)*self.high_cost
+                dp_costs[goal_location[0], goal_location[1]] = 0
 
-            self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=goal_location)
-            o_traj, o_traj_costs, o_traj_total_cost, o_traj_actions = self.optimal_trajectory(agent_location, goal_location)
+                self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=goal_location)
+                o_traj, o_traj_costs, o_traj_total_cost, o_traj_actions = self.optimal_trajectory(agent_location, goal_location)
 
 
-            ## by length
-            # n_steps_opt = len(self.o_traj)-1
-            # worth_it = n_steps_opt > dist
+                ## by length
+                # n_steps_opt = len(self.o_traj)-1
+                # worth_it = n_steps_opt > dist
 
-            ## or, by cost (i.e. vs manhattan vertical-first or horizontal-first)
-            manhattan_costs = self.manhattan_trajectory(agent_location, goal_location)
-            # worth_it = (manhattan_costs[0]/o_traj_total_cost) >= route_optimality_tolerance and (manhattan_costs[1]/o_traj_total_cost) >= route_optimality_tolerance ## p(high cost)
-            # worth_it = (manhattan_costs[0]/o_traj_total_cost) <= route_optimality_tolerance and (manhattan_costs[1]/o_traj_total_cost) >= route_optimality_tolerance ## p(low cost)
-            worth_it = (o_traj_total_cost/manhattan_costs[0]) <= route_optimality_tolerance and (o_traj_total_cost/manhattan_costs[1]) <= route_optimality_tolerance ## p(low cost)
+                ## or, by cost (i.e. vs manhattan vertical-first or horizontal-first)
+                manhattan_costs = self.manhattan_trajectory(agent_location, goal_location)
+                # worth_it = (manhattan_costs[0]/o_traj_total_cost) >= route_optimality_tolerance and (manhattan_costs[1]/o_traj_total_cost) >= route_optimality_tolerance ## p(high cost)
+                # worth_it = (manhattan_costs[0]/o_traj_total_cost) <= route_optimality_tolerance and (manhattan_costs[1]/o_traj_total_cost) >= route_optimality_tolerance ## p(low cost)
+                worth_it = (o_traj_total_cost/manhattan_costs[0]) <= route_optimality_tolerance and (o_traj_total_cost/manhattan_costs[1]) <= route_optimality_tolerance ## p(low cost)
+
+            ## or, if we're interested in 2AFC, then we don't need to do this
+            elif self.expt == '2AFC':
+                worth_it = True
 
             t+=1
             if t>200:
@@ -498,6 +504,10 @@ class MountainEnv(gym.Env):
             for move in order:
                 path.append(tuple(get_next_state(path[-1], self.action_to_direction[move], self.N)))
             return path
+        
+        ## check number of turns
+        def count_turns(moves_seq):
+            return sum(m1 != m2 and (m1 + m2) % 2 == 1 for m1, m2 in zip(moves_seq[:-1], moves_seq[1:]))
 
         ## if only one turn allowed, then only possible paths: all x then y, or all y then x
         if max_turns == 1:
@@ -509,7 +519,7 @@ class MountainEnv(gym.Env):
             moves = np.concatenate([x_actions, y_actions])
 
             ## set path criteria
-            rel_cost_diff_tol = 0.8
+            rel_cost_diff_tol = 0.9
             rel_cost_diff = 1
             n_common_within_ep = np.inf
             if len(self.path_states)>0:
@@ -526,15 +536,48 @@ class MountainEnv(gym.Env):
                 moves_1 = np.random.permutation(moves)
                 moves_2 = np.random.permutation(moves)
 
-                ## sanity check: always define path_1 as one of the simplest manhattan paths
-                moves_1 = np.concatenate([x_actions, y_actions])
+                ## on first episode, paths are the mirrored simplest manhattan paths
+                if len(self.starts)==0:
+                    moves_1 = np.concatenate([x_actions, y_actions])
+                    moves_2 = np.concatenate([y_actions, x_actions])
+                    path_states = [build_path(moves_1), build_path(moves_2)]
+                    path_actions = [moves_1, moves_2]
 
-                ## check number of turns
-                def count_turns(moves_seq):
-                    return sum(m1 != m2 and (m1 + m2) % 2 == 1 for m1, m2 in zip(moves_seq[:-1], moves_seq[1:]))
+                ## sanity check 1: always define path_1 as one of the simplest manhattan paths
+                # moves_1 = np.concatenate([x_actions, y_actions])
+
+                ## sanity check 2: at least the first n moves in x_direction of both paths are the same, and then otherwise shuffled
+                n_min_same = 2
+                if len(self.starts)>0:
+                    n_same = np.random.randint(n_min_same, len(x_actions)-1)
+                    first_moves = x_actions[:n_same]
+                    remaining_moves = np.concatenate([x_actions[n_same:], y_actions])
+                    moves_1 = np.concatenate([first_moves, np.random.permutation(remaining_moves)])
+
+                    n_same = np.random.randint(n_min_same, len(y_actions)-1)
+                    first_moves = x_actions[:n_same]
+                    remaining_moves = np.concatenate([x_actions[n_same:], y_actions])
+                    moves_2 = np.concatenate([first_moves, np.random.permutation(remaining_moves)])
+                    # print('moves_1:', moves_1)
+                
+                    ## additional restriction: the final move cannot be the same as the initial move (i.e. preventing excessive overlap with the distal row/column path_2[0])
+                    if (moves_1[-1] == moves_1[0]) or (moves_2[-1] == moves_2[0]):
+                        continue
+
+
+
+                ## sanity check 3: the first n moves in moves_2 are the same as the first n moves in moves_1, and then otherwise shuffled
+                # if len(self.starts)>0:
+                #     n_same = 2
+                #     moves_2 = np.concatenate([moves_1[:n_same], np.random.permutation(moves_1[n_same:])])
+                # elif len(self.starts)==0:
+
+
                 if count_turns(moves_1) <= max_turns and count_turns(moves_2) <= max_turns:
+                    
                     path_1 = build_path(moves_1)
                     path_2 = build_path(moves_2)
+
 
                     ## check against criteria
                     path_1_cost = np.sum([self.p_costs[x, y] for x, y in path_1])
@@ -551,25 +594,15 @@ class MountainEnv(gym.Env):
                         common_across_eps = []
                         for paths in self.path_states:
                             p1, p2 = paths
-                            # common_across_eps.append(len(set(p1).intersection(set(path_1)))-2)
+                            common_across_eps.append(len(set(p1).intersection(set(path_1)))-2)
                             common_across_eps.append(len(set(p2).intersection(set(path_2)))-2)
                             common_across_eps.append(len(set(p1).intersection(set(path_2)))-2)
-                            # common_across_eps.append(len(set(p2).intersection(set(path_1)))-2)
+                            common_across_eps.append(len(set(p2).intersection(set(path_1)))-2)
                         n_common_across_eps = np.max(common_across_eps)
                             
                 t+=1
                 if t>100:
                     raise ValueError('cant find paths')
-
-        ## insane sanity check
-        # if len(self.starts)>0:
-
-        #     ## the first 3 moves in moves_2 are the same as the first 3 moves in moves_1, and then otherwise shuffled
-        #     moves_2 = np.concatenate([moves_1[:3], np.random.permutation(moves_1[3:])])
-        # elif len(self.starts)==0:
-        #     moves_2 = np.concatenate([y_actions, x_actions])
-        #     path_states = [build_path(moves_1), build_path(moves_2)]
-        #     path_actions = [moves_1, moves_2]
 
 
         ## reorder the pairs of moves and paths so that the first in the pair is always the one with the higher cost
@@ -690,13 +723,13 @@ class MountainEnv(gym.Env):
         # )
         self._agent_location = get_next_state(self._agent_location, direction, self.N)
 
-        ## get the predicted cost of the new state
-        predicted_cost = self.predicted_costs[self._agent_location[0], self._agent_location[1]]
+        ## get the predicted and actual costs of the new state, sampling using the p(cost) values
+        current_cost = self.get_cost(self._agent_location)
         # predicted_cost = self.get_pred_cost(self._agent_location)
 
-        ## get the actual cost of the current state
-        # current_cost = self.get_cost(self._agent_location)
-        current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
+        ## or, use pre-sampled costs
+        # current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
+        predicted_cost = self.predicted_costs[self._agent_location[0], self._agent_location[1]]
 
 
         ## return the real cost if not simulating
@@ -756,7 +789,10 @@ class MountainEnv(gym.Env):
 
                 ## scores for the trial
                 self.action_score = np.nanmean(self.action_scores)
-                self.cost_ratio = self.o_traj_total_costs[self._episode] / self.a_traj_total_cost
+                if self.expt == 'free':
+                    self.cost_ratio = self.o_traj_total_costs[self._episode] / self.a_traj_total_cost
+                elif self.expt == '2AFC':
+                    self.cost_ratio = 1 ## sort this out later
 
                 ## update ep counter
                 self._episode += 1

@@ -524,6 +524,7 @@ def get_next_state(current, direction, N):
 ## data-saving/dict stuff
 data_keys = [
     'agent',
+    'run',
     'mountain',
     'episode',
     'start',
