@@ -377,25 +377,13 @@ class Farmer:
         self.beta_row = env.beta_row
         self.beta_col = env.beta_col
 
-    ## root sampling of surface
-    # def root_sample(self, obs=None, n_iter=100, lazy=True, CE=False, state=None):
-    #     sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, obs, N=self.N, CE=CE)
-
-    #     ## lazy
-    #     if lazy:
-    #         self.posterior_p, self.posterior_q = sampler.lazy_sample(n_iter = n_iter)
-    #         # self.posterior_p, self.posterior_q = sampler.lazy_sample(n_iter = n_iter, state=state)
-
-    #     ## full
-    #     else:
-    #         self.posterior_p, self.posterior_q = sampler.sample(n_iter = n_iter)
-
-    #     self.posterior_p_cost = np.outer(self.posterior_p, self.posterior_q)
-
 
     ## generate full set of root samples
-    def root_samples(self, obs=None, n_samples=1000, n_iter=100, lazy=True, CE=False):
-        sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, obs, N=self.N, CE=CE)
+    def root_samples(self, obs=None, n_samples=1000, n_iter=100, lazy=True, CE=False, correct_prior = True):
+        if correct_prior:
+            sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, obs, N=self.N, CE=CE)
+        else:
+            sampler = GridSampler(self.alpha_col, self.beta_col, self.alpha_row, self.beta_row, self.low_cost, self.high_cost, obs, N=self.N, CE=CE)
         self.all_posterior_ps = np.zeros((n_samples, self.N))
         self.all_posterior_qs = np.zeros((n_samples, self.N))
         self.all_posterior_p_costs = np.zeros((n_samples, self.N, self.N))
@@ -421,8 +409,8 @@ class Farmer:
         ## if no obs, just sample from prior
         else:
             for s in range(n_samples):
-                self.all_posterior_ps[s,:] = np.random.beta(self.alpha_row, self.beta_row, size=self.N)
-                self.all_posterior_qs[s,:] = np.random.beta(self.alpha_col, self.beta_col, size=self.N)
+                self.all_posterior_ps[s,:] = np.random.beta(sampler.alpha_row, sampler.beta_row, size=self.N)
+                self.all_posterior_qs[s,:] = np.random.beta(sampler.alpha_col, sampler.beta_col, size=self.N)
                 self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
 
 
