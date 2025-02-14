@@ -109,11 +109,12 @@ def acceptance_priors(ps, qs, m1,m2,n1,n2):
 #     return rel_obs
 
 class GridSampler:
-    def __init__(self, alpha_row, beta_row, alpha_col, beta_col, obs, N=10, CE=False):
+    def __init__(self, alpha_row, beta_row, alpha_col, beta_col, low_cost, high_cost, obs, N=10, CE=False):
         self.alpha_row = alpha_row
         self.beta_row = beta_row
         self.alpha_col = alpha_col
         self.beta_col = beta_col
+        # print(alpha_row)
         self.obs = obs
         self.CE = CE
         if self.obs is None:
@@ -121,8 +122,8 @@ class GridSampler:
         # else:
             # self.obs = np.array([(int(i), int(j), float(cost)) for (i, j, cost) in self.obs])
         self.N = N
-        self.high_cost = -0.9
-        self.low_cost = -0.1
+        self.low_cost = low_cost
+        self.high_cost = high_cost
 
         ## cache obs groups for lazy sampling
         self.row_to_obs = {i: [(i, j, cost) for (i_, j, cost) in self.obs if i_ == i] for i in range(self.N)}

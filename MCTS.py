@@ -300,7 +300,7 @@ class MonteCarloTreeSearch():
 
 
     ## tree search --> action loop
-    def search(self, n_sims=1000, n_futures=0, n_iter=100, lazy=False,  progress=False, reuse_samples=False):
+    def search(self, n_sims=1000, n_futures=0, n_iter=100, lazy=False,  progress=False, reuse_samples=False, correct_prior = True):
 
         if progress:
             pbar = tqdm(total=n_sims, desc='MCTS search', position=0, leave=False, miniters=10, ascii=True, bar_format="{l_bar}{bar}")
@@ -313,7 +313,7 @@ class MonteCarloTreeSearch():
 
         ## if samples not provided, generate new set of root samples
         if not reuse_samples:
-            self.agent.root_samples(obs = self.env.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy, CE=False)
+            self.agent.root_samples(obs = self.env.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy, CE=False, correct_prior = correct_prior)
 
 
         ## debugging plot
