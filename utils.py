@@ -551,6 +551,7 @@ data_keys = [
     'expected_LD',
     'expected_KL',
     'Q_values',
+    'CE_Q_values',
 
     ## GP-specific
     # 'true_k',

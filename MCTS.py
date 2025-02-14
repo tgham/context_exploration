@@ -564,8 +564,34 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
 
 
 ## parallel function for simulating many episodes within the same mountain env
-def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episodes=10, agents = ['GP', 'GP-MCTS', 'BAMCP','CE'], n_sims=1000,n_runs=1, n_futures=0, n_iter=10, lazy=False, exploration_constant=2, discount_factor=0.95, progress=False, offline=False):
+# def simulate_agent(m, N, env_params=None, metric='cityblock', expt='2AFC', n_episodes=10, agents = ['GP', 'GP-MCTS', 'BAMCP','CE'], n_sims=1000,n_runs=1, correct_prior=True, n_futures=0, n_iter=10, lazy=False, exploration_constant=2, discount_factor=0.95, progress=False, offline=False):
+def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, agents= ['BAMCP', 'CE'], progress=False, offline=False):
     print(' ') # for some reason need this to get the pbar to appear
+
+    ## unroll param dictionaries
+    # locals().update(env_params)
+    # locals().update(MCTS_params)
+    # locals().update(sampler_params)
+
+    ## or, do this manually
+    N = env_params['N']
+    n_episodes = env_params['n_episodes']
+    expt = env_params['expt']
+    n_runs = env_params['n_runs']
+    metric = env_params['metric']
+    beta_params = env_params['beta_params']
+
+    n_sims = MCTS_params['n_sims']
+    n_futures = MCTS_params['n_futures']
+    exploration_constant = MCTS_params['exploration_constant']
+    discount_factor = MCTS_params['discount_factor']
+
+    n_iter = sampler_params['n_iter']
+    lazy = sampler_params['lazy']
+    correct_prior = sampler_params['correct_prior']
+
+
+
     
     ## initiate dictionary to store the results
     sim_out = {}
@@ -578,7 +604,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
     np.random.seed(seed)
     
     ## create base mountain environment
-    env = make_env(N, n_episodes, expt, params, metric)
+    env = make_env(N, n_episodes, expt, beta_params, metric)
     
     ## debugging plot env
     # fig, ax = plt.subplots(1, 1, figsize=(5,5))
@@ -635,6 +661,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
                 actions = []
                 CE_actions = []
                 Q_values = []
+                CE_Q_values = []
                 ELDs = []
                 EKLs = []
                 
@@ -670,7 +697,10 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
                 early_terminate = False
                 reuse_samples = False
                 steps = 0
-                max_steps = len(env_copy.o_trajs[e])*1.75
+                if expt=='free':
+                    max_steps = len(env_copy.o_trajs[e])*1.75
+                elif expt=='2AFC':
+                    max_steps = 100 ## just in case
                 max_search_attempts = 3
 
                 while not end_episode:
@@ -694,7 +724,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
                         env_copy.set_sim(False)
 
                         ## get posterior mean grid
-                        agent.root_samples(obs=env_copy.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy,CE=True)
+                        agent.root_samples(obs=env_copy.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy,CE=True, correct_prior = correct_prior)
                         env_copy.receive_predictions(agent.posterior_mean_p_cost)
 
 
@@ -764,7 +794,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
 
                             ## search
                             n_sims_tmp = n_sims
-                            action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures, n_iter=n_iter, lazy=lazy, progress=progress, reuse_samples=reuse_samples)
+                            action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures, n_iter=n_iter, lazy=lazy, progress=progress, reuse_samples=reuse_samples, correct_prior=correct_prior)
 
                             ## reduce number of sims if near to the goal (A BETTER IDEA WLD BE TO REDUCE THE DISTANCE IF THE TREE HAS REACHED THE GOAL)
                             # dist_to_goal = np.max(cdist([current, goal], [current, goal], metric='cityblock')) 
@@ -805,9 +835,22 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
                             posterior_mean_p_cost_tmp = np.mean(all_posterior_p_costs_tmp, axis=0)
 
                             ## get CE's action
-                            agent.dp(posterior_mean_p_cost_tmp, expected_cost=True)
-                            action_CE = agent.optimal_policy(current, agent.Q_inf)
-                            CE_actions.append(action_CE)
+                            if expt=='free':
+                                agent.dp(posterior_mean_p_cost_tmp, expected_cost=True)
+                                action_CE = agent.optimal_policy(current, agent.Q_inf)
+                                CE_actions.append(action_CE)
+                            elif expt=='2AFC':
+                                path_costs = []
+                                for path_id in range(env_copy.n_afc):
+                                    path_states = env_copy.path_states[e][path_id]
+                                    path_cost = 0
+                                    for state in path_states:
+                                        # path_cost += env_copy.get_pred_cost(state) ## i.e. sample binary costs from the posterior pqs
+                                        path_cost += posterior_mean_p_cost_tmp[state[0], state[1]]*env_copy.low_cost + (1-posterior_mean_p_cost_tmp[state[0], state[1]])*env_copy.high_cost
+                                    path_costs.append(path_cost)
+                                action_CE = argm(path_costs, np.max(path_costs))
+                                CE_actions.append(action_CE)
+                                CE_Q_values.append(path_costs)
 
 
 
@@ -834,6 +877,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
                             if expt=='free':
                                 current, cost, terminated, _, _ = env_copy.step(action)
                                 next_node_id = np.append(current,cost)
+                                steps += 1
                             elif expt=='2AFC':
                                 action_sequence = env_copy.path_actions[e][action]
                                 states, costs = env_copy.take_path(action_sequence)
@@ -845,7 +889,6 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
                                 ## update next node id
                                 next_node_id = MCTS.init_node_id(env_copy.obs.copy(), None)
 
-                            steps += 1
                             search_attempts = 0 # could do nan here
 
 
@@ -1114,6 +1157,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
                         sim_out['actions'].append(actions)
                         sim_out['Q_values'].append(Q_values)
                         sim_out['CE_actions'].append(CE_actions)
+                        sim_out['CE_Q_values'].append(CE_Q_values)
                         sim_out['optimal_actions'].append(env_copy.o_traj_actions[e])
                         sim_out['costs'].append(np.nan)
                         sim_out['optimal_costs'].append(env_copy.o_traj_costs[e])
@@ -1161,6 +1205,7 @@ def simulate_agent(m, N, params=None, metric='cityblock', expt='2AFC', n_episode
                         sim_out['actions'].append(actions)
                         sim_out['Q_values'].append(Q_values)
                         sim_out['CE_actions'].append(CE_actions)
+                        sim_out['CE_Q_values'].append(CE_Q_values)
                         sim_out['optimal_actions'].append(env_copy.o_traj_actions[e])
                         # if np.round(env_copy.optimal_cost,4) < np.round(env_copy.accrued_cost,4):
                         #     print(env_copy.optimal_cost, env_copy.accrued_cost)

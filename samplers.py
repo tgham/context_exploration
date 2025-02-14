@@ -114,7 +114,6 @@ class GridSampler:
         self.beta_row = beta_row
         self.alpha_col = alpha_col
         self.beta_col = beta_col
-        # print(alpha_row)
         self.obs = obs
         self.CE = CE
         if self.obs is None:

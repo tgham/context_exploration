@@ -526,8 +526,8 @@ class MountainEnv(gym.Env):
                 n_common_across_eps = np.inf
             else:
                 n_common_across_eps = 0
-            max_common_within_ep = (len(moves)-1)/1.8
-            max_common_across_eps = (len(moves)-1)/1.5
+            max_common_within_ep = (len(moves)-1)/1.5
+            max_common_across_eps = (len(moves)-1)/1.2
 
             t=0
             while (rel_cost_diff >= rel_cost_diff_tol) or (n_common_within_ep >= max_common_within_ep) or (n_common_across_eps >= max_common_across_eps):
