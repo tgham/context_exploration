@@ -530,6 +530,8 @@ data_keys = [
     'start',
     'goal',
     'costs',
+    'path_A',
+    'path_B',
     'optimal_costs',
     'actions',
     'CE_actions',
