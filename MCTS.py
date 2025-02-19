@@ -629,7 +629,10 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
         tree_reset = True ## to determine whether tree is reset at the start of each episode
         if n_runs <= 1:
             pbar = tqdm(total=n_episodes, desc='Mountain_'+str(m)+', run '+str(run+1)+'/'+str(n_runs), position=m+1, leave=False)
-        for e in range(n_episodes):
+        # for e in range(n_episodes):
+
+        ## TEMP: just interested in first choice
+        for e in range(1):
 
             ## loop through agents
             for a, ag in enumerate(agents):
@@ -637,7 +640,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                 ### reset episode 
 
                 ## copy env for our base agents
-                if (ag=='BAMCP') or (ag=='CE'):
+                if (ag=='BAMCP') or (ag=='CE') or (ag=='BAMCP_wrong'):
                     env_copy = agent_envs[ag]
                     env_copy.reset()
                     env_copy.set_sim(True)
@@ -649,6 +652,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                     elif (ag=='CE') & ('BAMCP w/ CE' in agents):
                         agent_envs['BAMCP w/ CE'] = copy.deepcopy(env_copy)
                         assert np.array_equal(agent_envs['BAMCP w/ CE'].obs, env_copy.obs), 'obs do not match'
+
 
                 ## or, load env for our checker agents
                 else:
@@ -664,6 +668,12 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                 CE_Q_values = []
                 ELDs = []
                 EKLs = []
+
+                ## correct vs incorrect prior for BAMCP agent
+                if ag=='BAMCP':
+                    correct_prior=True
+                elif ag=='BAMCP_wrong':
+                    correct_prior=False
                 
 
                 ## GP-MCTS agent receives info from env
@@ -671,12 +681,12 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                     # K_inf = env_copy.K_gen.copy()
                     # K_inf = None
                     agent = GP
-                elif (ag == 'BAMCP') or (ag == 'CE') or (ag=='BAMCP w/ CE') or (ag=='CE w/ BAMCP'):
+                elif (ag == 'BAMCP') or (ag == 'CE') or (ag=='BAMCP w/ CE') or (ag=='CE w/ BAMCP') or (ag=='BAMCP_wrong'):
                     agent = farmer
                 agent.get_env_info(env_copy)
 
                 ## reset tree
-                if ((ag == 'BAMCP') or (ag == 'BAMCP w/ CE')) & tree_reset:
+                if ((ag == 'BAMCP') or (ag == 'BAMCP w/ CE') or (ag=='BAMCP_wrong')) & tree_reset:
                     tree = Tree(N)
                     if expt == 'free':
                         MCTS = MonteCarloTreeSearch_Free(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
@@ -684,7 +694,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         MCTS = MonteCarloTreeSearch_2AFC(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
                 
                 ## if keeping the tree between episodes, need to update tree with new episode info
-                elif ((ag == 'BAMCP') or (ag == 'BAMCP w/ CE')) & (not tree_reset):
+                elif ((ag == 'BAMCP') or (ag == 'BAMCP w/ CE') or (ag=='BAMCP_wrong')) & (not tree_reset):
                     MCTS.update_episode()
                     tree_reset = True
                 assert e == env_copy.episode, 'episode mismatch between simulation and env\n simulation: {} \n env: {}'.format(e, MCTS.env.episode)
@@ -780,7 +790,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
 
 
                     ## bamcp
-                    elif (ag == 'BAMCP') or (ag == 'BAMCP w/ CE'):
+                    elif (ag == 'BAMCP') or (ag == 'BAMCP w/ CE') or (ag=='BAMCP_wrong'):
                         env_copy.set_sim(True)
                         MCTS.actual_state = current
                         
@@ -936,6 +946,9 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                                         # print('failed to find:\n', next_node_id)
                                         # print('next node id:', np.sum(np.array(next_node_id).reshape(N,N,2), axis=2))
                                         tree_reset = True
+
+                                    ## for debugging purposes, don't prune the tree
+                                    # tree_reset=True
 
 
                         ## if offline planning (i.e. plan the full trajectory)
@@ -1154,6 +1167,8 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         sim_out['mountain'].append(m)
                         sim_out['start'].append(start)
                         sim_out['goal'].append(goal)
+                        sim_out['path_A'].append(env_copy.path_states[e][0])
+                        sim_out['path_B'].append(env_copy.path_states[e][1])
                         sim_out['actions'].append(actions)
                         sim_out['Q_values'].append(Q_values)
                         sim_out['CE_actions'].append(CE_actions)
@@ -1202,6 +1217,8 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         sim_out['mountain'].append(m)
                         sim_out['start'].append(start)
                         sim_out['goal'].append(goal)
+                        sim_out['path_A'].append(env_copy.path_states[e][0])
+                        sim_out['path_B'].append(env_copy.path_states[e][1])
                         sim_out['actions'].append(actions)
                         sim_out['Q_values'].append(Q_values)
                         sim_out['CE_actions'].append(CE_actions)
