@@ -213,15 +213,17 @@ class MountainEnv(gym.Env):
                 except:
                     break
 
+                ### define actual binary costs for each episode, assuming they regenerate each time
+
                 ## prob = p(high cost)
                 # self.costss.append(np.array([self.high_cost if r<self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N))
                 
                 ## prob = p(low cost)
-                self.costss.append(np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N))
+                # self.costss.append(np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N))
 
-                # except:
-                #     print("couldn't solve for current env. reinitialising...")
-                #     break
+            ### or, define actual binary costs for each episode, assuming they are the same across episodes
+            costs = np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
+            self.costss = [costs for e in range(n_episodes)]
 
 
             if len(self.starts)==self.n_episodes:
@@ -235,6 +237,7 @@ class MountainEnv(gym.Env):
         if self.expt == '2AFC':
             self.most_overlap = []
             self.path_future_overlaps = []
+
             for e in range(self.n_episodes-1):
 
                 ### calculate the number of states in the current path that appear in the future set
@@ -269,6 +272,38 @@ class MountainEnv(gym.Env):
                     n_overlaps.append(len(intersections))
                 self.path_future_overlaps.append(n_overlaps)
                 self.most_overlap.append(np.argmax(n_overlaps))
+
+            ## for path A and B of the first episode, calculate the number of states that overlap with the first row and column
+            self.p0_x_overlaps = []
+            self.p0_y_overlaps = []
+            self.p0_overlaps = np.zeros((2,2)) ## i.e. dim=0 is path A and B, dim=1 is x and y (rows and cols??)
+            for p, first_path in enumerate(self.path_states[0]):
+                p0_x_overlap = []
+                p0_y_overlap = []
+
+                ## check if opening path is column first or row first
+                if first_path[0][0]==first_path[1][0]: ## i.e. the x stays the same, 
+                    p0_x = first_path[0][0]
+                    p0_y = first_path[-1][1]
+                elif first_path[0][1]==first_path[1][1]:
+                    p0_y = first_path[0][1]
+                    p0_x = first_path[-1][0]
+                for next_e in range(1, self.n_episodes):
+                    for next_path in self.path_states[next_e]:
+                        for state in next_path[1:-1]:
+                            if state[0]== p0_x:
+                                p0_x_overlap.append(state)
+                            if state[1]==p0_y:
+                                p0_y_overlap.append(state)
+                total_x_overlap = len(p0_x_overlap)
+                total_y_overlap = len(p0_y_overlap)
+                # total_column_overlap = len(set(p0_column_overlap)) ## if you don't want to count states twice
+                # total_row_overlap = len(set(p0_row_overlap)) ## if you don't want to count states twice
+                self.p0_x_overlaps.append(total_x_overlap)
+                self.p0_y_overlaps.append(total_y_overlap)
+                self.p0_overlaps[p, 0] = total_x_overlap
+                self.p0_overlaps[p, 1] = total_y_overlap
+
         self.sim = False
 
     ## get info from current state
@@ -400,9 +435,9 @@ class MountainEnv(gym.Env):
 
         ## sample start and goal locations
         dist = 0
-        min_dist = self.N*0.8
+        min_dist = self.N*0.75
         angle = 0
-        angle_tolerance = 0.5
+        angle_tolerance = 0.75
         angle_bounds = [45*(1+angle_tolerance), 45*(1-angle_tolerance)]
         row_or_col = 1
         t = 0
@@ -488,6 +523,14 @@ class MountainEnv(gym.Env):
         # self._goal_location = np.array(self.goals[self.n_eps%4])
         # self.n_eps += 1
 
+        ## what kind of quadrilateral is this? e.g. is the long edge vertical or horizontal?
+        dx = goal_location[0] - agent_location[0]
+        dy = goal_location[1] - agent_location[1]
+        if abs(dx) > abs(dy):
+            self.quad_type = 'horizontal'
+        else:
+            self.quad_type = 'vertical'
+
         return agent_location, goal_location
     
     ## sample a pair of manhattan paths from the set of all possible manhattan paths
@@ -520,7 +563,7 @@ class MountainEnv(gym.Env):
             moves = np.concatenate([x_actions, y_actions])
 
             ## set path criteria
-            rel_cost_diff_tol = 0.9
+            rel_cost_diff_tol = 1
             rel_cost_diff = 1
             n_common_within_ep = np.inf
             if len(self.path_states)>0:
@@ -528,7 +571,7 @@ class MountainEnv(gym.Env):
             else:
                 n_common_across_eps = 0
             max_common_within_ep = (len(moves)-1)/1.5
-            max_common_across_eps = (len(moves)-1)/1
+            max_common_across_eps = (len(moves)-1)/1.2
 
             ## sanity check: remove all these constraints
             # rel_cost_diff_tol = 1
@@ -560,15 +603,14 @@ class MountainEnv(gym.Env):
                 #     remaining_moves = np.concatenate([x_actions[n_same:], y_actions])
                 #     moves_1 = np.concatenate([first_moves, np.random.permutation(remaining_moves)])
 
-                #     n_same = np.random.randint(n_min_same, len(y_actions)-1)
+                #     n_same = np.random.randint(n_min_same, len(x_actions)-1)
                 #     first_moves = x_actions[:n_same]
                 #     remaining_moves = np.concatenate([x_actions[n_same:], y_actions])
                 #     moves_2 = np.concatenate([first_moves, np.random.permutation(remaining_moves)])
-
                 
-                #     ## additional restriction: the final move cannot be the same as the initial move (i.e. preventing excessive overlap with the distal row/column path_2[0])
-                #     if (moves_1[-1] == moves_1[0]) or (moves_2[-1] == moves_2[0]):
-                #         continue
+                    ## additional restriction: the final move cannot be the same as the initial move (i.e. preventing excessive overlap with the distal row/column path_2[0])
+                    # if (moves_1[-1] == moves_1[0]) or (moves_2[-1] == moves_2[0]):
+                    #     continue
                 
                 
                 ## or,  as above but with the last n moves in the opposite direction
@@ -589,25 +631,63 @@ class MountainEnv(gym.Env):
                 #         continue
 
 
-                ## sanity check 3: both paths have a total of N=nA + nB overlap, where nA is the overlap with the initial x_actions of path A, and nB is the overlap with the final x_actions of path B
-                max_overlap = len(x_actions)
-                # n_overlap = np.random.randint(2, max_overlap)
+                ## or, combination of the above two options: randomly select whether it is the first n moves in the x direction or the last n moves in the y direction
+                n_min_same = 2
                 if len(self.starts)>0:
+                    movess = []
+                    for p in range(2):
+                        if np.random.rand() > 0.5: ## first moves overlap with x_actions of path A1
+                            n_same = np.random.randint(n_min_same, len(x_actions)-1)
+                            first_moves = x_actions[:n_same] 
+                            remaining_moves = np.concatenate([x_actions[n_same:], y_actions])
+                            movess.append(np.concatenate([first_moves, np.random.permutation(remaining_moves)]))
+                        else: ## last moves overlap with y_actions of path A1
+                            n_same = np.random.randint(n_min_same, len(y_actions)-1)
+                            last_moves = y_actions[:n_same]
+                            remaining_moves = np.concatenate([y_actions[n_same:], x_actions])
+                            movess.append(np.concatenate([np.random.permutation(remaining_moves), last_moves]))
+                    moves_1, moves_2 = movess
+                    # if np.random.rand() > 0.5:
+                    #     n_same = np.random.randint(n_min_same, len(x_actions)-1)
+                    #     first_moves = x_actions[:n_same] 
+                    #     remaining_moves = np.concatenate([x_actions[n_same:], y_actions])
+                    #     moves_1 = np.concatenate([first_moves, np.random.permutation(remaining_moves)])
 
-                    ## random split of max_overlap into nA and nB
-                    nA = np.random.randint(2, max_overlap-1)
-                    nB = max_overlap - nA
+                    #     n_same = np.random.randint(n_min_same, len(x_actions)-1)
+                    #     first_moves = x_actions[:n_same]
+                    #     remaining_moves = np.concatenate([x_actions[n_same:], y_actions])
+                    #     moves_2 = np.concatenate([first_moves, np.random.permutation(remaining_moves)])
+                    # else:
+                    #     n_same = np.random.randint(n_min_same, len(y_actions)-1)
+                    #     last_moves = y_actions[:n_same] ## IN THE UNKNOWN CONTEXT VERSION, WE WOULD RANDOMLY SELECT X OR Y
+                    #     remaining_moves = np.concatenate([y_actions[n_same:], x_actions])
+                    #     moves_1 = np.concatenate([np.random.permutation(remaining_moves), last_moves])
 
-                    ## first nA moves of path 1 are in the x direction, and last nB moves of path 2 are in the x direction
-                    first_moves = x_actions[:nA]
-                    last_moves = x_actions[:nB]
-                    remaining_moves = y_actions.copy()
-                    moves_1 = np.concatenate([first_moves, remaining_moves, last_moves])
+                    #     n_same = np.random.randint(n_min_same, len(y_actions)-1)
+                    #     last_moves = y_actions[:n_same]
+                    #     remaining_moves = np.concatenate([y_actions[n_same:], x_actions])
+                    #     moves_2 = np.concatenate([np.random.permutation(remaining_moves), last_moves])
 
-                    first_moves = x_actions[:nB]
-                    last_moves = x_actions[:nA]
-                    remaining_moves = y_actions.copy()
-                    moves_2 = np.concatenate([first_moves, remaining_moves, last_moves])
+
+
+                ## sanity check 3: both paths have a total of N=nA + nB overlap, where nA is the overlap with the initial x_actions of path A, and nB is the overlap with the final x_actions of path B
+                # max_overlap = len(x_actions)
+                # if len(self.starts)>0:
+
+                #     ## random split of max_overlap into nA and nB
+                #     nA = np.random.randint(2, max_overlap-1)
+                #     nB = max_overlap - nA
+
+                #     ## first nA moves of path 1 are in the x direction, and last nB moves of path 2 are in the x direction
+                #     first_moves = x_actions[:nA]
+                #     last_moves = x_actions[:nB]
+                #     remaining_moves = y_actions.copy()
+                #     moves_1 = np.concatenate([first_moves, remaining_moves, last_moves])
+
+                #     first_moves = x_actions[:nB]
+                #     last_moves = x_actions[:nA]
+                #     remaining_moves = y_actions.copy()
+                #     moves_2 = np.concatenate([first_moves, remaining_moves, last_moves])
 
 
                 ## sanity check 4: for path 1, the first n moves are in the x direction, whereas for path 2, both the first n and last n moves are in the x direction
@@ -783,11 +863,11 @@ class MountainEnv(gym.Env):
         self._agent_location = get_next_state(self._agent_location, direction, self.N)
 
         ## get the predicted and actual costs of the new state, sampling using the p(cost) values
-        current_cost = self.get_cost(self._agent_location)
+        # current_cost = self.get_cost(self._agent_location)
         # predicted_cost = self.get_pred_cost(self._agent_location)
 
         ## or, use pre-sampled costs
-        # current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
+        current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
         predicted_cost = self.predicted_costs[self._agent_location[0], self._agent_location[1]]
 
 
