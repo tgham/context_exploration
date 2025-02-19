@@ -571,7 +571,7 @@ class MountainEnv(gym.Env):
             else:
                 n_common_across_eps = 0
             max_common_within_ep = (len(moves)-1)/1.5
-            max_common_across_eps = (len(moves)-1)/1.2
+            max_common_across_eps = (len(moves)-1)/1
 
             ## sanity check: remove all these constraints
             # rel_cost_diff_tol = 1

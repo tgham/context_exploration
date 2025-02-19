@@ -553,6 +553,7 @@ data_keys = [
     'expected_LD',
     'expected_KL',
     'Q_values',
+    'leaf_visits',
     'CE_Q_values',
 
     ## GP-specific
@@ -560,4 +561,16 @@ data_keys = [
     # 'RPE',
     # 'posterior_mean',
     # 'theta_MLE',
+]
+
+## misc mountain keys
+mountain_keys = [
+    # 'mountain',
+    # 'env',
+    'p_costs',
+    'path_states',
+    'path_actions',
+    'starts',
+    'goals',
+    'p0_overlaps'
 ]
