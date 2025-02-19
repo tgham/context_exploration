@@ -300,10 +300,7 @@ class MonteCarloTreeSearch():
 
 
     ## tree search --> action loop
-    def search(self, n_sims=1000, n_futures=0, n_iter=100, lazy=False,  progress=False, reuse_samples=False, correct_prior = True):
-
-        if progress:
-            pbar = tqdm(total=n_sims, desc='MCTS search', position=0, leave=False, miniters=10, ascii=True, bar_format="{l_bar}{bar}")
+    def search(self, n_sims=1000, n_futures=0, n_iter=100, lazy=False, reuse_samples=False, correct_prior = True):
 
         ## root sampling of new posterior
         # self.GP.root_sample(certainty_equivalent=True)
@@ -327,9 +324,6 @@ class MonteCarloTreeSearch():
         
         ## loop through simulations
         for t in range(n_sims):
-
-            if progress:
-                pbar.update(1)
 
             ## CHEATING: give agent full knowledge of grid probabilities
             # posterior_p_cost = self.env.p_costs
@@ -358,10 +352,6 @@ class MonteCarloTreeSearch():
                 self.Q_tracker.append(Qs)
             except:
                 pass
-
-
-        if progress:
-            pbar.close()
 
         
         ## action selection
@@ -612,8 +602,9 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
     # plt.show()
 
     ## loop through runs of the same mountain-episode set
-    if n_runs > 1:
-        pbar = tqdm(total=n_runs*n_episodes, desc='Mountain_'+str(m)+', '+str(n_runs)+' runs, '+str(n_episodes)+' episodes', position=0, leave=False, ascii=True)
+    if progress:
+        if n_runs > 1:
+            pbar = tqdm(total=n_runs*n_episodes, desc='Mountain_'+str(m)+', '+str(n_runs)+' runs, '+str(n_episodes)+' episodes', position=0, leave=False, ascii=True)
     for run in range(n_runs):   
 
         ## copy env so that each agent makes its own observations 
@@ -621,18 +612,27 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
         for a in agents:
             agent_envs[a] = copy.deepcopy(env)
 
+        ## copy MCTS planners
+        MCTSs = {}
+        tree_resets = {}
+        for a in agents:
+            if (a == 'BAMCP') or (a == 'BAMCP w/ CE') or (a=='BAMCP_wrong'):
+                MCTSs[a] = None
+                tree_resets[a] = True
+        # tree_reset = True ## to determine whether tree is reset at the start of each episode
+
 
         ## initialise farmer
         farmer = Farmer(N)
 
         ## loop through episodes (i.e. different start and goal states for the same mountain)
-        tree_reset = True ## to determine whether tree is reset at the start of each episode
-        if n_runs <= 1:
-            pbar = tqdm(total=n_episodes, desc='Mountain_'+str(m)+', run '+str(run+1)+'/'+str(n_runs), position=m+1, leave=False)
-        # for e in range(n_episodes):
+        if progress:
+            if n_runs <= 1:
+                pbar = tqdm(total=n_episodes, desc='Mountain_'+str(m)+', run '+str(run+1)+'/'+str(n_runs), position=m+1, leave=False)
+        for e in range(n_episodes):
 
         ## TEMP: just interested in first choice
-        for e in range(1):
+        # for e in range(1):
 
             ## loop through agents
             for a, ag in enumerate(agents):
@@ -686,17 +686,22 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                 agent.get_env_info(env_copy)
 
                 ## reset tree
-                if ((ag == 'BAMCP') or (ag == 'BAMCP w/ CE') or (ag=='BAMCP_wrong')) & tree_reset:
+                if ((ag == 'BAMCP') or (ag == 'BAMCP w/ CE') or (ag=='BAMCP_wrong')) & tree_resets[ag]:#& tree_reset:
                     tree = Tree(N)
                     if expt == 'free':
-                        MCTS = MonteCarloTreeSearch_Free(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
+                        # MCTS = MonteCarloTreeSearch_Free(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
+                        MCTSs[ag] = MonteCarloTreeSearch_Free(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
                     elif expt == '2AFC':
-                        MCTS = MonteCarloTreeSearch_2AFC(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
+                        # MCTS = MonteCarloTreeSearch_2AFC(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
+                        MCTSs[ag] = MonteCarloTreeSearch_2AFC(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
                 
                 ## if keeping the tree between episodes, need to update tree with new episode info
-                elif ((ag == 'BAMCP') or (ag == 'BAMCP w/ CE') or (ag=='BAMCP_wrong')) & (not tree_reset):
-                    MCTS.update_episode()
-                    tree_reset = True
+                elif ((ag == 'BAMCP') or (ag == 'BAMCP w/ CE') or (ag=='BAMCP_wrong')) & (not tree_resets[ag]): #& (not tree_reset):
+                    # MCTS.update_episode()
+                    MCTSs[ag].update_episode()
+                    # tree_reset = True
+                    tree_resets[ag] = True
+                MCTS = MCTSs[ag]
                 assert e == env_copy.episode, 'episode mismatch between simulation and env\n simulation: {} \n env: {}'.format(e, MCTS.env.episode)
                 assert e == MCTS.actual_episode, 'episode mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(e, MCTS.env.episode)
 
@@ -804,7 +809,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
 
                             ## search
                             n_sims_tmp = n_sims
-                            action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures, n_iter=n_iter, lazy=lazy, progress=progress, reuse_samples=reuse_samples, correct_prior=correct_prior)
+                            action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures, n_iter=n_iter, lazy=lazy, reuse_samples=reuse_samples, correct_prior=correct_prior)
 
                             ## reduce number of sims if near to the goal (A BETTER IDEA WLD BE TO REDUCE THE DISTANCE IF THE TREE HAS REACHED THE GOAL)
                             # dist_to_goal = np.max(cdist([current, goal], [current, goal], metric='cityblock')) 
@@ -931,7 +936,8 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                                     if next_node_id in MCTS.tree.root.action_leaves[action].children:
                                         MCTS.tree.prune(action, next_node_id)
                                         assert np.array_equal(MCTS.tree.root.state[2:], costs), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action) 
-                                        tree_reset = False
+                                        # tree_reset = False
+                                        tree_resets[ag] = False
                                         # print('successful prune after action {}. new root has two leaves with a total of {} children'.format(action, np.sum(len(MCTS.tree.root.action_leaves[a].children) for a in MCTS.tree.root.action_leaves.keys())))
                                         # for a in MCTS.tree.root.action_leaves.keys():
                                         #     print('action:', a, ', n_children:', len(MCTS.tree.root.action_leaves[a].children))
@@ -945,62 +951,12 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                                         # print('unsuccessful prune after action {}'.format(action))
                                         # print('failed to find:\n', next_node_id)
                                         # print('next node id:', np.sum(np.array(next_node_id).reshape(N,N,2), axis=2))
-                                        tree_reset = True
+                                        # tree_reset = True
+                                        tree_resets[ag] = True
 
                                     ## for debugging purposes, don't prune the tree
                                     # tree_reset=True
-
-
-                        ## if offline planning (i.e. plan the full trajectory)
-                        elif offline:
-                            non_stuck_route=False
-                            search_attempts = 0
-                            while not non_stuck_route:
-                                search_attempts += 1
-
-                                ## search
-                                action, MCTS_Q = MCTS.search(n_sims, n_futures, progress=progress, reuse_samples=reuse_samples)
-                                actions.append(action)
-
-                                ## get the trajectory from the tree
-                                MCTS.tree.action_tree()
-                                traj_states, traj_actions = MCTS.tree.best_traj(start, goal)
-
-                                ## take the trajectory if it leads you to the goal
-                                if np.array_equal(traj_states[-1], goal):
-                                    env_copy.set_sim(False)
-                                    for state, action in zip(traj_states, traj_actions):
-                                        assert np.array_equal(state, current), 'error in trajectory execution\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, state, action)
-                                        current, _, terminated, _, _ = env_copy.step(action)
-                                        # current = observation['agent']
-                                        steps += 1
-                                        # if terminated:
-                                        #     break
-                                    assert terminated
-                                    non_stuck_route = True
-
-                                ## if stuck, repeat the search
-                                else:
-                                    print('mountain {}, episode {}: MCTS failed to find a path on search attempt {}'.format(m, e, search_attempts))
-                                    ## plot the tree???
-
-                                    # ## execute the path anyway?
-                                    # env_copy.set_sim(False)
-                                    # for state, action in zip(traj_states, traj_actions):
-                                    #     assert np.array_equal(state, current), 'error in trajectory execution\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, state, action)
-                                    #     observation, _, terminated, truncated = env_copy.step(action)
-                                    #     current = observation['agent']
-                                    #     steps += 1
-                                    # MCTS.tree.root = MCTS.tree.nodes[str(current)]
-                                    # env_copy.set_sim(True)
-
-                                    ## give up if too many searches
-                                    print('restarting search from ', MCTS.tree.root.state)
-                                    if search_attempts>max_search_attempts:
-                                        early_terminate = True
-                                        print('mountain {}, epsiode {}: search attempts exceeded'.format(m, e))
-                                        break
-
+                        MCTSs[ag] = MCTS
                     
                     ### log determinant of covariance matrix
                     # if (ag=='BAMCP') or (ag=='BAMCP w/ CE'):
@@ -1290,10 +1246,11 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         agent_envs[ag] = env_copy
 
                         end_episode = True
-            pbar.update(1)
-        if n_runs <= 1:
+            if progress:
+                pbar.update(1)
+        if progress & (n_runs <= 1):
             pbar.close()
-    if n_runs > 1:
+    if progress & (n_runs > 1):
         pbar.close()
                     
 
