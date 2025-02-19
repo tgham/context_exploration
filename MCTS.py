@@ -629,10 +629,10 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
         if progress:
             if n_runs <= 1:
                 pbar = tqdm(total=n_episodes, desc='Mountain_'+str(m)+', run '+str(run+1)+'/'+str(n_runs), position=m+1, leave=False)
-        for e in range(n_episodes):
+        # for e in range(n_episodes):
 
         ## TEMP: just interested in first choice
-        # for e in range(1):
+        for e in range(1):
 
             ## loop through agents
             for a, ag in enumerate(agents):
@@ -787,6 +787,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                             block_terminated = e == (n_episodes-1)
                         steps += 1
                         search_attempts = 0 # could do nan
+                        leaf_visits = []
 
                         ## update observations
                         agent.get_env_info(env_copy)
@@ -826,6 +827,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                             #     action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures,n_iter=n_iter, lazy=lazy,  progress=progress, reuse_samples=reuse_samples)
                             actions.append(action)
                             Q_values.append(MCTS_Q)
+                            leaf_visits = [leaf.n_action_visits for leaf in MCTS.tree.root.action_leaves.values()]
 
                             ### optional: check what the CE agent would have done with the mean of this set of samples
 
@@ -953,9 +955,6 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                                         # print('next node id:', np.sum(np.array(next_node_id).reshape(N,N,2), axis=2))
                                         # tree_reset = True
                                         tree_resets[ag] = True
-
-                                    ## for debugging purposes, don't prune the tree
-                                    # tree_reset=True
                         MCTSs[ag] = MCTS
                     
                     ### log determinant of covariance matrix
@@ -1127,6 +1126,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         sim_out['path_B'].append(env_copy.path_states[e][1])
                         sim_out['actions'].append(actions)
                         sim_out['Q_values'].append(Q_values)
+                        sim_out['leaf_visits'].append(leaf_visits)
                         sim_out['CE_actions'].append(CE_actions)
                         sim_out['CE_Q_values'].append(CE_Q_values)
                         sim_out['optimal_actions'].append(env_copy.o_traj_actions[e])
@@ -1177,6 +1177,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         sim_out['path_B'].append(env_copy.path_states[e][1])
                         sim_out['actions'].append(actions)
                         sim_out['Q_values'].append(Q_values)
+                        sim_out['leaf_visits'].append(leaf_visits)
                         sim_out['CE_actions'].append(CE_actions)
                         sim_out['CE_Q_values'].append(CE_Q_values)
                         sim_out['optimal_actions'].append(env_copy.o_traj_actions[e])
