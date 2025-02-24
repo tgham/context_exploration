@@ -26,8 +26,7 @@ from itertools import product
 # from utils import make_env, Node, Tree, argm, value_iteration, data_keys
 # from MCTS import MonteCarloTreeSearch, simulate_agent
 
-from utils import make_env, Node, Tree, argm, data_keys, mountain_keys, parse_lists, KL_divergence, profile_func, KL_sim
-from value_iteration import value_iteration
+from utils import make_env, Node, Tree, argm, data_keys, mountain_keys, parse_lists, KL_divergence, profile_func, KL_sim, value_iteration
 from MCTS import MonteCarloTreeSearch, MonteCarloTreeSearch_Free, MonteCarloTreeSearch_2AFC, simulate_agent
 
 import IPython
