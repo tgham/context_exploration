@@ -618,7 +618,7 @@ def KL_sim(obs_set, t, farmer, n_samples, plotting = False):
             plt.tight_layout()
             plt.show()
 
-    return KLs, t
+    return KLs, obs_set, t
 
 
 ## profiling

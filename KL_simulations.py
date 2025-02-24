@@ -76,12 +76,15 @@ def generate_state_sequences(N, max_turns):
 ## callback function for saving results
 def save_KLs(sim_out):
     KLs = sim_out[0]
-    t = sim_out[1]
+    obs_set = sim_out[1]
+    t = sim_out[2]
 
+    ## save KLs
     for seq in range(len(KLs)):
         KL_dict['t'].append(t)
         KL_dict['sequence'].append(seq)
         KL_dict['KL'].append(KLs[seq])
+        KL_dict['obs'].append(obs_set[seq])
 
     ## update progress bar
     master_pbar.update(1)
@@ -144,6 +147,8 @@ KL_dict = {
     't': [],
     'sequence': [],
     'KL': [],
+    'obs': []
+
 }
 plotting=False
 
