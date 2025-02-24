@@ -571,12 +571,12 @@ class MountainEnv(gym.Env):
             else:
                 n_common_across_eps = 0
             max_common_within_ep = (len(moves)-1)/1.5
-            max_common_across_eps = (len(moves)-1)/1
+            max_common_across_eps = (len(moves)-1)/1.2
 
             ## sanity check: remove all these constraints
             # rel_cost_diff_tol = 1
-            # max_common_within_ep = np.inf
-            # max_common_across_eps = np.inf
+            max_common_within_ep = np.inf
+            max_common_across_eps = np.inf
 
             t=0
             while (rel_cost_diff >= rel_cost_diff_tol) or (n_common_within_ep >= max_common_within_ep) or (n_common_across_eps >= max_common_across_eps):
@@ -589,8 +589,6 @@ class MountainEnv(gym.Env):
                 if len(self.starts)==0:
                     moves_1 = np.concatenate([x_actions, y_actions])
                     moves_2 = np.concatenate([y_actions, x_actions])
-                    path_states = [build_path(moves_1), build_path(moves_2)]
-                    path_actions = [moves_1, moves_2]
 
                 ## sanity check 1: always define path_1 as one of the simplest manhattan paths
                 # moves_1 = np.concatenate([x_actions, y_actions])
@@ -632,41 +630,29 @@ class MountainEnv(gym.Env):
 
 
                 ## or, combination of the above two options: randomly select whether it is the first n moves in the x direction or the last n moves in the y direction
-                n_min_same = 2
+                # n_min_same = 2
+                # if len(self.starts)>0:
+                #     movess = []
+                #     for p in range(2):
+                #         if np.random.rand() > 0.5: ## first moves overlap with x_actions of path A1
+                #             n_same = np.random.randint(n_min_same, len(x_actions)-1)
+                #             first_moves = x_actions[:n_same] 
+                #             remaining_moves = np.concatenate([x_actions[n_same:], y_actions])
+                #             movess.append(np.concatenate([first_moves, np.random.permutation(remaining_moves)]))
+                #         else: ## last moves overlap with y_actions of path A1
+                #             n_same = np.random.randint(n_min_same, len(y_actions)-1)
+                #             last_moves = y_actions[:n_same]
+                #             remaining_moves = np.concatenate([y_actions[n_same:], x_actions])
+                #             movess.append(np.concatenate([np.random.permutation(remaining_moves), last_moves]))
+                #     moves_1, moves_2 = movess
+
+                ## sanity check 3: path A is always the same simplest manhattan as path A1; path B takes a random number of steps in y direction, then all of its x steps, then the remaining y steps
+                n_min_same = 1
+                moves_1 = np.concatenate([x_actions, y_actions])
                 if len(self.starts)>0:
-                    movess = []
-                    for p in range(2):
-                        if np.random.rand() > 0.5: ## first moves overlap with x_actions of path A1
-                            n_same = np.random.randint(n_min_same, len(x_actions)-1)
-                            first_moves = x_actions[:n_same] 
-                            remaining_moves = np.concatenate([x_actions[n_same:], y_actions])
-                            movess.append(np.concatenate([first_moves, np.random.permutation(remaining_moves)]))
-                        else: ## last moves overlap with y_actions of path A1
-                            n_same = np.random.randint(n_min_same, len(y_actions)-1)
-                            last_moves = y_actions[:n_same]
-                            remaining_moves = np.concatenate([y_actions[n_same:], x_actions])
-                            movess.append(np.concatenate([np.random.permutation(remaining_moves), last_moves]))
-                    moves_1, moves_2 = movess
-                    # if np.random.rand() > 0.5:
-                    #     n_same = np.random.randint(n_min_same, len(x_actions)-1)
-                    #     first_moves = x_actions[:n_same] 
-                    #     remaining_moves = np.concatenate([x_actions[n_same:], y_actions])
-                    #     moves_1 = np.concatenate([first_moves, np.random.permutation(remaining_moves)])
-
-                    #     n_same = np.random.randint(n_min_same, len(x_actions)-1)
-                    #     first_moves = x_actions[:n_same]
-                    #     remaining_moves = np.concatenate([x_actions[n_same:], y_actions])
-                    #     moves_2 = np.concatenate([first_moves, np.random.permutation(remaining_moves)])
-                    # else:
-                    #     n_same = np.random.randint(n_min_same, len(y_actions)-1)
-                    #     last_moves = y_actions[:n_same] ## IN THE UNKNOWN CONTEXT VERSION, WE WOULD RANDOMLY SELECT X OR Y
-                    #     remaining_moves = np.concatenate([y_actions[n_same:], x_actions])
-                    #     moves_1 = np.concatenate([np.random.permutation(remaining_moves), last_moves])
-
-                    #     n_same = np.random.randint(n_min_same, len(y_actions)-1)
-                    #     last_moves = y_actions[:n_same]
-                    #     remaining_moves = np.concatenate([y_actions[n_same:], x_actions])
-                    #     moves_2 = np.concatenate([np.random.permutation(remaining_moves), last_moves])
+                    n_same = np.random.randint(n_min_same, len(y_actions)-1)
+                    first_moves = y_actions[:n_same]
+                    moves_2 = np.concatenate([first_moves, x_actions, y_actions[n_same:]])
 
 
 
