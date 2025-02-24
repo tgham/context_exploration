@@ -25,6 +25,7 @@ import pstats
 import subprocess
 import time
 from numba import jit, njit
+from agents import Farmer
 
 
 
@@ -446,6 +447,15 @@ def parse_lists(df):
             pass
     return df
 
+def parse_np(df):
+    cols = df.columns[2:]
+    for key in cols:
+        try:
+            df[key] = df[key].apply(lambda x: eval(x, {"array": np.array}))
+        except:
+            pass
+    return df
+
 
 ## KL divergence between prior and posterior samples, where samples as assumed to be multivariate Gaussians
 def KL_divergence(x, y):
@@ -478,6 +488,88 @@ def KL_divergence(x, y):
     return KL
 
 
+## parallel function for uncertainty tests
+def KL_sim(obs_set, t, farmer, n_samples, plotting = False):
+
+    ## get expt + sampler info
+    N = farmer.N
+    n_episodes = 2 ## arbitrary
+    expt = farmer.expt
+    n_iter = 10
+    lazy = False
+    CE = False
+
+    ## get prior samples
+    beta_params = {
+        'alpha_row': farmer.alpha_row,
+        'beta_row': farmer.beta_row,
+        'alpha_col': farmer.alpha_col,
+        'beta_col': farmer.beta_col
+        }
+    prior_p_samples = farmer.all_posterior_ps
+    prior_q_samples = farmer.all_posterior_qs
+    prior_samples = np.vstack([prior_p_samples.T, prior_q_samples.T])
+
+    ## reset env
+    env = make_env(N, n_episodes,expt, beta_params, 'cityblock')
+    env.reset()
+
+    ## loop through obs sets
+    KLs = []
+    for a, obs in enumerate(obs_set):
+        if plotting:
+            fig, axs = plt.subplots(1,5, figsize = (20, 5))
+        costs = []
+        for oi, o in enumerate(obs):
+            o_tmp = o[:2].astype(int)
+            # costs.append(env.get_cost(o_tmp))
+            # costs.append(arbitrary_costs[oi])
+            costs.append(env.costs[o_tmp[0], o_tmp[1]])
+        obs[:,2] = costs
+        env.set_obs(obs)
+
+        ## farmer generates new set of root samples, given the obs
+        farmer = Farmer(N)
+        farmer.get_env_info(env)
+        farmer.root_samples(farmer.obs, n_samples,n_iter, lazy=lazy,CE=False)
+        posterior_p_samples = farmer.all_posterior_ps
+        posterior_q_samples = farmer.all_posterior_qs
+        posterior_samples = np.vstack([posterior_p_samples.T, posterior_q_samples.T])
+        
+        ## plot posterior
+        if plotting:
+            # plot_r(farmer.posterior_mean_p_cost, axs[a,1], title = 'Posterior reward distribution\nmean root sample\npost obs')
+            plot_r(farmer.posterior_mean_p_cost, axs[0], title = 'Posterior reward distribution\nmean root sample\npost obs')
+            plot_obs(env.obs, ax = axs[0], text=True)
+            # plot_obs(env.obs, ax = axs[a,1], text=True)
+            
+            ## plot the prior and posterior KDEs of row and column parameters
+            for n in range(N):
+                sns.kdeplot(prior_p_samples[:,n], ax=axs[1], fill=True)
+                sns.kdeplot(posterior_p_samples[:,n], ax=axs[2], fill=True)
+                sns.kdeplot(prior_q_samples[:,n], ax=axs[3], fill=True)
+                sns.kdeplot(posterior_q_samples[:,n], ax=axs[4], fill=True)
+            axs[1].set_title('prior p')
+            axs[2].set_title('posterior p')
+            axs[3].set_title('prior q')
+            axs[4].set_title('posterior q')
+
+        ## KL divergence
+        KL = KL_divergence(prior_samples, posterior_samples)
+        KLs.append(KL)
+        # KLs[t,a] = KL
+        # print('KL after obs along ',axes[a],':',KL)
+
+        ## plot formatting
+        if plotting:
+            plt.suptitle('KL = '+str(np.round(KL,2)), fontsize = 20)
+            plt.tight_layout()
+            plt.show()
+
+    return KLs, t
+
+
+## profiling
 def profile_func(func, *args, **kwargs):
 
     ## check first of all if a profiler is active, in which case disable it

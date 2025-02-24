@@ -368,6 +368,7 @@ class Farmer:
         self.N = env.N 
         self.obs = env.obs
         self.current = env.current
+        self.expt = env.expt
         self.goal = env.goal
         self.high_cost = env.high_cost
         self.low_cost = env.low_cost

@@ -61,11 +61,15 @@ def plot_RPE(RPE, ax, title=None, cbar = False):
     return ax
 
 ## plot path between two points
-def plot_traj(trajs, ax, title=None):
+def plot_traj(trajs, ax, expt='free',title=None):
     
     ## plot direct and optimal trajectories using different markers
-    markers = ['*','x','x']
-    colours = ['white','red','red']
+    if expt=='free':
+        markers = ['*','x','x']
+        colours = ['white','red','red']
+    elif expt=='2AFC':
+        markers = ['x','x']
+        colours = ['blue', 'red']
     costs = ['L','H']
 
     # if len(trajs[0]) ==2:
@@ -95,7 +99,9 @@ def plot_traj(trajs, ax, title=None):
                 if len(t) == 3:
                     ax.text(t[1] + 0.5, t[0] + 0.5, costs[round(t[2], 2)==-0.9], ha='center', va='center', color='darkred', weight='bold')
                 else:
-                    ax.plot(t[1] + 0.5, t[0] + 0.5, markers[ti], color=colours[ti], markersize=10, linewidth=10)
+                    # Check for overlap and adjust position if necessary
+                    offset = 0.1 * (ti % 2 * 2 - 1)  # Alternate offset left and right
+                    ax.plot(t[1] + 0.5 + offset, t[0] + 0.5, markers[ti], color=colours[ti], markersize=10, linewidth=10)
 
 
 
