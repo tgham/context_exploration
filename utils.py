@@ -2,7 +2,6 @@ from enum import Enum
 import gymnasium as gym
 from gymnasium import spaces
 from gymnasium.envs.registration import register, registry
-import pygame
 import numpy as np
 from plotter import *
 import matplotlib.pyplot as plt

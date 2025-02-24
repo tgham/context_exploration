@@ -66,7 +66,7 @@ def save_results(sim):
     
 ## sim init
 parallel=True
-n_cores = 12
+n_cores = 40
 sim_results = {}
 for key in data_keys:
     sim_results[key] = []
@@ -79,12 +79,12 @@ all_mountains['env'] = [] ## in case we want to save the whole thing
 ### env inits
 beta_params = {
     'alpha_row': 5,
-    'beta_row': 0.1,
+    'beta_row': 1,
     'alpha_col': 0.5,
     'beta_col': 0.5
 }
 N = 7
-n_mountains = 12
+n_mountains = 2500
 n_episodes = 3
 n_runs = 1
 expt = '2AFC'
@@ -101,10 +101,10 @@ env_params = {
 n_mountains = env_params['n_mountains']
 
 ## MCTS params
-n_sims = 50000
+n_sims = 100000
 MCTS_params = {
     'n_sims': n_sims,
-    'n_futures': 0,
+    'n_futures': 0, 
     'exploration_constant': 25,
     'discount_factor': 1,
 }

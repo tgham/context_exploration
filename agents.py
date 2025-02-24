@@ -1,7 +1,6 @@
 from enum import Enum
 import gymnasium as gym
 from gymnasium import spaces
-import pygame
 import numpy as np
 from plotter import *
 import matplotlib.pyplot as plt

@@ -1,7 +1,6 @@
 from enum import Enum
 import gymnasium as gym
 from gymnasium import spaces
-import pygame
 import numpy as np
 from plotter import *
 import matplotlib.pyplot as plt
@@ -571,7 +570,7 @@ class MountainEnv(gym.Env):
             else:
                 n_common_across_eps = 0
             max_common_within_ep = (len(moves)-1)/1.5
-            max_common_across_eps = (len(moves)-1)/1
+            max_common_across_eps = (len(moves)-1)/1.2
 
             ## sanity check: remove all these constraints
             # rel_cost_diff_tol = 1
@@ -647,28 +646,6 @@ class MountainEnv(gym.Env):
                             remaining_moves = np.concatenate([y_actions[n_same:], x_actions])
                             movess.append(np.concatenate([np.random.permutation(remaining_moves), last_moves]))
                     moves_1, moves_2 = movess
-                    # if np.random.rand() > 0.5:
-                    #     n_same = np.random.randint(n_min_same, len(x_actions)-1)
-                    #     first_moves = x_actions[:n_same] 
-                    #     remaining_moves = np.concatenate([x_actions[n_same:], y_actions])
-                    #     moves_1 = np.concatenate([first_moves, np.random.permutation(remaining_moves)])
-
-                    #     n_same = np.random.randint(n_min_same, len(x_actions)-1)
-                    #     first_moves = x_actions[:n_same]
-                    #     remaining_moves = np.concatenate([x_actions[n_same:], y_actions])
-                    #     moves_2 = np.concatenate([first_moves, np.random.permutation(remaining_moves)])
-                    # else:
-                    #     n_same = np.random.randint(n_min_same, len(y_actions)-1)
-                    #     last_moves = y_actions[:n_same] ## IN THE UNKNOWN CONTEXT VERSION, WE WOULD RANDOMLY SELECT X OR Y
-                    #     remaining_moves = np.concatenate([y_actions[n_same:], x_actions])
-                    #     moves_1 = np.concatenate([np.random.permutation(remaining_moves), last_moves])
-
-                    #     n_same = np.random.randint(n_min_same, len(y_actions)-1)
-                    #     last_moves = y_actions[:n_same]
-                    #     remaining_moves = np.concatenate([y_actions[n_same:], x_actions])
-                    #     moves_2 = np.concatenate([np.random.permutation(remaining_moves), last_moves])
-
-
 
                 ## sanity check 3: both paths have a total of N=nA + nB overlap, where nA is the overlap with the initial x_actions of path A, and nB is the overlap with the final x_actions of path B
                 # max_overlap = len(x_actions)
