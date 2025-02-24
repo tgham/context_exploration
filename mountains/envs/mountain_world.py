@@ -15,7 +15,6 @@ import heapq
 from collections import defaultdict
 from IPython.display import display, clear_output
 from utils import *
-from value_iteration import value_iteration
 from scipy.stats import rankdata, truncnorm
 from scipy.linalg import cholesky
 from minimax_tilting_sampler import TruncatedMVN
