@@ -1,7 +1,6 @@
 from enum import Enum
 import gymnasium as gym
 from gymnasium import spaces
-import pygame
 import numpy as np
 from plotter import *
 import matplotlib.pyplot as plt
@@ -649,11 +648,19 @@ class MountainEnv(gym.Env):
                 n_min_same = 1
                 moves_1 = np.concatenate([x_actions, y_actions])
                 if len(self.starts)>0:
-                    n_same = np.random.randint(n_min_same, len(y_actions)-1)
-                    first_moves = y_actions[:n_same]
-                    moves_2 = np.concatenate([first_moves, x_actions, y_actions[n_same:]])
-
-
+                    movess = []
+                    for p in range(2):
+                        if np.random.rand() > 0.5: ## first moves overlap with x_actions of path A1
+                            n_same = np.random.randint(n_min_same, len(x_actions)-1)
+                            first_moves = x_actions[:n_same] 
+                            remaining_moves = np.concatenate([x_actions[n_same:], y_actions])
+                            movess.append(np.concatenate([first_moves, np.random.permutation(remaining_moves)]))
+                        else: ## last moves overlap with y_actions of path A1
+                            n_same = np.random.randint(n_min_same, len(y_actions)-1)
+                            last_moves = y_actions[:n_same]
+                            remaining_moves = np.concatenate([y_actions[n_same:], x_actions])
+                            movess.append(np.concatenate([np.random.permutation(remaining_moves), last_moves]))
+                    moves_1, moves_2 = movess
 
                 ## sanity check 3: both paths have a total of N=nA + nB overlap, where nA is the overlap with the initial x_actions of path A, and nB is the overlap with the final x_actions of path B
                 # max_overlap = len(x_actions)
