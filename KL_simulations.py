@@ -161,15 +161,18 @@ n_seqs = len(obs_set[0])
 parallel = True
 n_cores = 12
 if __name__ == '__main__':
+    if parallel:
+        print('Parallel KL tests')
+    else:
+        print('Serial KL tests')
+    print('n samples:', n_samples)
+    print('N:',N, ', n_seqs:', n_seqs)
     master_pbar = tqdm(total=n_tests, desc='all_tests', position=0, leave=True, colour='green')
     if parallel:
 
         ## start pool
         n_cores = np.min([n_cores, n_tests])
         with mp.Pool(n_cores) as pool:
-            print('Parallel uncertainty tests:')
-            print('n samples:', n_samples)
-            print('N:',N, ', n_seqs:', n_seqs)
             KLs = [pool.apply_async(KL_sim, args = (obs_set[t], t, farmer,n_samples, plotting),
                                     callback = save_KLs) for t in range(n_tests)
                    ]
