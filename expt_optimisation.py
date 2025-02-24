@@ -84,7 +84,7 @@ beta_params = {
     'beta_col': 0.5
 }
 N = 7
-n_mountains = 12
+n_mountains = 500
 n_episodes = 3
 n_runs = 1
 expt = '2AFC'
@@ -101,7 +101,7 @@ env_params = {
 n_mountains = env_params['n_mountains']
 
 ## MCTS params
-n_sims = 50000
+n_sims = 100000
 MCTS_params = {
     'n_sims': n_sims,
     'n_futures': 0,
