@@ -562,6 +562,9 @@ def KL_sim(obs_set, t, farmer, n_samples, plotting = False):
     prior_q_samples = farmer.all_posterior_qs
     prior_samples = np.vstack([prior_p_samples.T, prior_q_samples.T])
 
+    ## save the posterior means
+    all_posterior_mean_p_costs = []
+
     ## reset env
     env = make_env(N, n_episodes,expt, beta_params, 'cityblock')
     env.reset()
@@ -588,6 +591,7 @@ def KL_sim(obs_set, t, farmer, n_samples, plotting = False):
         posterior_p_samples = farmer.all_posterior_ps
         posterior_q_samples = farmer.all_posterior_qs
         posterior_samples = np.vstack([posterior_p_samples.T, posterior_q_samples.T])
+        all_posterior_mean_p_costs.append(farmer.posterior_mean_p_cost)
         
         ## plot posterior
         if plotting and a==n_seqs-1:
@@ -618,8 +622,9 @@ def KL_sim(obs_set, t, farmer, n_samples, plotting = False):
             plt.suptitle('KL = '+str(np.round(KL,2)), fontsize = 20)
             plt.tight_layout()
             plt.show()
+    all_posterior_mean_p_costs = np.array(all_posterior_mean_p_costs)
 
-    return KLs, obs_set, t
+    return KLs, obs_set, all_posterior_mean_p_costs, t
 
 
 ## profiling
