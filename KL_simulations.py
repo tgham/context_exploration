@@ -72,6 +72,35 @@ def generate_state_sequences(N, max_turns):
     
     return state_sequences
 
+def generate_abstract_sequences(N, max_turns):
+    """Generate unique movement sequences based on abstract structure (number of horizontal/vertical moves)."""
+    
+    # Generate all possible movement sequences
+    move_sequences = product([(1, 0), (0, 1)], repeat=N)
+    
+    # Filter sequences that respect the max_turns constraint
+    compressed_sequences = defaultdict(list)  # Store sequences grouped by structure
+    
+    for moves in move_sequences:
+        if count_turns(moves) <= max_turns:
+            # Abstract representation: count (right, up) moves
+            num_right = sum(1 for move in moves if move == (1, 0))
+            num_up = N - num_right  # Remaining moves must be 'up'
+            compressed_sequences[(num_right, num_up)].append(moves)
+
+    # Convert one representative movement sequence per abstract type into a state sequence
+    state_sequences = []
+    for _, moves_list in compressed_sequences.items():
+        moves = moves_list[0]  # Pick the first representative sequence
+        state = np.array([0, 0])
+        path = [state.copy()]
+        for move in moves:
+            state += np.array(move)
+            path.append(state.copy())
+        state_sequences.append(np.array(path))
+
+    return state_sequences  # Each unique (right, up) count corresponds to one sequence
+
 ## callback function for saving results
 def save_KLs(sim_out):
     KLs = sim_out[0]
