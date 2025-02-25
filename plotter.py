@@ -78,7 +78,7 @@ def plot_traj(trajs, ax, expt='free',title=None):
     for ti, traj in enumerate(trajs):
 
         ## optimal path
-        if (ti==0) or (expt=='2AFC_SG'):
+        if (ti==0) or (expt=='2AFC'):
 
             ## plot start and goal
             # ax.scatter(traj[0][1]+0.5, traj[0][0]+0.5, color='red', s=100)
