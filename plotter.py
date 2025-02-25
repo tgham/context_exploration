@@ -67,7 +67,7 @@ def plot_traj(trajs, ax, expt='free',title=None):
     if expt=='free':
         markers = ['*','x','x']
         colours = ['white','red','red']
-    elif expt=='2AFC':
+    elif expt=='2AFC' or expt=='2AFC_SG':
         markers = ['x','x']
         colours = ['blue', 'red']
     costs = ['L','H']
@@ -78,7 +78,7 @@ def plot_traj(trajs, ax, expt='free',title=None):
     for ti, traj in enumerate(trajs):
 
         ## optimal path
-        if ti==0:
+        if (ti==0) or (expt=='2AFC_SG'):
 
             ## plot start and goal
             # ax.scatter(traj[0][1]+0.5, traj[0][0]+0.5, color='red', s=100)
@@ -97,7 +97,8 @@ def plot_traj(trajs, ax, expt='free',title=None):
 
                 ## label the costs
                 if len(t) == 3:
-                    ax.text(t[1] + 0.5, t[0] + 0.5, costs[round(t[2], 2)==-0.9], ha='center', va='center', color='darkred', weight='bold')
+                    # ax.text(t[1] + 0.5, t[0] + 0.5, costs[round(t[2], 2)==-0.9], ha='center', va='center', color='darkred', weight='bold')
+                    ax.text(t[1] + 0.5, t[0] + 0.5, costs[round(t[2], 2)==-1], ha='center', va='center', color='darkred', weight='bold')
                 else:
                     # Check for overlap and adjust position if necessary
                     offset = 0.1 * (ti % 2 * 2 - 1)  # Alternate offset left and right
