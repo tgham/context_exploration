@@ -38,7 +38,7 @@ class Actions(Enum):
 
 class MountainEnv(gym.Env):
 
-    def __init__(self, N, n_episodes=1, expt='free', beta_params=None, metric = 'cityblock', size=5, seed=None):
+    def __init__(self, N, n_episodes=1, expt_info={'type':'free'}, beta_params=None, metric = 'cityblock', size=5, seed=None):
         
         ## seed
         if seed is not None:
@@ -52,7 +52,9 @@ class MountainEnv(gym.Env):
         y = np.arange(N)
         X,Y = np.meshgrid(x,y)
         self.locations = np.column_stack([X.ravel(), Y.ravel()])
-        self.expt = expt
+        self.expt = expt_info['type']
+        if self.expt == '2AFC':
+            self.same_SGs = expt_info['same_SGs']
 
 
         ### misc gym inits
@@ -150,7 +152,7 @@ class MountainEnv(gym.Env):
 
 
             ## if 2AFC, we use the same SG pair all the way through
-            if expt=='2AFC':
+            if self.expt=='2AFC' and self.same_SGs:
                 try:
                     start, goal = self.sample_SG()
                     SG_found=True
@@ -160,10 +162,10 @@ class MountainEnv(gym.Env):
             ## generate relevant trial info for each episode
             for e in range(n_episodes):
 
-                try:
+                # try:
                 
                     ## free movement
-                    if expt == 'free':
+                    if self.expt == 'free':
                         start, goal = self.sample_SG()
                         self.starts.append(start)
                         self.goals.append(goal)
@@ -178,13 +180,26 @@ class MountainEnv(gym.Env):
                         self.o_traj_actions.append(o_traj_actions)
 
                     ## 2AFC
-                    elif expt=='2AFC':
-                        max_turns = 3
-                        path_actions, path_states = self.sample_paths(start, goal, max_turns)
-                        self.starts.append(start)
-                        self.goals.append(goal)
-                        self.path_states.append(path_states)
-                        self.path_actions.append(path_actions)
+                    elif self.expt=='2AFC':
+                        if self.same_SGs:
+                            max_turns = 3
+                            path_actions, path_states = self.sample_paths(start, goal, max_turns)
+                            self.starts.append(start)
+                            self.goals.append(goal)
+                            self.path_states.append(path_states)
+                            self.path_actions.append(path_actions)
+                        
+                        ## or, different SGs for each episode
+                        elif not self.same_SGs:
+                            max_turns=1
+                            sampled_abstract_sequences, path_actions, path_states, starts, goals = self.sample_paths_and_SGs(max_turns)
+                            self.starts.append(starts)
+                            self.goals.append(goals)
+                            self.path_states.append(path_states)
+                            self.path_actions.append(path_actions)
+                            self.sampled_abstract_sequences.append(sampled_abstract_sequences)
+                            SG_found = True
+
 
                         ## get info about optimal path (WILL CHANGE THIS LATER SINCE THE NOTION OF OPTIMAL IS DIFFERENT FOR 2AFC)
                         # o_traj, o_traj_costs, o_traj_total_cost, o_traj_actions = self.optimal_trajectory(start, goal)
@@ -207,39 +222,8 @@ class MountainEnv(gym.Env):
                         self.path_costs.append(path_costs)
                         paths_found = True
 
-                    ## 2AFC_SG
-                    elif expt=='2AFC_SG':
-                        max_turns = 1
-                        sampled_abstract_sequences, path_actions, path_states, starts, goals = self.sample_paths_and_SGs(max_turns)
-                        self.starts.append(starts)
-                        self.goals.append(goals)
-                        self.path_states.append(path_states)
-                        self.path_actions.append(path_actions)
-                        self.sampled_abstract_sequences.append(sampled_abstract_sequences)
-
-                        ## get info about optimal path (WILL CHANGE THIS LATER SINCE THE NOTION OF OPTIMAL IS DIFFERENT FOR 2AFC)
-                        # o_traj, o_traj_costs, o_traj_total_cost, o_traj_actions = self.optimal_trajectory(start, goal)
-                        self.o_trajs.append([])
-                        self.o_traj_costs.append([])
-                        self.o_traj_total_costs.append(np.nan)
-                        self.o_traj_actions.append([])
-
-                        ## save expected costs of the paths
-                        path_costs = []
-                        for path in self.path_states[e]:
-                            
-                            ## pq = p(high cost)
-                            # path_cost = np.sum([self.p_costs[x, y]*self.high_cost + (1-self.p_costs[x, y])*self.low_cost for x, y in path]) 
-
-                            ## pq = p(low cost)
-                            path_cost = np.sum([self.p_costs[x, y]*self.low_cost + (1-self.p_costs[x, y])*self.high_cost for x, y in path]) 
-                            path_costs.append(path_cost)
-
-                        self.path_costs.append(path_costs)
-                        paths_found = True
-
-                except:
-                    break
+                # except:
+                #     break
 
                 ### define actual binary costs for each episode, assuming they regenerate each time
 
