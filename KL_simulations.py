@@ -105,13 +105,15 @@ def generate_abstract_sequences(N, max_turns):
 def save_KLs(sim_out):
     KLs = sim_out[0]
     obs_set = sim_out[1]
-    t = sim_out[2]
+    all_posterior_mean_p_costs = sim_out[2]
+    t = sim_out[3]
 
     ## save KLs
     for seq in range(len(KLs)):
         KL_dict['t'].append(t)
         KL_dict['sequence'].append(seq)
         KL_dict['KL'].append(KLs[seq])
+        KL_dict['posterior_mean_p_cost'].append(all_posterior_mean_p_costs[seq])
         KL_dict['obs'].append(obs_set[seq])
 
     ## update progress bar
@@ -175,8 +177,8 @@ KL_dict = {
     't': [],
     'sequence': [],
     'KL': [],
+    'posterior_mean_p_cost': [],
     'obs': []
-
 }
 plotting=False
 
