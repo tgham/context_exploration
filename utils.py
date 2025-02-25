@@ -568,8 +568,9 @@ def KL_sim(obs_set, t, farmer, n_samples, plotting = False):
 
     ## loop through obs sets
     KLs = []
+    n_seqs = len(obs_set)
     for a, obs in enumerate(obs_set):
-        if plotting:
+        if plotting and a==n_seqs-1:
             fig, axs = plt.subplots(1,5, figsize = (20, 5))
         costs = []
         for oi, o in enumerate(obs):
@@ -589,7 +590,7 @@ def KL_sim(obs_set, t, farmer, n_samples, plotting = False):
         posterior_samples = np.vstack([posterior_p_samples.T, posterior_q_samples.T])
         
         ## plot posterior
-        if plotting:
+        if plotting and a==n_seqs-1:
             # plot_r(farmer.posterior_mean_p_cost, axs[a,1], title = 'Posterior reward distribution\nmean root sample\npost obs')
             plot_r(farmer.posterior_mean_p_cost, axs[0], title = 'Posterior reward distribution\nmean root sample\npost obs')
             plot_obs(env.obs, ax = axs[0], text=True)
@@ -613,7 +614,7 @@ def KL_sim(obs_set, t, farmer, n_samples, plotting = False):
         # print('KL after obs along ',axes[a],':',KL)
 
         ## plot formatting
-        if plotting:
+        if plotting and a==n_seqs-1:
             plt.suptitle('KL = '+str(np.round(KL,2)), fontsize = 20)
             plt.tight_layout()
             plt.show()
