@@ -78,6 +78,14 @@ class MonteCarloTreeSearch():
         node.action_leaves[action].norm_performance = 0
 
         return node.action_leaves[action]
+    
+    ## debugging method for checking if node and env states match
+    def check_state(self, node):
+        if self.env.same_SGs:
+            assert np.array_equal(node.state[:2], self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.env.current) ### USE THIS IN THE SUBCLASS DEFINITION FOR THE FREE EXPT TOO
+        else:
+            # assert np.array_equal(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.starts[node.episode]), 'mismatch between node and env state\n node: {} \n env: {}'.format(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.starts[node.episode])
+            assert np.array_equal(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.current)
 
     ## take an action according to the tree policy, i.e. take the best UCT child and see where it takes you
     def tree_policy(self):
@@ -88,7 +96,9 @@ class MonteCarloTreeSearch():
         node_episode = self.env.episode
         goal = node.goal
         assert node_episode == node.episode, 'episode mismatch between env and tree\n env: {} \n tree: {}\n MCTS: {}'.format(node_episode, node.episode, self.actual_episode)
-        assert np.array_equal(node.state[:2], self.actual_state), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.actual_state)
+        # assert np.array_equal(node.state[:2], self.actual_state), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.actual_state)
+        self.check_state(node)
+
 
         ## create a record of the nodes/leaves visited in the tree
         self.tree_costs = [] ## i.e. the cost associated with each traversal of the tree *under the tree policy*. Hence, this does not include the cost of the current state, which is the starting point of the tree policy, nor does it include the cost of expansion.
@@ -108,7 +118,8 @@ class MonteCarloTreeSearch():
         assert self.env.sim, 'env is not in sim mode'
         while not node.terminated:
             t+=1
-            assert np.array_equal(node.state[:2], self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.env.current)
+            # assert np.array_equal(node.state[:2], self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.env.current)
+            self.check_state(node)
 
             ## expansion step
             if self.tree.is_expandable(node):
@@ -122,7 +133,7 @@ class MonteCarloTreeSearch():
 
                 ## revert env
                 self.env.set_state(self.actual_state)
-                # self.env.set_goal(self.actual_goal)
+                self.env.set_goal(self.actual_goal)
                 self.env.set_episode(self.actual_episode)
                 assert np.array_equal(self.env.current, self.actual_state), 'env state not reverted properly'
                 assert self.env.episode == self.actual_episode, 'env episode not reverted properly. should be in {}, but actually in {}'.format(self.actual_episode, self.env.episode)
@@ -151,7 +162,7 @@ class MonteCarloTreeSearch():
 
                 ## debugging
                 assert np.array_equal(next_state, self.env.current), 'mismatch between env and tree state\n env: {} \n tree: {}'.format(self.env.current, next_state)
-                assert np.array_equal(node.state[:2], next_state), 'error in tree policy step {}\n started in {}\n supposed to take action {} to {}\n ended up moving  to {}'.format(t, state_tmp, action_leaf.action, node.state[:2], action_leaf.next_state)
+                # assert np.array_equal(node.state[:2], next_state), 'error in tree policy step {}\n started in {}\n supposed to take action {} to {}\n ended up moving  to {}'.format(t, state_tmp, action_leaf.action, node.state[:2], action_leaf.next_state)
 
         ## if terminal node, there are no mode action leaves to choose from
         if node.terminated:
@@ -464,15 +475,17 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
     
     def update_episode(self):
         self.actual_episode = self.env.episode
-        # self.actual_state = self.env.starts[self.actual_episode].copy()
-        self.actual_state = self.env.current
+        # self.actual_state = self.env.current
+        self.actual_state = self.env.starts[self.actual_episode].copy()
         self.actual_goal = self.env.goals[self.actual_episode].copy() ## in fact, this will probably be two goals
 
     ## tree step
     def tree_step(self, action_leaf):
         # print('tree step in ep ', action_leaf.episode, 'action:', action_leaf.action)
-        start_tmp = self.env.current ## will change this if multiple starts are used
-        goal_tmp = self.env.goals[self.actual_episode][action_leaf.action]
+        # start_tmp = self.env.current ## will change this if multiple starts are used
+        start_tmp = self.env.starts[self.actual_episode][action_leaf.action].copy()
+        goal_tmp = self.env.goals[self.actual_episode][action_leaf.action].copy()
+        self.env.set_state(start_tmp)
         self.env.set_goal(goal_tmp)
         path_id = action_leaf.action
         assert self.env.episode == action_leaf.episode, 'episode mismatch between env and tree\n env: {} \n tree: {}\n MCTS: {}'.format(self.env.episode, action_leaf.episode, self.actual_episode)

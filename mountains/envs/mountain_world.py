@@ -772,7 +772,6 @@ class MountainEnv(gym.Env):
         while not diff_axes:
             seq_idxs = np.random.choice(len(abstract_sequences), size=self.n_afc, replace=False)
             sampled_abstract_sequences = [abstract_sequences[i] for i in seq_idxs]
-            print(sampled_abstract_sequences)
 
             ## ensure that one has more horizontal moves than its vertical moves, and the other has more vertical moves than its horizontal moves
             # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
@@ -786,7 +785,7 @@ class MountainEnv(gym.Env):
                 # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])):
                 if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
                     diff_axes = True
-        print('found different axes: ', sampled_abstract_sequences)
+        # print('found different axes: ', sampled_abstract_sequences)
         # seq_idxs = np.random.choice(len(abstract_sequences), size=self.n_afc, replace=False)
         # sampled_abstract_sequences = [abstract_sequences[i] for i in seq_idxs]
         # print('sampled_abstract_sequences:', sampled_abstract_sequences)
@@ -807,65 +806,65 @@ class MountainEnv(gym.Env):
         ### get the concrete sequences
 
         ## same starts
-        while (n_common_within_ep >= max_common_within_ep) or (n_common_across_eps >= max_common_across_eps):
-            both_in_grid = False
-            while not both_in_grid:
-                path_states = []
-                path_actions = []
-                goals = []
-                start = np.random.randint(0, self.N-1, size=2)
-                # start = np.array([0, 0])
-                for s_a_s in sampled_abstract_sequences:
-                    # transformation = 'none'
-                    transformation = np.random.choice(['none', 'x', 'y'])
-                    path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start.copy(), transformation=transformation)
-                    path_states.append(path)
-                    path_actions.append(actions)
-                    goals.append(path[-1])
-                    
-                ## check to see if all states are in the grid
-                # print(path_states)
-                if np.all([np.all(path >= 0) and np.all(path < self.N) for path in path_states]):
-                    both_in_grid = True
-
-            ## check overlap between paths
-            path_states = [tuple(map(tuple, path)) for path in path_states]
-            n_common_within_ep, n_common_across_eps = self.check_overlap(path_states[0], path_states[1],1)
-            assert np.array_equal(path_states[0][0], path_states[1][0]), 'start locations are not the same: %s, %s' % (path_states[0][0], path_states[1][0])
-        starts = start
-
-        
-        # ## or, enforce different starts
-        # while (not diff_starts) or (n_common_within_ep >= max_common_within_ep) or (n_common_across_eps >= max_common_across_eps):
-        #     path_states = []
-        #     path_actions = []
-        #     starts = []
-        #     goals = []
-        #     for s_a_s in sampled_abstract_sequences:
-        #         in_grid = False
-        #         while not in_grid:
-        #             transformation = np.random.choice(['none', 'x', 'y'])
+        # while (n_common_within_ep >= max_common_within_ep) or (n_common_across_eps >= max_common_across_eps):
+        #     both_in_grid = False
+        #     while not both_in_grid:
+        #         path_states = []
+        #         path_actions = []
+        #         goals = []
+        #         start = np.random.randint(0, self.N-1, size=2)
+        #         # start = np.array([0, 0])
+        #         for s_a_s in sampled_abstract_sequences:
         #             # transformation = 'none'
-        #             start = np.random.randint(0, self.N-1, size=2)
-        #             path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation=transformation)
-
-        #             ## check to see if all states are in the grid
-        #             if np.all(path >= 0) and np.all(path < self.N):
-        #                 in_grid = True
-            
-        #         path_states.append(path)
-        #         path_actions.append(actions)
-        #         starts.append(path[0])
-        #         goals.append(path[-1])
-            
-        #     ## check that all start locations are different
-        #     n_distinct_starts = len(set([tuple(s) for s in starts]))
-        #     if n_distinct_starts == self.n_afc:
-        #         diff_starts = True
+        #             transformation = np.random.choice(['none', 'x', 'y'])
+        #             path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start.copy(), transformation=transformation)
+        #             path_states.append(path)
+        #             path_actions.append(actions)
+        #             goals.append(path[-1])
+                    
+        #         ## check to see if all states are in the grid
+        #         # print(path_states)
+        #         if np.all([np.all(path >= 0) and np.all(path < self.N) for path in path_states]):
+        #             both_in_grid = True
 
         #     ## check overlap between paths
         #     path_states = [tuple(map(tuple, path)) for path in path_states]
-        #     n_common_within_ep, n_common_across_eps = self.check_overlap(path_states[0], path_states[1],0)
+        #     n_common_within_ep, n_common_across_eps = self.check_overlap(path_states[0], path_states[1],1)
+        #     assert np.array_equal(path_states[0][0], path_states[1][0]), 'start locations are not the same: %s, %s' % (path_states[0][0], path_states[1][0])
+        # starts = start
+
+        
+        ## or, enforce different starts
+        while (not diff_starts) or (n_common_within_ep >= max_common_within_ep) or (n_common_across_eps >= max_common_across_eps):
+            path_states = []
+            path_actions = []
+            starts = []
+            goals = []
+            for s_a_s in sampled_abstract_sequences:
+                in_grid = False
+                while not in_grid:
+                    transformation = np.random.choice(['none', 'x', 'y'])
+                    # transformation = 'none'
+                    start = np.random.randint(0, self.N-1, size=2)
+                    path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation=transformation)
+
+                    ## check to see if all states are in the grid
+                    if np.all(path >= 0) and np.all(path < self.N):
+                        in_grid = True
+            
+                path_states.append(path)
+                path_actions.append(actions)
+                starts.append(path[0])
+                goals.append(path[-1])
+            
+            ## check that all start locations are different
+            n_distinct_starts = len(set([tuple(s) for s in starts]))
+            if n_distinct_starts == self.n_afc:
+                diff_starts = True
+
+            ## check overlap between paths
+            path_states = [tuple(map(tuple, path)) for path in path_states]
+            n_common_within_ep, n_common_across_eps = self.check_overlap(path_states[0], path_states[1],0)
 
         return sampled_abstract_sequences, path_actions, path_states, starts, goals
 
