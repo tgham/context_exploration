@@ -68,12 +68,16 @@ class MonteCarloTreeSearch():
             terminated = node.episode == self.env.n_episodes-1 ## i.e. this action leaf corresponds to the action made in the final episode, so it leads to termination of the block
             # next_state = node.state[:2] #i.e. this stays the same since agent always regens to the same start state. may instead choose to fill this with the states that are actually traversed
             if not terminated:
-                next_state = self.env.starts[node.episode]
+                # next_state = self.env.starts[node.episode]
+                next_state = self.env.goals[node.episode][action].copy()
             else:
-                next_state = np.array([None, None])
+                # next_state = np.array([None, None])
+                next_state = self.env.goals[node.episode][action].copy()
             
         ## update info for s-a leaf - i.e. the state-action pair
-        node.action_leaves[action] = Action_Node(prev_state = node.state, action=action, next_state = next_state, terminated=terminated, episode=node.episode, parent_id=node.node_id)
+        # prev_state = node.state
+        prev_state = self.env.starts[node.episode][action].copy()
+        node.action_leaves[action] = Action_Node(prev_state = prev_state, action=action, next_state = next_state, terminated=terminated, episode=node.episode, parent_id=node.node_id)
         node.action_leaves[action].performance = 0
         node.action_leaves[action].norm_performance = 0
 
