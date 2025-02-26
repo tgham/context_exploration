@@ -257,6 +257,7 @@ class MonteCarloTreeSearch():
     ## calculate E-E value
     def compute_UCT(self, node, action_leaf): 
         exploitation_term = action_leaf.performance
+        # exploitation_term = action_leaf.norm_performance
         assert action_leaf.n_action_visits > 0 or action_leaf.terminated, 'action leaf has not been visited: {}'.format(action_leaf)
         exploration_term = self.exploration_constant * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
         # print('exploration term:', exploration_term, 'exploitation term:', exploitation_term)

@@ -547,6 +547,10 @@ def KL_sim(obs_set, t, farmer, n_samples, plotting = False):
     N = farmer.N
     n_episodes = 2 ## arbitrary
     expt = farmer.expt
+    expt_info = {
+        'type': expt,
+        'same_SGs': True,
+    }
     n_iter = 10
     lazy = False
     CE = False
@@ -566,7 +570,7 @@ def KL_sim(obs_set, t, farmer, n_samples, plotting = False):
     all_posterior_mean_p_costs = []
 
     ## reset env
-    env = make_env(N, n_episodes,expt, beta_params, 'cityblock')
+    env = make_env(N, n_episodes,expt_info, beta_params, 'cityblock')
     env.reset()
 
     ## loop through obs sets
@@ -612,7 +616,8 @@ def KL_sim(obs_set, t, farmer, n_samples, plotting = False):
             axs[4].set_title('posterior q')
 
         ## KL divergence
-        KL = KL_divergence(prior_samples, posterior_samples)
+        # KL = KL_divergence(prior_samples, posterior_samples)
+        KL = KL_divergence(posterior_samples, prior_samples)
         KLs.append(KL)
         # KLs[t,a] = KL
         # print('KL after obs along ',axes[a],':',KL)
