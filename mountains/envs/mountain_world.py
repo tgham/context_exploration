@@ -162,7 +162,7 @@ class MountainEnv(gym.Env):
             ## generate relevant trial info for each episode
             for e in range(n_episodes):
 
-                # try:
+                try:
                 
                     ## free movement
                     if self.expt == 'free':
@@ -186,6 +186,8 @@ class MountainEnv(gym.Env):
                             path_actions, path_states = self.sample_paths(start, goal, max_turns)
                             self.starts.append(start)
                             self.goals.append(goal)
+                            # self.starts.append([path_states[0][0], path_states[1][0]])
+                            # self.goals.append([path_states[0][-1], path_states[1][-1]])
                             self.path_states.append(path_states)
                             self.path_actions.append(path_actions)
                         
@@ -222,8 +224,8 @@ class MountainEnv(gym.Env):
                         self.path_costs.append(path_costs)
                         paths_found = True
 
-                # except:
-                #     break
+                except:
+                    break
 
                 ### define actual binary costs for each episode, assuming they regenerate each time
 
@@ -437,9 +439,15 @@ class MountainEnv(gym.Env):
         # return observation, info
 
     ## soft reset (allows simulation of future episodes without full copying of env) - i.e. update only the start and goal locations
-    def soft_reset(self):
-        self._agent_location = np.array(self.starts[self._episode])
-        self._goal_location = np.array(self.goals[self._episode])
+    def soft_reset(self, start=None, goal=None):
+        if start is not None:
+            self._agent_location = start
+        else:
+            self._agent_location = np.array(self.starts[self._episode])
+        if goal is not None:
+            self._goal_location = goal
+        else:
+            self._goal_location = np.array(self.goals[self._episode])
         self.terminated=False
     
     ## get some S-G pairs
@@ -755,17 +763,30 @@ class MountainEnv(gym.Env):
 
         ### get the sequences of abstract paths
         # path_len = np.random.randint(2, self.N-1)
-        path_len = self.N-4
+        path_len = self.N-2
         # path_len = 5
         abstract_sequences = self.generate_abstract_sequences(path_len, max_turns)
 
-        ## sample a pair of abstract sequences, ensuring that one has more horizontal moves than its vertical moves, and the other has more vertical moves than its horizontal moves
+        ## sample a pair of abstract sequences
         diff_axes = False
         while not diff_axes:
             seq_idxs = np.random.choice(len(abstract_sequences), size=self.n_afc, replace=False)
             sampled_abstract_sequences = [abstract_sequences[i] for i in seq_idxs]
-            if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
-                diff_axes = True
+            print(sampled_abstract_sequences)
+
+            ## ensure that one has more horizontal moves than its vertical moves, and the other has more vertical moves than its horizontal moves
+            # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
+            #     diff_axes = True
+
+            ## or, ensure different axes on first episode, but otherwise same axes on subsequent episodes
+            if len(self.starts)==0:
+                if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
+                    diff_axes = True
+            else:
+                # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])):
+                if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
+                    diff_axes = True
+        print('found different axes: ', sampled_abstract_sequences)
         # seq_idxs = np.random.choice(len(abstract_sequences), size=self.n_afc, replace=False)
         # sampled_abstract_sequences = [abstract_sequences[i] for i in seq_idxs]
         # print('sampled_abstract_sequences:', sampled_abstract_sequences)

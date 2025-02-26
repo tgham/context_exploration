@@ -42,9 +42,15 @@ class MonteCarloTreeSearch():
 
     ## update MCTS with episode info
     def update_episode(self):
-        self.actual_state = self.env.current
-        self.actual_goal = self.env.goal
-        self.actual_episode = self.env.episode
+        raise NotImplementedError('episode update not implemented in subclass')
+
+    ## tree step
+    def tree_step(self, action_leaf):
+        raise NotImplementedError('tree step not implemented in subclass')
+    
+    ## rollout policy
+    def rollout_policy(self, action_leaf):
+        raise NotImplementedError('rollout policy not implemented in subclass')
 
     ## expand the action space of a node
     def expand(self, node):
@@ -60,7 +66,11 @@ class MonteCarloTreeSearch():
 
         elif self.expt == '2AFC':
             terminated = node.episode == self.env.n_episodes-1 ## i.e. this action leaf corresponds to the action made in the final episode, so it leads to termination of the block
-            next_state = node.state[:2] #i.e. this stays the same since agent always regens to the same start state. may instead choose to fill this with the states that are actually traversed
+            # next_state = node.state[:2] #i.e. this stays the same since agent always regens to the same start state. may instead choose to fill this with the states that are actually traversed
+            if not terminated:
+                next_state = self.env.starts[node.episode]
+            else:
+                next_state = np.array([None, None])
             
         ## update info for s-a leaf - i.e. the state-action pair
         node.action_leaves[action] = Action_Node(prev_state = node.state, action=action, next_state = next_state, terminated=terminated, episode=node.episode, parent_id=node.node_id)
@@ -68,16 +78,6 @@ class MonteCarloTreeSearch():
         node.action_leaves[action].norm_performance = 0
 
         return node.action_leaves[action]
-    
-
-    ## tree step
-    def tree_step(self, action_leaf):
-        raise NotImplementedError('tree step not implemented in subclass')
-    
-    ## rollout policy
-    def rollout_policy(self, action_leaf):
-        raise NotImplementedError('rollout policy not implemented in subclass')
-
 
     ## take an action according to the tree policy, i.e. take the best UCT child and see where it takes you
     def tree_policy(self):
@@ -122,7 +122,7 @@ class MonteCarloTreeSearch():
 
                 ## revert env
                 self.env.set_state(self.actual_state)
-                self.env.set_goal(self.actual_goal)
+                # self.env.set_goal(self.actual_goal)
                 self.env.set_episode(self.actual_episode)
                 assert np.array_equal(self.env.current, self.actual_state), 'env state not reverted properly'
                 assert self.env.episode == self.actual_episode, 'env episode not reverted properly. should be in {}, but actually in {}'.format(self.actual_episode, self.env.episode)
@@ -141,16 +141,16 @@ class MonteCarloTreeSearch():
                 self.node_id_path.append(node.node_id)
 
                 ## move in env
-                # print('selection:',t, self.env.current)
                 next_state, cost, terminated, node_episode, next_node_id = self.tree_step(action_leaf)
-                assert np.array_equal(next_state, self.env.current)
 
                 # see if the next state node already exists as a child of this action leaf
-                # next_node_id = tuple(np.append(next_state, cost))
                 if next_node_id in action_leaf.children:
                     node = action_leaf.children[next_node_id]
                 else:
                     node = self.tree.add_state_node(next_state, cost, next_node_id, goal, terminated, episode = node_episode, n_afc = self.n_afc, parent=action_leaf)
+
+                ## debugging
+                assert np.array_equal(next_state, self.env.current), 'mismatch between env and tree state\n env: {} \n tree: {}'.format(self.env.current, next_state)
                 assert np.array_equal(node.state[:2], next_state), 'error in tree policy step {}\n started in {}\n supposed to take action {} to {}\n ended up moving  to {}'.format(t, state_tmp, action_leaf.action, node.state[:2], action_leaf.next_state)
 
         ## if terminal node, there are no mode action leaves to choose from
@@ -386,6 +386,11 @@ class MonteCarloTreeSearch_Free(MonteCarloTreeSearch):
     def init_node_id(self, obs=None, init_info_state = None):
         node_id = tuple(np.append(self.actual_state, self.env.costs[self.actual_state[0], self.actual_state[1]]))
         return node_id
+    
+    def update_episode(self):
+        self.actual_state = self.env.current
+        self.actual_goal = self.env.goal
+        self.actual_episode = self.env.episode
 
     ## tree step
     def tree_step(self, action_leaf):
@@ -456,10 +461,19 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
             init_info_state[i,j,cost_idx] += 1
         node_id = tuple(init_info_state.flatten())
         return node_id
+    
+    def update_episode(self):
+        self.actual_episode = self.env.episode
+        # self.actual_state = self.env.starts[self.actual_episode].copy()
+        self.actual_state = self.env.current
+        self.actual_goal = self.env.goals[self.actual_episode].copy() ## in fact, this will probably be two goals
 
     ## tree step
     def tree_step(self, action_leaf):
-        start_tmp = self.env.current
+        # print('tree step in ep ', action_leaf.episode, 'action:', action_leaf.action)
+        start_tmp = self.env.current ## will change this if multiple starts are used
+        goal_tmp = self.env.goals[self.actual_episode][action_leaf.action]
+        self.env.set_goal(goal_tmp)
         path_id = action_leaf.action
         assert self.env.episode == action_leaf.episode, 'episode mismatch between env and tree\n env: {} \n tree: {}\n MCTS: {}'.format(self.env.episode, action_leaf.episode, self.actual_episode)
         step_ep = action_leaf.episode
@@ -473,7 +487,7 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         states, costs = self.env.take_path(action_sequence)
         simulated_obs += [np.append(s, c) for s, c in zip(states, costs)]
         self.tree_costs.append(np.sum(costs))
-        next_state = start_tmp ## I think this is correct, since the agent always regenerates to the same start state
+        # next_state = start_tmp ##  NEED TO CHANGE IF SGS ARE CHANGING 
         terminated = action_leaf.terminated
 
         ## get the next node id, i.e. the informational state after taking this path
@@ -482,12 +496,17 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
 
         ## since the agent has chosen a path to the goal, we need to move the environment to the next episode
         node_episode = step_ep+1
-        self.env.soft_reset()
-        self.env.set_episode(node_episode)
+        if not terminated:
+            next_state = self.env.starts[node_episode].copy()
+            self.env.set_episode(node_episode)
+            self.env.soft_reset()
+        else:
+            next_state = np.array([None, None])
+            next_goal = np.array([None, None])
+            self.env.soft_reset(next_state, next_goal)
 
         ## some checks
         assert len(self.tree_costs)<=self.env.n_episodes, 'tree costs exceed number of episodes, tree len: {}, n_eps: {}'.format(len(self.tree_costs), self.env.n_episodes)
-
         return next_state, costs, terminated, node_episode, next_node_id
     
     ## rollout policy
