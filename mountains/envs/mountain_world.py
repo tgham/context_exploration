@@ -765,7 +765,7 @@ class MountainEnv(gym.Env):
 
         ### get the sequences of abstract paths
         # path_len = np.random.randint(2, self.N-1)
-        path_len = self.N-2
+        path_len = self.N-3
         # path_len = 5
         abstract_sequences = self.generate_abstract_sequences(path_len, max_turns)
 
@@ -791,12 +791,13 @@ class MountainEnv(gym.Env):
                 diff_axes=True
             else:
                 # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])):
-                # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
-                #     diff_axes = True
+                # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
+                if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
+                    diff_axes = True
 
                 ## choose the two longest vertical paths
-                sampled_abstract_sequences = [abstract_sequences[-1], abstract_sequences[-1]]
-                diff_axes=True
+                # sampled_abstract_sequences = [abstract_sequences[-1], abstract_sequences[-1]]
+                # diff_axes=True
                     
         # print('found different axes: ', sampled_abstract_sequences)
         # seq_idxs = np.random.choice(len(abstract_sequences), size=self.n_afc, replace=False)
@@ -813,7 +814,7 @@ class MountainEnv(gym.Env):
         else:
             n_common_across_eps = 0
         max_common_within_ep = (path_len-1)/1
-        max_common_across_eps = (path_len-1)/0.5
+        max_common_across_eps = (path_len-1)/1
         ## debugging
         # max_common_within_ep = np.inf
         # max_common_across_eps = np.inf
@@ -862,6 +863,11 @@ class MountainEnv(gym.Env):
                     transformation = np.random.choice(['none', 'x', 'y'])
                     # transformation = 'none'
                     start = np.random.randint(0, self.N-1, size=2)
+                    
+                    ## sanity check: in the corner!
+                    if len(self.starts)==0:
+                        start = np.array([0, 0])
+                        path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation='none')
                     path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation=transformation)
 
                     ## check to see if all states are in the grid

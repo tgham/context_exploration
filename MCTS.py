@@ -542,6 +542,7 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
 
         ## take path
         states, costs = self.env.take_path(action_sequence)
+        assert np.array_equal(states[-1], self.env.goals[step_ep][path_id]), 'final state of path does not match goal\n final state: {}, goal: {}'.format(states[-1], self.env.goals[step_ep][path_id])
         simulated_obs += [np.append(s, c) for s, c in zip(states, costs)]
 
         ## add back in the start state if it wasn't actually observed in non-sim space
