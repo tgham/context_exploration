@@ -51,6 +51,10 @@ class MonteCarloTreeSearch():
     ## rollout policy
     def rollout_policy(self, action_leaf):
         raise NotImplementedError('rollout policy not implemented in subclass')
+    
+    ## myopic rollout
+    def myopic_rollout(self, myopic_ep):
+        raise NotImplementedError('myopic rollout not implemented in subclass')
 
     ## expand the action space of a node
     def expand(self, node):
@@ -125,6 +129,17 @@ class MonteCarloTreeSearch():
             # assert np.array_equal(node.state[:2], self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.env.current)
             self.check_state(node)
 
+            ## myopia - i.e. initiate rollout of all subsequent episodes
+            # if t == 2:
+
+            #     ## revert env
+            #     self.env.set_state(self.actual_state)
+            #     self.env.set_goal(self.actual_goal)
+            #     self.env.set_episode(self.actual_episode)
+            #     assert np.array_equal(self.env.current, self.actual_state), 'env state not reverted properly'
+            #     assert self.env.episode == self.actual_episode, 'env episode not reverted properly'
+            #     return False
+
             ## expansion step
             if self.tree.is_expandable(node):
                 action_leaf = self.expand(node)
@@ -152,6 +167,9 @@ class MonteCarloTreeSearch():
 
                 ## get the best child
                 action_leaf = self.best_child(node)
+
+
+                ## update the tree path
                 self.tree_path.append(tuple([node.state, action_leaf.action]))
                 self.node_id_path.append(node.node_id)
 
@@ -167,6 +185,8 @@ class MonteCarloTreeSearch():
                 ## debugging
                 assert np.array_equal(next_state, self.env.current), 'mismatch between env and tree state\n env: {} \n tree: {}'.format(self.env.current, next_state)
                 # assert np.array_equal(node.state[:2], next_state), 'error in tree policy step {}\n started in {}\n supposed to take action {} to {}\n ended up moving  to {}'.format(t, state_tmp, action_leaf.action, node.state[:2], action_leaf.next_state)
+
+
 
         ## if terminal node, there are no mode action leaves to choose from
         if node.terminated:
@@ -190,7 +210,7 @@ class MonteCarloTreeSearch():
     ## backup costs until you reach the root
     def backup(self):
         tree_len = len(self.tree_costs)
-        assert tree_len == len(self.tree_path), 'tree costs and path lengths do not match\n n tree costs: {} \n n tree path: {}\ntree path: {}\n tree costs: {}'.format(len(self.tree_costs), len(self.tree_path), self.tree_path, self.tree_costs)
+        assert tree_len == len(self.tree_path), 'tree costs and path lengths do not match\n n tree costs: {} \n n tree path: {}\ntree costs: {}\n tree path: {}'.format(len(self.tree_costs), len(self.tree_path), self.tree_costs, self.tree_path)
 
         ## Precompute discount factors
         discount_factors = [self.discount_factor ** d for d in range(tree_len)]
@@ -223,11 +243,20 @@ class MonteCarloTreeSearch():
             )
 
             ## debugging: save updates applied to the first node
-            # if depth == 0:
-            #     if action==0:
-            #         self.first_node_updates.append([discounted_cost, 0])
-            #     elif action==1:
-            #         self.first_node_updates.append([0, discounted_cost])
+            if depth == 0:
+                if action==0:
+                    self.first_node_updates.append([discounted_cost, np.nan])
+                    self.first_node_updates_by_depth[tree_len-1].append([discounted_cost, np.nan])
+                elif action==1:
+                    self.first_node_updates.append([np.nan, discounted_cost])
+                    self.first_node_updates_by_depth[tree_len-1].append([np.nan, discounted_cost])
+            ## save costs of each step in the tree - i.e. the cost of making each move in the tree
+            # first_action = self.tree_path[0][1]
+            if action== 0:
+                self.tree_cost_tracker[depth].append([self.tree_costs[depth], np.nan])
+            elif action== 1:
+                self.tree_cost_tracker[depth].append([np.nan, self.tree_costs[depth]])
+            
 
 
             ## update norm performance
@@ -337,6 +366,11 @@ class MonteCarloTreeSearch():
         ## debugging Q-vals
         self.Q_tracker = []
         self.first_node_updates = []
+        self.first_node_updates_by_depth = []
+        self.tree_cost_tracker = []
+        for e in range(self.env.n_episodes):
+            self.first_node_updates_by_depth.append([])
+            self.tree_cost_tracker.append([])
         
         ## loop through simulations
         for t in range(n_sims):
@@ -357,7 +391,10 @@ class MonteCarloTreeSearch():
 
             ## selection, expansion, simulation
             action_leaf = self.tree_policy()
-            self.rollout_policy(action_leaf)
+            if action_leaf == False:
+                self.myopic_rollout(1)
+            else:
+                self.rollout_policy(action_leaf)
             
             ##backup
             self.backup()
@@ -498,14 +535,19 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         action_sequence = self.env.path_actions[step_ep][path_id]
 
         ## initialise costs and observations for this path
-        # simulated_obs = []
-        simulated_obs = [np.append(start_tmp, self.env.predicted_costs[start_tmp[0], start_tmp[1]])] ## if the agent hasn't already observed the start state
+        simulated_obs = []
+        # simulated_obs = [np.append(start_tmp, self.env.predicted_costs[start_tmp[0], start_tmp[1]])] ## if the agent hasn't already observed the start state
 
         ## take path
         states, costs = self.env.take_path(action_sequence)
         simulated_obs += [np.append(s, c) for s, c in zip(states, costs)]
+
+        ## add back in the start state if it wasn't actually observed in non-sim space
+        simulated_obs = [np.append(start_tmp, self.env.predicted_costs[start_tmp[0], start_tmp[1]])] + simulated_obs
+        costs = [self.env.predicted_costs[start_tmp[0], start_tmp[1]]] + costs
         self.tree_costs.append(np.sum(costs))
-        # next_state = start_tmp ##  NEED TO CHANGE IF SGS ARE CHANGING 
+        assert len(simulated_obs) == len(costs), 'sim obs and costs do not match\n sim obs: {}, costs: {}'.format(len(simulated_obs), len(costs))
+        assert len(simulated_obs) == len(action_sequence)+1, 'sim obs and action sequence do not match\n sim obs: {}, action seq: {}'.format(len(simulated_obs), len(action_sequence)+1)
         terminated = action_leaf.terminated
 
         ## get the next node id, i.e. the informational state after taking this path
@@ -586,6 +628,31 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         self.tree_costs.append(total_cost)
         assert len(remaining_ro_costs)+first_episode+1 == self.env.n_episodes, 'remaining RO costs do not match number of episodes\n n remaining RO costs: {}, n episodes: {}'.format(len(remaining_ro_costs), self.env.n_episodes)
         return total_cost 
+    
+    ## myopic rollout - i.e. tree has been cut off at a certain depth, after which point you just do greedy rollouts
+    def myopic_rollout(self, myopic_ep):
+
+        ## init
+        total_cost = 0
+        depth = 0
+        for ep in range(myopic_ep, self.env.n_episodes):
+            depth+=1
+
+            ## GREEDY: get the total cost of the two paths and return the better one
+            path_costs = []
+            for path_id in range(self.n_afc):
+                path_states = self.env.path_states[ep][path_id]
+                ro_cost = 0
+                for state in path_states:
+                    # cost = self.env.get_pred_cost(state)
+                    cost = self.env.predicted_costs[state[0], state[1]]
+                    ro_cost += cost
+                path_costs.append(ro_cost)
+            total_cost += np.max(path_costs) * self.discount_factor**depth
+
+        # self.tree_costs.append(total_cost)
+        self.tree_costs[-1] += total_cost
+        return total_cost
 
 
 
