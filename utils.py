@@ -209,7 +209,7 @@ class Tree:
                     pass
 
 
-    def print_tree(self, node, indent="", is_last=True, dummy=False):
+    def print_tree(self, node, indent="", is_last=True, dummy=False, depth=0, max_depth=None):
         """
         Recursively print the tree structure with markers, visit counts, and values.
 
@@ -218,7 +218,13 @@ class Tree:
         - indent: The current indentation string for formatting.
         - is_last: Whether this node is the last child of its parent.
         - dummy: Whether to print display action leaves that don't have any children.
+        - depth: The current depth of the recursion.
+        - max_depth: The maximum depth to print (None for no limit).
         """
+        # Stop printing if max depth is reached
+        if max_depth is not None and depth > max_depth:
+            return
+
         # Get the current node
         # node = self.nodes[node_id]
         if dummy:
@@ -228,6 +234,7 @@ class Tree:
                 node_label = f"{node.state}"
         else:
             node_label = f"{node.state}"
+            # node_label = f"{node.node_id}"
         episode_label = f"{node.episode}"
 
         # Add branch marker
@@ -250,7 +257,6 @@ class Tree:
             key=lambda item: item[1][0][0].performance,  # Access the performance of the first leaf
             default=(None, [])
         )[0]
-
 
         # Iterate through actions and their corresponding children
         num_actions = len(children_by_action)
@@ -277,12 +283,16 @@ class Tree:
                 # Check if this is the last child of this action
                 is_child_last = j == len(children) - 1
 
-                # Recursively print the child node
+                # Recursively print the child node with increased depth
                 self.print_tree(
                     child_node,
                     indent=sub_child_indent,
                     is_last=is_child_last,
+                    dummy=dummy,
+                    depth=depth + 1,
+                    max_depth=max_depth
                 )
+
 
     def max_depth(self, node):
         """
