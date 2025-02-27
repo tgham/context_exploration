@@ -88,6 +88,7 @@ class MountainEnv(gym.Env):
             #     Actions.down.value: np.array([0, -1]),
             # }
             self.action_to_direction = np.array([[1, 0], [0, 1], [-1, 0], [0, -1]])
+            self.direction_to_action = {tuple(v): k for k, v in enumerate(self.action_to_direction)}
             self.n_actions = 4
 
             ## action labels (NB these deviate from env action space, bc axes are flipped for plotting
@@ -120,7 +121,7 @@ class MountainEnv(gym.Env):
             SG_found = False
             paths_found = False
             # self.high_cost, self.low_cost = -0.9, -0.1
-            self.high_cost, self.low_cost = -1, -0
+            self.high_cost, self.low_cost = -1, -0.1
             self.alpha_row = beta_params['alpha_row']
             self.beta_row = beta_params['beta_row']
             self.alpha_col = beta_params['alpha_col']
@@ -763,7 +764,7 @@ class MountainEnv(gym.Env):
 
         ### get the sequences of abstract paths
         # path_len = np.random.randint(2, self.N-1)
-        path_len = self.N-2
+        path_len = self.N-3
         # path_len = 5
         abstract_sequences = self.generate_abstract_sequences(path_len, max_turns)
 
@@ -779,16 +780,22 @@ class MountainEnv(gym.Env):
 
             ## or, ensure different axes on first episode, but otherwise same axes on subsequent episodes
             if len(self.starts)==0:
+            # if len(self.starts)<=1:
                 # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
-                #     diff_axes = True
+                if ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
+                    diff_axes = True
                 
                 ## sanity check: choose the longest vertical and horizontal paths
                 sampled_abstract_sequences = [abstract_sequences[0], abstract_sequences[-1]]
                 diff_axes=True
             else:
                 # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])):
-                if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
-                    diff_axes = True
+                # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
+                #     diff_axes = True
+
+                ## choose the two longest vertical paths
+                sampled_abstract_sequences = [abstract_sequences[-1], abstract_sequences[-1]]
+                diff_axes=True
                     
         # print('found different axes: ', sampled_abstract_sequences)
         # seq_idxs = np.random.choice(len(abstract_sequences), size=self.n_afc, replace=False)
@@ -805,7 +812,10 @@ class MountainEnv(gym.Env):
         else:
             n_common_across_eps = 0
         max_common_within_ep = (path_len-1)/1
-        max_common_across_eps = (path_len-1)/1
+        max_common_across_eps = (path_len-1)/0.5
+        ## debugging
+        # max_common_within_ep = np.inf
+        max_common_across_eps = np.inf
 
 
         ### get the concrete sequences
@@ -966,6 +976,9 @@ class MountainEnv(gym.Env):
         for move in moves:
             state += np.array(move)
             path.append(state.copy())
+
+        ## convert moves from tuples to integers
+        moves = [self.direction_to_action[tuple(m)] for m in moves]
         return np.array(path), moves
 
     
@@ -1065,7 +1078,7 @@ class MountainEnv(gym.Env):
 
         ## return the real cost if not simulating
         if not self.sim:
-            cost = current_cost
+            cost = current_cost.copy()
             
             ## update observation and trajectory arrays - i.e. agent observes along the way
             self.a_traj.append(tuple(self._agent_location))
@@ -1089,7 +1102,7 @@ class MountainEnv(gym.Env):
         ## return the predicted cost if simulating
         elif self.sim:
             # cost = current_cost
-            cost = predicted_cost 
+            cost = predicted_cost.copy()
             # cost += self.expl_beta * np.sqrt(var_cost) #UCB
 
             ## still need to store obs_tmp along the way for subsequent posterior inference
@@ -1102,9 +1115,6 @@ class MountainEnv(gym.Env):
             self.terminated = True
             if self.expt=='free':
                 cost=0 ## cost of final state is 0 (MIGHT WANT TO CHANGE THIS...)
-            elif self.expt=='2AFC':
-                cost = current_cost
-            # cost = self.expl_beta * np.sqrt(var_cost)
         
             ## update observation array only once the episode is complete
             if not self.sim:
