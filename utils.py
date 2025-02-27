@@ -239,7 +239,7 @@ class Tree:
 
         # Add branch marker
         branch = "└── " if is_last else "├── "
-        print(f"{indent}{branch}Node: {node_label}, Episode: {episode_label}")
+        print(f"{indent}{branch}Node: {node_label}, Episode: {episode_label}, Visits: {node.n_state_visits}")
 
         # Update indentation for children
         child_indent = indent + ("    " if is_last else "│   ")

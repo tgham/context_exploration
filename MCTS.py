@@ -168,7 +168,6 @@ class MonteCarloTreeSearch():
                 ## get the best child
                 action_leaf = self.best_child(node)
 
-
                 ## update the tree path
                 self.tree_path.append(tuple([node.state, action_leaf.action]))
                 self.node_id_path.append(node.node_id)
@@ -181,6 +180,9 @@ class MonteCarloTreeSearch():
                     node = action_leaf.children[next_node_id]
                 else:
                     node = self.tree.add_state_node(next_state, cost, next_node_id, goal, terminated, episode = node_episode, n_afc = self.n_afc, parent=action_leaf)
+                    # if (node_episode==2) and action_leaf.action==0:
+                    #     print('new node after action:', action_leaf.action, 'in episode:', node_episode, 'cost:', cost, 'terminated:', terminated)
+                    #     print(node)
 
                 ## debugging
                 assert np.array_equal(next_state, self.env.current), 'mismatch between env and tree state\n env: {} \n tree: {}'.format(self.env.current, next_state)
@@ -525,8 +527,8 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
     def tree_step(self, action_leaf):
         # print('tree step in ep ', action_leaf.episode, 'action:', action_leaf.action)
         # start_tmp = self.env.current ## will change this if multiple starts are used
-        start_tmp = self.env.starts[self.actual_episode][action_leaf.action].copy()
-        goal_tmp = self.env.goals[self.actual_episode][action_leaf.action].copy()
+        start_tmp = self.env.starts[action_leaf.episode][action_leaf.action].copy()
+        goal_tmp = self.env.goals[action_leaf.episode][action_leaf.action].copy()
         self.env.set_state(start_tmp)
         self.env.set_goal(goal_tmp)
         path_id = action_leaf.action
@@ -546,9 +548,13 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         simulated_obs = [np.append(start_tmp, self.env.predicted_costs[start_tmp[0], start_tmp[1]])] + simulated_obs
         costs = [self.env.predicted_costs[start_tmp[0], start_tmp[1]]] + costs
         self.tree_costs.append(np.sum(costs))
+        # if (action_leaf.episode==1) and (action_leaf.action==1):
+        #     print(simulated_obs)
         assert len(simulated_obs) == len(costs), 'sim obs and costs do not match\n sim obs: {}, costs: {}'.format(len(simulated_obs), len(costs))
         assert len(simulated_obs) == len(action_sequence)+1, 'sim obs and action sequence do not match\n sim obs: {}, action seq: {}'.format(len(simulated_obs), len(action_sequence)+1)
         terminated = action_leaf.terminated
+        # if terminated:
+        #     print(action_leaf.episode, action_leaf.parent_id)
 
         ## get the next node id, i.e. the informational state after taking this path
         init_info_state = np.array(action_leaf.parent_id).reshape(self.N, self.N, 2)

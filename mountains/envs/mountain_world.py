@@ -121,7 +121,8 @@ class MountainEnv(gym.Env):
             SG_found = False
             paths_found = False
             # self.high_cost, self.low_cost = -0.9, -0.1
-            self.high_cost, self.low_cost = -1, -0.1
+            # self.high_cost, self.low_cost = -1, -0.1
+            self.high_cost, self.low_cost = 0, 1
             self.alpha_row = beta_params['alpha_row']
             self.beta_row = beta_params['beta_row']
             self.alpha_col = beta_params['alpha_col']
@@ -764,7 +765,7 @@ class MountainEnv(gym.Env):
 
         ### get the sequences of abstract paths
         # path_len = np.random.randint(2, self.N-1)
-        path_len = self.N-3
+        path_len = self.N-2
         # path_len = 5
         abstract_sequences = self.generate_abstract_sequences(path_len, max_turns)
 
@@ -815,7 +816,7 @@ class MountainEnv(gym.Env):
         max_common_across_eps = (path_len-1)/0.5
         ## debugging
         # max_common_within_ep = np.inf
-        max_common_across_eps = np.inf
+        # max_common_across_eps = np.inf
 
 
         ### get the concrete sequences
