@@ -38,7 +38,7 @@ class Actions(Enum):
 
 class MountainEnv(gym.Env):
 
-    def __init__(self, N, n_episodes=1, expt='free', beta_params=None, metric = 'cityblock', size=5, seed=None):
+    def __init__(self, N, n_episodes=1, expt_info={'type':'free'}, beta_params=None, metric = 'cityblock', size=5, seed=None):
         
         ## seed
         if seed is not None:
@@ -52,7 +52,9 @@ class MountainEnv(gym.Env):
         y = np.arange(N)
         X,Y = np.meshgrid(x,y)
         self.locations = np.column_stack([X.ravel(), Y.ravel()])
-        self.expt = expt
+        self.expt = expt_info['type']
+        if self.expt == '2AFC':
+            self.same_SGs = expt_info['same_SGs']
 
 
         ### misc gym inits
@@ -93,7 +95,7 @@ class MountainEnv(gym.Env):
 
             if self.expt =='free':
                 self.n_afc = 4
-            elif self.expt == '2AFC':
+            elif (self.expt == '2AFC') or (self.expt == '2AFC_SG'):
                 self.n_afc = 2
         elif self.metric == 'chebyshev':
             self.action_space = spaces.Discrete(8)
@@ -139,6 +141,7 @@ class MountainEnv(gym.Env):
             self.goals = []
             self.path_states = []
             self.path_actions = []
+            self.sampled_abstract_sequences = []
             self.path_costs = []
             self.costss = []
             self.o_trajs = []
@@ -147,8 +150,9 @@ class MountainEnv(gym.Env):
             self.o_traj_actions = []
             self.n_episodes = n_episodes
 
+
             ## if 2AFC, we use the same SG pair all the way through
-            if expt=='2AFC':
+            if self.expt=='2AFC' and self.same_SGs:
                 try:
                     start, goal = self.sample_SG()
                     SG_found=True
@@ -158,10 +162,10 @@ class MountainEnv(gym.Env):
             ## generate relevant trial info for each episode
             for e in range(n_episodes):
 
-                try:
-                    
+                # try:
+                
                     ## free movement
-                    if expt == 'free':
+                    if self.expt == 'free':
                         start, goal = self.sample_SG()
                         self.starts.append(start)
                         self.goals.append(goal)
@@ -175,17 +179,27 @@ class MountainEnv(gym.Env):
                         self.o_traj_total_costs.append(o_traj_total_cost)
                         self.o_traj_actions.append(o_traj_actions)
 
-
-
-
                     ## 2AFC
-                    elif expt=='2AFC':
-                        max_turns = 3
-                        path_actions, path_states = self.sample_paths(start, goal, max_turns)
-                        self.starts.append(start)
-                        self.goals.append(goal)
-                        self.path_states.append(path_states)
-                        self.path_actions.append(path_actions)
+                    elif self.expt=='2AFC':
+                        if self.same_SGs:
+                            max_turns = 3
+                            path_actions, path_states = self.sample_paths(start, goal, max_turns)
+                            self.starts.append(start)
+                            self.goals.append(goal)
+                            self.path_states.append(path_states)
+                            self.path_actions.append(path_actions)
+                        
+                        ## or, different SGs for each episode
+                        elif not self.same_SGs:
+                            max_turns=1
+                            sampled_abstract_sequences, path_actions, path_states, starts, goals = self.sample_paths_and_SGs(max_turns)
+                            self.starts.append(starts)
+                            self.goals.append(goals)
+                            self.path_states.append(path_states)
+                            self.path_actions.append(path_actions)
+                            self.sampled_abstract_sequences.append(sampled_abstract_sequences)
+                            SG_found = True
+
 
                         ## get info about optimal path (WILL CHANGE THIS LATER SINCE THE NOTION OF OPTIMAL IS DIFFERENT FOR 2AFC)
                         # o_traj, o_traj_costs, o_traj_total_cost, o_traj_actions = self.optimal_trajectory(start, goal)
@@ -208,8 +222,8 @@ class MountainEnv(gym.Env):
                         self.path_costs.append(path_costs)
                         paths_found = True
 
-                except:
-                    break
+                # except:
+                #     break
 
                 ### define actual binary costs for each episode, assuming they regenerate each time
 
@@ -546,10 +560,6 @@ class MountainEnv(gym.Env):
             for move in order:
                 path.append(tuple(get_next_state(path[-1], self.action_to_direction[move], self.N)))
             return path
-        
-        ## check number of turns
-        def count_turns(moves_seq):
-            return sum(m1 != m2 and (m1 + m2) % 2 == 1 for m1, m2 in zip(moves_seq[:-1], moves_seq[1:]))
 
         ## if only one turn allowed, then only possible paths: all x then y, or all y then x
         if max_turns == 1:
@@ -704,7 +714,7 @@ class MountainEnv(gym.Env):
                     print('moves_1 and moves_2 are not the same length: %s, %s' % (len(moves_1), len(moves_2)))
 
 
-                if count_turns(moves_1) <= max_turns and count_turns(moves_2) <= max_turns:
+                if self.count_turns(moves_1) <= max_turns and self.count_turns(moves_2) <= max_turns:
                     
                     path_1 = build_path(moves_1)
                     path_2 = build_path(moves_2)
@@ -716,20 +726,10 @@ class MountainEnv(gym.Env):
                     rel_cost_diff = min(path_1_cost, path_2_cost) / max(path_1_cost, path_2_cost)
                     # print('rel cost diff:', rel_cost_diff, rel_cost_diff_tol)
 
-                    ## check if too much overlap within episode
-                    n_common_within_ep = len(set(path_1).intersection(set(path_2)))-2 ## -2 if start and end are shared
-                    # print('within ep:',n_common_within_ep, max_common_within_ep)
-
-                    ## check if too much overlap across episodes
-                    if len(self.path_states)>0:
-                        common_across_eps = []
-                        for paths in self.path_states:
-                            p1, p2 = paths
-                            common_across_eps.append(len(set(p1).intersection(set(path_1)))-2)
-                            common_across_eps.append(len(set(p2).intersection(set(path_2)))-2)
-                            common_across_eps.append(len(set(p1).intersection(set(path_2)))-2)
-                            common_across_eps.append(len(set(p2).intersection(set(path_1)))-2)
-                        n_common_across_eps = np.max(common_across_eps)
+                    ## check if too much overlap within or across episodes
+                    n_common_across_eps, n_common_within_ep = self.check_overlap(path_1, path_2,2)
+                    # print('n_common_within_ep:', n_common_within_ep, max_common_within_ep)
+                    
                             
                 t+=1
                 if t>100:
@@ -748,6 +748,126 @@ class MountainEnv(gym.Env):
 
 
         return path_actions, path_states
+    
+
+    ## sample paths and SGs for 2AFC_SG expt
+    def sample_paths_and_SGs(self, max_turns=1):
+
+        ### get the sequences of abstract paths
+        # path_len = np.random.randint(2, self.N-1)
+        path_len = self.N-4
+        # path_len = 5
+        abstract_sequences = self.generate_abstract_sequences(path_len, max_turns)
+
+        ## sample a pair of abstract sequences, ensuring that one has more horizontal moves than its vertical moves, and the other has more vertical moves than its horizontal moves
+        diff_axes = False
+        while not diff_axes:
+            seq_idxs = np.random.choice(len(abstract_sequences), size=self.n_afc, replace=False)
+            sampled_abstract_sequences = [abstract_sequences[i] for i in seq_idxs]
+            if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
+                diff_axes = True
+        # seq_idxs = np.random.choice(len(abstract_sequences), size=self.n_afc, replace=False)
+        # sampled_abstract_sequences = [abstract_sequences[i] for i in seq_idxs]
+        # print('sampled_abstract_sequences:', sampled_abstract_sequences)
+
+
+
+        ## set path criteria
+        diff_starts = False
+        n_common_within_ep = np.inf
+        if len(self.path_states)>0:
+            n_common_across_eps = np.inf
+        else:
+            n_common_across_eps = 0
+        max_common_within_ep = (path_len-1)/1
+        max_common_across_eps = (path_len-1)/1
+
+
+        ### get the concrete sequences
+
+        ## same starts
+        while (n_common_within_ep >= max_common_within_ep) or (n_common_across_eps >= max_common_across_eps):
+            both_in_grid = False
+            while not both_in_grid:
+                path_states = []
+                path_actions = []
+                goals = []
+                start = np.random.randint(0, self.N-1, size=2)
+                # start = np.array([0, 0])
+                for s_a_s in sampled_abstract_sequences:
+                    # transformation = 'none'
+                    transformation = np.random.choice(['none', 'x', 'y'])
+                    path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start.copy(), transformation=transformation)
+                    path_states.append(path)
+                    path_actions.append(actions)
+                    goals.append(path[-1])
+                    
+                ## check to see if all states are in the grid
+                # print(path_states)
+                if np.all([np.all(path >= 0) and np.all(path < self.N) for path in path_states]):
+                    both_in_grid = True
+
+            ## check overlap between paths
+            path_states = [tuple(map(tuple, path)) for path in path_states]
+            n_common_within_ep, n_common_across_eps = self.check_overlap(path_states[0], path_states[1],1)
+            assert np.array_equal(path_states[0][0], path_states[1][0]), 'start locations are not the same: %s, %s' % (path_states[0][0], path_states[1][0])
+        starts = start
+
+        
+        # ## or, enforce different starts
+        # while (not diff_starts) or (n_common_within_ep >= max_common_within_ep) or (n_common_across_eps >= max_common_across_eps):
+        #     path_states = []
+        #     path_actions = []
+        #     starts = []
+        #     goals = []
+        #     for s_a_s in sampled_abstract_sequences:
+        #         in_grid = False
+        #         while not in_grid:
+        #             transformation = np.random.choice(['none', 'x', 'y'])
+        #             # transformation = 'none'
+        #             start = np.random.randint(0, self.N-1, size=2)
+        #             path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation=transformation)
+
+        #             ## check to see if all states are in the grid
+        #             if np.all(path >= 0) and np.all(path < self.N):
+        #                 in_grid = True
+            
+        #         path_states.append(path)
+        #         path_actions.append(actions)
+        #         starts.append(path[0])
+        #         goals.append(path[-1])
+            
+        #     ## check that all start locations are different
+        #     n_distinct_starts = len(set([tuple(s) for s in starts]))
+        #     if n_distinct_starts == self.n_afc:
+        #         diff_starts = True
+
+        #     ## check overlap between paths
+        #     path_states = [tuple(map(tuple, path)) for path in path_states]
+        #     n_common_within_ep, n_common_across_eps = self.check_overlap(path_states[0], path_states[1],0)
+
+        return sampled_abstract_sequences, path_actions, path_states, starts, goals
+
+
+
+    ## count number of overlapping states
+    def check_overlap(self, path_1, path_2, minus=2):
+        n_common_within_ep = len(set(path_1).intersection(set(path_2)))-minus ## -2 if start and end are shared
+        if len(self.path_states)>0:
+            common_across_eps = []
+            for paths in self.path_states:
+                p1, p2 = paths
+                common_across_eps.append(len(set(p1).intersection(set(path_1)))-minus)
+                common_across_eps.append(len(set(p2).intersection(set(path_2)))-minus)
+                common_across_eps.append(len(set(p1).intersection(set(path_2)))-minus)
+                common_across_eps.append(len(set(p2).intersection(set(path_1)))-minus)
+            n_common_across_eps = np.max(common_across_eps)
+        else:
+            n_common_across_eps = 0
+        return n_common_within_ep, n_common_across_eps
+        
+
+
 
 
 
@@ -767,6 +887,61 @@ class MountainEnv(gym.Env):
     #     unique_paths = set(permutations(moves))
 
     #     return unique_paths
+
+
+    ### some more functions for path building
+
+    ## count number of turns in a sequence of moves
+    def count_turns(self, moves):
+        """Count the number of turns (non-consecutive action changes) in a movement sequence."""
+        if isinstance(moves[0], tuple):
+            turns = 0
+            for i in range(1, len(moves)):
+                if moves[i] != moves[i - 1]:  # A turn occurs when the direction changes
+                    turns += 1
+        elif isinstance(moves[0], int) or isinstance(moves[0], np.int64):
+
+            turns = sum(m1 != m2 and (m1 + m2) % 2 == 1 for m1, m2 in zip(moves[:-1], moves[1:]))
+        else:
+            raise ValueError("Invalid input type: %s" % type(moves[0]))
+        return turns
+    
+    ## generate abstract and concrete sequences
+    def generate_abstract_sequences(self, path_len, max_turns):
+        """Generate unique movement sequences based on abstract structure (number of horizontal/vertical moves)."""
+        
+        abstract_structures = []  # Store unique (num_right, num_up) pairs
+
+        for num_right in range(path_len + 1):
+            num_up = path_len - num_right  # Remaining moves must be 'up'
+            if num_right > 0 or num_up > 0:
+                # Check if at least one valid sequence exists with max_turns constraint
+                example_sequence = [(1, 0)] * num_right + [(0, 1)] * num_up
+                for perm in permutations(example_sequence):
+                    if self.count_turns(perm) <= max_turns:
+                        abstract_structures.append((num_right, num_up))
+                        break  # Only need one example to confirm it's valid
+
+        return abstract_structures
+
+    def generate_concrete_sequence(self, num_right, num_up, start = np.array([0,0]),transformation='none'):
+        """Convert an abstract sequence into a concrete state sequence."""
+        if transformation == 'none':
+            moves = [(1, 0)] * num_right + [(0, 1)] * num_up
+        elif transformation == 'x':
+            moves = [(-1, 0)] * num_right + [(0, 1)] * num_up
+        elif transformation == 'y':
+            moves = [(1, 0)] * num_right + [(0, -1)] * num_up
+        else:
+            raise ValueError("Invalid transformation")
+        # random.shuffle(moves)  # Randomize order while preserving counts
+        
+        state = start
+        path = [state.copy()]
+        for move in moves:
+            state += np.array(move)
+            path.append(state.copy())
+        return np.array(path), moves
 
     
     ## custom functions for manually editing the env

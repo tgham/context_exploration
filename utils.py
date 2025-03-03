@@ -31,7 +31,7 @@ from agents import Farmer
 
 
 ## create a mountain environment
-def make_env(N, n_episodes, expt, beta_params, metric, seed=None):
+def make_env(N, n_episodes, expt_info, beta_params, metric, seed=None):
 
     ## register env
     
@@ -48,7 +48,7 @@ def make_env(N, n_episodes, expt, beta_params, metric, seed=None):
         kwargs={"size": N},
     )
     
-    env = gym.make("mountains/MountainEnv-v0", N=N, n_episodes=n_episodes, expt=expt, beta_params=beta_params, metric=metric, seed=seed)
+    env = gym.make("mountains/MountainEnv-v0", N=N, n_episodes=n_episodes, expt_info=expt_info, beta_params=beta_params, metric=metric, seed=seed)
     return env
 
 
