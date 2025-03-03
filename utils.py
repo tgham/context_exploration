@@ -315,6 +315,40 @@ class Tree:
 
         # The depth of this node is 1 + max depth of its children
         return 1 + max(child_depths)
+    
+
+    ## function for getting the max and min Q-values at a given depth of the tree
+    def min_max_Q(self, node, depth, current_depth=0):
+        """
+        Recursively calculate the maximum and minimum Q-values at a given depth of the tree starting from the given node.
+
+        Args:
+        - node: The current node (root of the subtree being evaluated).
+        - depth: The target depth to calculate the Q-values.
+        - current_depth: The current depth of the recursion.
+
+        Returns:
+        - (float, float): The maximum and minimum Q-values at the target depth.
+        """
+        # Base case: If the target depth is reached, return the Q-value of this node
+        if current_depth == depth:
+            Qs = []
+            for a in node.action_leaves.keys():
+                if node.action_leaves[a] is not None:
+                    Qs.append(node.action_leaves[a].performance)
+            if len(Qs) == 0:
+                return np.inf, -np.inf
+            return min(Qs), max(Qs)
+
+        # Recursive case: Compute the maximum and minimum Q-values for each child
+        max_Q = -np.inf
+        min_Q = np.inf
+        for _, _, _, child_node in self.get_children(node):
+            child_min_Q, child_max_Q = self.min_max_Q(child_node, depth, current_depth + 1)
+            max_Q = max(max_Q, child_max_Q)
+            min_Q = min(min_Q, child_min_Q)
+
+        return min_Q, max_Q
 
 
 

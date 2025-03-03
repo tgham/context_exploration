@@ -20,12 +20,32 @@ class MonteCarloTreeSearch():
         self.expt = env.expt
         self.n_afc = self.env.n_afc
         self.agent = agent
+        self.low_cost = self.env.low_cost
+        self.high_cost = self.env.high_cost
         self.update_episode()
         self.tree = tree
         self.N = self.env.N
-        self.exploration_constant = exploration_constant
         self.discount_factor = discount_factor
         starting_cost = self.env.costs[self.actual_state[0], self.actual_state[1]]
+        self.exploration_constant = exploration_constant
+
+        ## or, scale exploration constant by the expected cost of the entire block
+        # n_steps = 0
+        # for ep in range(self.env.n_episodes):
+        #     n_steps += len(self.env.path_states[ep][0])
+        # self.exploration_constant = exploration_constant * n_steps
+        self.exploration_constants = [self.exploration_constant for e in range(self.env.n_episodes)]
+
+        ## or, multiple exploration constants, each scaled by the expected cost of the block from that episode onwards
+        # expected_cost = np.abs(np.mean([self.low_cost, self.high_cost]))
+        # self.exploration_constants = []
+        # for e in range(self.env.n_episodes):
+        #     n_steps = 0
+        #     for subseq_e in range(e, self.env.n_episodes):
+        #         n_steps += len(self.env.path_states[subseq_e][0])
+        #     self.exploration_constants.append(exploration_constant * expected_cost * n_steps)
+        # print(self.exploration_constants)
+
 
         ## create id for root node
         node_id = self.init_node_id(self.env.obs, None)
@@ -33,6 +53,8 @@ class MonteCarloTreeSearch():
         ## some debugging metrics
         self.exploratory_steps = 0
         self.exploitative_steps = 0
+        self.max_Q = np.zeros(self.env.n_episodes) - np.inf
+        self.min_Q = np.zeros(self.env.n_episodes) 
 
         ## add state node to the tree
         self.tree.add_state_node(state=self.actual_state, cost=starting_cost, node_id=node_id, goal = self.actual_goal, terminated=False, episode = self.actual_episode, n_afc = self.n_afc, parent=None)
@@ -89,11 +111,11 @@ class MonteCarloTreeSearch():
     
     ## debugging method for checking if node and env states match
     def check_state(self, node):
-        if self.env.same_SGs:
-            assert np.array_equal(node.state[:2], self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.env.current) ### USE THIS IN THE SUBCLASS DEFINITION FOR THE FREE EXPT TOO
-        else:
+        if self.expt == '2AFC':
             # assert np.array_equal(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.starts[node.episode]), 'mismatch between node and env state\n node: {} \n env: {}'.format(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.starts[node.episode])
             assert np.array_equal(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.current)
+        elif self.expt == 'free':
+            assert np.array_equal(node.state[:2], self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.env.current) ### USE THIS IN THE SUBCLASS DEFINITION FOR THE FREE EXPT TOO
 
     ## take an action according to the tree policy, i.e. take the best UCT child and see where it takes you
     def tree_policy(self):
@@ -258,8 +280,13 @@ class MonteCarloTreeSearch():
                 self.tree_cost_tracker[depth].append([self.tree_costs[depth], np.nan])
             elif action== 1:
                 self.tree_cost_tracker[depth].append([np.nan, self.tree_costs[depth]])
-            
 
+            ## debugging: save max and min Q values to normalise Qs
+            if action_leaf.performance > self.max_Q[depth]:
+                self.max_Q[depth] = action_leaf.performance
+            if action_leaf.performance < self.min_Q[depth]:
+                self.min_Q[depth] = action_leaf.performance
+            
 
             ## update norm performance
             action_leaves = [leaf for leaf in node.action_leaves.values() if leaf is not None]
@@ -287,10 +314,26 @@ class MonteCarloTreeSearch():
 
     ## calculate E-E value
     def compute_UCT(self, node, action_leaf): 
-        exploitation_term = action_leaf.performance
-        # exploitation_term = action_leaf.norm_performance
         assert action_leaf.n_action_visits > 0 or action_leaf.terminated, 'action leaf has not been visited: {}'.format(action_leaf)
-        exploration_term = self.exploration_constant * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
+        
+        ## standard case
+        # exploitation_term = action_leaf.performance
+        # exploration_term = self.exploration_constant * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
+
+        ## or, depth-dependent exploration constant
+        exploitation_term = action_leaf.performance
+        exploration_term = self.exploration_constants[action_leaf.episode] * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
+
+        ## or, min-max normalisation of Qs
+        # min_Q, max_Q = self.tree.min_max_Q(node=self.tree.root, depth=action_leaf.episode, current_depth=0)
+        # norm_term = max_Q - min_Q
+        # if norm_term == 0 or norm_term==np.inf:
+        #     exploitation_term = action_leaf.performance
+        # else:
+        #     exploitation_term = (exploitation_term - min_Q) / norm_term
+        # # print(action_leaf.performance, min_Q, max_Q, exploitation_term)
+        # exploration_term = self.exploration_constants[action_leaf.episode] * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
+        
         # print('exploration term:', exploration_term, 'exploitation term:', exploitation_term)
         return exploitation_term + exploration_term
 
@@ -512,7 +555,7 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         for i,j,c in obs:
             i = int(i)
             j = int(j)
-            cost_idx = 1 if c == self.env.high_cost else 0
+            cost_idx = 1 if c == self.high_cost else 0
             init_info_state[i,j,cost_idx] += 1
         node_id = tuple(init_info_state.flatten())
         return node_id
