@@ -846,24 +846,25 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                 agent.get_env_info(env_copy)
 
                 ## reset tree
-                if ((ag == 'BAMCP') or (ag == 'BAMCP w/ CE') or (ag=='BAMCP_wrong')) & tree_resets[ag]:#& tree_reset:
-                    tree = Tree(N)
-                    if expt == 'free':
-                        # MCTS = MonteCarloTreeSearch_Free(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
-                        MCTSs[ag] = MonteCarloTreeSearch_Free(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
-                    elif expt == '2AFC':
-                        # MCTS = MonteCarloTreeSearch_2AFC(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
-                        MCTSs[ag] = MonteCarloTreeSearch_2AFC(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
+                if ((ag == 'BAMCP') or (ag == 'BAMCP w/ CE') or (ag=='BAMCP_wrong')):
+                    if tree_resets[ag]:#& tree_reset:
+                        tree = Tree(N)
+                        if expt == 'free':
+                            # MCTS = MonteCarloTreeSearch_Free(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
+                            MCTSs[ag] = MonteCarloTreeSearch_Free(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
+                        elif expt == '2AFC':
+                            # MCTS = MonteCarloTreeSearch_2AFC(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
+                            MCTSs[ag] = MonteCarloTreeSearch_2AFC(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
                 
                 ## if keeping the tree between episodes, need to update tree with new episode info
-                elif ((ag == 'BAMCP') or (ag == 'BAMCP w/ CE') or (ag=='BAMCP_wrong')) & (not tree_resets[ag]): #& (not tree_reset):
-                    # MCTS.update_episode()
-                    MCTSs[ag].update_episode()
-                    # tree_reset = True
-                    tree_resets[ag] = True
-                MCTS = MCTSs[ag]
+                    elif (not tree_resets[ag]): #& (not tree_reset):
+                        # MCTS.update_episode()
+                        MCTSs[ag].update_episode()
+                        # tree_reset = True
+                        tree_resets[ag] = True
+                    MCTS = MCTSs[ag]
+                    assert e == MCTS.actual_episode, 'episode mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(e, MCTS.env.episode)
                 assert e == env_copy.episode, 'episode mismatch between simulation and env\n simulation: {} \n env: {}'.format(e, MCTS.env.episode)
-                assert e == MCTS.actual_episode, 'episode mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(e, MCTS.env.episode)
 
             
                 ## run episode until goal is reached
@@ -938,12 +939,25 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                             max_cost = np.max(path_costs)
                             action = argm(path_costs, max_cost)
                             actions.append(action)
+
+                            ## take the path
+                            env_copy.set_sim(False)
+                            env_copy.init_ep(action)
+                            start = env_copy.current
+                            goal = env_copy.goal
+                            assert np.array_equal(start, env_copy.starts[e][action]), 'current state does not match start state\n current: {}, start: {}'.format(env_copy.current, env_copy.starts[e][action])
                             action_sequence = env_copy.path_actions[e][action]
-                            costs = []
-                            for ac in action_sequence:
-                                current, cost, terminated, _, _ = env_copy.step(ac)
-                                costs.append(cost)
+                            _,_ = env_copy.take_path(action_sequence)
+                            current = env_copy.current
+                            costs = env_copy.ep_obs[:,-1]
                             path_cost = np.sum(costs)
+                            terminated=True
+                            block_terminated = e == (n_episodes-1)
+                            # costs = []
+                            # for ac in action_sequence:
+                            #     current, cost, terminated, _, _ = env_copy.step(ac)
+                            #     costs.append(cost)
+                            # path_cost = np.sum(costs)
                             block_terminated = e == (n_episodes-1)
                         steps += 1
                         search_attempts = 0 # could do nan
@@ -1048,6 +1062,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                             current = env_copy.current
                             # path_cost = np.sum(costs)
                             costs = env_copy.ep_obs[:,-1]
+                            assert len(costs) == len(action_sequence)+1, 'costs and action sequence do not match\n costs: {}, action sequence: {}'.format(len(costs), len(action_sequence))
                             path_cost = np.sum(costs)
                             terminated = True ## trivially true in 2AFC
                             block_terminated = e == (n_episodes-1)
@@ -1273,6 +1288,8 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         sim_out['goal'].append(goal)
                         sim_out['path_A'].append(env_copy.path_states[e][0])
                         sim_out['path_B'].append(env_copy.path_states[e][1])
+                        sim_out['abstract_sequence_A'].append(env_copy.sampled_abstract_sequences[e][0])
+                        sim_out['abstract_sequence_B'].append(env_copy.sampled_abstract_sequences[e][1])
                         sim_out['actions'].append(actions)
                         sim_out['Q_values'].append(Q_values)
                         sim_out['leaf_visits'].append(leaf_visits)
@@ -1324,6 +1341,8 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         sim_out['goal'].append(goal)
                         sim_out['path_A'].append(env_copy.path_states[e][0])
                         sim_out['path_B'].append(env_copy.path_states[e][1])
+                        sim_out['abstract_sequence_A'].append(env_copy.sampled_abstract_sequences[e][0])
+                        sim_out['abstract_sequence_B'].append(env_copy.sampled_abstract_sequences[e][1])
                         sim_out['actions'].append(actions)
                         sim_out['Q_values'].append(Q_values)
                         sim_out['leaf_visits'].append(leaf_visits)

@@ -194,6 +194,7 @@ class MountainEnv(gym.Env):
                             # self.goals.append([path_states[0][-1], path_states[1][-1]])
                             self.path_states.append(path_states)
                             self.path_actions.append(path_actions)
+                            self.sampled_abstract_sequences.append([None, None])
                         
                         ## or, different SGs for each episode
                         elif not self.same_SGs:
@@ -766,7 +767,7 @@ class MountainEnv(gym.Env):
     def sample_paths_and_SGs(self, max_turns=1):
 
         ### get the sequences of abstract paths
-        path_len = np.random.randint(4, self.N-1)
+        path_len = np.random.randint(5, self.N-1)
         # path_len = self.N-4
         # path_len = 5
         abstract_sequences = self.generate_abstract_sequences(path_len, max_turns)
@@ -789,8 +790,8 @@ class MountainEnv(gym.Env):
                     diff_axes = True
                 
                 ## sanity check: choose the longest vertical and horizontal paths
-                sampled_abstract_sequences = [abstract_sequences[0], abstract_sequences[-1]]
-                diff_axes=True
+                # sampled_abstract_sequences = [abstract_sequences[0], abstract_sequences[-1]]
+                # diff_axes=True
             else:
 
                 ## dominant in the same way

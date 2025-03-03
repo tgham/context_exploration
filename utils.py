@@ -730,6 +730,8 @@ data_keys = [
     'costs',
     'path_A',
     'path_B',
+    'abstract_sequence_A',
+    'abstract_sequence_B',
     'optimal_costs',
     'actions',
     'CE_actions',
