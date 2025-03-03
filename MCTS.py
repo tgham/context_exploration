@@ -715,8 +715,8 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
 
 
 ## parallel function for simulating many episodes within the same mountain env
-# def simulate_agent(m, N, env_params=None, metric='cityblock', expt='2AFC', n_episodes=10, agents = ['GP', 'GP-MCTS', 'BAMCP','CE'], n_sims=1000,n_runs=1, correct_prior=True, n_futures=0, n_iter=10, lazy=False, exploration_constant=2, discount_factor=0.95, progress=False, offline=False):
-def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, agents= ['BAMCP', 'CE'], progress=False, offline=False):
+# def simulate_agent(m, N, env_params=None, metric='cityblock', expt='2AFC', n_episodes=10, agents = ['GP', 'GP-MCTS', 'BAMCP','CE'], n_sims=1000,n_runs=1, correct_prior=True, n_futures=0, n_iter=10, lazy=False, exploration_constant=2, discount_factor=0.95, progress=False):
+def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, agents= ['BAMCP', 'CE'], progress=False):
     print(' ') # for some reason need this to get the pbar to appear
 
     ## unroll param dictionaries
@@ -791,10 +791,10 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
         if progress:
             if n_runs <= 1:
                 pbar = tqdm(total=n_episodes, desc='Mountain_'+str(m)+', run '+str(run+1)+'/'+str(n_runs), position=m+1, leave=False)
-        # for e in range(n_episodes):
+        for e in range(n_episodes):
 
         ## TEMP: just interested in first choice
-        for e in range(1):
+        # for e in range(1):
 
             ## loop through agents
             for a, ag in enumerate(agents):
@@ -840,8 +840,6 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
 
                 ## GP-MCTS agent receives info from env
                 if ag =='GP-MCTS':
-                    # K_inf = env_copy.K_gen.copy()
-                    # K_inf = None
                     agent = GP
                 elif (ag == 'BAMCP') or (ag == 'CE') or (ag=='BAMCP w/ CE') or (ag=='CE w/ BAMCP') or (ag=='BAMCP_wrong'):
                     agent = farmer
@@ -967,156 +965,149 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         # MCTS = MonteCarloTreeSearch(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
                         assert MCTS.env.sim == True, 'env not in sim mode'
                     
-                        ## if online planning (i.e. replan after each step)
-                        if not offline:
+                        ## search
+                        action, MCTS_Q = MCTS.search(n_sims, n_futures, n_iter=n_iter, lazy=lazy, reuse_samples=reuse_samples, correct_prior=correct_prior)
+                        actions.append(action)
+                        Q_values.append(MCTS_Q)
+                        leaf_visits = [leaf.n_action_visits for leaf in MCTS.tree.root.action_leaves.values()]
 
-                            ## search
-                            n_sims_tmp = n_sims
-                            action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures, n_iter=n_iter, lazy=lazy, reuse_samples=reuse_samples, correct_prior=correct_prior)
+                        ### optional: check what the CE agent would have done with the mean of this set of samples
 
-                            ## reduce number of sims if near to the goal (A BETTER IDEA WLD BE TO REDUCE THE DISTANCE IF THE TREE HAS REACHED THE GOAL)
-                            # dist_to_goal = np.max(cdist([current, goal], [current, goal], metric='cityblock')) 
-                            # if dist_to_goal > (N/2):
-                            #     n_sims_tmp = n_sims
-                            #     action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures, n_iter=n_iter, lazy=lazy, progress=progress, reuse_samples=reuse_samples)
-                            # elif (dist_to_goal <= (N/2)) & (dist_to_goal > (N/4)):
-                            #     # n_sims_tmp = int(n_sims/2)
-                            #     n_sims_tmp = n_sims
-                            #     action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures, n_iter=n_iter, lazy=lazy, progress=progress, reuse_samples=reuse_samples)
-                            # else:
-                            #     # n_sims_tmp = int(n_sims/4)
-                            #     n_sims_tmp = n_sims
-                            #     action, MCTS_Q = MCTS.search(n_sims_tmp, n_futures,n_iter=n_iter, lazy=lazy,  progress=progress, reuse_samples=reuse_samples)
-                            actions.append(action)
-                            Q_values.append(MCTS_Q)
-                            leaf_visits = [leaf.n_action_visits for leaf in MCTS.tree.root.action_leaves.values()]
+                        ## ensure that all unobserved row and columns are set to the prior mean (i.e. proper CE)
+                        all_posterior_ps_tmp = agent.all_posterior_ps.copy()
+                        all_posterior_qs_tmp = agent.all_posterior_qs.copy()
+                        for i in range(N):
+                            for o in env_copy.obs:
+                                if o[0] == i:
+                                    break
+                            else:
+                                all_posterior_ps_tmp[:,i] = env_copy.alpha_row / (env_copy.alpha_row + env_copy.beta_row)
+                        for j in range(N):
+                            for o in env_copy.obs:
+                                if o[1] == j:
+                                    break
+                            else:
+                                all_posterior_qs_tmp[:,j] = env_copy.alpha_col / (env_copy.alpha_col + env_copy.beta_col)
+                        all_posterior_p_costs_tmp = np.zeros((n_sims, N,N))
+                        for s in range(n_sims):
+                            all_posterior_p_costs_tmp[s] = np.outer(all_posterior_ps_tmp[s], all_posterior_qs_tmp[s])
+                        posterior_mean_p_cost_tmp = np.mean(all_posterior_p_costs_tmp, axis=0)
 
-                            ### optional: check what the CE agent would have done with the mean of this set of samples
-
-                            ## ensure that all unobserved row and columns are set to the prior mean (i.e. proper CE)
-                            all_posterior_ps_tmp = agent.all_posterior_ps.copy()
-                            all_posterior_qs_tmp = agent.all_posterior_qs.copy()
-                            for i in range(N):
-                                for o in env_copy.obs:
-                                    if o[0] == i:
-                                        break
-                                else:
-                                    all_posterior_ps_tmp[:,i] = env_copy.alpha_row / (env_copy.alpha_row + env_copy.beta_row)
-                            for j in range(N):
-                                for o in env_copy.obs:
-                                    if o[1] == j:
-                                        break
-                                else:
-                                    all_posterior_qs_tmp[:,j] = env_copy.alpha_col / (env_copy.alpha_col + env_copy.beta_col)
-                            all_posterior_p_costs_tmp = np.zeros((n_sims_tmp, N,N))
-                            for s in range(n_sims_tmp):
-                                all_posterior_p_costs_tmp[s] = np.outer(all_posterior_ps_tmp[s], all_posterior_qs_tmp[s])
-                            posterior_mean_p_cost_tmp = np.mean(all_posterior_p_costs_tmp, axis=0)
-
-                            ## get CE's action
-                            if expt=='free':
-                                agent.dp(posterior_mean_p_cost_tmp, expected_cost=True)
-                                action_CE = agent.optimal_policy(current, agent.Q_inf)
-                                CE_actions.append(action_CE)
-                            elif expt=='2AFC':
-                                path_costs = []
-                                for path_id in range(env_copy.n_afc):
-                                    path_states = env_copy.path_states[e][path_id]
-                                    path_cost = 0
-                                    for state in path_states:
-                                        # path_cost += env_copy.get_pred_cost(state) ## i.e. sample binary costs from the posterior pqs
-                                        path_cost += posterior_mean_p_cost_tmp[state[0], state[1]]*env_copy.low_cost + (1-posterior_mean_p_cost_tmp[state[0], state[1]])*env_copy.high_cost
-                                    path_costs.append(path_cost)
-                                action_CE = argm(path_costs, np.max(path_costs))
-                                CE_actions.append(action_CE)
-                                CE_Q_values.append(path_costs)
+                        ## get CE's action
+                        if expt=='free':
+                            agent.dp(posterior_mean_p_cost_tmp, expected_cost=True)
+                            action_CE = agent.optimal_policy(current, agent.Q_inf)
+                            CE_actions.append(action_CE)
+                        elif expt=='2AFC':
+                            path_costs = []
+                            for path_id in range(env_copy.n_afc):
+                                path_states = env_copy.path_states[e][path_id]
+                                path_cost = 0
+                                for state in path_states:
+                                    # path_cost += env_copy.get_pred_cost(state) ## i.e. sample binary costs from the posterior pqs
+                                    path_cost += posterior_mean_p_cost_tmp[state[0], state[1]]*env_copy.low_cost + (1-posterior_mean_p_cost_tmp[state[0], state[1]])*env_copy.high_cost
+                                path_costs.append(path_cost)
+                            action_CE = argm(path_costs, np.max(path_costs))
+                            CE_actions.append(action_CE)
+                            CE_Q_values.append(path_costs)
 
 
 
-                            ## plot for debugging?
-                            # print('next action: BAMCP action:', env_copy.action_labels[action],', CE action:', env_copy.action_labels[action_CE])
-                            # _, axs = plt.subplots(1, 3, figsize=(21,7))
-                            # plot_r(env_copy.p_costs.reshape(N,N), ax=axs[0], title = 'p_costs')
-                            # a_traj = np.zeros((len(env_copy.a_traj),3))
-                            # for i, a in enumerate(env_copy.a_traj):
-                            #     a_traj[i,:2] = a
-                            #     a_traj[i,2] = env_copy.costs[a[0], a[1]]
-                            # # plot_traj([env_copy.o_trajs[e], env_copy.a_traj], ax=axs[0])
-                            # plot_traj([env_copy.o_trajs[e], a_traj], ax=axs[0])
-                            # plot_r(agent.posterior_mean_p_cost, ax=axs[1], title = 'average posterior p cost')
-                            # plot_action_tree(agent.Q_inf, current, goal, ax=axs[2], title = 'CE_DP_inf')
-                            # plt.show()
-                            # MCTS_Q_labelled = {env_copy.action_labels[k]:v for k,v in enumerate(MCTS_Q)}
-                            # if action != action_CE:
-                            #     print('MCTS Q:', MCTS_Q_labelled)
-                            #     print('n_visits of action leaves:',{env_copy.action_labels[k]:v.n_action_visits for k,v in MCTS.tree.root.action_leaves.items()})
+                        ## plot for debugging?
+                        # print('next action: BAMCP action:', env_copy.action_labels[action],', CE action:', env_copy.action_labels[action_CE])
+                        # _, axs = plt.subplots(1, 3, figsize=(21,7))
+                        # plot_r(env_copy.p_costs.reshape(N,N), ax=axs[0], title = 'p_costs')
+                        # a_traj = np.zeros((len(env_copy.a_traj),3))
+                        # for i, a in enumerate(env_copy.a_traj):
+                        #     a_traj[i,:2] = a
+                        #     a_traj[i,2] = env_copy.costs[a[0], a[1]]
+                        # # plot_traj([env_copy.o_trajs[e], env_copy.a_traj], ax=axs[0])
+                        # plot_traj([env_copy.o_trajs[e], a_traj], ax=axs[0])
+                        # plot_r(agent.posterior_mean_p_cost, ax=axs[1], title = 'average posterior p cost')
+                        # plot_action_tree(agent.Q_inf, current, goal, ax=axs[2], title = 'CE_DP_inf')
+                        # plt.show()
+                        # MCTS_Q_labelled = {env_copy.action_labels[k]:v for k,v in enumerate(MCTS_Q)}
+                        # if action != action_CE:
+                        #     print('MCTS Q:', MCTS_Q_labelled)
+                        #     print('n_visits of action leaves:',{env_copy.action_labels[k]:v.n_action_visits for k,v in MCTS.tree.root.action_leaves.items()})
 
-                            ## take action
-                            env_copy.set_sim(False)
-                            if expt=='free':
-                                current, cost, terminated, _, _ = env_copy.step(action)
-                                next_node_id = np.append(current,cost)
-                                steps += 1
-                            elif expt=='2AFC':
-                                action_sequence = env_copy.path_actions[e][action]
-                                states, costs = env_copy.take_path(action_sequence)
-                                current = states[-1]
-                                path_cost = np.sum(costs)
-                                terminated = True ## trivially true in 2AFC
-                                block_terminated = e == (n_episodes-1)
+                        ## take action
+                        env_copy.set_sim(False)
+                        env_copy.init_ep(action)
+                        start = env_copy.current
+                        goal = env_copy.goal
+                        assert np.array_equal(start, env_copy.starts[e][action]), 'current state does not match start state\n current: {}, start: {}'.format(env_copy.current, env_copy.starts[e][action])
+                        if expt=='free':
+                            current, cost, terminated, _, _ = env_copy.step(action)
+                            next_node_id = np.append(current,cost)
+                            steps += 1
+                        elif expt=='2AFC':
+                            action_sequence = env_copy.path_actions[e][action]
+                            _, _ = env_copy.take_path(action_sequence)
+                            # current = states[-1]
+                            current = env_copy.current
+                            # path_cost = np.sum(costs)
+                            costs = env_copy.ep_obs[:,-1]
+                            path_cost = np.sum(costs)
+                            terminated = True ## trivially true in 2AFC
+                            block_terminated = e == (n_episodes-1)
 
-                                ## update next node id
-                                next_node_id = MCTS.init_node_id(env_copy.obs.copy(), None)
+                            ## update next node id
+                            next_node_id = MCTS.init_node_id(env_copy.obs.copy(), None)
+                        
 
-                            search_attempts = 0 # could do nan here
+                        search_attempts = 0 # could do nan here
 
 
-                            ## check for backtracking
-                            if len(actions)>1:
-                                # backtracked = np.abs(action-actions[-2]) ==2
-                                backtracked = np.array_equal(current, env_copy.a_traj[-3])
-                                if backtracked:
-                                    # print(MCTS.tree.print_tree(MCTS.tree.root))
-                                    # print('backtracked in state:', current,' back from ', env_copy.a_traj[-2])
-                                    raise ValueError('backtracked in state:', current,' back from ', env_copy.a_traj[-2], ', en route to ', goal)
+                        ## check for backtracking
+                        if len(actions)>1:
+                            # backtracked = np.abs(action-actions[-2]) ==2
+                            backtracked = np.array_equal(current, env_copy.a_traj[-3])
+                            if backtracked:
+                                # print(MCTS.tree.print_tree(MCTS.tree.root))
+                                # print('backtracked in state:', current,' back from ', env_copy.a_traj[-2])
+                                raise ValueError('backtracked in state:', current,' back from ', env_copy.a_traj[-2], ', en route to ', goal)
+                        
+
+                        ## update observations
+                        agent.get_env_info(env_copy)
+
+                        ### prune tree
+                        if expt=='free': 
                             
+                            ## no need to prune at the end of the episode in free-choice expt, since the tree resets at this point
+                            if not terminated:
+                                MCTS.tree.prune(action, next_node_id)
+                                assert np.array_equal(MCTS.tree.root.state[:2], current), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action)
 
-                            ## update observations
-                            agent.get_env_info(env_copy)
+                        elif expt=='2AFC':
 
-                            ### prune tree
-                            if expt=='free': 
-                                
-                                ## no need to prune at the end of the episode in free-choice expt, since the tree resets at this point
-                                if not terminated:
+                            ## pruning not always successful due to high branching factor, in which case reset the tree
+                            if not block_terminated:
+
+                                if next_node_id in MCTS.tree.root.action_leaves[action].children:
                                     MCTS.tree.prune(action, next_node_id)
-                                    assert np.array_equal(MCTS.tree.root.state[:2], current), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action)
-
-                            elif expt=='2AFC':
-
-                                ## pruning not always successful due to high branching factor, in which case reset the tree
-                                if not block_terminated:
-
-                                    if next_node_id in MCTS.tree.root.action_leaves[action].children:
-                                        MCTS.tree.prune(action, next_node_id)
+                                    if expt_info['same_SGs']:
                                         assert np.array_equal(MCTS.tree.root.state[2:], costs), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action) 
-                                        # tree_reset = False
-                                        tree_resets[ag] = False
-                                        # print('successful prune after action {}. new root has two leaves with a total of {} children'.format(action, np.sum(len(MCTS.tree.root.action_leaves[a].children) for a in MCTS.tree.root.action_leaves.keys())))
-                                        # for a in MCTS.tree.root.action_leaves.keys():
-                                        #     print('action:', a, ', n_children:', len(MCTS.tree.root.action_leaves[a].children))
-                                        #     for child in MCTS.tree.root.action_leaves[a].children:
-                                        #         print(np.sum(np.array(child).reshape(N,N,2), axis=2))
-                                        #         print()
                                     else:
-                                        # print('n_children:', len(MCTS.tree.root.action_leaves[action].children))
-                                        # for child in MCTS.tree.root.action_leaves[action].children.values():
-                                        #     print(child.node_id)
-                                        # print('unsuccessful prune after action {}'.format(action))
-                                        # print('failed to find:\n', next_node_id)
-                                        # print('next node id:', np.sum(np.array(next_node_id).reshape(N,N,2), axis=2))
-                                        # tree_reset = True
-                                        tree_resets[ag] = True
+                                        assert np.array_equal(MCTS.tree.root.state[4:], costs), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action) 
+                                    # tree_reset = False
+                                    tree_resets[ag] = False
+                                    # print('successful prune after action {}. new root has two leaves with a total of {} children'.format(action, np.sum(len(MCTS.tree.root.action_leaves[a].children) for a in MCTS.tree.root.action_leaves.keys())))
+                                    # for a in MCTS.tree.root.action_leaves.keys():
+                                    #     print('action:', a, ', n_children:', len(MCTS.tree.root.action_leaves[a].children))
+                                    #     for child in MCTS.tree.root.action_leaves[a].children:
+                                    #         print(np.sum(np.array(child).reshape(N,N,2), axis=2))
+                                    #         print()
+                                else:
+                                    # print('n_children:', len(MCTS.tree.root.action_leaves[action].children))
+                                    # for child in MCTS.tree.root.action_leaves[action].children.values():
+                                    #     print(child.node_id)
+                                    # print('unsuccessful prune after action {}'.format(action))
+                                    # print('failed to find:\n', next_node_id)
+                                    # print('next node id:', np.sum(np.array(next_node_id).reshape(N,N,2), axis=2))
+                                    # tree_reset = True
+                                    tree_resets[ag] = True
                         MCTSs[ag] = MCTS
                     
                     ### log determinant of covariance matrix
