@@ -25,8 +25,7 @@ import copy
 # from utils import make_env, Node, Tree, argm, value_iteration, data_keys
 # from MCTS import MonteCarloTreeSearch, simulate_agent
 
-from utils import make_env, Node, Tree, argm, data_keys, mountain_keys, parse_lists, KL_divergence, profile_func
-from value_iteration import value_iteration
+from utils import make_env, Node, Tree, argm, data_keys, mountain_keys, parse_lists, KL_divergence, profile_func, KL_sim, value_iteration
 from MCTS import MonteCarloTreeSearch, MonteCarloTreeSearch_Free, MonteCarloTreeSearch_2AFC, simulate_agent
 
 import IPython
@@ -88,6 +87,10 @@ n_mountains = 2500
 n_episodes = 3
 n_runs = 1
 expt = '2AFC'
+expt_info = {
+    'type': expt,
+    'same_SGs': False,
+}
 env_params = {
     'N': N,
     'n_mountains': n_mountains,
@@ -101,11 +104,11 @@ env_params = {
 n_mountains = env_params['n_mountains']
 
 ## MCTS params
-n_sims = 100000
+n_sims = 50000
 MCTS_params = {
     'n_sims': n_sims,
     'n_futures': 0, 
-    'exploration_constant': 25,
+    'exploration_constant': 1,
     'discount_factor': 1,
 }
 
