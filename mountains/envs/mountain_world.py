@@ -88,6 +88,7 @@ class MountainEnv(gym.Env):
             #     Actions.down.value: np.array([0, -1]),
             # }
             self.action_to_direction = np.array([[1, 0], [0, 1], [-1, 0], [0, -1]])
+            self.direction_to_action = {tuple(v): k for k, v in enumerate(self.action_to_direction)}
             self.n_actions = 4
 
             ## action labels (NB these deviate from env action space, bc axes are flipped for plotting
@@ -120,7 +121,8 @@ class MountainEnv(gym.Env):
             SG_found = False
             paths_found = False
             # self.high_cost, self.low_cost = -0.9, -0.1
-            self.high_cost, self.low_cost = -1, -0
+            self.high_cost, self.low_cost = -1, -0.5
+            # self.high_cost, self.low_cost = 0, 1
             self.alpha_row = beta_params['alpha_row']
             self.beta_row = beta_params['beta_row']
             self.alpha_col = beta_params['alpha_col']
@@ -162,7 +164,7 @@ class MountainEnv(gym.Env):
             ## generate relevant trial info for each episode
             for e in range(n_episodes):
 
-                # try:
+                try:
                 
                     ## free movement
                     if self.expt == 'free':
@@ -184,8 +186,12 @@ class MountainEnv(gym.Env):
                         if self.same_SGs:
                             max_turns = 3
                             path_actions, path_states = self.sample_paths(start, goal, max_turns)
-                            self.starts.append(start)
-                            self.goals.append(goal)
+                            # self.starts.append(start)
+                            # self.goals.append(goal)
+                            self.starts.append([start, start])
+                            self.goals.append([goal, goal])
+                            # self.starts.append([path_states[0][0], path_states[1][0]])
+                            # self.goals.append([path_states[0][-1], path_states[1][-1]])
                             self.path_states.append(path_states)
                             self.path_actions.append(path_actions)
                         
@@ -222,8 +228,8 @@ class MountainEnv(gym.Env):
                         self.path_costs.append(path_costs)
                         paths_found = True
 
-                # except:
-                #     break
+                except:
+                    break
 
                 ### define actual binary costs for each episode, assuming they regenerate each time
 
@@ -401,18 +407,6 @@ class MountainEnv(gym.Env):
         if not self.sim:
             if not hasattr(self, 'obs') or self.obs is None:
                 self.obs = np.array([])
-                self.obs_tmp = np.array([[self._agent_location[0], self._agent_location[1], current_cost]])
-                self.obs_start_tmp = self.obs_tmp.copy()
-            else:
-            ####     self.obs = np.vstack([self.obs, [self._agent_location[0], self._agent_location[1], current_cost]])
-                self.obs_tmp = self.obs.copy()
-                self.obs_tmp = np.vstack([self.obs_tmp, [self._agent_location[0], self._agent_location[1], current_cost]])
-                self.obs_start_tmp = self.obs_tmp.copy()
-
-        ## or, if simulating some unknown future environment, the observations are given by the previous tree, so we trivially have obs already
-        elif self.sim:
-            self.obs_tmp = np.vstack([self.obs, [self._agent_location[0], self._agent_location[1], current_cost]])
-            self.obs_start_tmp = self.obs_tmp.copy()
 
 
         ## dynamic programming to get the true optimal trajectory
@@ -423,23 +417,41 @@ class MountainEnv(gym.Env):
         #     ## get the costs of this optimal trajectory
         #     self.optimal_trajectory()
 
-        ## initialise actual trajectory as list of tuples
-        if not self.sim:
+        ## initialise actual trajectory as list of tuples (MIGHT NEED THIS FOR THE FREE CHOICE EXPT?)
+        # if not self.sim:
 
-            ## start from start
-            self.a_traj = [tuple(self._agent_location)]
+        #     ## start from start
+        #     self.a_traj = [tuple(self._agent_location)]
 
-            ## or start from nothing
-            # self.a_traj = []
+        #     ## or start from nothing
+        #     # self.a_traj = []
             
-            self.action_scores = []
+        self.action_scores = []
         
         # return observation, info
 
+    ## init ep - i.e. in the 2AFC task, once a start has been chosen, initialise the start, goal and obs for that episode
+    def init_ep(self, action):
+        self._agent_location = np.array(self.starts[self._episode][action])
+        self._goal_location = np.array(self.goals[self._episode][action])
+        self.terminated = False
+        if self.sim:
+            current_cost = self.predicted_costs[self._agent_location[0], self._agent_location[1]]
+        else:
+            current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
+        self.ep_obs = np.array([[self._agent_location[0], self._agent_location[1], current_cost]])
+        self.a_traj = [tuple(self._agent_location)]
+
     ## soft reset (allows simulation of future episodes without full copying of env) - i.e. update only the start and goal locations
-    def soft_reset(self):
-        self._agent_location = np.array(self.starts[self._episode])
-        self._goal_location = np.array(self.goals[self._episode])
+    def soft_reset(self, start=None, goal=None):
+        if start is not None:
+            self._agent_location = start
+        else:
+            self._agent_location = np.array(self.starts[self._episode])
+        if goal is not None:
+            self._goal_location = goal
+        else:
+            self._goal_location = np.array(self.goals[self._episode])
         self.terminated=False
     
     ## get some S-G pairs
@@ -754,18 +766,48 @@ class MountainEnv(gym.Env):
     def sample_paths_and_SGs(self, max_turns=1):
 
         ### get the sequences of abstract paths
-        # path_len = np.random.randint(2, self.N-1)
-        path_len = self.N-4
+        path_len = np.random.randint(4, self.N-1)
+        # path_len = self.N-4
         # path_len = 5
         abstract_sequences = self.generate_abstract_sequences(path_len, max_turns)
 
-        ## sample a pair of abstract sequences, ensuring that one has more horizontal moves than its vertical moves, and the other has more vertical moves than its horizontal moves
+        ## sample a pair of abstract sequences
         diff_axes = False
         while not diff_axes:
             seq_idxs = np.random.choice(len(abstract_sequences), size=self.n_afc, replace=False)
             sampled_abstract_sequences = [abstract_sequences[i] for i in seq_idxs]
-            if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
-                diff_axes = True
+
+            ## ensure that one has more horizontal moves than its vertical moves, and the other has more vertical moves than its horizontal moves
+            # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
+            #     diff_axes = True
+
+            ## or, ensure different axes on first episode, but otherwise same axes on subsequent episodes
+            if len(self.starts)==0:
+            # if len(self.starts)<=1:
+                # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
+                if ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
+                    diff_axes = True
+                
+                ## sanity check: choose the longest vertical and horizontal paths
+                sampled_abstract_sequences = [abstract_sequences[0], abstract_sequences[-1]]
+                diff_axes=True
+            else:
+
+                ## dominant in the same way
+                # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])):
+                
+                ## one of each
+                if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
+                
+                ## both vertically dominant
+                # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
+                    diff_axes = True
+
+                ## choose the two longest vertical paths
+                # sampled_abstract_sequences = [abstract_sequences[-1], abstract_sequences[-1]]
+                # diff_axes=True
+                    
+        # print('found different axes: ', sampled_abstract_sequences)
         # seq_idxs = np.random.choice(len(abstract_sequences), size=self.n_afc, replace=False)
         # sampled_abstract_sequences = [abstract_sequences[i] for i in seq_idxs]
         # print('sampled_abstract_sequences:', sampled_abstract_sequences)
@@ -779,72 +821,80 @@ class MountainEnv(gym.Env):
             n_common_across_eps = np.inf
         else:
             n_common_across_eps = 0
-        max_common_within_ep = (path_len-1)/1
-        max_common_across_eps = (path_len-1)/1
+        max_common_within_ep = (path_len-1)/1.2
+        max_common_across_eps = (path_len-1)/1.2
+        ## debugging
+        # max_common_within_ep = np.inf
+        # max_common_across_eps = np.inf
 
 
         ### get the concrete sequences
 
         ## same starts
-        while (n_common_within_ep >= max_common_within_ep) or (n_common_across_eps >= max_common_across_eps):
-            both_in_grid = False
-            while not both_in_grid:
-                path_states = []
-                path_actions = []
-                goals = []
-                start = np.random.randint(0, self.N-1, size=2)
-                # start = np.array([0, 0])
-                for s_a_s in sampled_abstract_sequences:
-                    # transformation = 'none'
-                    transformation = np.random.choice(['none', 'x', 'y'])
-                    path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start.copy(), transformation=transformation)
-                    path_states.append(path)
-                    path_actions.append(actions)
-                    goals.append(path[-1])
-                    
-                ## check to see if all states are in the grid
-                # print(path_states)
-                if np.all([np.all(path >= 0) and np.all(path < self.N) for path in path_states]):
-                    both_in_grid = True
-
-            ## check overlap between paths
-            path_states = [tuple(map(tuple, path)) for path in path_states]
-            n_common_within_ep, n_common_across_eps = self.check_overlap(path_states[0], path_states[1],1)
-            assert np.array_equal(path_states[0][0], path_states[1][0]), 'start locations are not the same: %s, %s' % (path_states[0][0], path_states[1][0])
-        starts = start
-
-        
-        # ## or, enforce different starts
-        # while (not diff_starts) or (n_common_within_ep >= max_common_within_ep) or (n_common_across_eps >= max_common_across_eps):
-        #     path_states = []
-        #     path_actions = []
-        #     starts = []
-        #     goals = []
-        #     for s_a_s in sampled_abstract_sequences:
-        #         in_grid = False
-        #         while not in_grid:
-        #             transformation = np.random.choice(['none', 'x', 'y'])
+        # while (n_common_within_ep >= max_common_within_ep) or (n_common_across_eps >= max_common_across_eps):
+        #     both_in_grid = False
+        #     while not both_in_grid:
+        #         path_states = []
+        #         path_actions = []
+        #         goals = []
+        #         start = np.random.randint(0, self.N-1, size=2)
+        #         # start = np.array([0, 0])
+        #         for s_a_s in sampled_abstract_sequences:
         #             # transformation = 'none'
-        #             start = np.random.randint(0, self.N-1, size=2)
-        #             path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation=transformation)
-
-        #             ## check to see if all states are in the grid
-        #             if np.all(path >= 0) and np.all(path < self.N):
-        #                 in_grid = True
-            
-        #         path_states.append(path)
-        #         path_actions.append(actions)
-        #         starts.append(path[0])
-        #         goals.append(path[-1])
-            
-        #     ## check that all start locations are different
-        #     n_distinct_starts = len(set([tuple(s) for s in starts]))
-        #     if n_distinct_starts == self.n_afc:
-        #         diff_starts = True
+        #             transformation = np.random.choice(['none', 'x', 'y'])
+        #             path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start.copy(), transformation=transformation)
+        #             path_states.append(path)
+        #             path_actions.append(actions)
+        #             goals.append(path[-1])
+                    
+        #         ## check to see if all states are in the grid
+        #         # print(path_states)
+        #         if np.all([np.all(path >= 0) and np.all(path < self.N) for path in path_states]):
+        #             both_in_grid = True
 
         #     ## check overlap between paths
         #     path_states = [tuple(map(tuple, path)) for path in path_states]
-        #     n_common_within_ep, n_common_across_eps = self.check_overlap(path_states[0], path_states[1],0)
+        #     n_common_within_ep, n_common_across_eps = self.check_overlap(path_states[0], path_states[1],1)
+        #     assert np.array_equal(path_states[0][0], path_states[1][0]), 'start locations are not the same: %s, %s' % (path_states[0][0], path_states[1][0])
+        # starts = start
+
+        
+        ## or, enforce different starts
+        while (not diff_starts) or (n_common_within_ep >= max_common_within_ep) or (n_common_across_eps >= max_common_across_eps):
+            path_states = []
+            path_actions = []
+            starts = []
+            goals = []
+            for s_a_s in sampled_abstract_sequences:
+                in_grid = False
+                while not in_grid:
+                    transformation = np.random.choice(['none', 'x', 'y'])
+                    # transformation = 'none'
+                    start = np.random.randint(0, self.N-1, size=2)
+                    
+                    ## sanity check: in the corner!
+                    # if len(self.starts)==0:
+                    #     start = np.array([0, 0])
+                    #     path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation='none')
+                    path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation=transformation)
+
+                    ## check to see if all states are in the grid
+                    if np.all(path >= 0) and np.all(path < self.N):
+                        in_grid = True
+            
+                path_states.append(path)
+                path_actions.append(actions)
+                starts.append(path[0])
+                goals.append(path[-1])
+            
+            ## check that all start locations are different
+            n_distinct_starts = len(set([tuple(s) for s in starts]))
+            if n_distinct_starts == self.n_afc:
+                diff_starts = True
+
+            ## check overlap between paths
+            path_states = [tuple(map(tuple, path)) for path in path_states]
+            n_common_within_ep, n_common_across_eps = self.check_overlap(path_states[0], path_states[1],0)
 
         return sampled_abstract_sequences, path_actions, path_states, starts, goals
 
@@ -941,6 +991,9 @@ class MountainEnv(gym.Env):
         for move in moves:
             state += np.array(move)
             path.append(state.copy())
+
+        ## convert moves from tuples to integers
+        moves = [self.direction_to_action[tuple(m)] for m in moves]
         return np.array(path), moves
 
     
@@ -996,6 +1049,7 @@ class MountainEnv(gym.Env):
     def step(self, action):
 
         self.terminated = False
+
         
         ## get the score of the current action (only necessary if not simulating)
         if not self.sim:
@@ -1040,22 +1094,11 @@ class MountainEnv(gym.Env):
 
         ## return the real cost if not simulating
         if not self.sim:
-            cost = current_cost
+            cost = current_cost.copy()
             
             ## update observation and trajectory arrays - i.e. agent observes along the way
             self.a_traj.append(tuple(self._agent_location))
-            if len(self.obs)==0:
-                self.obs = np.array([[self._agent_location[0], self._agent_location[1], current_cost]])
-            else:
-                self.obs = np.vstack([self.obs, [self._agent_location[0], self._agent_location[1], current_cost]])
-            self.obs_tmp = np.vstack([self.obs_tmp, [self._agent_location[0], self._agent_location[1], current_cost]])
-            
-            ## calculate new posterior for next trial
-            # self.posterior_mean, self.posterior_var = self.inference_func(obs = self.obs, pred='all')
-
-            ## or, temporarily store observations until the end of the trial (no need to calculate posterior at each step, since there are no new observations)
-            # self.a_traj.append(tuple(self._agent_location))
-            # self.obs_tmp = np.vstack([self.obs_tmp, [self._agent_location[0], self._agent_location[1], cost]])
+            self.ep_obs = np.vstack([self.ep_obs, [self._agent_location[0], self._agent_location[1], current_cost]])
 
             ## store info on optimality of the choice, given the agent's current position
             self.action_scores.append(action_score)
@@ -1064,26 +1107,22 @@ class MountainEnv(gym.Env):
         ## return the predicted cost if simulating
         elif self.sim:
             # cost = current_cost
-            cost = predicted_cost 
+            cost = predicted_cost.copy()
             # cost += self.expl_beta * np.sqrt(var_cost) #UCB
-
-            ## still need to store obs_tmp along the way for subsequent posterior inference
-            # self.a_traj.append(tuple(self._agent_location))
-            # self.obs_tmp = np.vstack([self.obs_tmp, [self._agent_location[0], self._agent_location[1], cost]])
-                
 
         # An episode is done iff the agent has reached the goal
         if np.array_equal(self._agent_location, self._goal_location):
             self.terminated = True
             if self.expt=='free':
                 cost=0 ## cost of final state is 0 (MIGHT WANT TO CHANGE THIS...)
-            elif self.expt=='2AFC':
-                cost = current_cost
-            # cost = self.expl_beta * np.sqrt(var_cost)
         
             ## update observation array only once the episode is complete
             if not self.sim:
-                self.obs = self.obs_tmp.copy()
+                if len(self.obs)==0: ## i.e. first episode, so just copy the ep_obs
+                    assert self._episode==0, 'episode counter should be 0'
+                    self.obs = self.ep_obs.copy()
+                else: ## otherwise, append the ep_obs to the obs from the previous episodes
+                    self.obs = np.vstack([self.obs, self.ep_obs])
 
                 ## sum of costs of route INC START AND END
                 self.a_traj_costs = [self.costs[x, y] for x, y in self.a_traj]

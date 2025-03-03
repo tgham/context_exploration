@@ -209,7 +209,7 @@ class Tree:
                     pass
 
 
-    def print_tree(self, node, indent="", is_last=True, dummy=False):
+    def print_tree(self, node, indent="", is_last=True, dummy=False, depth=0, max_depth=None):
         """
         Recursively print the tree structure with markers, visit counts, and values.
 
@@ -218,7 +218,13 @@ class Tree:
         - indent: The current indentation string for formatting.
         - is_last: Whether this node is the last child of its parent.
         - dummy: Whether to print display action leaves that don't have any children.
+        - depth: The current depth of the recursion.
+        - max_depth: The maximum depth to print (None for no limit).
         """
+        # Stop printing if max depth is reached
+        if max_depth is not None and depth > max_depth:
+            return
+
         # Get the current node
         # node = self.nodes[node_id]
         if dummy:
@@ -228,11 +234,12 @@ class Tree:
                 node_label = f"{node.state}"
         else:
             node_label = f"{node.state}"
+            # node_label = f"{node.node_id}"
         episode_label = f"{node.episode}"
 
         # Add branch marker
         branch = "└── " if is_last else "├── "
-        print(f"{indent}{branch}Node: {node_label}, Episode: {episode_label}")
+        print(f"{indent}{branch}Node: {node_label}, Episode: {episode_label}, Visits: {node.n_state_visits}")
 
         # Update indentation for children
         child_indent = indent + ("    " if is_last else "│   ")
@@ -251,7 +258,6 @@ class Tree:
             default=(None, [])
         )[0]
 
-
         # Iterate through actions and their corresponding children
         num_actions = len(children_by_action)
         for i, (action, children) in enumerate(children_by_action.items()):
@@ -260,7 +266,7 @@ class Tree:
 
             # Print the action label (only once per action)
             leaf = children[0][0]  # Assume all children of the same action share the same leaf
-            action_label = f"Action {action}, (n_v: {leaf.n_action_visits}, branch factor: {len(children)}, perf: {leaf.performance:.2f})"
+            action_label = f"Action {action}, (n_v: {leaf.n_action_visits}, prev_state: {leaf.prev_state}, next_state: {leaf.next_state}, branch factor: {len(children)}, perf: {leaf.performance:.2f})"
 
             # Highlight the best action in bold (use ANSI escape codes for bold text)
             if action == best_action:
@@ -277,12 +283,16 @@ class Tree:
                 # Check if this is the last child of this action
                 is_child_last = j == len(children) - 1
 
-                # Recursively print the child node
+                # Recursively print the child node with increased depth
                 self.print_tree(
                     child_node,
                     indent=sub_child_indent,
                     is_last=is_child_last,
+                    dummy=dummy,
+                    depth=depth + 1,
+                    max_depth=max_depth
                 )
+
 
     def max_depth(self, node):
         """
@@ -305,6 +315,40 @@ class Tree:
 
         # The depth of this node is 1 + max depth of its children
         return 1 + max(child_depths)
+    
+
+    ## function for getting the max and min Q-values at a given depth of the tree
+    def min_max_Q(self, node, depth, current_depth=0):
+        """
+        Recursively calculate the maximum and minimum Q-values at a given depth of the tree starting from the given node.
+
+        Args:
+        - node: The current node (root of the subtree being evaluated).
+        - depth: The target depth to calculate the Q-values.
+        - current_depth: The current depth of the recursion.
+
+        Returns:
+        - (float, float): The maximum and minimum Q-values at the target depth.
+        """
+        # Base case: If the target depth is reached, return the Q-value of this node
+        if current_depth == depth:
+            Qs = []
+            for a in node.action_leaves.keys():
+                if node.action_leaves[a] is not None:
+                    Qs.append(node.action_leaves[a].performance)
+            if len(Qs) == 0:
+                return np.inf, -np.inf
+            return min(Qs), max(Qs)
+
+        # Recursive case: Compute the maximum and minimum Q-values for each child
+        max_Q = -np.inf
+        min_Q = np.inf
+        for _, _, _, child_node in self.get_children(node):
+            child_min_Q, child_max_Q = self.min_max_Q(child_node, depth, current_depth + 1)
+            max_Q = max(max_Q, child_max_Q)
+            min_Q = min(min_Q, child_min_Q)
+
+        return min_Q, max_Q
 
 
 
@@ -547,6 +591,10 @@ def KL_sim(obs_set, t, farmer, n_samples, plotting = False):
     N = farmer.N
     n_episodes = 2 ## arbitrary
     expt = farmer.expt
+    expt_info = {
+        'type': expt,
+        'same_SGs': True,
+    }
     n_iter = 10
     lazy = False
     CE = False
@@ -566,7 +614,7 @@ def KL_sim(obs_set, t, farmer, n_samples, plotting = False):
     all_posterior_mean_p_costs = []
 
     ## reset env
-    env = make_env(N, n_episodes,expt, beta_params, 'cityblock')
+    env = make_env(N, n_episodes,expt_info, beta_params, 'cityblock')
     env.reset()
 
     ## loop through obs sets
@@ -612,7 +660,8 @@ def KL_sim(obs_set, t, farmer, n_samples, plotting = False):
             axs[4].set_title('posterior q')
 
         ## KL divergence
-        KL = KL_divergence(prior_samples, posterior_samples)
+        # KL = KL_divergence(prior_samples, posterior_samples)
+        KL = KL_divergence(posterior_samples, prior_samples)
         KLs.append(KL)
         # KLs[t,a] = KL
         # print('KL after obs along ',axes[a],':',KL)
