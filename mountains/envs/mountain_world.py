@@ -121,8 +121,8 @@ class MountainEnv(gym.Env):
             SG_found = False
             paths_found = False
             # self.high_cost, self.low_cost = -0.9, -0.1
-            # self.high_cost, self.low_cost = -1, -0.1
-            self.high_cost, self.low_cost = 0, 1
+            self.high_cost, self.low_cost = -1, -0.5
+            # self.high_cost, self.low_cost = 0, 1
             self.alpha_row = beta_params['alpha_row']
             self.beta_row = beta_params['beta_row']
             self.alpha_col = beta_params['alpha_col']
@@ -186,8 +186,10 @@ class MountainEnv(gym.Env):
                         if self.same_SGs:
                             max_turns = 3
                             path_actions, path_states = self.sample_paths(start, goal, max_turns)
-                            self.starts.append(start)
-                            self.goals.append(goal)
+                            # self.starts.append(start)
+                            # self.goals.append(goal)
+                            self.starts.append([start, start])
+                            self.goals.append([goal, goal])
                             # self.starts.append([path_states[0][0], path_states[1][0]])
                             # self.goals.append([path_states[0][-1], path_states[1][-1]])
                             self.path_states.append(path_states)
@@ -764,8 +766,8 @@ class MountainEnv(gym.Env):
     def sample_paths_and_SGs(self, max_turns=1):
 
         ### get the sequences of abstract paths
-        # path_len = np.random.randint(2, self.N-1)
-        path_len = self.N-3
+        path_len = np.random.randint(4, self.N-1)
+        # path_len = self.N-4
         # path_len = 5
         abstract_sequences = self.generate_abstract_sequences(path_len, max_turns)
 
@@ -790,9 +792,15 @@ class MountainEnv(gym.Env):
                 sampled_abstract_sequences = [abstract_sequences[0], abstract_sequences[-1]]
                 diff_axes=True
             else:
+
+                ## dominant in the same way
                 # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])):
-                # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
-                if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
+                
+                ## one of each
+                if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
+                
+                ## both vertically dominant
+                # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
                     diff_axes = True
 
                 ## choose the two longest vertical paths
@@ -813,8 +821,8 @@ class MountainEnv(gym.Env):
             n_common_across_eps = np.inf
         else:
             n_common_across_eps = 0
-        max_common_within_ep = (path_len-1)/1
-        max_common_across_eps = (path_len-1)/1
+        max_common_within_ep = (path_len-1)/1.2
+        max_common_across_eps = (path_len-1)/1.2
         ## debugging
         # max_common_within_ep = np.inf
         # max_common_across_eps = np.inf
@@ -865,9 +873,9 @@ class MountainEnv(gym.Env):
                     start = np.random.randint(0, self.N-1, size=2)
                     
                     ## sanity check: in the corner!
-                    if len(self.starts)==0:
-                        start = np.array([0, 0])
-                        path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation='none')
+                    # if len(self.starts)==0:
+                    #     start = np.array([0, 0])
+                    #     path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation='none')
                     path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation=transformation)
 
                     ## check to see if all states are in the grid
@@ -1041,6 +1049,7 @@ class MountainEnv(gym.Env):
     def step(self, action):
 
         self.terminated = False
+
         
         ## get the score of the current action (only necessary if not simulating)
         if not self.sim:
