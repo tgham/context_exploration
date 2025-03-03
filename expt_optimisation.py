@@ -65,7 +65,7 @@ def save_results(sim):
     
 ## sim init
 parallel=True
-n_cores = 40
+n_cores = 12
 sim_results = {}
 for key in data_keys:
     sim_results[key] = []
@@ -83,7 +83,7 @@ beta_params = {
     'beta_col': 0.5
 }
 N = 7
-n_mountains = 2500
+n_mountains = 12
 n_episodes = 3
 n_runs = 1
 expt = '2AFC'
@@ -96,7 +96,7 @@ env_params = {
     'n_mountains': n_mountains,
     'n_episodes': n_episodes,
     'n_runs': n_runs,
-    'expt': expt,
+    'expt_info': expt_info,
     'metric': 'cityblock',
     # 'expt': 'free',
     'beta_params': beta_params,
@@ -104,7 +104,7 @@ env_params = {
 n_mountains = env_params['n_mountains']
 
 ## MCTS params
-n_sims = 50000
+n_sims = 1000
 MCTS_params = {
     'n_sims': n_sims,
     'n_futures': 0, 
@@ -168,10 +168,10 @@ df_sim = pd.DataFrame(sim_results)
 
 
 ## save simulated mountains + results
-df_sim.to_csv('{}_{}x{}_env_{}-{}-{}-{}_beta_{}_mountains_{}_episodes_{}_sims_results.csv'.format(expt,N,N, 
+df_sim.to_csv('useful_saves/expt_optimisation/{}_{}x{}_env_{}-{}-{}-{}_beta_{}_mountains_{}_episodes_{}_sims_results.csv'.format(expt,N,N, 
                                                                                        beta_params['alpha_row'], beta_params['beta_row'], beta_params['alpha_col'], beta_params['beta_col'],
                                                                                        n_mountains, n_episodes, n_sims))
-with open('{}_{}x{}_env_{}_{}-{}-{}_beta_{}_mountains_{}_episodes_{}_sims_envs.pkl'.format(expt,N,N, 
+with open('useful_saves/expt_optimisation/{}_{}x{}_env_{}_{}-{}-{}_beta_{}_mountains_{}_episodes_{}_sims_envs.pkl'.format(expt,N,N, 
                                                                                                          beta_params['alpha_row'], beta_params['beta_row'], beta_params['alpha_col'], beta_params['beta_col'],
                                                                                                  n_mountains, n_episodes, n_sims), 'wb') as f:
     pickle.dump(all_mountains, f)
