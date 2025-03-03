@@ -28,22 +28,22 @@ class MonteCarloTreeSearch():
         self.discount_factor = discount_factor
         starting_cost = self.env.costs[self.actual_state[0], self.actual_state[1]]
         self.exploration_constant = exploration_constant
+        self.exploration_constants = [self.exploration_constant for e in range(self.env.n_episodes)]
 
         ## or, scale exploration constant by the expected cost of the entire block
         # n_steps = 0
         # for ep in range(self.env.n_episodes):
         #     n_steps += len(self.env.path_states[ep][0])
         # self.exploration_constant = exploration_constant * n_steps
-        self.exploration_constants = [self.exploration_constant for e in range(self.env.n_episodes)]
 
         ## or, multiple exploration constants, each scaled by the expected cost of the block from that episode onwards
-        # expected_cost = np.abs(np.mean([self.low_cost, self.high_cost]))
-        # self.exploration_constants = []
-        # for e in range(self.env.n_episodes):
-        #     n_steps = 0
-        #     for subseq_e in range(e, self.env.n_episodes):
-        #         n_steps += len(self.env.path_states[subseq_e][0])
-        #     self.exploration_constants.append(exploration_constant * expected_cost * n_steps)
+        expected_cost = np.abs(np.mean([self.low_cost, self.high_cost]))
+        self.exploration_constants = []
+        for e in range(self.env.n_episodes):
+            n_steps = 0
+            for subseq_e in range(e, self.env.n_episodes):
+                n_steps += len(self.env.path_states[subseq_e][0])
+            self.exploration_constants.append(exploration_constant * expected_cost * n_steps)
         # print(self.exploration_constants)
 
 
@@ -324,14 +324,21 @@ class MonteCarloTreeSearch():
         exploitation_term = action_leaf.performance
         exploration_term = self.exploration_constants[action_leaf.episode] * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
 
-        ## or, min-max normalisation of Qs
-        # min_Q, max_Q = self.tree.min_max_Q(node=self.tree.root, depth=action_leaf.episode, current_depth=0)
+        
+        ### or, min-max normalisation of Qs, 
+
+        ## based on overall min and max Q values (i.e. min and max of all estimates ever recorded at that depth)
+        # min_Q = self.min_Q[action_leaf.episode]
+        # max_Q = self.max_Q[action_leaf.episode]
+
+        # ## or, based on min and max of current estimates of Qs at that depth
+        # # min_Q, max_Q = self.tree.min_max_Q(node=self.tree.root, depth=action_leaf.episode, current_depth=0)
+
         # norm_term = max_Q - min_Q
         # if norm_term == 0 or norm_term==np.inf:
         #     exploitation_term = action_leaf.performance
         # else:
-        #     exploitation_term = (exploitation_term - min_Q) / norm_term
-        # # print(action_leaf.performance, min_Q, max_Q, exploitation_term)
+        #     exploitation_term = (action_leaf.performance - min_Q) / norm_term
         # exploration_term = self.exploration_constants[action_leaf.episode] * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
         
         # print('exploration term:', exploration_term, 'exploitation term:', exploitation_term)
@@ -720,7 +727,8 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
     ## or, do this manually
     N = env_params['N']
     n_episodes = env_params['n_episodes']
-    expt = env_params['expt']
+    expt_info = env_params['expt_info']
+    expt = expt_info['type']
     n_runs = env_params['n_runs']
     metric = env_params['metric']
     beta_params = env_params['beta_params']
@@ -748,7 +756,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
     np.random.seed(seed)
     
     ## create base mountain environment
-    env = make_env(N, n_episodes, expt, beta_params, metric)
+    env = make_env(N, n_episodes, expt_info, beta_params, metric)
     
     ## debugging plot env
     # fig, ax = plt.subplots(1, 1, figsize=(5,5))
