@@ -265,6 +265,7 @@ class MonteCarloTreeSearch():
             action_leaf.performance += (
                 (discounted_cost - action_leaf.performance) / action_leaf.n_action_visits
             )
+            # print('depth:',depth,', n_action_visits:', action_leaf.n_action_visits, 'performance:', action_leaf.performance, 'discounted_cost:', discounted_cost, 'tree costs:', self.tree_costs)
 
             ## debugging: save updates applied to the first node
             if depth == 0:
@@ -274,12 +275,23 @@ class MonteCarloTreeSearch():
                 elif action==1:
                     self.first_node_updates.append([np.nan, discounted_cost])
                     self.first_node_updates_by_depth[tree_len-1].append([np.nan, discounted_cost])
+            
             ## save costs of each step in the tree - i.e. the cost of making each move in the tree
-            # first_action = self.tree_path[0][1]
             if action== 0:
                 self.tree_cost_tracker[depth].append([self.tree_costs[depth], np.nan])
             elif action== 1:
                 self.tree_cost_tracker[depth].append([np.nan, self.tree_costs[depth]])
+
+            ## updates, conditional on first action
+            first_action = self.tree_path[0][1]
+            # if action== 0:
+            #     # self.conditional_tree_cost_tracker[first_action][depth].append([self.tree_costs[depth], np.nan])
+            # elif action== 1:
+            #     # self.conditional_tree_cost_tracker[first_action][depth].append([np.nan, self.tree_costs[depth]])
+            if first_action == 0:
+                self.conditional_tree_cost_tracker[action][depth].append([self.tree_costs[depth], np.nan])
+            elif first_action == 1:
+                self.conditional_tree_cost_tracker[action][depth].append([np.nan, self.tree_costs[depth]])
 
             ## debugging: save max and min Q values to normalise Qs
             if action_leaf.performance > self.max_Q[depth]:
@@ -289,8 +301,7 @@ class MonteCarloTreeSearch():
             
 
             ## update norm performance
-            action_leaves = [leaf for leaf in node.action_leaves.values() if leaf is not None]
-
+            # action_leaves = [leaf for leaf in node.action_leaves.values() if leaf is not None]
             # elif len(action_leaves) == 1:
             #     # If there is only one leaf, set its norm_performance to 1
             #     action_leaves[0].norm_performance = 0
@@ -420,9 +431,12 @@ class MonteCarloTreeSearch():
         self.first_node_updates = []
         self.first_node_updates_by_depth = []
         self.tree_cost_tracker = []
+        self.conditional_tree_cost_tracker = [[],[]] 
         for e in range(self.env.n_episodes):
             self.first_node_updates_by_depth.append([])
             self.tree_cost_tracker.append([])
+            self.conditional_tree_cost_tracker[0].append([])
+            self.conditional_tree_cost_tracker[1].append([])
         
         ## loop through simulations
         for t in range(n_sims):
@@ -443,10 +457,13 @@ class MonteCarloTreeSearch():
 
             ## selection, expansion, simulation
             action_leaf = self.tree_policy()
-            if action_leaf == False:
-                self.myopic_rollout(1)
-            else:
-                self.rollout_policy(action_leaf)
+            self.rollout_policy(action_leaf)
+            
+            ## myopic?
+            # if action_leaf == False:
+            #     self.myopic_rollout(1)
+            # else:
+            #     self.rollout_policy(action_leaf)
             
             ##backup
             self.backup()
@@ -605,11 +622,13 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         assert len(simulated_obs) == len(action_sequence)+1, 'sim obs and action sequence do not match\n sim obs: {}, action seq: {}'.format(len(simulated_obs), len(action_sequence)+1)
         terminated = action_leaf.terminated
         # if terminated:
-        #     print(action_leaf.episode, action_leaf.parent_id)
+        #     print(action_leaf.episode, start_tmp, goal_tmp)
 
         ## get the next node id, i.e. the informational state after taking this path
         init_info_state = np.array(action_leaf.parent_id).reshape(self.N, self.N, 2)
         next_node_id = self.init_node_id(simulated_obs, init_info_state)
+        # n_total_obs = np.sum([len(self.env.path_states[ep][0]) for ep in range(action_leaf.episode+1)])
+        # assert n_total_obs == np.sum(next_node_id), 'total obs and next node id do not match\n total obs: {}, next node id: {}'.format(n_total_obs, np.sum(next_node_id))
 
         ## since the agent has chosen a path to the goal, we need to move the environment to the next episode
         node_episode = step_ep+1
@@ -791,10 +810,10 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
         if progress:
             if n_runs <= 1:
                 pbar = tqdm(total=n_episodes, desc='Mountain_'+str(m)+', run '+str(run+1)+'/'+str(n_runs), position=m+1, leave=False)
-        for e in range(n_episodes):
+        # for e in range(n_episodes):
 
         ## TEMP: just interested in first choice
-        # for e in range(1):
+        for e in range(1):
 
             ## loop through agents
             for a, ag in enumerate(agents):
@@ -1290,6 +1309,8 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         sim_out['path_B'].append(env_copy.path_states[e][1])
                         sim_out['abstract_sequence_A'].append(env_copy.sampled_abstract_sequences[e][0])
                         sim_out['abstract_sequence_B'].append(env_copy.sampled_abstract_sequences[e][1])
+                        sim_out['path_A_future_overlap'].append(env_copy.path_future_overlaps[e][0])
+                        sim_out['path_B_future_overlap'].append(env_copy.path_future_overlaps[e][1])
                         sim_out['actions'].append(actions)
                         sim_out['Q_values'].append(Q_values)
                         sim_out['leaf_visits'].append(leaf_visits)
@@ -1343,6 +1364,8 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         sim_out['path_B'].append(env_copy.path_states[e][1])
                         sim_out['abstract_sequence_A'].append(env_copy.sampled_abstract_sequences[e][0])
                         sim_out['abstract_sequence_B'].append(env_copy.sampled_abstract_sequences[e][1])
+                        sim_out['path_A_future_overlap'].append(env_copy.path_future_overlaps[e][0])
+                        sim_out['path_B_future_overlap'].append(env_copy.path_future_overlaps[e][1])
                         sim_out['actions'].append(actions)
                         sim_out['Q_values'].append(Q_values)
                         sim_out['leaf_visits'].append(leaf_visits)
