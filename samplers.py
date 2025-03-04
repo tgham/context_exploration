@@ -65,11 +65,11 @@ def propose(alpha, beta):
 
 # @njit
 @lru_cache(maxsize=None)
-def proposal_params(alpha_prior, beta_prior, low_counts, high_counts):
+def proposal_params(alpha_prior, beta_prior, other_alpha_prior, other_beta_prior, low_counts, high_counts):
 
     ## calculate prior mean failure
     prior_mean_failure = 1-(
-        beta_prior / (2*(alpha_prior + beta_prior))
+        other_beta_prior / (2*(other_alpha_prior + other_beta_prior))
     )
 
     ### Count occurrences of each cost
@@ -166,12 +166,16 @@ class GridSampler:
         ## first for the row
         low_counts_row = self.low_counts_rows[sampled_i]
         high_counts_row = self.high_counts_rows[sampled_i]
-        alpha_p, beta_p, m1, n1 = proposal_params(self.alpha_row, self.beta_row, low_counts_row, high_counts_row)
+        alpha_p, beta_p, m1, n1 = proposal_params(self.alpha_row, self.beta_row, 
+                                                    self.alpha_col, self.beta_col,
+                                                  low_counts_row, high_counts_row)
 
         ## then for the column
         low_counts_col = self.low_counts_cols[sampled_j]
         high_counts_col = self.high_counts_cols[sampled_j]
-        alpha_q, beta_q, m2, n2 = proposal_params(self.alpha_col, self.beta_col, low_counts_col, high_counts_col)
+        alpha_q, beta_q, m2, n2 = proposal_params(self.alpha_col, self.beta_col, 
+                                                    self.alpha_row, self.beta_row,
+                                                  low_counts_col, high_counts_col)
 
         ## draw from proposal distribution
         proposed_p = propose(alpha_p, beta_p)
@@ -218,12 +222,16 @@ class GridSampler:
         for i in range(self.N):
             low_counts_row = self.low_counts_rows[i]
             high_counts_row = self.high_counts_rows[i]
-            alpha_p, beta_p, m1, n1 = proposal_params(self.alpha_row, self.beta_row, low_counts_row, high_counts_row)
+            alpha_p, beta_p, m1, n1 = proposal_params(self.alpha_row, self.beta_row, 
+                                                    self.alpha_col, self.beta_col,
+                                                      low_counts_row, high_counts_row)
             proposed_ps[i] = propose(alpha_p, beta_p)
         for j in range(self.N):
             low_counts_col = self.low_counts_cols[j]
             high_counts_col = self.high_counts_cols[j]
-            alpha_q, beta_q, m2, n2 = proposal_params(self.alpha_col, self.beta_col, low_counts_col, high_counts_col)
+            alpha_q, beta_q, m2, n2 = proposal_params(self.alpha_col, self.beta_col, 
+                                                    self.alpha_row, self.beta_row,
+                                                      low_counts_col, high_counts_col)
             proposed_qs[j] = propose(alpha_q, beta_q)
 
         # Compute likelihood for proposed and current probabilities using all observations
