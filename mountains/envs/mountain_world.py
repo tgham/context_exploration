@@ -121,7 +121,7 @@ class MountainEnv(gym.Env):
             SG_found = False
             paths_found = False
             # self.high_cost, self.low_cost = -0.9, -0.1
-            self.high_cost, self.low_cost = -1, -0.5
+            self.high_cost, self.low_cost = -1, -0.1
             # self.high_cost, self.low_cost = 0, 1
             self.alpha_row = beta_params['alpha_row']
             self.beta_row = beta_params['beta_row']
@@ -291,6 +291,7 @@ class MountainEnv(gym.Env):
                     n_overlaps.append(len(intersections))
                 self.path_future_overlaps.append(n_overlaps)
                 self.most_overlap.append(np.argmax(n_overlaps))
+            self.path_future_overlaps.append([0,0]) ## trivially, the final episode has no future overlaps
 
             ## for path A and B of the first episode, calculate the number of states that overlap with the first row and column
             self.p0_x_overlaps = []
@@ -786,12 +787,12 @@ class MountainEnv(gym.Env):
             if len(self.starts)==0:
             # if len(self.starts)<=1:
                 # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
-                if ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
-                    diff_axes = True
+                # if ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
+                #     diff_axes = True
                 
                 ## sanity check: choose the longest vertical and horizontal paths
-                # sampled_abstract_sequences = [abstract_sequences[0], abstract_sequences[-1]]
-                # diff_axes=True
+                sampled_abstract_sequences = [abstract_sequences[0], abstract_sequences[-1]]
+                diff_axes=True
             else:
 
                 ## dominant in the same way
@@ -799,10 +800,11 @@ class MountainEnv(gym.Env):
                 
                 ## one of each
                 if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
+                    diff_axes = True
                 
                 ## both vertically dominant
                 # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
-                    diff_axes = True
+                #     diff_axes = True
 
                 ## choose the two longest vertical paths
                 # sampled_abstract_sequences = [abstract_sequences[-1], abstract_sequences[-1]]

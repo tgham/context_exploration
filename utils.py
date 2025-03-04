@@ -732,6 +732,8 @@ data_keys = [
     'path_B',
     'abstract_sequence_A',
     'abstract_sequence_B',
+    'path_A_future_overlap',
+    'path_B_future_overlap',
     'optimal_costs',
     'actions',
     'CE_actions',
