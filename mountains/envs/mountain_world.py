@@ -131,11 +131,23 @@ class MountainEnv(gym.Env):
             self.col_q = np.random.beta(self.alpha_col, self.beta_col, self.N)
             self.p_costs = np.outer(self.row_p, self.col_q)
 
-            ## prob = p(high cost)
-            # self.costs = np.array([self.high_cost if r<self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
 
-            ## prob = p(low cost)
-            # self.costs = np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
+            ####  define costs
+
+            ### define actual binary costs for each episode, assuming they regenerate each time
+            # self.costss = []
+            # for e in range(self.n_episodes):
+
+                ## prob = p(high cost)
+                # self.costss.append(np.array([self.high_cost if r<self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N))
+                
+                ## prob = p(low cost)
+                # self.costss.append(np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N))
+
+            ### or, define actual binary costs for each episode, assuming they are the same across episodes
+            self.costss = []
+            costs = np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
+            self.costss = [costs for e in range(n_episodes)]
             
 
             ## init trial info, depending on the expt type
@@ -144,8 +156,8 @@ class MountainEnv(gym.Env):
             self.path_states = []
             self.path_actions = []
             self.sampled_abstract_sequences = []
-            self.path_costs = []
-            self.costss = []
+            self.path_actual_costs = []
+            self.path_expected_costs = []
             self.o_trajs = []
             self.o_traj_costs = []
             self.o_traj_total_costs = []
@@ -164,7 +176,7 @@ class MountainEnv(gym.Env):
             ## generate relevant trial info for each episode
             for e in range(n_episodes):
 
-                try:
+                # try:
                 
                     ## free movement
                     if self.expt == 'free':
@@ -216,33 +228,26 @@ class MountainEnv(gym.Env):
                         self.o_traj_actions.append([])
 
                         ## save expected costs of the paths
-                        path_costs = []
+                        path_actual_costs = []
+                        path_expected_costs = []
                         for path in self.path_states[e]:
                             
                             ## pq = p(high cost)
                             # path_cost = np.sum([self.p_costs[x, y]*self.high_cost + (1-self.p_costs[x, y])*self.low_cost for x, y in path]) 
 
                             ## pq = p(low cost)
-                            path_cost = np.sum([self.p_costs[x, y]*self.low_cost + (1-self.p_costs[x, y])*self.high_cost for x, y in path]) 
-                            path_costs.append(path_cost)
-
-                        self.path_costs.append(path_costs)
+                            # path_expected_cost = np.sum([self.p_costs[x, y]*self.low_cost + (1-self.p_costs[x, y])*self.high_cost for x, y in path]) 
+                            path_expected_cost = np.sum([self.p_costs[x, y]*self.compound_cost(self.low_cost,e) + (1-self.p_costs[x, y])*self.compound_cost(self.high_cost,e) for x, y in path])  ## if using compound costs
+                            path_actual_cost = np.sum([self.compound_cost(self.costss[e][x, y],e) for x, y in path])
+                            path_expected_costs.append(path_expected_cost)
+                            path_actual_costs.append(path_actual_cost)
+                        self.path_expected_costs.append(path_expected_costs)
+                        self.path_actual_costs.append(path_actual_costs)
                         paths_found = True
 
-                except:
-                    break
+                # except:
+                #     break
 
-                ### define actual binary costs for each episode, assuming they regenerate each time
-
-                ## prob = p(high cost)
-                # self.costss.append(np.array([self.high_cost if r<self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N))
-                
-                ## prob = p(low cost)
-                # self.costss.append(np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N))
-
-            ### or, define actual binary costs for each episode, assuming they are the same across episodes
-            costs = np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
-            self.costss = [costs for e in range(n_episodes)]
 
 
             if len(self.starts)==self.n_episodes:
