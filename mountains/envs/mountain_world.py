@@ -121,7 +121,7 @@ class MountainEnv(gym.Env):
             SG_found = False
             paths_found = False
             # self.high_cost, self.low_cost = -0.9, -0.1
-            self.high_cost, self.low_cost = -1, -0.1
+            self.high_cost, self.low_cost = -1, -0
             # self.high_cost, self.low_cost = 0, 1
             self.alpha_row = beta_params['alpha_row']
             self.beta_row = beta_params['beta_row']
@@ -441,6 +441,9 @@ class MountainEnv(gym.Env):
             current_cost = self.predicted_costs[self._agent_location[0], self._agent_location[1]]
         else:
             current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
+
+        ## if using compound costs
+        current_cost = current_cost * (self._episode+1)
         self.ep_obs = np.array([[self._agent_location[0], self._agent_location[1], current_cost]])
         self.a_traj = [tuple(self._agent_location)]
 
@@ -768,7 +771,7 @@ class MountainEnv(gym.Env):
     def sample_paths_and_SGs(self, max_turns=1):
 
         ### get the sequences of abstract paths
-        path_len = np.random.randint(5, self.N-1)
+        path_len = np.random.randint(5, self.N)
         # path_len = self.N-4
         # path_len = 5
         abstract_sequences = self.generate_abstract_sequences(path_len, max_turns)
@@ -1036,6 +1039,10 @@ class MountainEnv(gym.Env):
         ## pq = p(low cost)
         return self.high_cost if np.random.random() > self.predicted_p_costs[state[0], state[1]] else self.low_cost
     
+    ## define way in which costs become compounded over episodes
+    def compound_costs(self, cost, episode):
+        return cost*(episode+1)
+    
     ## functions for receiving predictions from the agent
     def receive_predictions(self, predicted_p_costs):
         # self.posterior_mean = posterior_mean
@@ -1094,6 +1101,12 @@ class MountainEnv(gym.Env):
         current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
         predicted_cost = self.predicted_costs[self._agent_location[0], self._agent_location[1]]
 
+        ## costs are compounded with each episode??
+        # cost = cost**self._episode
+        # print(self._episode)
+        current_cost = current_cost*(self._episode+1)
+        predicted_cost = predicted_cost*(self._episode+1)
+
 
         ## return the real cost if not simulating
         if not self.sim:
@@ -1111,7 +1124,7 @@ class MountainEnv(gym.Env):
         elif self.sim:
             # cost = current_cost
             cost = predicted_cost.copy()
-            # cost += self.expl_beta * np.sqrt(var_cost) #UCB
+
 
         # An episode is done iff the agent has reached the goal
         if np.array_equal(self._agent_location, self._goal_location):
@@ -1144,6 +1157,7 @@ class MountainEnv(gym.Env):
 
                 ## update ep counter
                 self._episode += 1
+
 
         # observation = self.get_obs()
         # info = self._get_info()
