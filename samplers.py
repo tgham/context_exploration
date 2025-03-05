@@ -1,4 +1,5 @@
 from numba import njit
+import seaborn as sns
 import numpy as np
 import random
 from math import log, exp
@@ -207,6 +208,8 @@ class GridSampler:
         if self.acceptance_thresholds[it] < min(1, acceptance_ratio):
             self.row_probs[sampled_i] = proposed_p
             self.col_probs[sampled_j] = proposed_q
+            # self.n_accepts += 1
+
 
     ## Perform a full MH sampling update for all rows and columns
     def update_full(self):
@@ -255,6 +258,8 @@ class GridSampler:
         if np.random.random() < min(1, acceptance_ratio):
             self.row_probs = proposed_ps
             self.col_probs = proposed_qs
+            # self.n_accepts += 1
+
 
     def lazy_sample(self, n_iter=100):
         self.init_pqs()
@@ -266,6 +271,7 @@ class GridSampler:
         ## save progress of samples to check convergence
         # self.row_iters = np.zeros((n_iter, self.N))
         # self.col_iters = np.zeros((n_iter, self.N))
+        # self.n_accepts = 0
 
         ## iterate
         for it in range(n_iter):
@@ -280,6 +286,15 @@ class GridSampler:
         # axs[1].plot(self.col_iters)
         # axs[1].set_title('Col probs')
         # plt.show()
+        # ## same, but a kdeplot of samples
+        # fig, axs = plt.subplots(1,2, figsize=(10,5))
+        # for i in range(self.N):
+        #     sns.kdeplot(self.row_iters[:,i], ax=axs[0])
+        #     sns.kdeplot(self.col_iters[:,i], ax=axs[1])
+        # axs[0].set_title('Row probs')
+        # axs[1].set_title('Col probs')
+        # plt.show()
+        # print('Acceptance rate:', self.n_accepts / n_iter)
 
         return self.row_probs, self.col_probs
     

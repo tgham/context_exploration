@@ -443,7 +443,7 @@ class MountainEnv(gym.Env):
             current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
 
         ## if using compound costs
-        current_cost = current_cost * (self._episode+1)
+        current_cost = self.compound_cost(current_cost, self._episode)
         self.ep_obs = np.array([[self._agent_location[0], self._agent_location[1], current_cost]])
         self.a_traj = [tuple(self._agent_location)]
 
@@ -1040,8 +1040,12 @@ class MountainEnv(gym.Env):
         return self.high_cost if np.random.random() > self.predicted_p_costs[state[0], state[1]] else self.low_cost
     
     ## define way in which costs become compounded over episodes
-    def compound_costs(self, cost, episode):
-        return cost*(episode+1)
+    def compound_cost(self, cost, episode):
+        # cc = cost ## do nothing
+        cc = cost * (episode + 1)  ## i.e. cost increases linearly with episode number
+        # cc = cost * 2**episode ## i.e. cost increases exponentially with episode number
+        return cc
+    
     
     ## functions for receiving predictions from the agent
     def receive_predictions(self, predicted_p_costs):
@@ -1102,11 +1106,8 @@ class MountainEnv(gym.Env):
         predicted_cost = self.predicted_costs[self._agent_location[0], self._agent_location[1]]
 
         ## costs are compounded with each episode??
-        # cost = cost**self._episode
-        # print(self._episode)
-        current_cost = current_cost*(self._episode+1)
-        predicted_cost = predicted_cost*(self._episode+1)
-
+        current_cost = self.compound_cost(current_cost, self._episode)
+        predicted_cost = self.compound_cost(predicted_cost, self._episode)
 
         ## return the real cost if not simulating
         if not self.sim:

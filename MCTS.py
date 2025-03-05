@@ -41,10 +41,13 @@ class MonteCarloTreeSearch():
         self.exploration_constants = []
         for e in range(self.env.n_episodes):
             n_steps = 0
+            ec = exploration_constant
             for subseq_e in range(e, self.env.n_episodes):
+                # expected_cost = np.abs(np.mean([self.env.compound_cost(self.low_cost, subseq_e),
+                #                                 self.env.compound_cost(self.high_cost, subseq_e)])) ## if using compound
                 n_steps += len(self.env.path_states[subseq_e][0])
-            self.exploration_constants.append(exploration_constant * expected_cost * n_steps)
-            # self.exploration_constants.append(exploration_constant * expected_cost * n_steps * (e+1)) #if using compound costs
+                ec += (expected_cost * n_steps)
+            self.exploration_constants.append(ec)
         # print(self.exploration_constants)
 
 
@@ -575,13 +578,14 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
     ## node_ids are defined by the informational state, i.e. the counts of low and high cost states in each cell
     def init_node_id(self, obs=None, init_info_state = None, episode=None):
         # info_state = np.zeros((self.N, self.N, 2))
+        # high_cost = self.high_cost
+        high_cost = self.env.compound_cost(self.high_cost, episode) ## if using compound costs
         if init_info_state is None:
             init_info_state = np.zeros((self.N, self.N, 2))
         for i,j,c in obs:
             i = int(i)
             j = int(j)
-            # cost_idx = 1 if c == self.high_cost else 0
-            cost_idx = 1 if c == self.high_cost*(episode+1) else 0 ## if compound costs 
+            cost_idx = 1 if c == high_cost else 0
             init_info_state[i,j,cost_idx] += 1
         node_id = tuple(init_info_state.flatten())
         return node_id
@@ -620,8 +624,8 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         # costs = [self.env.predicted_costs[start_tmp[0], start_tmp[1]]] + costs
         
         ## or, if compound costs
-        simulated_obs = [np.append(start_tmp, self.env.predicted_costs[start_tmp[0], start_tmp[1]] * (step_ep+1))] + simulated_obs
-        costs = [self.env.predicted_costs[start_tmp[0], start_tmp[1]]*(step_ep+1)] + costs 
+        simulated_obs = [np.append(start_tmp, self.env.compound_cost(self.env.predicted_costs[start_tmp[0], start_tmp[1]], step_ep))] + simulated_obs
+        costs = [self.env.compound_cost(self.env.predicted_costs[start_tmp[0], start_tmp[1]], step_ep)] + costs 
         self.tree_costs.append(np.sum(costs))
         # if (action_leaf.episode==1) and (action_leaf.action==1):
         #     print(simulated_obs)
@@ -671,7 +675,7 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         total_cost = starting_cost
 
         ## compound costs per episode
-        total_cost = total_cost*(first_episode+1)
+        total_cost = self.env.compound_cost(total_cost, first_episode)
 
         ## if final episode, just stop here
         if action_leaf.terminated:
@@ -692,8 +696,7 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
                 ro_cost = 0
                 for state in path_states:
                     # cost = self.env.get_pred_cost(state)
-                    # cost = self.env.predicted_costs[state[0], state[1]]
-                    cost = self.env.predicted_costs[state[0], state[1]] * (ep+1) ## or if using compound costs
+                    cost = self.env.predicted_costs[state[0], state[1]]
                     ro_cost += cost
                 path_costs.append(ro_cost)
             # first_step_action = self.tree_path[0][1]
@@ -703,7 +706,10 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
             #     print('RO ep:', ep,', costs:',path_costs)
             remaining_ro_costs.append(np.max(path_costs))
             ro_choices.append(np.argmax(path_costs))
-            best_ro_cost = np.max(path_costs)
+            
+            
+            # best_ro_cost = np.max(path_costs) 
+            best_ro_cost = self.env.compound_cost(np.max(path_costs), ep) ## or if using compound costs
             total_cost += best_ro_cost * self.discount_factor**depth
 
             ## RANDOM: randomly choose between the two paths
