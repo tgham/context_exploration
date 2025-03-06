@@ -37,13 +37,13 @@ def compute_log_likelihood(sampled_i, sampled_j, rel_obs, proposed_row_p, propos
         current_prob = current_row_p * current_col_q
 
         ## NB this is assuming prob = p(low cost)
-        if cost == high_cost:
-            log_likelihood += log(1 - proposed_prob)
-            log_likelihood -= log(1 - current_prob)
-        # elif cost == low_cost:
-        else:
+        if cost ==low_cost:
             log_likelihood += log(proposed_prob)
             log_likelihood -= log(current_prob)
+        else:
+        # elif cost == high_cost:
+            log_likelihood += log(1 - proposed_prob)
+            log_likelihood -= log(1 - current_prob)
 
     return log_likelihood
 
@@ -53,10 +53,11 @@ def compute_log_likelihood_global(obs, row_probs, col_probs, high_cost, low_cost
     log_likelihood = 0.0
     for i, j, cost in obs:
         prob = row_probs[int(i)] * col_probs[int(j)]
-        if cost == high_cost:
-            log_likelihood += np.log(1 - prob)
-        else:  # cost == low_cost
+        if cost == low_cost:
             log_likelihood += np.log(prob)
+        # if cost == high_cost:
+        else:
+            log_likelihood += np.log(1 - prob)
     return log_likelihood
 
 
@@ -83,11 +84,11 @@ def proposal_params(alpha_prior, beta_prior, other_alpha_prior, other_beta_prior
     n = prior_mean_failure * high_counts
 
     ## normalise counts to cap their magnitude
-    cap = 10
-    total_count = m + n
-    if total_count > cap:
-        m = cap * m / total_count
-        n = cap * n / total_count
+    # cap = 10
+    # total_count = m + n
+    # if total_count > cap:
+    #     m = cap * m / total_count
+    #     n = cap * n / total_count
 
     ## Update Beta parameters based on observed data
     alpha_prop = alpha_prior + m
@@ -132,9 +133,11 @@ class GridSampler:
 
         ## precompute the number of high and low costs for each row and column
         self.low_counts_rows = np.array([np.sum([cost == self.low_cost for (_, _, cost) in self.row_to_obs[i]]) for i in range(self.N)])
-        self.high_counts_rows = np.array([np.sum([cost == self.high_cost for (_, _, cost) in self.row_to_obs[i]]) for i in range(self.N)])
         self.low_counts_cols = np.array([np.sum([cost == self.low_cost for (_, _, cost) in self.col_to_obs[j]]) for j in range(self.N)])
-        self.high_counts_cols = np.array([np.sum([cost == self.high_cost for (_, _, cost) in self.col_to_obs[j]]) for j in range(self.N)])
+        # self.high_counts_rows = np.array([np.sum([cost == self.high_cost for (_, _, cost) in self.row_to_obs[i]]) for i in range(self.N)])
+        # self.high_counts_cols = np.array([np.sum([cost == self.high_cost for (_, _, cost) in self.col_to_obs[j]]) for j in range(self.N)])
+        self.high_counts_rows = np.array([np.sum([cost != self.low_cost for (_, _, cost) in self.row_to_obs[i]]) for i in range(self.N)])
+        self.high_counts_cols = np.array([np.sum([cost != self.low_cost for (_, _, cost) in self.col_to_obs[j]]) for j in range(self.N)])
 
 
     def init_pqs(self):
