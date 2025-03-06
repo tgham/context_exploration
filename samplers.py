@@ -2,9 +2,10 @@ from numba import njit
 import seaborn as sns
 import numpy as np
 import random
-from math import log, exp
+from math import log, exp, gamma
 from functools import lru_cache
 from matplotlib import pyplot as plt
+from scipy.special import beta, logsumexp
 
 @njit
 def compute_log_likelihood(sampled_i, sampled_j, rel_obs, proposed_row_p, proposed_col_q, current_row_p, current_col_q, high_cost, low_cost):
@@ -64,6 +65,10 @@ def compute_log_likelihood_global(obs, row_probs, col_probs, high_cost, low_cost
 @njit
 def propose(alpha, beta):
     return np.random.beta(alpha, beta)
+
+# @njit
+# def beta(a,b):
+#     return gamma(a) * gamma(b) / gamma(a+b)
 
 # @njit
 @lru_cache(maxsize=None)
@@ -321,8 +326,69 @@ class GridSampler:
         # axs[1].set_title('Col probs')
         # plt.show()
 
-
         return self.row_probs, self.col_probs
+    
+    ## no combinatorial structure - just use the counts for each row and column
+    def simple_sample(self, col_context=True):
+        self.col_probs = np.ones(self.N) 
+        self.row_probs = np.ones(self.N)
+        if col_context:
+            # self.row_probs = np.ones(self.N)
+            for j in range(self.N):
+                low_counts_col = self.low_counts_cols[j]
+                high_counts_col = self.high_counts_cols[j]
+                alpha = self.alpha_col + low_counts_col
+                beta = self.beta_col + high_counts_col
+                self.col_probs[j] = propose(alpha, beta)
+        else:
+            # self.col_probs = np.ones(self.N)
+            for i in range(self.N):
+                low_counts_row = self.low_counts_rows[i]
+                high_counts_row = self.high_counts_rows[i]
+                alpha = self.alpha_row + low_counts_row
+                beta = self.beta_row + high_counts_row
+                self.row_probs[i] = propose(alpha, beta)
+        return self.row_probs, self.col_probs
+    
+
+    def context_posterior(self, context_prior=0.5):
+        
+        # Compute log-likelihood for columns
+        log_col_likelihoods = []
+        for j in range(self.N):
+            low_counts_col = self.low_counts_cols[j]
+            high_counts_col = self.high_counts_cols[j]
+            log_lik_j = np.log(beta(self.alpha_col + low_counts_col, self.beta_col + high_counts_col)) - np.log(beta(self.alpha_col, self.beta_col))
+            log_col_likelihoods.append(log_lik_j)
+        log_col_likelihood = np.sum(log_col_likelihoods)
+        
+        # Compute log-likelihood for rows
+        log_row_likelihoods = []
+        for i in range(self.N):
+            low_counts_row = self.low_counts_rows[i]
+            high_counts_row = self.high_counts_rows[i]
+            log_lik_i = np.log(beta(self.alpha_row + low_counts_row, self.beta_row + high_counts_row)) - np.log(beta(self.alpha_row, self.beta_row))
+            log_row_likelihoods.append(log_lik_i)
+        log_row_likelihood = np.sum(log_row_likelihoods)
+        
+        # Combine with the log priors (where context_prior is the prior for the context being the column world)
+        log_prior_col = np.log(context_prior)
+        log_prior_row = np.log(1 - context_prior)
+        
+        # Compute the log joint probabilities:
+        log_joint_col = log_col_likelihood + log_prior_col
+        log_joint_row = log_row_likelihood + log_prior_row
+        
+        # Use logsumexp for the denominator:
+        log_denominator = logsumexp([log_joint_col, log_joint_row])
+        
+        # Compute the posterior probability for context being the column world
+        posterior_col = np.exp(log_joint_col - log_denominator)
+
+        # print('Posterior probability of context being the column world:', posterior_col)
+        
+        return posterior_col
+
     
     def get_rel_obs(self, sampled_i, sampled_j):
         if (sampled_i, sampled_j) in self.cached_obs:

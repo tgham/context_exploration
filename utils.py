@@ -722,7 +722,7 @@ def get_next_state(current, direction, N):
 ## data-saving/dict stuff
 data_keys = [
     'agent',
-    'run',
+    'block',
     'mountain',
     'episode',
     'start',
@@ -738,6 +738,8 @@ data_keys = [
     'abstract_sequence_B',
     'path_A_future_overlap',
     'path_B_future_overlap',
+    'context_prior',
+    'context_posterior',
     'optimal_costs',
     'actions',
     'CE_actions',
