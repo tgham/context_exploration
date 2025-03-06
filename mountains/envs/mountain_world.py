@@ -127,9 +127,21 @@ class MountainEnv(gym.Env):
             self.beta_row = beta_params['beta_row']
             self.alpha_col = beta_params['alpha_col']
             self.beta_col = beta_params['beta_col']
-            self.row_p = np.random.beta(self.alpha_row,self.beta_row, self.N)
+
+            ## combinatorial
+            # self.row_p = np.random.beta(self.alpha_row,self.beta_row, self.N)
+            # self.col_q = np.random.beta(self.alpha_col, self.beta_col, self.N)
+            # self.p_costs = np.outer(self.row_p, self.col_q)
+
+            ## column world
+            self.row_p = np.ones(self.N)
             self.col_q = np.random.beta(self.alpha_col, self.beta_col, self.N)
             self.p_costs = np.outer(self.row_p, self.col_q)
+
+            ## row world
+            # self.row_p = np.random.beta(self.alpha_row,self.beta_row, self.N)
+            # self.col_q = np.ones(self.N)
+            # self.p_costs = np.outer(self.row_p, self.col_q)
 
 
             ####  define costs
@@ -801,6 +813,13 @@ class MountainEnv(gym.Env):
                 ## sanity check: choose the longest vertical and horizontal paths
                 sampled_abstract_sequences = [abstract_sequences[0], abstract_sequences[-1]]
                 diff_axes=True
+
+                ## or, the first path is the rightangle path, and the second path is a long path
+                # sampled_abstract_sequences[0] = abstract_sequences[int(np.round(len(abstract_sequences)/2))]
+                # sampled_abstract_sequences[1] = abstract_sequences[-1]
+                # diff_axes=True
+
+
             else:
 
                 ## dominant in the same way
@@ -1046,8 +1065,8 @@ class MountainEnv(gym.Env):
     
     ## define way in which costs become compounded over episodes
     def compound_cost(self, cost, episode):
-        # cc = cost ## do nothing
-        cc = cost * (episode + 1)  ## i.e. cost increases linearly with episode number
+        cc = cost ## do nothing
+        # cc = cost * (episode + 1)  ## i.e. cost increases linearly with episode number
         # cc = cost * 2**episode ## i.e. cost increases exponentially with episode number
         return cc
     

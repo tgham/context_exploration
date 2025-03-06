@@ -19,7 +19,6 @@ from scipy.linalg import cholesky
 from minimax_tilting_sampler import TruncatedMVN
 from base_kernels import *
 from samplers import GridSampler
-# from c_samplers import GridSampler
 
 
 
@@ -352,13 +351,16 @@ class GPAgent:
 ### farmer model?
 class Farmer:
 
-    def __init__(self, N, metric='cityblock'):
+    def __init__(self, N, context_prior=0.5, metric='cityblock'):
 
         self.metric = metric
         self.N = N
         self.n_actions = 4
         # self.action_to_direction = {0: np.array([0, 1]), 1: np.array([0, -1]), 2: np.array([1, 0]), 3: np.array([-1, 0])}
         self.action_to_direction = {0: np.array([1,0]), 1: np.array([0, 1]), 2: np.array([-1, 0]), 3: np.array([0, -1])}
+        
+        ## initialise context prior prob
+        self.context_prob = context_prior
 
     ### interactions with the environment
 
@@ -378,7 +380,7 @@ class Farmer:
 
 
     ## generate full set of root samples
-    def root_samples(self, obs=None, n_samples=1000, n_iter=100, lazy=True, CE=False, correct_prior = True):
+    def root_samples(self, obs=None, n_samples=1000, n_iter=100, lazy=True, CE=False, correct_prior = True, combo=True):
         if correct_prior:
             sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, obs, N=self.N, CE=CE)
         else:
@@ -387,42 +389,65 @@ class Farmer:
         self.all_posterior_qs = np.zeros((n_samples, self.N))
         self.all_posterior_p_costs = np.zeros((n_samples, self.N, self.N))
 
-        if len(obs) > 0:
+        ## if combinatorial task
+        if combo:
 
-            ## lazy
-            if lazy:
+            if len(obs) > 0:
 
-                ## loop through samples
-                for s in range(n_samples):
-                    self.all_posterior_ps[s,:], self.all_posterior_qs[s,:] = sampler.lazy_sample(n_iter = n_iter)
-                    self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
+                ## lazy
+                if lazy:
 
-            ## full 
+                    ## loop through samples
+                    for s in range(n_samples):
+                        self.all_posterior_ps[s,:], self.all_posterior_qs[s,:] = sampler.lazy_sample(n_iter = n_iter)
+                        self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
+
+                ## full 
+                else:
+
+                    ## loop through samples
+                    for s in range(n_samples):
+                        self.all_posterior_ps[s,:], self.all_posterior_qs[s,:] = sampler.full_sample(n_iter = n_iter)
+                        self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
+
+
+            ## if no obs, just sample from prior
             else:
-
-                ## loop through samples
                 for s in range(n_samples):
-                    self.all_posterior_ps[s,:], self.all_posterior_qs[s,:] = sampler.full_sample(n_iter = n_iter)
+                    self.all_posterior_ps[s,:] = np.random.beta(sampler.alpha_row, sampler.beta_row, size=self.N)
+                    self.all_posterior_qs[s,:] = np.random.beta(sampler.alpha_col, sampler.beta_col, size=self.N)
                     self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
 
+                ## TMP: half the samples are from the correct prior, half are from the incorrect prior
+                # for s in range(n_samples//2):
+                #     self.all_posterior_ps[s,:] = np.random.beta(sampler.alpha_row, sampler.beta_row, size=self.N)
+                #     self.all_posterior_qs[s,:] = np.random.beta(sampler.alpha_col, sampler.beta_col, size=self.N)
+                #     self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
+                # for s in range(n_samples//2, n_samples):
+                #     self.all_posterior_ps[s,:] = np.random.beta(sampler.alpha_col, sampler.beta_col, size=self.N)
+                #     self.all_posterior_qs[s,:] = np.random.beta(sampler.alpha_row, sampler.beta_row, size=self.N)
+                #     self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
+                # np.random.shuffle(self.all_posterior_p_costs)
 
-        ## if no obs, just sample from prior
+        ## simpler task
         else:
-            for s in range(n_samples):
-                self.all_posterior_ps[s,:] = np.random.beta(sampler.alpha_row, sampler.beta_row, size=self.N)
-                self.all_posterior_qs[s,:] = np.random.beta(sampler.alpha_col, sampler.beta_col, size=self.N)
-                self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
+            
+            ### determine context indicators
 
-            ## TMP: half the samples are from the correct prior, half are from the incorrect prior
-            # for s in range(n_samples//2):
-            #     self.all_posterior_ps[s,:] = np.random.beta(sampler.alpha_row, sampler.beta_row, size=self.N)
-            #     self.all_posterior_qs[s,:] = np.random.beta(sampler.alpha_col, sampler.beta_col, size=self.N)
-            #     self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
-            # for s in range(n_samples//2, n_samples):
-            #     self.all_posterior_ps[s,:] = np.random.beta(sampler.alpha_col, sampler.beta_col, size=self.N)
-            #     self.all_posterior_qs[s,:] = np.random.beta(sampler.alpha_row, sampler.beta_row, size=self.N)
-            #     self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
-            # np.random.shuffle(self.all_posterior_p_costs)
+            ## simple case: certain prior
+            # self.col_world_prob = 1 ## tmp, i.e. probability of one context or another
+
+            ## inference case: infer posterior probability, given observations
+            context_prior = self.context_prob
+            self.context_prob = sampler.context_posterior(context_prior=context_prior)
+            # print(self.context_prob)
+
+            ## use inferred context to sample
+            context_indicators = np.random.binomial(1, self.context_prob, size=n_samples) 
+            col_context = context_indicators.astype(bool)
+            for s in range(n_samples):
+                self.all_posterior_ps[s,:], self.all_posterior_qs[s,:] = sampler.simple_sample(col_context=col_context[s])
+                self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
 
 
         ## posterior means
@@ -438,6 +463,12 @@ class Farmer:
         # axs[0].set_title('p')
         # axs[1].set_title('q')
         # plt.show()
+
+    ## quick and cheap context posterior
+    def quick_context_posterior(self, obs):
+        sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, obs, N=self.N)
+        context_prob = sampler.context_posterior(context_prior=self.context_prob)
+        return context_prob
 
 
     ## dynamic programming

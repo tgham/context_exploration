@@ -422,7 +422,7 @@ class MonteCarloTreeSearch():
 
         ## if samples not provided, generate new set of root samples
         if not reuse_samples:
-            self.agent.root_samples(obs = self.env.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy, CE=False, correct_prior = correct_prior)
+            self.agent.root_samples(obs = self.env.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy, CE=False, correct_prior = correct_prior, combo=False)
 
 
         ## debugging plot
@@ -753,7 +753,7 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
 
 
 ## parallel function for simulating many episodes within the same mountain env
-# def simulate_agent(m, N, env_params=None, metric='cityblock', expt='2AFC', n_episodes=10, agents = ['GP', 'GP-MCTS', 'BAMCP','CE'], n_sims=1000,n_runs=1, correct_prior=True, n_futures=0, n_iter=10, lazy=False, exploration_constant=2, discount_factor=0.95, progress=False):
+# def simulate_agent(m, N, env_params=None, metric='cityblock', expt='2AFC', n_episodes=10, agents = ['GP', 'GP-MCTS', 'BAMCP','CE'], n_sims=1000,n_blocks=1, correct_prior=True, n_futures=0, n_iter=10, lazy=False, exploration_constant=2, discount_factor=0.95, progress=False):
 def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, agents= ['BAMCP', 'CE'], progress=False):
     print(' ') # for some reason need this to get the pbar to appear
 
@@ -767,7 +767,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
     n_episodes = env_params['n_episodes']
     expt_info = env_params['expt_info']
     expt = expt_info['type']
-    n_runs = env_params['n_runs']
+    n_blocks = env_params['n_blocks']
     metric = env_params['metric']
     beta_params = env_params['beta_params']
 
@@ -779,9 +779,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
     n_iter = sampler_params['n_iter']
     lazy = sampler_params['lazy']
     correct_prior = sampler_params['correct_prior']
-
-
-
+    context_prior = 0.5
     
     ## initiate dictionary to store the results
     sim_out = {}
@@ -792,20 +790,22 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
     seed=m
     seed=os.getpid()
     np.random.seed(seed)
-    
-    ## create base mountain environment
-    env = make_env(N, n_episodes, expt_info, beta_params, metric)
-    
-    ## debugging plot env
-    # fig, ax = plt.subplots(1, 1, figsize=(5,5))
-    # plot_r(env.p_costs, ax = ax, title=m)
-    # plt.show()
 
     ## loop through runs of the same mountain-episode set
     if progress:
-        if n_runs > 1:
-            pbar = tqdm(total=n_runs*n_episodes, desc='Mountain_'+str(m)+', '+str(n_runs)+' runs, '+str(n_episodes)+' episodes', position=0, leave=False, ascii=True)
-    for run in range(n_runs):   
+        if n_blocks > 1:
+            pbar = tqdm(total=n_blocks*n_episodes, desc='Mountain_'+str(m)+', '+str(n_blocks)+' blocks, '+str(n_episodes)+' episodes', position=0, leave=False, ascii=True)
+    
+    ## loop through blocks - i.e. different mountains drawn from the same prior
+    for block in range(n_blocks):   
+
+        ## create base mountain environment
+        env = make_env(N, n_episodes, expt_info, beta_params, metric)
+        
+        ## debugging plot env
+        # fig, ax = plt.subplots(1, 1, figsize=(5,5))
+        # plot_r(env.p_costs, ax = ax, title=m)
+        # plt.show()
 
         ## copy env so that each agent makes its own observations 
         agent_envs = {}
@@ -823,12 +823,12 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
 
 
         ## initialise farmer
-        farmer = Farmer(N)
+        farmer = Farmer(N, context_prior=context_prior)
 
         ## loop through episodes (i.e. different start and goal states for the same mountain)
         if progress:
-            if n_runs <= 1:
-                pbar = tqdm(total=n_episodes, desc='Mountain_'+str(m)+', run '+str(run+1)+'/'+str(n_runs), position=m+1, leave=False)
+            if n_blocks <= 1:
+                pbar = tqdm(total=n_episodes, desc='Mountain_'+str(m)+', block '+str(block+1)+'/'+str(n_blocks), position=m+1, leave=False)
         for e in range(n_episodes):
 
         ## TEMP: just interested in first choice
@@ -864,6 +864,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                 goal = env_copy.goal
                 actions = []
                 CE_actions = []
+                # context_probs = [] ## i.e. the prob of the context at the start of the episode
                 Q_values = []
                 CE_Q_values = []
                 ELDs = []
@@ -885,6 +886,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
 
                 ## reset tree
                 if ((ag == 'BAMCP') or (ag == 'BAMCP w/ CE') or (ag=='BAMCP_wrong')):
+                    # context_probs.append(farmer.context_prob)
                     if tree_resets[ag]:#& tree_reset:
                         tree = Tree(N)
                         if expt == 'free':
@@ -1022,6 +1024,10 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         actions.append(action)
                         Q_values.append(MCTS_Q)
                         leaf_visits = [leaf.n_action_visits for leaf in MCTS.tree.root.action_leaves.values()]
+
+                        ## get the initial context probability
+                        context_prior = farmer.context_prob
+                        # print('prior context:', farmer.context_prob)
 
                         ### optional: check what the CE agent would have done with the mean of this set of samples
 
@@ -1163,6 +1169,10 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                                     # tree_reset = True
                                     tree_resets[ag] = True
                         MCTSs[ag] = MCTS
+
+                        ## get the new context posterior 
+                        context_posterior = farmer.quick_context_posterior(env_copy.obs)
+                        # print('posterior context:', context_posterior)
                     
                     ### log determinant of covariance matrix
                     # if (ag=='BAMCP') or (ag=='BAMCP w/ CE'):
@@ -1324,7 +1334,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
 
                         ## or just skip to the next episode
                         sim_out['agent'].append(agent)
-                        sim_out['run'].append(run)
+                        sim_out['block'].append(block)
                         sim_out['episode'].append(e)
                         sim_out['mountain'].append(m)
                         sim_out['start'].append(start)
@@ -1339,6 +1349,8 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         sim_out['path_B_future_overlap'].append(env_copy.path_future_overlaps[e][1])
                         sim_out['abstract_sequence_A'].append(env_copy.sampled_abstract_sequences[e][0])
                         sim_out['abstract_sequence_B'].append(env_copy.sampled_abstract_sequences[e][1])
+                        sim_out['context_prior'].append(context_prior)
+                        sim_out['context_posterior'].append(context_posterior)
                         sim_out['actions'].append(actions)
                         sim_out['Q_values'].append(Q_values)
                         sim_out['leaf_visits'].append(leaf_visits)
@@ -1383,7 +1395,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                     ## save data and end the episode
                     elif terminated:
                         sim_out['agent'].append(ag)
-                        sim_out['run'].append(run)
+                        sim_out['block'].append(block)
                         sim_out['episode'].append(e)
                         sim_out['mountain'].append(m)
                         sim_out['start'].append(start)
@@ -1398,6 +1410,8 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         sim_out['abstract_sequence_B'].append(env_copy.sampled_abstract_sequences[e][1])
                         sim_out['path_A_future_overlap'].append(env_copy.path_future_overlaps[e][0])
                         sim_out['path_B_future_overlap'].append(env_copy.path_future_overlaps[e][1])
+                        sim_out['context_prior'].append(context_prior)
+                        sim_out['context_posterior'].append(context_posterior)
                         sim_out['actions'].append(actions)
                         sim_out['Q_values'].append(Q_values)
                         sim_out['leaf_visits'].append(leaf_visits)
@@ -1472,9 +1486,15 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         end_episode = True
             if progress:
                 pbar.update(1)
-        if progress & (n_runs <= 1):
+
+        ## carry over the context prob to the next run
+        if (ag == 'BAMCP') or (ag == 'BAMCP w/ CE'):
+            # context_prior = farmer.context_prob
+            context_prior = context_posterior
+            # print(context_probs)
+        if progress & (n_blocks <= 1):
             pbar.close()
-    if progress & (n_runs > 1):
+    if progress & (n_blocks > 1):
         pbar.close()
                     
 
