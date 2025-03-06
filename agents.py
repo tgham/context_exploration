@@ -361,6 +361,8 @@ class Farmer:
         
         ## initialise context prior prob
         self.context_prob = context_prior
+        # print('initialised with context prior:', self.context_prob)
+
 
     ### interactions with the environment
 
@@ -440,7 +442,7 @@ class Farmer:
             ## inference case: infer posterior probability, given observations
             context_prior = self.context_prob
             self.context_prob = sampler.context_posterior(context_prior=context_prior)
-            # print(self.context_prob)
+            # print('sampler prior:', context_prior, ',', 'posterior:', self.context_prob)
 
             ## use inferred context to sample
             context_indicators = np.random.binomial(1, self.context_prob, size=n_samples) 
@@ -468,6 +470,7 @@ class Farmer:
     def quick_context_posterior(self, obs):
         sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, obs, N=self.N)
         context_prob = sampler.context_posterior(context_prior=self.context_prob)
+        # print('quick sampler prior:', self.context_prob, ',', 'posterior:', context_prob)
         return context_prob
 
 
