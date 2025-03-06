@@ -779,7 +779,12 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
     n_iter = sampler_params['n_iter']
     lazy = sampler_params['lazy']
     correct_prior = sampler_params['correct_prior']
-    context_prior = 0.5
+    
+    ## set context prior for each sampling agent
+    context_priors = {}
+    # for agent in ['BAMCP', 'CE', 'BAMCP w/ CE', 'CE w/ BAMCP']:
+    for agent in agents:
+        context_priors[agent] = 0.5
     
     ## initiate dictionary to store the results
     sim_out = {}
@@ -822,8 +827,9 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
         # tree_reset = True ## to determine whether tree is reset at the start of each episode
 
 
-        ## initialise farmer
-        farmer = Farmer(N, context_prior=context_prior)
+        ## initialise farmer agent
+        # farmer = Farmer(N, context_prior=context_prior)
+        # farmer = Farmer(N, context_prior=context_priors[ag])
 
         ## loop through episodes (i.e. different start and goal states for the same mountain)
         if progress:
@@ -836,6 +842,11 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
 
             ## loop through agents
             for a, ag in enumerate(agents):
+                
+                ## initialise the farmer
+                farmer = Farmer(N, context_prior=context_priors[ag])
+                # print('agent:', ag, ', episode:', e,', context prior:', farmer.context_prob)
+
                 
                 ### reset episode 
 
@@ -896,15 +907,20 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                             # MCTS = MonteCarloTreeSearch_2AFC(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
                             MCTSs[ag] = MonteCarloTreeSearch_2AFC(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
                 
-                ## if keeping the tree between episodes, need to update tree with new episode info
+                    ## if keeping the tree between episodes, need to update tree with new episode info
                     elif (not tree_resets[ag]): #& (not tree_reset):
                         # MCTS.update_episode()
                         MCTSs[ag].update_episode()
                         # tree_reset = True
                         tree_resets[ag] = True
+                        MCTSs[ag].agent = agent ##???
                     MCTS = MCTSs[ag]
                     assert e == MCTS.actual_episode, 'episode mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(e, MCTS.env.episode)
                 assert e == env_copy.episode, 'episode mismatch between simulation and env\n simulation: {} \n env: {}'.format(e, MCTS.env.episode)
+
+                ## get the initial context probability
+                context_prior = agent.context_prob
+                # print('prior context:', farmer.context_prob)
 
             
                 ## run episode until goal is reached
@@ -940,7 +956,8 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         env_copy.set_sim(False)
 
                         ## get posterior mean grid
-                        agent.root_samples(obs=env_copy.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy,CE=True, correct_prior = correct_prior)
+                        # agent.root_samples(obs=env_copy.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy,CE=True, correct_prior = correct_prior)
+                        agent.root_samples(obs=env_copy.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy,CE=True, correct_prior = correct_prior, combo=False)
                         env_copy.receive_predictions(agent.posterior_mean_p_cost)
 
 
@@ -1025,9 +1042,6 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         Q_values.append(MCTS_Q)
                         leaf_visits = [leaf.n_action_visits for leaf in MCTS.tree.root.action_leaves.values()]
 
-                        ## get the initial context probability
-                        context_prior = farmer.context_prob
-                        # print('prior context:', farmer.context_prob)
 
                         ### optional: check what the CE agent would have done with the mean of this set of samples
 
@@ -1170,9 +1184,9 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                                     tree_resets[ag] = True
                         MCTSs[ag] = MCTS
 
-                        ## get the new context posterior 
-                        context_posterior = farmer.quick_context_posterior(env_copy.obs)
-                        # print('posterior context:', context_posterior)
+                    # get the new context posterior for this agent
+                    context_posterior = farmer.quick_context_posterior(env_copy.obs)
+                    # print('posterior context:', context_posterior)
                     
                     ### log determinant of covariance matrix
                     # if (ag=='BAMCP') or (ag=='BAMCP w/ CE'):
@@ -1484,13 +1498,18 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         agent_envs[ag] = env_copy
 
                         end_episode = True
+            
+                ## carry over the context prob to the next run
+                context_priors[ag] = context_posterior
+                # print('new context prob for agent {}: {}'.format(ag, context_posterior))
+            
             if progress:
                 pbar.update(1)
 
         ## carry over the context prob to the next run
-        if (ag == 'BAMCP') or (ag == 'BAMCP w/ CE'):
+        # if (ag == 'BAMCP') or (ag == 'BAMCP w/ CE'):
             # context_prior = farmer.context_prob
-            context_prior = context_posterior
+            # context_prior = context_posterior
             # print(context_probs)
         if progress & (n_blocks <= 1):
             pbar.close()
