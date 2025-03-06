@@ -826,6 +826,11 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                 tree_resets[a] = True
         # tree_reset = True ## to determine whether tree is reset at the start of each episode
 
+        ## copy of farmers
+        farmers = {}
+        for a in agents:
+            farmers[a] = Farmer(N, context_prior=context_priors[a])
+
 
         ## initialise farmer agent
         # farmer = Farmer(N, context_prior=context_prior)
@@ -844,9 +849,9 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
             for a, ag in enumerate(agents):
                 
                 ## initialise the farmer
-                farmer = Farmer(N, context_prior=context_priors[ag])
+                # farmer = Farmer(N, context_prior=context_priors[ag])
+                farmer = farmers[ag]
                 # print('agent:', ag, ', episode:', e,', context prior:', farmer.context_prob)
-
                 
                 ### reset episode 
 
@@ -917,10 +922,6 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                     MCTS = MCTSs[ag]
                     assert e == MCTS.actual_episode, 'episode mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(e, MCTS.env.episode)
                 assert e == env_copy.episode, 'episode mismatch between simulation and env\n simulation: {} \n env: {}'.format(e, MCTS.env.episode)
-
-                ## get the initial context probability
-                context_prior = agent.context_prob
-                # print('prior context:', farmer.context_prob)
 
             
                 ## run episode until goal is reached
@@ -1183,10 +1184,17 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                                     # tree_reset = True
                                     tree_resets[ag] = True
                         MCTSs[ag] = MCTS
+                    
+                    ## get the context prior - i.e. the probability with which samples were drawn
+                    context_prior = agent.context_prob
+                    # print('prior context:', farmer.context_prob)
 
                     # get the new context posterior for this agent
+                    # print('agent:', ag, ', episode:', e,', block:', block, ', action:', action, ', context prior:', farmer.context_prob)
+                    # print('farmers prior context:',farmer.context_prob)
                     context_posterior = farmer.quick_context_posterior(env_copy.obs)
                     # print('posterior context:', context_posterior)
+                    # print()
                     
                     ### log determinant of covariance matrix
                     # if (ag=='BAMCP') or (ag=='BAMCP w/ CE'):
@@ -1499,8 +1507,11 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
 
                         end_episode = True
             
-                ## carry over the context prob to the next run
-                context_priors[ag] = context_posterior
+                ## carry over the context prob to the next run, if on the final episode of the block
+                if e == (n_episodes-1):
+                    context_priors[ag] = context_posterior
+                # else:
+                #     context_priors[ag] = context_prior
                 # print('new context prob for agent {}: {}'.format(ag, context_posterior))
             
             if progress:
