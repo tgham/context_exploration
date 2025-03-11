@@ -332,22 +332,42 @@ class GridSampler:
     def simple_sample(self, col_context=True):
         self.col_probs = np.ones(self.N) 
         self.row_probs = np.ones(self.N)
-        if col_context:
-            # self.row_probs = np.ones(self.N)
-            for j in range(self.N):
-                low_counts_col = self.low_counts_cols[j]
-                high_counts_col = self.high_counts_cols[j]
-                alpha = self.alpha_col + low_counts_col
-                beta = self.beta_col + high_counts_col
-                self.col_probs[j] = propose(alpha, beta)
-        else:
-            # self.col_probs = np.ones(self.N)
-            for i in range(self.N):
-                low_counts_row = self.low_counts_rows[i]
-                high_counts_row = self.high_counts_rows[i]
-                alpha = self.alpha_row + low_counts_row
-                beta = self.beta_row + high_counts_row
-                self.row_probs[i] = propose(alpha, beta)
+        
+        ## if BAMCP, then parameters are *sampled* from beta distribution
+        if not self.CE:
+            if col_context:
+                # self.row_probs = np.ones(self.N)
+                for j in range(self.N):
+                    low_counts_col = self.low_counts_cols[j]
+                    high_counts_col = self.high_counts_cols[j]
+                    alpha = self.alpha_col + low_counts_col
+                    beta = self.beta_col + high_counts_col
+                    self.col_probs[j] = propose(alpha, beta)
+            else:
+                # self.col_probs = np.ones(self.N)
+                for i in range(self.N):
+                    low_counts_row = self.low_counts_rows[i]
+                    high_counts_row = self.high_counts_rows[i]
+                    alpha = self.alpha_row + low_counts_row
+                    beta = self.beta_row + high_counts_row
+                    self.row_probs[i] = propose(alpha, beta)
+
+        ## if CE, then parameters are *fixed* at the mean of the beta distribution, whose parameters are determined by the counts
+        elif self.CE:
+            if col_context:
+                for j in range(self.N):
+                    low_counts_col = self.low_counts_cols[j]
+                    high_counts_col = self.high_counts_cols[j]
+                    alpha = self.alpha_col + low_counts_col
+                    beta = self.beta_col + high_counts_col
+                    self.col_probs[j] = alpha / (alpha + beta)
+            else:
+                for i in range(self.N):
+                    low_counts_row = self.low_counts_rows[i]
+                    high_counts_row = self.high_counts_rows[i]
+                    alpha = self.alpha_row + low_counts_row
+                    beta = self.beta_row + high_counts_row
+                    self.row_probs[i] = alpha / (alpha + beta)
         return self.row_probs, self.col_probs
     
 
