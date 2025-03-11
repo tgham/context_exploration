@@ -863,7 +863,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
 
                 ## tmp fix: fix the prior to the prior that was used at the beginning of the grid (to prevent observations contributing to the posterior on multiple episodes)
                 farmer.context_prob = context_priors[ag]
-                
+
                 
                 ### reset episode 
 
@@ -1131,8 +1131,9 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         # all_posterior_contexts_plot.append(farmer.context_prob)
                         # for ep in range(0, e+1):
                         #     context_title = title = r'$p(z_{c}) = $'+str(all_posterior_contexts_plot[ep].round(2))
-                        #     title = f'Posterior mean p(cost)\n{context_title}'
+                        #     title = f'Posterior mean p(low cost)\n{context_title}'
                         #     plot_r(all_posterior_p_costs_plot[ep], ax = axs[0, ep], title = title, cbar=False)
+                        #     plot_traj([env.path_states[ep][0], env.path_states[ep][1]], ax = axs[0, ep], expt=expt)
                         # for ep in range(e+1, n_episodes):
                         #     fig.delaxes(axs[0,ep])
                         # plt.show()

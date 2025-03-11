@@ -160,6 +160,15 @@ class MountainEnv(gym.Env):
             self.costss = []
             costs = np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
             self.costss = [costs for e in range(n_episodes)]
+
+            ## check if decent spread of high and low costs - i.e. mean cost should be around the mean of the two costs, +/- some tolerance
+            mean_cost = np.mean(costs)
+            ideal_mean_cost = (self.high_cost + self.low_cost)/2
+            tol = 0.05
+            if (mean_cost<ideal_mean_cost-tol) or (mean_cost>ideal_mean_cost+tol):
+                continue
+
+
             
 
             ## init trial info, depending on the expt type

@@ -451,6 +451,12 @@ class Farmer:
                 self.all_posterior_ps[s,:], self.all_posterior_qs[s,:] = sampler.simple_sample(col_context=col_context[s])
                 self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
 
+                ## temp fix: this posterior should also be filled in with 1s and 0s for states where a low and high cost have been observed respectively
+                for i,j,c in obs:
+                    i = int(i)
+                    j = int(j)
+                    prob = 1 if c == self.low_cost else 0
+                    self.all_posterior_p_costs[s][i,j] = prob
 
         ## posterior means
         self.posterior_mean_p_cost = np.mean(self.all_posterior_p_costs, axis=0)
@@ -465,6 +471,7 @@ class Farmer:
         # axs[0].set_title('p')
         # axs[1].set_title('q')
         # plt.show()
+
 
     ## quick and cheap context posterior
     def quick_context_posterior(self, obs):
