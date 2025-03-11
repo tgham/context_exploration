@@ -445,8 +445,8 @@ class Farmer:
             # print('sampler prior:', context_prior, ',', 'posterior:', self.context_prob)
 
             ## use inferred context to sample
-            context_indicators = np.random.binomial(1, self.context_prob, size=n_samples) 
-            col_context = context_indicators.astype(bool)
+            self.context_indicators = np.random.binomial(1, self.context_prob, size=n_samples) 
+            col_context = self.context_indicators.astype(bool)
             for s in range(n_samples):
                 self.all_posterior_ps[s,:], self.all_posterior_qs[s,:] = sampler.simple_sample(col_context=col_context[s])
                 self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
@@ -471,6 +471,7 @@ class Farmer:
         sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, obs, N=self.N)
         context_prob = sampler.context_posterior(context_prior=self.context_prob)
         # print('quick sampler prior:', self.context_prob, ',', 'posterior:', context_prob)
+        # print()
         return context_prob
 
 

@@ -831,6 +831,14 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
         for a in agents:
             farmers[a] = Farmer(N, context_prior=context_priors[a])
 
+        ## save posterior means (for presentation plot)
+        # all_posterior_p_costs_plot = []
+        # all_posterior_contexts_plot = []
+        # fig, axs = plt.subplots(2,1, figsize =(10,5))
+        # plot_r(env.p_costs, ax = axs[0], title='p(low cost)', cbar=True)
+        # plot_r(env.costss[0]+1, ax = axs[1], title='Actual costs', cbar=True)
+        # plt.show()
+
 
         ## initialise farmer agent
         # farmer = Farmer(N, context_prior=context_prior)
@@ -852,6 +860,10 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                 # farmer = Farmer(N, context_prior=context_priors[ag])
                 farmer = farmers[ag]
                 # print('agent:', ag, ', episode:', e,', context prior:', farmer.context_prob)
+
+                ## tmp fix: fix the prior to the prior that was used at the beginning of the grid (to prevent observations contributing to the posterior on multiple episodes)
+                farmer.context_prob = context_priors[ag]
+                
                 
                 ### reset episode 
 
@@ -899,6 +911,8 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                 elif (ag == 'BAMCP') or (ag == 'CE') or (ag=='BAMCP w/ CE') or (ag=='CE w/ BAMCP') or (ag=='BAMCP_wrong'):
                     agent = farmer
                 agent.get_env_info(env_copy)
+                if e==0:
+                    assert len(env_copy.obs)==0, 'obs not empty at start of episode'
 
                 ## reset tree
                 if ((ag == 'BAMCP') or (ag == 'BAMCP w/ CE') or (ag=='BAMCP_wrong')):
@@ -936,6 +950,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                     max_steps = 100 ## just in case
                 max_search_attempts = 3
 
+
                 while not end_episode:
 
                     ## plain balanced GP
@@ -958,7 +973,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
 
                         ## get posterior mean grid
                         # agent.root_samples(obs=env_copy.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy,CE=True, correct_prior = correct_prior)
-                        agent.root_samples(obs=env_copy.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy,CE=True, correct_prior = correct_prior, combo=False)
+                        agent.root_samples(obs=env_copy.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy, CE=True, correct_prior = correct_prior, combo=False)
                         env_copy.receive_predictions(agent.posterior_mean_p_cost)
 
 
@@ -1103,6 +1118,26 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         # if action != action_CE:
                         #     print('MCTS Q:', MCTS_Q_labelled)
                         #     print('n_visits of action leaves:',{env_copy.action_labels[k]:v.n_action_visits for k,v in MCTS.tree.root.action_leaves.items()})
+
+                        ## presentation plot of agent's observations, and the posterior mean (plot all episodes)
+                        # fig, axs = plt.subplots(2, n_episodes, figsize=(n_episodes*5, 10))
+                        # for ep in range(n_episodes):
+                        #     observed_costs = np.zeros((N,N)) + np.nan
+                        #     for i,j,c in env_copy.obs:
+                        #         observed_costs[i,j] = c
+                        #     plot_r(observed_costs+1, ax = axs[1, ep], title = f'Grid {block+1}, Trial {ep+1}', cbar=False)
+                        #     plot_traj([env.path_states[ep][0], env.path_states[ep][1]], ax = axs[1, ep], expt=expt)
+                        # all_posterior_p_costs_plot.append(agent.posterior_mean_p_cost)
+                        # all_posterior_contexts_plot.append(farmer.context_prob)
+                        # for ep in range(0, e+1):
+                        #     context_title = title = r'$p(z_{c}) = $'+str(all_posterior_contexts_plot[ep].round(2))
+                        #     title = f'Posterior mean p(cost)\n{context_title}'
+                        #     plot_r(all_posterior_p_costs_plot[ep], ax = axs[0, ep], title = title, cbar=False)
+                        # for ep in range(e+1, n_episodes):
+                        #     fig.delaxes(axs[0,ep])
+                        # plt.show()
+
+
 
                         ## take action
                         env_copy.set_sim(False)
@@ -1517,11 +1552,6 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
             if progress:
                 pbar.update(1)
 
-        ## carry over the context prob to the next run
-        # if (ag == 'BAMCP') or (ag == 'BAMCP w/ CE'):
-            # context_prior = farmer.context_prob
-            # context_prior = context_posterior
-            # print(context_probs)
         if progress & (n_blocks <= 1):
             pbar.close()
     if progress & (n_blocks > 1):
