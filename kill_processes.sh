@@ -2,7 +2,7 @@
 
 # Define the pattern to match your parallel loop processes
 # pattern="python -u parallel_recovery.py"
-pattern="python expt_optimisation.py"
+pattern="python -u expt_optimisation.py"
 
 # Kill the processes matching the pattern
 pkill -f "$pattern"
