@@ -26,6 +26,13 @@ def plot_r(sampled_rewards, ax, title=None, cbar=False):
     if cbar:
         ax.collections[0].colorbar.set_label('p(low cost)') 
         # ax.collections[0].colorbar.set_label('Route cost')
+
+    ## plot grid lines
+    N = sampled_rewards.shape[0]
+    for i in range(1, N):
+        ax.axhline(i, color='black', lw=0.5)
+        ax.axvline(i, color='black', lw=0.5)
+
     return ax
 
 def plot_state(current, goal, ax, title=None):
@@ -68,8 +75,12 @@ def plot_traj(trajs, ax, expt='free',title=None):
         markers = ['*','x','x']
         colours = ['white','red','red']
     elif expt=='2AFC' or expt=='2AFC_SG':
-        markers = ['x','x']
-        colours = ['blue', 'red']
+        # markers = ['x','x']
+        markers = ['*','*']
+        # colours = ['blue', 'lime']
+        colours = ['blue','indianred']
+        # colours = ['white','white']
+    path_letters = ['A','B']
     costs = ['L','H']
 
     # if len(trajs[0]) ==2:
@@ -81,13 +92,20 @@ def plot_traj(trajs, ax, expt='free',title=None):
         if (ti==0) or (expt=='2AFC'):
 
             ## plot start and goal
-            # ax.scatter(traj[0][1]+0.5, traj[0][0]+0.5, color='red', s=100)
-            ax.scatter(traj[0][1]+0.5, traj[0][0]+0.5, color='red', edgecolor='black', s=200, linewidth=2)
-            ax.scatter(traj[-1][1]+0.5, traj[-1][0]+0.5, color='lime', edgecolor='black', s=200, linewidth=2)
+            # ax.scatter(traj[0][1]+0.5, traj[0][0]+0.5, color='red', edgecolor='black', s=200, linewidth=2)
+            # ax.scatter(traj[-1][1]+0.5, traj[-1][0]+0.5, color='lime', edgecolor='black', s=200, linewidth=2)
+            ax.scatter(traj[0][1]+0.5, traj[0][0]+0.5, color=colours[ti], edgecolor='black', s=200, linewidth=2)
+            ax.scatter(traj[-1][1]+0.5, traj[-1][0]+0.5, color=colours[ti], edgecolor='black', s=200, linewidth=2)
+
+            ## for the first trajectory, the start and goal should also have an 'A' plotted. if the second, then 'B'
+            # ax.text(traj[0][1]+0.5, traj[0][0]+0.5, path_letters[ti], ha='center', va='center', color='white', weight='bold')
+            # ax.text(traj[-1][1]+0.5, traj[-1][0]+0.5, path_letters[ti], ha='center', va='center', color='white', weight='bold')
+            ax.text(traj[0][1]+0.5, traj[0][0]+0.5, 'S', ha='center', va='center', color='white', weight='bold', fontsize=13)
+            ax.text(traj[-1][1]+0.5, traj[-1][0]+0.5, 'G', ha='center', va='center', color='white', weight='bold', fontsize=13)
 
             ## plot path(s)
             for t in traj[1:-1]:
-                ax.plot(t[1]+0.5, t[0]+0.5, markers[ti], color=colours[ti], markersize=10, linewidth=10)
+                ax.plot(t[1]+0.5, t[0]+0.5, markers[ti], color=colours[ti], markersize=12, linewidth=10, markeredgewidth=2)
 
 
         ## actual path 
