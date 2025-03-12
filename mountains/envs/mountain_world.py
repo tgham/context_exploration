@@ -797,7 +797,7 @@ class MountainEnv(gym.Env):
     def sample_paths_and_SGs(self, max_turns=1):
 
         ### get the sequences of abstract paths
-        path_len = np.random.randint(5, self.N)
+        path_len = np.random.randint(self.N-4, self.N)
         # path_len = self.N-4
         # path_len = 5
         abstract_sequences = self.generate_abstract_sequences(path_len, max_turns)
@@ -820,13 +820,22 @@ class MountainEnv(gym.Env):
                 #     diff_axes = True
                 
                 ## sanity check: choose the longest vertical and horizontal paths
-                sampled_abstract_sequences = [abstract_sequences[0], abstract_sequences[-1]]
-                diff_axes=True
+                # sampled_abstract_sequences = [abstract_sequences[0], abstract_sequences[-1]]
+                # diff_axes=True
 
                 ## or, the first path is the rightangle path, and the second path is a long path
                 # sampled_abstract_sequences[0] = abstract_sequences[int(np.round(len(abstract_sequences)/2))]
                 # sampled_abstract_sequences[1] = abstract_sequences[-1]
                 # diff_axes=True
+
+                ## or, one is a long path, the other is an L path, as long as they have different axes
+                first_or_last = np.random.choice([0, -1])
+                sampled_abstract_sequences[0] = abstract_sequences[first_or_last]
+                L_path_idx = np.random.choice([i for i in range(2,len(abstract_sequences)-2)])
+                sampled_abstract_sequences[1] = abstract_sequences[L_path_idx]
+                if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
+                    diff_axes = True
+
 
 
             else:
@@ -860,8 +869,8 @@ class MountainEnv(gym.Env):
             n_common_across_eps = np.inf
         else:
             n_common_across_eps = 0
-        max_common_within_ep = (path_len-1)/1.2
-        max_common_across_eps = (path_len-1)/1.2
+        max_common_within_ep = (path_len-1)/2.5
+        max_common_across_eps = (path_len-1)/2.5
         ## debugging
         # max_common_within_ep = np.inf
         # max_common_across_eps = np.inf
