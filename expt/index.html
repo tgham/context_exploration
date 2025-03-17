@@ -24,24 +24,37 @@
         background-color: white; /* Default background for non-path cells */
     }
 
-    .blue-path {
-        background-color: lightblue; /* Color for blue path */
+    .start, .goal {
+        font-weight: bold;
+        z-index: 1; /* Ensure text is visible on top of the background */
     }
 
-    .red-path {
-        background-color: lightcoral; /* Color for red path */
+    .observed-cost.start, .observed-cost.goal {
+        background-color: red; /* Red for high cost */
+    }
+
+    .observed-no-cost.start, .observed-no-cost.goal {
+        background-color: grey; /* Grey for low cost */
+    }
+
+    .blue-path {
+        color: blue; /* Blue star for path A */
+    }
+
+    .green-path {
+        color: green; /* Green star for path B */
+    }
+
+    .observed-cost {
+        background-color: red; /* Red for high cost */
+    }
+
+    .observed-no-cost {
+        background-color: grey; /* Grey for low cost */
     }
 
     .avatar {
         background-color: yellow;
-    }
-
-    .cost {
-        color: red;
-    }
-
-    .no-cost {
-        color: grey;
     }
 
     .choice-container {
@@ -51,14 +64,24 @@
     }
 
     .choice-box {
-        width: 100px;
+        width: 150px;
         height: 50px;
         display: flex;
         align-items: center;
         justify-content: center;
         margin: 0 10px;
-        color: white;
         font-weight: bold;
+        border: 2px solid #000;
+    }
+
+    .blue-path.choice-box {
+        background-color: blue;
+        color: white;
+    }
+
+    .green-path.choice-box {
+        background-color: green;
+        color: white;
     }
   </style>
   <!-- Import the experiment.js script -->
