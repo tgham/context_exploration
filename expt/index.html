@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Path Selection Experiment</title>
+  <script src="jspsych/jspsych.js"></script>
+  <script src="jspsych/plugin-html-keyboard-response.js"></script>
+  <script src="jspsych/plugin-html-button-response.js"></script>
+  <script src="jspsych/plugin-animation.js"></script>
+  <script src="jspsych/plugin-preload.js"></script>
+  <link href="jspsych/jspsych.css" rel="stylesheet" type="text/css" />
+  <style>
+    .grid-container {
+        display: grid;
+        grid-template-columns: repeat(11, 40px); /* Fixed cell width */
+        grid-template-rows: repeat(11, 40px); /* Fixed cell height */
+        gap: 2px;
+    }
+
+    .grid-cell {
+        border: 1px solid #000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: white; /* Default background for non-path cells */
+    }
+
+    .blue-path {
+        background-color: lightblue; /* Color for blue path */
+    }
+
+    .red-path {
+        background-color: lightcoral; /* Color for red path */
+    }
+
+    .avatar {
+        background-color: yellow;
+    }
+
+    .cost {
+        color: red;
+    }
+
+    .no-cost {
+        color: grey;
+    }
+
+    .choice-container {
+        display: flex;
+        justify-content: center;
+        margin-top: 20px;
+    }
+
+    .choice-box {
+        width: 100px;
+        height: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 10px;
+        color: white;
+        font-weight: bold;
+    }
+  </style>
+  <!-- Import the experiment.js script -->
+  <script src="experiment.js"></script>
+</head>
+<body></body>
+</html>
