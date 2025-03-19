@@ -9,12 +9,6 @@
   <script src="jspsych/plugin-preload.js"></script>
   <link href="jspsych/jspsych.css" rel="stylesheet" type="text/css" />
   <style>
-    .grid-container {
-        display: grid;
-        grid-template-columns: repeat(11, 40px); /* Fixed cell width */
-        grid-template-rows: repeat(11, 40px); /* Fixed cell height */
-        gap: 2px;
-    }
 
     .grid-cell {
         border: 1px solid #000;
@@ -26,15 +20,6 @@
 
     .start, .goal {
         font-weight: bold;
-        z-index: 1; /* Ensure text is visible on top of the background */
-    }
-
-    .observed-cost.start, .observed-cost.goal {
-        background-color: red; /* Red for high cost */
-    }
-
-    .observed-no-cost.start, .observed-no-cost.goal {
-        background-color: grey; /* Grey for low cost */
     }
 
     .blue-path {
@@ -61,6 +46,7 @@
         display: flex;
         justify-content: center;
         margin-top: 20px;
+        height: 60px; /* Fixed height to prevent layout shifts */
     }
 
     .choice-box {
@@ -72,6 +58,18 @@
         margin: 0 10px;
         font-weight: bold;
         border: 2px solid #000;
+        position: relative; /* Enable positioning context */
+    }
+
+    .grid-container {
+        display: grid;
+        grid-template-columns: repeat(11, 40px);
+        grid-template-rows: repeat(11, 40px);
+        gap: 2px;
+        justify-content: center;
+        margin-top: 0px;
+        position: relative;
+        height: 450px; /* Fixed height to prevent shifts */
     }
 
     .blue-path.choice-box {
@@ -83,6 +81,51 @@
         background-color: green;
         color: white;
     }
+
+    .cost-display {
+        position: absolute;
+        right: 20px;
+        top: 100px;
+        font-size: 24px;
+        color: red;
+        font-weight: bold;
+    }
+    .cost-value {
+        font-size: 32px;
+    }
+
+    .cost-display-container {
+        display: flex;
+        flex-direction: column; /* Stack items vertically */
+        align-items: center;
+        text-align: center;
+        margin-bottom: 5px; /* Reduce spacing above grid */
+        height: 80px; /* ✅ Fixed height to prevent shifting */
+    }
+
+    .cost-total {
+        font-size: 22px;
+        color: black;
+        font-weight: bold;
+        margin: 0px; /* ✅ Remove default margin */
+        line-height: 1.2; /* ✅ Reduce spacing between lines */
+    }
+
+    .cost-trial {
+        font-size: 22px;
+        color: red;
+        font-weight: bold;
+        margin: 0px; /* ✅ Remove extra margin */
+        line-height: 1.2; /* ✅ Reduce spacing */
+        transition: transform 0.5s ease-in-out;
+    }
+
+    .hidden {
+        visibility: hidden; /* ✅ Keep space reserved instead of removing element */
+    }
+
+
+
   </style>
   <!-- Import the experiment.js script -->
   <script src="experiment.js"></script>

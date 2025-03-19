@@ -11,6 +11,7 @@ class Grid {
         this.trialInfo = gridData.trial_info; // Array of trial info
         this.envCosts = gridData.env_costs; // Object of environment costs
         this.observedCosts = {}; // Track observed costs for each grid
+        this.currentGrid = 0; // Track the current grid
     }
 
     // Get the binary costs for a specific grid
@@ -46,11 +47,17 @@ class Grid {
     // Create the grid HTML for a specific trial
     createGridHTML(trialIndex) {
         const trial = this.getTrialInfo(trialIndex);
-        console.log('Trial number:', trialIndex); // Debugging: Log the trial number
         const binaryCosts = this.getBinaryCosts(trial.grid);
-        let gridHTML = '<div class="grid-container">';
-
-        // Create empty 11x11 grid
+        
+        let gridHTML = `
+            <div class="cost-display-container">
+                <h2 class="cost-total">Total Cost:</h2>
+                <p id="total-cost" class="cost-total">-$${totalCost}</p>
+                <p id="trial-cost" class="cost-trial hidden">-$0</p> 
+            </div>
+            <div class="grid-container">
+        `;
+    
         for (let row = 0; row < 11; row++) {
             for (let col = 0; col < 11; col++) {
                 const cellId = `cell-${row}-${col}`;
@@ -60,47 +67,78 @@ class Grid {
                 const isGoalB = row === trial.goal_B[0] && col === trial.goal_B[1];
                 const isPathA = trial.path_A.some(coord => coord[0] === row && coord[1] === col);
                 const isPathB = trial.path_B.some(coord => coord[0] === row && coord[1] === col);
-
-                // Check if this cell has been observed
+    
                 const observedCost = this.observedCosts[`${row}-${col}`];
-                const observedClass = observedCost !== undefined ? (observedCost === -1 ? 'observed-cost' : 'observed-no-cost') : '';
-
-                if (isStartA || isStartB) {
-                    // Start state
-                    gridHTML += `<div class="grid-cell start ${observedClass}" id="${cellId}">S</div>`;
-                } else if (isGoalA || isGoalB) {
-                    // Goal state
-                    gridHTML += `<div class="grid-cell goal ${observedClass}" id="${cellId}">G</div>`;
+                const observedClass = observedCost !== undefined ? 
+                    (observedCost === -1 ? 'observed-cost' : 'observed-no-cost') : '';
+    
+                if (isStartA) {
+                    gridHTML += `<div class="grid-cell start blue-path ${observedClass}" id="${cellId}">S</div>`;
+                } else if (isStartB) {
+                    gridHTML += `<div class="grid-cell start green-path ${observedClass}" id="${cellId}">S</div>`;
+                } else if (isGoalA) {
+                    gridHTML += `<div class="grid-cell goal blue-path ${observedClass}" id="${cellId}">G</div>`;
+                } else if (isGoalB) {
+                    gridHTML += `<div class="grid-cell goal green-path ${observedClass}" id="${cellId}">G</div>`;
                 } else if (isPathA || isPathB) {
-                    // Path cell
                     const pathClass = isPathA ? 'blue-path' : 'green-path';
                     gridHTML += `<div class="grid-cell ${observedClass} ${pathClass}" id="${cellId}">★</div>`;
-                } else if (observedCost !== undefined) {
-                    // Observed cell
-                    if (observedCost === -1) {
-                        gridHTML += `<div class="grid-cell observed-cost" id="${cellId}"></div>`;
-                    } else {
-                        gridHTML += `<div class="grid-cell observed-no-cost" id="${cellId}"></div>`;
-                    }
                 } else {
-                    // Default cell
-                    gridHTML += `<div class="grid-cell" id="${cellId}"></div>`;
+                    gridHTML += `<div class="grid-cell ${observedClass}" id="${cellId}"></div>`;
                 }
             }
         }
-
-        gridHTML += '</div>';
+    
+        gridHTML += `</div>`; // ✅ Removed choice-container from here
+    
         return gridHTML;
     }
+    
+    
+    
+    
+    
+    
+    
 
     // Record observed costs for a path
     recordObservedCosts(path, binaryCosts) {
         path.forEach(cell => {
             const [row, col] = cell;
+            
+            // Check for out-of-bounds error
+            if (row < 0 || row > 10 || col < 0 || col > 10) {
+                console.error(`Error in observed costs: Cell (${row}, ${col}) is out of bounds.`);
+                return;
+            }
+    
             const cost = binaryCosts[row][col];
             this.observedCosts[`${row}-${col}`] = cost;
+    
+            console.log(`Recorded observed cost for cell (${row}, ${col}): ${cost}`);
         });
-    }
+    }    
+
+    // Reset the grid for a new set of trials
+    resetGrid() {
+        this.observedCosts = {}; 
+        this.currentGrid++; 
+    
+        // Reset trial cost
+        const trialCostElement = document.getElementById("trial-cost");
+        if (trialCostElement) {
+            trialCostElement.textContent = "+$0";
+            trialCostElement.classList.add("hidden");
+        }
+    
+        // Reset total cost
+        totalCost = 0;
+        const totalCostElement = document.getElementById("total-cost");
+        if (totalCostElement) {
+            totalCostElement.textContent = "-$0";
+        }
+    }    
+    
 }
 
 // Load the JSON data and initialize the Grid class
@@ -117,51 +155,103 @@ fetch('assets/expt_info.json') // Updated JSON file path
     .catch(error => console.error('Error loading JSON:', error));
 
 // Function to animate the agent along the chosen path
+let totalCost = 0; // Keeps track of total cost across trials
 function animateAgent(path, binaryCosts, callback) {
     let currentStep = 0;
-    const totalSteps = path.length;
+    let trialCost = 0; // Resets each trial
+    let trialCostVisible = false; // Tracks visibility of red trial cost number
 
-    // Animation function
     function step() {
         if (currentStep > 0) {
-            // Mark previous cell as visited with cost indicator
-            const prevCell = path[currentStep - 1];
-            const prevCellElement = document.getElementById(`cell-${prevCell[0]}-${prevCell[1]}`);
+            const [prevRow, prevCol] = path[currentStep - 1];
+            const prevCellElement = document.getElementById(`cell-${prevRow}-${prevCol}`);
+
             if (prevCellElement) {
                 prevCellElement.classList.remove('avatar');
+                const cost = binaryCosts[prevRow][prevCol];
 
-                const cost = binaryCosts[prevCell[0]][prevCell[1]];
                 if (cost === -1) {
-                    prevCellElement.classList.add('observed-cost'); // Mark as red if cost
+                    prevCellElement.classList.add('observed-cost');
+                    trialCost++; // Increment trial cost
+
+                    // Show trial cost only when first cost is incurred
+                    if (!trialCostVisible) {
+                        const trialCostElement = document.getElementById("trial-cost");
+                        if (trialCostElement) {
+                            trialCostElement.classList.remove("hidden");
+                            trialCostVisible = true;
+                        }
+                    }
                 } else {
-                    prevCellElement.classList.add('observed-no-cost'); // Mark as grey if no cost
+                    prevCellElement.classList.add('observed-no-cost');
                 }
-            } else {
-                console.error(`Cell not found: cell-${prevCell[0]}-${prevCell[1]}`);
+
+                // Update the trial cost display
+                const trialCostElement = document.getElementById("trial-cost");
+                if (trialCostElement) {
+                    trialCostElement.textContent = `-$${trialCost}`;
+                }
             }
         }
 
-        if (currentStep < totalSteps) {
-            // Move agent to current cell
-            const currentCell = path[currentStep];
-            const cellElement = document.getElementById(`cell-${currentCell[0]}-${currentCell[1]}`);
+        if (currentStep < path.length) {
+            const [curRow, curCol] = path[currentStep];
+            const cellElement = document.getElementById(`cell-${curRow}-${curCol}`);
+
             if (cellElement) {
                 cellElement.classList.add('avatar');
             } else {
-                console.error(`Cell not found: cell-${currentCell[0]}-${currentCell[1]}`);
+                console.error(`Cell not found in DOM: cell-${curRow}-${curCol}`);
+                return;
             }
 
             currentStep++;
-            setTimeout(step, 500); // 0.5 second per step
+            setTimeout(step, 300);
         } else {
-            // Animation complete
-            if (callback) callback();
+            // Animation complete → Move trial cost upward into total cost
+            mergeCosts(trialCost, callback);
         }
     }
 
-    // Start animation
-    setTimeout(step, 500); // Start after a short delay
+    setTimeout(step, 300);
 }
+
+
+
+
+//  merge costs together 
+function mergeCosts(trialCost, callback) {
+    const totalCostElement = document.getElementById("total-cost");
+    const trialCostElement = document.getElementById("trial-cost");
+
+    if (totalCostElement && trialCostElement) {
+        trialCostElement.style.transition = "transform 0.5s ease-in-out";
+        trialCostElement.style.transform = "translateY(-20px)"; // Moves up
+
+        setTimeout(() => {
+            totalCost += trialCost; // Add to total cost
+            totalCostElement.textContent = `-$${totalCost}`;
+
+            // Reset trial cost display
+            trialCostElement.textContent = `+$0`;
+            trialCostElement.style.transform = "translateY(0)"; // Reset position
+            trialCostElement.classList.add("hidden"); // Hide again
+        }, 500);
+    }
+
+    setTimeout(() => {
+        currentTrialIndex++; // Move to next trial
+        jsPsych.finishTrial();
+    }, 2000);
+}
+
+
+
+
+
+
+
+
 
 // Instructions
 const instructions = {
@@ -180,33 +270,44 @@ const instructions = {
     choices: "ALL_KEYS"
 };
 
+// New grid message
+const newGridMessage = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        return `
+            <h2>New Grid</h2>
+            <p>You are now in a new grid. Press any key to start.</p>
+        `;
+    },
+    choices: "ALL_KEYS",
+    on_finish: function() {
+        grid.resetGrid(); // Reset the grid for the new set of trials
+    }
+};
+
 // Path selection trial
 const pathSelectionTrial = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
-        const gridHTML = grid.createGridHTML(currentTrialIndex);
         return `
-            ${gridHTML}
+            ${grid.createGridHTML(currentTrialIndex)}
             <div class="choice-container">
-                <div class="choice-box blue-path">Left Arrow: Blue Path</div>
-                <div class="choice-box green-path">Right Arrow: Green Path</div>
+                <div class="choice-box blue-path" id="blue-choice">Left Arrow: <strong>Blue Path</strong></div>
+                <div class="choice-box green-path" id="green-choice">Right Arrow: <strong>Green Path</strong></div>
             </div>
         `;
     },
-    choices: ['ArrowLeft', 'ArrowRight'],
-    prompt: "",
-    data: {
-        task: 'path_selection',
-        trialIndex: function() {
-            return currentTrialIndex;
-        }
-    },
+    choices: ['ArrowLeft', 'ArrowRight'], 
     on_finish: function(data) {
         if (data.response === 'ArrowLeft') {
             data.choice = 'blue';
         } else if (data.response === 'ArrowRight') {
             data.choice = 'green';
+        } else {
+            console.warn(`Invalid key pressed: ${data.response}. Waiting for valid input.`);
+            return false; 
         }
+        jsPsych.data.get().addToLast({ choice: data.choice });
     }
 };
 
@@ -214,36 +315,41 @@ const pathSelectionTrial = {
 const pathAnimationTrial = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
-        return grid.createGridHTML(currentTrialIndex);
+        const lastTrialData = jsPsych.data.get().last(1).values()[0];
+        const chosenPath = lastTrialData.choice === 'blue' ? 'blue-choice' : 'green-choice';
+        const unchosenPath = lastTrialData.choice === 'blue' ? 'green-choice' : 'blue-choice';
+        
+        return `
+            ${grid.createGridHTML(currentTrialIndex)}
+            <div class="choice-container">
+                <div class="choice-box blue-path" id="blue-choice" style="${lastTrialData.choice === 'blue' ? '' : 'visibility: hidden;'}">Left Arrow: <strong>Blue Path</strong></div>
+                <div class="choice-box green-path" id="green-choice" style="${lastTrialData.choice === 'green' ? '' : 'visibility: hidden;'}">Right Arrow: <strong>Green Path</strong></div>
+            </div>
+        `;
     },
     choices: "NO_KEYS",
-    trial_duration: null, // Will be set dynamically
     on_load: function() {
         const currentTrial = grid.getTrialInfo(currentTrialIndex);
-        const chosenPath = jsPsych.data.get().last(1).values()[0].choice === 'blue' ? currentTrial.path_A : currentTrial.path_B;
+        const lastTrialData = jsPsych.data.get().last(1).values()[0];
+
+        if (!lastTrialData || !lastTrialData.choice) {
+            console.error("No valid path choice found. Restarting trial.");
+            return jsPsych.finishTrial();
+        }
+
+        const chosenPath = lastTrialData.choice === 'blue' ? currentTrial.path_A : currentTrial.path_B;
         const binaryCosts = grid.getBinaryCosts(currentTrial.grid);
 
-        // Record observed costs
+        console.log("Animating Trial:", currentTrialIndex);
+        console.log("Chosen Path:", lastTrialData.choice, chosenPath);
+
         grid.recordObservedCosts(chosenPath, binaryCosts);
 
-        // Calculate animation duration (0.5s per step + buffer)
-        const animationDuration = (chosenPath.length * 500) + 1000;
-
-        // Set trial duration correctly
-        jsPsych.getCurrentTrial().trial_duration = animationDuration;
-
-        // Start animation
-        animateAgent(chosenPath, binaryCosts, function() {
-            // Animation complete, end trial after a short delay
-            setTimeout(function() {
+        setTimeout(() => {
+            animateAgent(chosenPath, binaryCosts, function() {
                 jsPsych.finishTrial();
-            }, 1000);
-        });
-    },
-    data: function() {
-        return {
-            trialIndex: currentTrialIndex
-        };
+            });
+        }, 100);
     }
 };
 
@@ -251,25 +357,31 @@ const pathAnimationTrial = {
 const resultsSummary = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
-        const last_trial = jsPsych.data.get().last(2).values()[0]; // Get the path selection trial
+        const lastTrialData = jsPsych.data.get().last(2).values()[0];
         const currentTrial = grid.getTrialInfo(currentTrialIndex);
-        const chosenPath = last_trial.choice === 'blue' ? currentTrial.path_A : currentTrial.path_B;
+        const chosenPath = lastTrialData.choice === 'blue' ? currentTrial.path_A : currentTrial.path_B;
+        const binaryCosts = grid.getBinaryCosts(currentTrial.grid);
 
-        // Calculate total cost
-        const totalCost = chosenPath.filter(cell => cell.cost).length;
+        let totalCost = 0;
+        chosenPath.forEach(([r, c]) => {
+            if (binaryCosts[r][c] === -1) totalCost++;
+        });
 
+        // <h2>Results Summary</h2>
+        // <p>You chose the <strong>${lastTrialData.choice}</strong> path.</p>
+        // <p>Total cost: <strong>${totalCost}</strong> states</p>
         return `
-            <h2>Results Summary</h2>
-            <p>You chose the ${last_trial.choice} path.</p>
-            <p>Total cost: ${totalCost} states</p>
             <p>Press any key to continue.</p>
         `;
     },
-    choices: "ALL_KEYS",
+    choices: "ALL_KEYS", // **Requires explicit keypress**
+    trial_duration: null, // **Ensures no automatic skipping**
     on_finish: function() {
-        currentTrialIndex++; // Increment the trial index after the results summary
+        currentTrialIndex++; // Move to the next trial only after keypress
     }
 };
+
+
 
 // End message
 const end = {
@@ -288,9 +400,12 @@ function createTimeline() {
 
     // Loop through all trials and add them to the timeline
     for (let i = 0; i < grid.trialInfo.length; i++) {
+        if (i % 4 === 0 && i !== 0) {
+            // Add new grid message every 4 trials
+            timeline.push(newGridMessage);
+        }
         timeline.push(pathSelectionTrial);
-        timeline.push(pathAnimationTrial);
-        timeline.push(resultsSummary);
+        timeline.push(pathAnimationTrial); 
     }
 
     // Add the end message
@@ -298,6 +413,7 @@ function createTimeline() {
 
     return timeline;
 }
+
 
 // Start experiment when the page loads
 function initializeExperiment() {
