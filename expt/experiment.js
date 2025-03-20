@@ -51,9 +51,9 @@ class Grid {
         
         let gridHTML = `
             <div class="cost-display-container">
-                <h2 class="cost-total">Total Cost:</h2>
-                <p id="total-cost" class="cost-total">-$${totalCost}</p>
-                <p id="trial-cost" class="cost-trial hidden">-$0</p> 
+                <h2 class="cost-total">Ship Damage:</h2>
+                <p id="total-cost" class="cost-total">${totalCost} Units</p>
+                <p id="trial-cost" class="cost-trial hidden">+0 Units</p> 
             </div>
             <div class="grid-container">
         `;
@@ -82,25 +82,18 @@ class Grid {
                     gridHTML += `<div class="grid-cell goal green-path ${observedClass}" id="${cellId}">G</div>`;
                 } else if (isPathA || isPathB) {
                     const pathClass = isPathA ? 'blue-path' : 'green-path';
-                    gridHTML += `<div class="grid-cell ${observedClass} ${pathClass}" id="${cellId}">★</div>`;
+                    gridHTML += `<div class="grid-cell ${observedClass} ${pathClass}" id="${cellId}">⚝</div>`;
                 } else {
                     gridHTML += `<div class="grid-cell ${observedClass}" id="${cellId}"></div>`;
                 }
             }
         }
     
-        gridHTML += `</div>`; // ✅ Removed choice-container from here
+        gridHTML += `</div>`;
     
         return gridHTML;
     }
     
-    
-    
-    
-    
-    
-    
-
     // Record observed costs for a path
     recordObservedCosts(path, binaryCosts) {
         path.forEach(cell => {
@@ -127,7 +120,7 @@ class Grid {
         // Reset trial cost
         const trialCostElement = document.getElementById("trial-cost");
         if (trialCostElement) {
-            trialCostElement.textContent = "+$0";
+            trialCostElement.textContent = "+0 Units";
             trialCostElement.classList.add("hidden");
         }
     
@@ -135,10 +128,9 @@ class Grid {
         totalCost = 0;
         const totalCostElement = document.getElementById("total-cost");
         if (totalCostElement) {
-            totalCostElement.textContent = "-$0";
+            totalCostElement.textContent = "0 Units";
         }
     }    
-    
 }
 
 // Load the JSON data and initialize the Grid class
@@ -156,10 +148,44 @@ fetch('assets/expt_info.json') // Updated JSON file path
 
 // Function to animate the agent along the chosen path
 let totalCost = 0; // Keeps track of total cost across trials
+
+// 1. Add spaceship character with animation
+function createAvatar() {
+    return `
+        <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L4 10l8 2 8-2z"/>
+            <path d="M4 10l1 10h14l1-10"/>
+            <path d="M12 12v8"/>
+            <circle cx="8" cy="16" r="1"/>
+            <circle cx="16" cy="16" r="1"/>
+        </svg>
+    `;
+}
+
+function updateCellAppearance(cell, cost) {
+    if (cost === "high") {
+        cell.classList.add("observed-cost");
+        cell.classList.remove("observed-no-cost");
+    } else if (cost === "low") {
+        cell.classList.add("observed-no-cost");
+        cell.classList.remove("observed-cost");
+    }
+
+    // Ensure start and goal cells are updated correctly
+    if (cell.classList.contains("start")) {
+        cell.style.backgroundColor = cost === "high" ? "#c53030" : "#48bb78"; // Red for high, green for low
+    } 
+    if (cell.classList.contains("goal")) {
+        cell.style.backgroundColor = cost === "high" ? "#c53030" : "#48bb78";
+    }
+}
+
+
+// 2. Add visual and audio feedback for costs
 function animateAgent(path, binaryCosts, callback) {
     let currentStep = 0;
-    let trialCost = 0; // Resets each trial
-    let trialCostVisible = false; // Tracks visibility of red trial cost number
+    let trialCost = 0;
+    let trialCostVisible = false;
 
     function step() {
         if (currentStep > 0) {
@@ -172,9 +198,19 @@ function animateAgent(path, binaryCosts, callback) {
 
                 if (cost === -1) {
                     prevCellElement.classList.add('observed-cost');
-                    trialCost++; // Increment trial cost
+                    trialCost++;
+                    
+                    // Visual burst effect for radiation damage
+                    prevCellElement.innerHTML += '<div class="cost-burst">+1 Damage</div>';
+                    setTimeout(() => {
+                        const burst = prevCellElement.querySelector('.cost-burst');
+                        if (burst) burst.remove();
+                    }, 600);
+                    
+                    // Play radiation sound (create new instance for each step)
+                    const radiationSound = new Audio('assets/radiationSound.mp3');
+                    radiationSound.play();
 
-                    // Show trial cost only when first cost is incurred
                     if (!trialCostVisible) {
                         const trialCostElement = document.getElementById("trial-cost");
                         if (trialCostElement) {
@@ -184,12 +220,22 @@ function animateAgent(path, binaryCosts, callback) {
                     }
                 } else {
                     prevCellElement.classList.add('observed-no-cost');
+                    
+                    // Visual feedback for safe passage
+                    prevCellElement.innerHTML += '<div class="free-burst">Safe</div>';
+                    setTimeout(() => {
+                        const burst = prevCellElement.querySelector('.free-burst');
+                        if (burst) burst.remove();
+                    }, 600);
+                    
+                    // Play safe passage sound (create new instance for each step)
+                    const safeSound = new Audio('assets/safeSound.mp3');
+                    safeSound.play();
                 }
 
-                // Update the trial cost display
                 const trialCostElement = document.getElementById("trial-cost");
                 if (trialCostElement) {
-                    trialCostElement.textContent = `-$${trialCost}`;
+                    trialCostElement.textContent = `+${trialCost} Units`;
                 }
             }
         }
@@ -200,72 +246,150 @@ function animateAgent(path, binaryCosts, callback) {
 
             if (cellElement) {
                 cellElement.classList.add('avatar');
+                cellElement.innerHTML = createAvatar(); // Add spaceship avatar
             } else {
                 console.error(`Cell not found in DOM: cell-${curRow}-${curCol}`);
                 return;
             }
 
             currentStep++;
-            setTimeout(step, 300);
+            setTimeout(step, 500);
         } else {
-            // Animation complete → Move trial cost upward into total cost
+            // Animation complete
             mergeCosts(trialCost, callback);
         }
     }
 
-    setTimeout(step, 300);
+    setTimeout(step, 500);
 }
 
-
-
-
-//  merge costs together 
+// 4. Add animated transitions between trials
 function mergeCosts(trialCost, callback) {
     const totalCostElement = document.getElementById("total-cost");
     const trialCostElement = document.getElementById("trial-cost");
 
     if (totalCostElement && trialCostElement) {
+        // Add warning animation to cost display
+        if (trialCost > 0) {
+            trialCostElement.classList.add("cost-animate");
+        }
+        
         trialCostElement.style.transition = "transform 0.5s ease-in-out";
-        trialCostElement.style.transform = "translateY(-20px)"; // Moves up
+        trialCostElement.style.transform = "translateY(-20px)";
 
         setTimeout(() => {
-            totalCost += trialCost; // Add to total cost
-            totalCostElement.textContent = `-$${totalCost}`;
-
-            // Reset trial cost display
-            trialCostElement.textContent = `+$0`;
-            trialCostElement.style.transform = "translateY(0)"; // Reset position
-            trialCostElement.classList.add("hidden"); // Hide again
+            totalCost += trialCost;
+            
+            // Animated counter for total cost
+            const startCost = totalCost - trialCost;
+            const duration = 1000;
+            const frameDuration = 1000/60;
+            const totalFrames = Math.round(duration/frameDuration);
+            let frame = 0;
+            
+            const counter = setInterval(() => {
+                frame++;
+                const progress = frame/totalFrames;
+                const currentCount = Math.floor(startCost + progress * trialCost);
+                totalCostElement.textContent = `${currentCount} Units`;
+                
+                if (frame === totalFrames) {
+                    clearInterval(counter);
+                    totalCostElement.textContent = `${totalCost} Units`;
+                    
+                    // Reset trial cost display with animation
+                    trialCostElement.textContent = `+0 Units`;
+                    trialCostElement.classList.remove("cost-animate");
+                    trialCostElement.style.transform = "translateY(0)";
+                    trialCostElement.classList.add("hidden");
+                }
+            }, frameDuration);
         }, 500);
     }
 
     setTimeout(() => {
-        currentTrialIndex++; // Move to next trial
-        jsPsych.finishTrial();
-    }, 2000);
+        // Add transition effect between trials
+        document.querySelector(".grid-container").classList.add("fade-transition");
+        
+        setTimeout(() => {
+            currentTrialIndex++;
+            jsPsych.finishTrial();
+            
+            setTimeout(() => {
+                const grid = document.querySelector(".grid-container");
+                if (grid) grid.classList.remove("fade-transition");
+            }, 100);
+        }, 500);
+    }, 1500);
 }
 
-
-
-
-
-
-
-
+// 5. Update the path selection trial to include space theme elements
+const pathSelectionTrial = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        return `
+            <div class="theme-context">Choose your flight path through the asteroid field!</div>
+            ${grid.createGridHTML(currentTrialIndex)}
+            <div class="choice-container">
+                <div class="choice-box blue-path" id="blue-choice">
+                    <div class="choice-icon">🚀</div>
+                    <div>Left Arrow: <strong>Blue Route</strong></div>
+                </div>
+                <div class="choice-box green-path" id="green-choice">
+                    <div class="choice-icon">🛸</div>
+                    <div>Right Arrow: <strong>Green Route</strong></div>
+                </div>
+            </div>
+        `;
+    },
+    choices: ['ArrowLeft', 'ArrowRight'], 
+    on_finish: function(data) {
+        // Add "swipe" effect on selection
+        const choice = data.response === 'ArrowLeft' ? 'blue' : 'green';
+        const choiceElement = document.getElementById(choice === 'blue' ? 'blue-choice' : 'green-choice');
+        const unchosenElement = document.getElementById(choice === 'blue' ? 'green-choice' : 'blue-choice');
+        
+        if (choiceElement && unchosenElement) {
+            choiceElement.classList.add('choice-selected');
+            unchosenElement.classList.add('choice-unselected');
+        }
+        
+        data.choice = choice;
+        jsPsych.data.get().addToLast({ choice: data.choice });
+    }
+};
 
 // Instructions
 const instructions = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: `
-        <h2>Path Selection Task</h2>
-        <p>In this experiment, you will see a grid with two colored paths.</p>
-        <p>Each path has a start point (S) and a goal point (G).</p>
-        <p>Your task is to choose one of these paths using the arrow keys:</p>
-        <p>- Press the <strong>left arrow</strong> to choose the blue path</p>
-        <p>- Press the <strong>right arrow</strong> to choose the green path</p>
-        <p>After you choose, you'll see an avatar move along the path.</p>
-        <p>Some states will have a cost ($), and others will be free (✓).</p>
-        <p>Press any key to begin.</p>
+        <h1>Space Explorer Mission</h1>
+        <p>Welcome, Space Explorer! Your mission is to navigate through dangerous asteroid fields.</p>
+        
+        <div class="instruction-section">
+            <h2>Mission Briefing:</h2>
+            <p>For each mission, you'll see two possible flight paths marked with stars:</p>
+            <p>- <span class="blue-text">Blue stars</span> mark the first route</p>
+            <p>- <span class="green-text">Green stars</span> mark the second route</p>
+            <p>Each path has a starting point (S) and a destination (G).</p>
+        </div>
+        
+        <div class="instruction-section">
+            <h2>Your Task:</h2>
+            <p>Choose which route to fly using your arrow keys:</p>
+            <p>- Press <strong>LEFT ARROW</strong> to follow the blue route</p>
+            <p>- Press <strong>RIGHT ARROW</strong> to follow the green route</p>
+        </div>
+        
+        <div class="instruction-section">
+            <h2>Radiation Zones:</h2>
+            <p>Some sectors contain dangerous radiation that will damage your ship:</p>
+            <p>- <span class="red-text">Red sectors</span> are radiation zones that cause 1 unit of damage</p>
+            <p>- <span class="grey-text">Grey sectors</span> are safe passages with no damage</p>
+            <p>Your goal is to complete all missions while minimizing total radiation damage to your ship.</p>
+        </div>
+        
+        <p class="start-text">Press any key to begin your mission, Explorer!</p>
     `,
     choices: "ALL_KEYS"
 };
@@ -275,39 +399,15 @@ const newGridMessage = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         return `
-            <h2>New Grid</h2>
-            <p>You are now in a new grid. Press any key to start.</p>
+            <h2>New Asteroid Field Detected</h2>
+            <p>Your ship has entered a new sector of space.</p>
+            <p>Prepare for the next set of navigation decisions.</p>
+            <p>Press any key to continue the mission.</p>
         `;
     },
     choices: "ALL_KEYS",
     on_finish: function() {
         grid.resetGrid(); // Reset the grid for the new set of trials
-    }
-};
-
-// Path selection trial
-const pathSelectionTrial = {
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: function() {
-        return `
-            ${grid.createGridHTML(currentTrialIndex)}
-            <div class="choice-container">
-                <div class="choice-box blue-path" id="blue-choice">Left Arrow: <strong>Blue Path</strong></div>
-                <div class="choice-box green-path" id="green-choice">Right Arrow: <strong>Green Path</strong></div>
-            </div>
-        `;
-    },
-    choices: ['ArrowLeft', 'ArrowRight'], 
-    on_finish: function(data) {
-        if (data.response === 'ArrowLeft') {
-            data.choice = 'blue';
-        } else if (data.response === 'ArrowRight') {
-            data.choice = 'green';
-        } else {
-            console.warn(`Invalid key pressed: ${data.response}. Waiting for valid input.`);
-            return false; 
-        }
-        jsPsych.data.get().addToLast({ choice: data.choice });
     }
 };
 
@@ -322,8 +422,8 @@ const pathAnimationTrial = {
         return `
             ${grid.createGridHTML(currentTrialIndex)}
             <div class="choice-container">
-                <div class="choice-box blue-path" id="blue-choice" style="${lastTrialData.choice === 'blue' ? '' : 'visibility: hidden;'}">Left Arrow: <strong>Blue Path</strong></div>
-                <div class="choice-box green-path" id="green-choice" style="${lastTrialData.choice === 'green' ? '' : 'visibility: hidden;'}">Right Arrow: <strong>Green Path</strong></div>
+                <div class="choice-box blue-path" id="blue-choice" style="${lastTrialData.choice === 'blue' ? '' : 'visibility: hidden;'}">Route: <strong>Blue Path</strong></div>
+                <div class="choice-box green-path" id="green-choice" style="${lastTrialData.choice === 'green' ? '' : 'visibility: hidden;'}">Route: <strong>Green Path</strong></div>
             </div>
         `;
     },
@@ -353,44 +453,19 @@ const pathAnimationTrial = {
     }
 };
 
-// Results summary
-const resultsSummary = {
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: function() {
-        const lastTrialData = jsPsych.data.get().last(2).values()[0];
-        const currentTrial = grid.getTrialInfo(currentTrialIndex);
-        const chosenPath = lastTrialData.choice === 'blue' ? currentTrial.path_A : currentTrial.path_B;
-        const binaryCosts = grid.getBinaryCosts(currentTrial.grid);
-
-        let totalCost = 0;
-        chosenPath.forEach(([r, c]) => {
-            if (binaryCosts[r][c] === -1) totalCost++;
-        });
-
-        // <h2>Results Summary</h2>
-        // <p>You chose the <strong>${lastTrialData.choice}</strong> path.</p>
-        // <p>Total cost: <strong>${totalCost}</strong> states</p>
-        return `
-            <p>Press any key to continue.</p>
-        `;
-    },
-    choices: "ALL_KEYS", // **Requires explicit keypress**
-    trial_duration: null, // **Ensures no automatic skipping**
-    on_finish: function() {
-        currentTrialIndex++; // Move to the next trial only after keypress
-    }
-};
-
-
-
 // End message
 const end = {
     type: jsPsychHtmlKeyboardResponse,
-    stimulus: `
-        <p>Thank you for participating!</p>
-        <p>The experiment is now complete.</p>
-        <p>Press any key to see your data.</p>
-    `,
+    stimulus: function() {
+        return `
+            <h1>Mission Complete!</h1>
+            <p>Congratulations, Space Explorer!</p>
+            <p>You've successfully navigated all asteroid fields.</p>
+            <p>Final Ship Damage: <strong>${totalCost} Units</strong></p>
+            <p>Your exploration data has been recorded for analysis.</p>
+            <p>Press any key to see your mission data.</p>
+        `;
+    },
     choices: "ALL_KEYS"
 };
 
@@ -413,7 +488,6 @@ function createTimeline() {
 
     return timeline;
 }
-
 
 // Start experiment when the page loads
 function initializeExperiment() {

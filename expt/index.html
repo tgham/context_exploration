@@ -1,134 +1,305 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Path Selection Experiment</title>
-  <script src="jspsych/jspsych.js"></script>
-  <script src="jspsych/plugin-html-keyboard-response.js"></script>
-  <script src="jspsych/plugin-html-button-response.js"></script>
-  <script src="jspsych/plugin-animation.js"></script>
-  <script src="jspsych/plugin-preload.js"></script>
-  <link href="jspsych/jspsych.css" rel="stylesheet" type="text/css" />
-  <style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Space Explorer Navigation Experiment</title>
+    <script src="https://unpkg.com/jspsych@7.3.0"></script>
+    <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@1.1.1"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #0c0c1d;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            overflow-x: hidden;
+        }
 
-    .grid-cell {
-        border: 1px solid #000;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background-color: white; /* Default background for non-path cells */
-    }
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(11, 40px);
+            grid-gap: 2px;
+            margin: 20px auto;
+            transition: opacity 0.3s ease-in-out;
+        }
 
-    .start, .goal {
-        font-weight: bold;
-    }
-
-    .blue-path {
-        color: blue; /* Blue star for path A */
-    }
-
-    .green-path {
-        color: green; /* Green star for path B */
-    }
-
-    .observed-cost {
-        background-color: red; /* Red for high cost */
-    }
-
-    .observed-no-cost {
-        background-color: grey; /* Grey for low cost */
-    }
-
-    .avatar {
-        background-color: yellow;
-    }
-
-    .choice-container {
-        display: flex;
-        justify-content: center;
-        margin-top: 20px;
-        height: 60px; /* Fixed height to prevent layout shifts */
-    }
-
-    .choice-box {
-        width: 150px;
-        height: 50px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin: 0 10px;
-        font-weight: bold;
-        border: 2px solid #000;
-        position: relative; /* Enable positioning context */
-    }
-
-    .grid-container {
-        display: grid;
-        grid-template-columns: repeat(11, 40px);
-        grid-template-rows: repeat(11, 40px);
-        gap: 2px;
-        justify-content: center;
-        margin-top: 0px;
-        position: relative;
-        height: 450px; /* Fixed height to prevent shifts */
-    }
-
-    .blue-path.choice-box {
-        background-color: blue;
-        color: white;
-    }
-
-    .green-path.choice-box {
-        background-color: green;
-        color: white;
-    }
-
-    .cost-display {
-        position: absolute;
-        right: 20px;
-        top: 100px;
-        font-size: 24px;
-        color: red;
-        font-weight: bold;
-    }
-    .cost-value {
-        font-size: 32px;
-    }
-
-    .cost-display-container {
-        display: flex;
-        flex-direction: column; /* Stack items vertically */
-        align-items: center;
-        text-align: center;
-        margin-bottom: 5px; /* Reduce spacing above grid */
-        height: 80px; /* ✅ Fixed height to prevent shifting */
-    }
-
-    .cost-total {
-        font-size: 22px;
-        color: black;
-        font-weight: bold;
-        margin: 0px; /* ✅ Remove default margin */
-        line-height: 1.2; /* ✅ Reduce spacing between lines */
-    }
-
-    .cost-trial {
-        font-size: 22px;
-        color: red;
-        font-weight: bold;
-        margin: 0px; /* ✅ Remove extra margin */
-        line-height: 1.2; /* ✅ Reduce spacing */
-        transition: transform 0.5s ease-in-out;
-    }
-
-    .hidden {
-        visibility: hidden; /* ✅ Keep space reserved instead of removing element */
-    }
+        .grid-cell {
+            width: 40px;
+            height: 40px;
+            background-color: #33334d; /* Lighter background for better visibility */
+            border: 1px solid #4a4a7f;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            position: relative;
+            transition: background-color 0.3s;
+        }
 
 
+        .grid-cell.start {
+            background-color: #3a3a6a;
+            font-size: 24px;
+        }
 
-  </style>
-  <!-- Import the experiment.js script -->
-  <script src="experiment.js"></script>
+        .grid-cell.goal {
+            background-color: #3a3a6a;
+            font-size: 24px;
+        }
+
+        .grid-cell.avatar {
+            position: relative;
+            z-index: 10;
+        }
+
+        .grid-cell.avatar svg {
+            filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.7));
+        }
+
+        .blue-path {
+            color: #5dadec;
+            border-color: #5dadec;
+        }
+
+        .green-path {
+            color: #4ade80;
+            border-color: #4ade80;
+        }
+
+        .observed-cost {
+            background-color: #f87171;
+            transition: background-color 0.5s;
+        }
+
+        .observed-no-cost {
+            background-color: #b8b8d9; /* Much lighter grey for better visibility */
+            transition: background-color 0.5s;
+        }
+
+        .cost-display-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 20px;
+            background-color: #1c1c33;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            width: 80%;
+            max-width: 400px;
+        }
+
+        .cost-total {
+            font-size: 24px;
+            margin: 5px 0;
+        }
+
+        .cost-trial {
+            color: #f87171;
+            font-size: 20px;
+            margin: 5px 0;
+            font-weight: bold;
+            transition: transform 0.5s, opacity 0.5s;
+        }
+
+        .cost-animate {
+            animation: pulse 1s infinite alternate;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.1); }
+        }
+
+        .hidden {
+            opacity: 0;
+        }
+
+        .cost-burst {
+            position: absolute;
+            color: #f87171;
+            font-weight: bold;
+            animation: burst 0.6s ease-out forwards;
+            z-index: 20;
+        }
+
+        .free-burst {
+            position: absolute;
+            color: #4ade80;
+            font-weight: bold;
+            animation: burst 0.6s ease-out forwards;
+            z-index: 20;
+        }
+
+        @keyframes burst {
+            0% { transform: scale(0); opacity: 0; }
+            50% { transform: scale(1.5); opacity: 1; }
+            100% { transform: scale(1); opacity: 0; }
+        }
+
+        .choice-container {
+            display: flex;
+            justify-content: space-between;
+            width: 80%;
+            max-width: 500px;
+            margin: 20px auto;
+        }
+
+        .choice-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 15px;
+            border: 2px solid;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            width: 45%;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .choice-box:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .choice-icon {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .choice-selected {
+            transform: scale(1.1);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+        }
+
+        .choice-unselected {
+            opacity: 0.3;
+            transform: scale(0.9);
+        }
+
+        .progress-container {
+            width: 80%;
+            max-width: 500px;
+            margin: 20px auto;
+            background-color: #1c1c33;
+            padding: 15px;
+            border-radius: 10px;
+        }
+
+        .progress-label {
+            margin-bottom: 10px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .progress-bar {
+            height: 20px;
+            background-color: #252542;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #5dadec, #4ade80);
+            transition: width 0.3s ease-in-out;
+        }
+
+        .instruction-section {
+            background-color: #1c1c33;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 10px;
+            max-width: 700px;
+        }
+
+        h1, h2 {
+            color: #5dadec;
+            text-align: center;
+        }
+
+        .theme-context {
+            font-size: 22px;
+            text-align: center;
+            margin: 10px 0;
+            color: #4ade80;
+        }
+
+        .blue-text {
+            color: #5dadec;
+            font-weight: bold;
+        }
+
+        .green-text {
+            color: #4ade80;
+            font-weight: bold;
+        }
+
+        .red-text {
+            color: #f87171;
+            font-weight: bold;
+        }
+
+        .grey-text {
+            color: #9ca3af;
+            font-weight: bold;
+        }
+
+        .start-text {
+            font-size: 18px;
+            margin-top: 30px;
+            text-align: center;
+            color: #4ade80;
+        }
+
+        .fade-transition {
+            animation: fade 1s ease-in-out;
+        }
+
+        @keyframes fade {
+            0% { opacity: 1; }
+            50% { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .grid-container {
+                grid-template-columns: repeat(11, 30px);
+            }
+
+            .grid-cell {
+                width: 30px;
+                height: 30px;
+                font-size: 14px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .grid-container {
+                grid-template-columns: repeat(11, 25px);
+            }
+
+            .grid-cell {
+                width: 25px;
+                height: 25px;
+                font-size: 12px;
+            }
+        }
+    </style>
 </head>
-<body></body>
+<body>
+    <div id="jspsych-experiment"></div>
+
+    <script>
+        function initJsPsych(options) {
+            return new jsPsychModule.JsPsych(options);
+        }
+    </script>
+    <script src="experiment.js"></script>
+</body>
 </html>
