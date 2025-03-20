@@ -947,26 +947,17 @@ class MountainEnv(gym.Env):
             ## check that all start locations are different
             n_distinct_starts = len(set([tuple(s) for s in starts]))
             if n_distinct_starts == self.n_afc:
-                # diff_starts = True
+                diff_starts = True
 
-                ## check that the start or goal of one path is not a state that appears somewhere on the other path in the other path
-                start_A, goal_A = starts[0], goals[0]
-                start_B, goal_B = starts[1], goals[1]
-                for s in path_states[1]:
-                    if np.array_equal(start_A, s) or np.array_equal(goal_A, s):
-                        diff_starts = False
-                        break
-                    else:
-                        for s in path_states[0]:
-                            if np.array_equal(start_B, s) or np.array_equal(goal_B, s):
-                                diff_starts = False
-                                break
-
-                            ## if successful, then diff_starts is True
-                            else:
-                                diff_starts = True
-
-                
+            ## check that the start or goal of path A is not a state that appears on path B, and vice versa
+            # path_A = set(path_states[0])
+            # path_B = set(path_states[1])
+            path_A = set(map(tuple, path_states[0]))
+            path_B = set(map(tuple, path_states[1]))
+            if not (tuple(starts[0]) in path_B or tuple(goals[0]) in path_B or tuple(starts[1]) in path_A or tuple(goals[1]) in path_A):
+                diff_starts = diff_starts and True
+            else:
+                diff_starts = False
 
                 
 
