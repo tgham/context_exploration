@@ -51,7 +51,7 @@ class Grid {
         
         let gridHTML = `
             <div class="cost-display-container">
-                <h2 class="cost-total">Ship Damage:</h2>
+                <h2 class="cost-total">Total Ship Damage:</h2>
                 <p id="total-cost" class="cost-total">${totalCost} Units</p>
                 <p id="trial-cost" class="cost-trial hidden">+0 Units</p> 
             </div>
@@ -162,25 +162,6 @@ function createAvatar() {
     `;
 }
 
-function updateCellAppearance(cell, cost) {
-    if (cost === "high") {
-        cell.classList.add("observed-cost");
-        cell.classList.remove("observed-no-cost");
-    } else if (cost === "low") {
-        cell.classList.add("observed-no-cost");
-        cell.classList.remove("observed-cost");
-    }
-
-    // Ensure start and goal cells are updated correctly
-    if (cell.classList.contains("start")) {
-        cell.style.backgroundColor = cost === "high" ? "#c53030" : "#48bb78"; // Red for high, green for low
-    } 
-    if (cell.classList.contains("goal")) {
-        cell.style.backgroundColor = cost === "high" ? "#c53030" : "#48bb78";
-    }
-}
-
-
 // 2. Add visual and audio feedback for costs
 function animateAgent(path, binaryCosts, callback) {
     let currentStep = 0;
@@ -196,18 +177,26 @@ function animateAgent(path, binaryCosts, callback) {
                 prevCellElement.classList.remove('avatar');
                 const cost = binaryCosts[prevRow][prevCol];
 
+                // Update observed cost classes
+                prevCellElement.classList.remove("observed-cost", "observed-no-cost");
+                prevCellElement.classList.add(cost === -1 ? "observed-cost" : "observed-no-cost");
+
+                // Ensure start and goal cells update their color when observed
+                if (prevCellElement.classList.contains("start") || prevCellElement.classList.contains("goal")) {
+                    prevCellElement.style.backgroundColor = cost === -1 ? "#f87171" : "#b8b8d9"; // Red for high-cost, grey for low-cost
+                }
+
                 if (cost === -1) {
-                    prevCellElement.classList.add('observed-cost');
                     trialCost++;
-                    
+
                     // Visual burst effect for radiation damage
                     prevCellElement.innerHTML += '<div class="cost-burst">+1 Damage</div>';
                     setTimeout(() => {
                         const burst = prevCellElement.querySelector('.cost-burst');
                         if (burst) burst.remove();
                     }, 600);
-                    
-                    // Play radiation sound (create new instance for each step)
+
+                    // Play radiation sound
                     const radiationSound = new Audio('assets/radiationSound.mp3');
                     radiationSound.play();
 
@@ -219,18 +208,16 @@ function animateAgent(path, binaryCosts, callback) {
                         }
                     }
                 } else {
-                    prevCellElement.classList.add('observed-no-cost');
-                    
                     // Visual feedback for safe passage
                     prevCellElement.innerHTML += '<div class="free-burst">Safe</div>';
                     setTimeout(() => {
                         const burst = prevCellElement.querySelector('.free-burst');
                         if (burst) burst.remove();
                     }, 600);
-                    
-                    // Play safe passage sound (create new instance for each step)
-                    const safeSound = new Audio('assets/safeSound.mp3');
-                    safeSound.play();
+
+                    // Play safe passage sound
+                    // const safeSound = new Audio('assets/safeSound.mp3');
+                    // safeSound.play();
                 }
 
                 const trialCostElement = document.getElementById("trial-cost");
@@ -262,6 +249,8 @@ function animateAgent(path, binaryCosts, callback) {
 
     setTimeout(step, 500);
 }
+
+
 
 // 4. Add animated transitions between trials
 function mergeCosts(trialCost, callback) {
@@ -327,8 +316,8 @@ function mergeCosts(trialCost, callback) {
 const pathSelectionTrial = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
+        // <div class="theme-context">Choose your flight path through the asteroid field!</div>
         return `
-            <div class="theme-context">Choose your flight path through the asteroid field!</div>
             ${grid.createGridHTML(currentTrialIndex)}
             <div class="choice-container">
                 <div class="choice-box blue-path" id="blue-choice">
@@ -342,11 +331,24 @@ const pathSelectionTrial = {
             </div>
         `;
     },
-    choices: ['ArrowLeft', 'ArrowRight'], 
+    choices: ['arrowleft', 'arrowright'], 
     on_finish: function(data) {
+        console.log("Key pressed:", data.response); // Log the keypress
+    
+        let choice;
+        if (data.response === 'arrowleft') {
+            choice = 'blue';
+        } else if (data.response === 'arrowright') {
+            choice = 'green';
+        } else {
+            console.error("Invalid keypress:", data.response);
+            return;
+        }
+    
+        console.log("Chosen path:", choice); // Log the chosen path
+    
         // Add "swipe" effect on selection
-        const choice = data.response === 'ArrowLeft' ? 'blue' : 'green';
-        const choiceElement = document.getElementById(choice === 'blue' ? 'blue-choice' : 'green-choice');
+        const choiceElement = document.getElementById(`${choice}-choice`);
         const unchosenElement = document.getElementById(choice === 'blue' ? 'green-choice' : 'blue-choice');
         
         if (choiceElement && unchosenElement) {
@@ -354,12 +356,34 @@ const pathSelectionTrial = {
             unchosenElement.classList.add('choice-unselected');
         }
         
+        // Store the choice in the trial data
         data.choice = choice;
         jsPsych.data.get().addToLast({ choice: data.choice });
     }
 };
 
-// Instructions
+// Modified newGridMessage
+const newGridMessage = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        return `
+            <h2>New Asteroid Field Detected</h2>
+            <p>Your ship has entered a new sector of space.</p>
+            <p>Prepare for the next set of navigation decisions.</p>
+            <p>Press any key to continue the mission.</p>
+        `;
+    },
+    choices: "ALL_KEYS",
+    on_load: function() {
+        // Set a new random planet background when entering a new grid
+        setRandomPlanetBackground();
+    },
+    on_finish: function() {
+        grid.resetGrid(); // Reset the grid for the new set of trials
+    }
+};
+
+// Modified instructions
 const instructions = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: `
@@ -391,25 +415,43 @@ const instructions = {
         
         <p class="start-text">Press any key to begin your mission, Explorer!</p>
     `,
-    choices: "ALL_KEYS"
-};
-
-// New grid message
-const newGridMessage = {
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: function() {
-        return `
-            <h2>New Asteroid Field Detected</h2>
-            <p>Your ship has entered a new sector of space.</p>
-            <p>Prepare for the next set of navigation decisions.</p>
-            <p>Press any key to continue the mission.</p>
-        `;
-    },
     choices: "ALL_KEYS",
-    on_finish: function() {
-        grid.resetGrid(); // Reset the grid for the new set of trials
+    on_load: function() {
+        // Set the initial planet background
+        setRandomPlanetBackground();
     }
 };
+
+// Add this function to select a random planet background
+function setRandomPlanetBackground() {
+    // Generate a random number between 1 and 9
+    const planetNum = Math.floor(Math.random() * 9) + 1;
+    // Format the number with leading zero if needed
+    const planetId = planetNum.toString().padStart(2, '0');
+    // Set the background image
+    document.body.style.backgroundImage = `url('assets/planets/planet${planetId}.png')`;
+    document.body.style.backgroundSize = 'cover';
+    document.body.style.backgroundPosition = 'center';
+    document.body.style.backgroundRepeat = 'no-repeat';
+    
+    // Add a subtle overlay to ensure grid visibility
+    // const overlay = document.getElementById('background-overlay');
+    // if (!overlay) {
+    //     const newOverlay = document.createElement('div');
+    //     newOverlay.id = 'background-overlay';
+    //     newOverlay.style.position = 'fixed';
+    //     newOverlay.style.top = '0';
+    //     newOverlay.style.left = '0';
+    //     newOverlay.style.width = '100%';
+    //     newOverlay.style.height = '100%';
+    //     newOverlay.style.backgroundColor = 'rgba(12, 12, 29, 0.0)';
+    //     newOverlay.style.zIndex = '-1';
+    //     document.body.appendChild(newOverlay);
+    // }
+    
+    console.log(`Set background to planet${planetId}.png`);
+}
+
 
 // Path animation trial
 const pathAnimationTrial = {
@@ -491,6 +533,9 @@ function createTimeline() {
 
 // Start experiment when the page loads
 function initializeExperiment() {
+    // Set the initial planet background
+    setRandomPlanetBackground();
+    
     const timeline = createTimeline();
     jsPsych.run(timeline);
 }

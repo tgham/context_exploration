@@ -21,16 +21,34 @@
         .grid-container {
             display: grid;
             grid-template-columns: repeat(11, 40px);
-            grid-gap: 2px;
+            grid-gap: 10px;
             margin: 20px auto;
             transition: opacity 0.3s ease-in-out;
+            background-color: rgba(12, 12, 29, 0.6); /* Semi-transparent background */
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+        }
+
+        .cost-display-container, .choice-container, .instruction-section {
+            background-color: rgba(28, 28, 51, 0.85); /* More opaque for better readability */
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        /* Add this to ensure the experiment container is above the background */
+        #jspsych-experiment {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
         }
 
         .grid-cell {
             width: 40px;
             height: 40px;
             background-color: #33334d; /* Lighter background for better visibility */
-            border: 1px solid #4a4a7f;
+            border: 2px solid #4a4a7f;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -82,14 +100,15 @@
         .cost-display-container {
             display: flex;
             flex-direction: column;
+            justify-content: center;
             align-items: center;
             margin-bottom: 20px;
             background-color: #1c1c33;
             padding: 15px;
             border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-            width: 80%;
-            max-width: 400px;
+            /* width: 80%;
+            max-width: 400px; */
         }
 
         .cost-total {
