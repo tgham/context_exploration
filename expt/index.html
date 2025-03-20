@@ -21,10 +21,10 @@
         .grid-container {
             display: grid;
             grid-template-columns: repeat(11, 40px);
-            grid-gap: 10px;
+            grid-gap: 15px;
             margin: 20px auto;
-            transition: opacity 0.3s ease-in-out;
-            background-color: rgba(12, 12, 29, 0.6); /* Semi-transparent background */
+            transition: opacity 0.2s ease-in-out;
+            background-color: rgb(208, 208, 210); /* Semi-transparent background */
             padding: 15px;
             border-radius: 10px;
             box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
@@ -47,24 +47,26 @@
         .grid-cell {
             width: 40px;
             height: 40px;
-            background-color: #33334d; /* Lighter background for better visibility */
-            border: 2px solid #4a4a7f;
+            background-color: rgba(51, 51, 77, 0.8); /* Semi-transparent background for better visibility */
+            border: 3px solid #4a4a7f;
             display: flex;
             justify-content: center;
             align-items: center;
             font-weight: bold;
             position: relative;
-            transition: background-color 0.3s;
+            transition: background-color 0.25s;
         }
 
 
         .grid-cell.start {
-            background-color: #3a3a6a;
+            /* background-color: #3a3a6a; */
+            background-color: rgba(51, 51, 77, 0.8); /* Semi-transparent background for better visibility */
             font-size: 24px;
         }
 
         .grid-cell.goal {
-            background-color: #3a3a6a;
+            /* background-color: #3a3a6a; */
+            background-color: rgba(51, 51, 77, 0.8); /* Semi-transparent background for better visibility */
             font-size: 24px;
         }
 

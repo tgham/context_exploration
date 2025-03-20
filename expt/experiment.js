@@ -10,6 +10,7 @@ class Grid {
     constructor(gridData) {
         this.trialInfo = gridData.trial_info; // Array of trial info
         this.envCosts = gridData.env_costs; // Object of environment costs
+        this.gridSize = gridData.env_costs.grid_size; // Grid size (N)
         this.observedCosts = {}; // Track observed costs for each grid
         this.currentGrid = 0; // Track the current grid
     }
@@ -48,6 +49,7 @@ class Grid {
     createGridHTML(trialIndex) {
         const trial = this.getTrialInfo(trialIndex);
         const binaryCosts = this.getBinaryCosts(trial.grid);
+        const gridSize = this.gridSize;
         
         let gridHTML = `
             <div class="cost-display-container">
@@ -55,11 +57,11 @@ class Grid {
                 <p id="total-cost" class="cost-total">${totalCost} Units</p>
                 <p id="trial-cost" class="cost-trial hidden">+0 Units</p> 
             </div>
-            <div class="grid-container">
+            <div class="grid-container" style="grid-template-columns: repeat(${gridSize}, 40px);">
         `;
     
-        for (let row = 0; row < 11; row++) {
-            for (let col = 0; col < 11; col++) {
+        for (let row = 0; row < gridSize; row++) {
+            for (let col = 0; col < gridSize; col++) {
                 const cellId = `cell-${row}-${col}`;
                 const isStartA = row === trial.start_A[0] && col === trial.start_A[1];
                 const isStartB = row === trial.start_B[0] && col === trial.start_B[1];
@@ -100,7 +102,7 @@ class Grid {
             const [row, col] = cell;
             
             // Check for out-of-bounds error
-            if (row < 0 || row > 10 || col < 0 || col > 10) {
+            if (row < 0 || row > this.gridSize - 1 || col < 0 || col > this.gridSize - 1) {
                 console.error(`Error in observed costs: Cell (${row}, ${col}) is out of bounds.`);
                 return;
             }
@@ -152,13 +154,7 @@ let totalCost = 0; // Keeps track of total cost across trials
 // 1. Add spaceship character with animation
 function createAvatar() {
     return `
-        <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 2L4 10l8 2 8-2z"/>
-            <path d="M4 10l1 10h14l1-10"/>
-            <path d="M12 12v8"/>
-            <circle cx="8" cy="16" r="1"/>
-            <circle cx="16" cy="16" r="1"/>
-        </svg>
+        <img src="assets/ships/ship_black.png" width="30" height="30" alt="Spaceship Avatar" />
     `;
 }
 
@@ -175,24 +171,33 @@ function animateAgent(path, binaryCosts, callback) {
 
             if (prevCellElement) {
                 prevCellElement.classList.remove('avatar');
-                const cost = binaryCosts[prevRow][prevCol];
+                prevCellElement.innerHTML = ''; // Remove avatar
+            }
+        }
+
+        if (currentStep < path.length) {
+            const [curRow, curCol] = path[currentStep];
+            const cellElement = document.getElementById(`cell-${curRow}-${curCol}`);
+
+            if (cellElement) {
+                const cost = binaryCosts[curRow][curCol];
 
                 // Update observed cost classes
-                prevCellElement.classList.remove("observed-cost", "observed-no-cost");
-                prevCellElement.classList.add(cost === -1 ? "observed-cost" : "observed-no-cost");
+                cellElement.classList.remove("observed-cost", "observed-no-cost");
+                cellElement.classList.add(cost === -1 ? "observed-cost" : "observed-no-cost");
 
                 // Ensure start and goal cells update their color when observed
-                if (prevCellElement.classList.contains("start") || prevCellElement.classList.contains("goal")) {
-                    prevCellElement.style.backgroundColor = cost === -1 ? "#f87171" : "#b8b8d9"; // Red for high-cost, grey for low-cost
+                if (cellElement.classList.contains("start") || cellElement.classList.contains("goal")) {
+                    cellElement.style.backgroundColor = cost === -1 ? "#f87171" : "#b8b8d9"; // Red for high-cost, grey for low-cost
                 }
 
                 if (cost === -1) {
                     trialCost++;
 
                     // Visual burst effect for radiation damage
-                    prevCellElement.innerHTML += '<div class="cost-burst">+1 Damage</div>';
+                    cellElement.innerHTML += '<div class="cost-burst">+1 Damage</div>';
                     setTimeout(() => {
-                        const burst = prevCellElement.querySelector('.cost-burst');
+                        const burst = cellElement.querySelector('.cost-burst');
                         if (burst) burst.remove();
                     }, 600);
 
@@ -209,9 +214,9 @@ function animateAgent(path, binaryCosts, callback) {
                     }
                 } else {
                     // Visual feedback for safe passage
-                    prevCellElement.innerHTML += '<div class="free-burst">Safe</div>';
+                    cellElement.innerHTML += '<div class="free-burst">Safe</div>';
                     setTimeout(() => {
-                        const burst = prevCellElement.querySelector('.free-burst');
+                        const burst = cellElement.querySelector('.free-burst');
                         if (burst) burst.remove();
                     }, 600);
 
@@ -224,16 +229,11 @@ function animateAgent(path, binaryCosts, callback) {
                 if (trialCostElement) {
                     trialCostElement.textContent = `+${trialCost} Units`;
                 }
-            }
-        }
 
-        if (currentStep < path.length) {
-            const [curRow, curCol] = path[currentStep];
-            const cellElement = document.getElementById(`cell-${curRow}-${curCol}`);
-
-            if (cellElement) {
+                // remove the star or S or G, then add the avatar
+                cellElement.textContent = '';
                 cellElement.classList.add('avatar');
-                cellElement.innerHTML = createAvatar(); // Add spaceship avatar
+                cellElement.innerHTML += createAvatar(); // Add spaceship avatar on top
             } else {
                 console.error(`Cell not found in DOM: cell-${curRow}-${curCol}`);
                 return;
@@ -316,7 +316,6 @@ function mergeCosts(trialCost, callback) {
 const pathSelectionTrial = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
-        // <div class="theme-context">Choose your flight path through the asteroid field!</div>
         return `
             ${grid.createGridHTML(currentTrialIndex)}
             <div class="choice-container">
