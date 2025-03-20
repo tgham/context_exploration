@@ -278,6 +278,11 @@ class MountainEnv(gym.Env):
             if t>500:
                 raise ValueError('couldnt initialise env. SG: ', SG_found, 'paths: ', paths_found)
         
+        ## hacky fix: make sure all coordinates in the path_states list are tuples of int, rather than tuples of int64
+        for e in range(self.n_episodes):
+            for p, path in enumerate(self.path_states[e]):
+                self.path_states[e][p] = [tuple([int(x) for x in state]) for state in path]
+        
         ## get info on path overlaps in 2AFC expt
         if self.expt == '2AFC':
             self.most_overlap = []
@@ -829,11 +834,15 @@ class MountainEnv(gym.Env):
                 # diff_axes=True
 
                 ## or, one is a long path, the other is an L path, as long as they have different axes
-                first_or_last = np.random.choice([0, -1])
-                sampled_abstract_sequences[0] = abstract_sequences[first_or_last]
-                L_path_idx = np.random.choice([i for i in range(2,len(abstract_sequences)-2)])
-                sampled_abstract_sequences[1] = abstract_sequences[L_path_idx]
-                if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
+                # first_or_last = np.random.choice([0, -1])
+                # sampled_abstract_sequences[0] = abstract_sequences[first_or_last]
+                # L_path_idx = np.random.choice([i for i in range(2,len(abstract_sequences)-2)])
+                # sampled_abstract_sequences[1] = abstract_sequences[L_path_idx]
+                # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
+                #     diff_axes = True
+
+                ## or, one of each L, but for consistency let's keep the first one horizontally dominant
+                if ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
                     diff_axes = True
 
 
@@ -938,7 +947,28 @@ class MountainEnv(gym.Env):
             ## check that all start locations are different
             n_distinct_starts = len(set([tuple(s) for s in starts]))
             if n_distinct_starts == self.n_afc:
-                diff_starts = True
+                # diff_starts = True
+
+                ## check that the start or goal of one path is not a state that appears somewhere on the other path in the other path
+                start_A, goal_A = starts[0], goals[0]
+                start_B, goal_B = starts[1], goals[1]
+                for s in path_states[1]:
+                    if np.array_equal(start_A, s) or np.array_equal(goal_A, s):
+                        diff_starts = False
+                        break
+                    else:
+                        for s in path_states[0]:
+                            if np.array_equal(start_B, s) or np.array_equal(goal_B, s):
+                                diff_starts = False
+                                break
+
+                            ## if successful, then diff_starts is True
+                            else:
+                                diff_starts = True
+
+                
+
+                
 
             ## check overlap between paths
             path_states = [tuple(map(tuple, path)) for path in path_states]
