@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Space Explorer Navigation Experiment</title>
+    <title>Taxi Coordination Task</title>
     <script src="https://unpkg.com/jspsych@7.3.0"></script>
     <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@1.1.1"></script>
     <style>
@@ -35,7 +35,6 @@
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
         }
 
-        /* Add this to ensure the experiment container is above the background */
         #jspsych-experiment {
             position: relative;
             z-index: 1;
@@ -57,17 +56,30 @@
             transition: background-color 0.25s;
         }
 
-
         .grid-cell.start {
-            /* background-color: #3a3a6a; */
             background-color: rgba(51, 51, 77, 0.8); /* Semi-transparent background for better visibility */
             font-size: 24px;
         }
 
+        .grid-cell.start.observed-cost {
+            background-color: #f87171; /* Red background for observed cost */
+        }
+
+        .grid-cell.start.observed-no-cost {
+            background-color: #b8b8d9; /* Grey background for observed no cost */
+        }
+
         .grid-cell.goal {
-            /* background-color: #3a3a6a; */
             background-color: rgba(51, 51, 77, 0.8); /* Semi-transparent background for better visibility */
             font-size: 24px;
+        }
+
+        .grid-cell.goal.observed-cost {
+            background-color: #f87171; /* Red background for observed cost */
+        }
+
+        .grid-cell.goal.observed-no-cost {
+            background-color: #b8b8d9; /* Grey background for observed no cost */
         }
 
         .grid-cell.avatar {
@@ -109,8 +121,6 @@
             padding: 15px;
             border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-            /* width: 80%;
-            max-width: 400px; */
         }
 
         .cost-total {
@@ -129,6 +139,104 @@
         .cost-animate {
             animation: pulse 1s infinite alternate;
         }
+
+        /* Updated layout for jobs display */
+        .jobs-layout {
+            display: flex;
+            flex-direction: row; /* Align current and upcoming jobs horizontally */
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* Current job styling */
+        .current-job-section {
+            flex: 2; /* Take up more space for the current job */
+            margin-right: 20px; /* Add spacing between current and upcoming jobs */
+        }
+
+        /* Jobs section header */
+        .jobs-section {
+            width: 100%;
+        }
+
+        .jobs-header {
+            color: #5dadec;
+            text-align: center;
+            margin-top: 10px;
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+        }
+
+        /* Upcoming jobs container */
+        .upcoming-jobs-container {
+            flex: 1; /* Take up less space for upcoming jobs */
+            display: flex;
+            flex-direction: row; /* Stack upcoming jobs horizontally */
+            gap: 15px;
+            background-color: rgba(28, 28, 51, 0.85);
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            justify-content: center; /* Center horizontally */
+            align-items: center; /* Center vertically */
+        }
+
+        /* Individual upcoming job styling */
+        .upcoming-job {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-width: 0; /* Allows the flex items to shrink below content size */
+            background-color: rgba(51, 51, 77, 0.4);
+            border-radius: 8px;
+            padding: 10px;
+        }
+
+        .upcoming-job-header {
+            color: #5dadec;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        /* Grid styling for upcoming jobs */
+        .upcoming-grid {
+            display: grid;
+            grid-gap: 5px;
+            margin: 0 auto;
+            background-color: rgb(208, 208, 210);
+            padding: 10px;
+            border-radius: 8px;
+        }
+
+        .upcoming-cell {
+            width: 25px;
+            height: 25px;
+            background-color: rgba(51, 51, 77, 0.8);
+            border: 2px solid #4a4a7f;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 0.8rem;
+            position: relative;
+        }
+
+        .upcoming-cell.start, .upcoming-cell.goal {
+            font-size: 1rem;
+        }
+
+        /* Shared styles for observed costs */
+        .upcoming-cell.observed-cost {
+            background-color: #f87171;
+        }
+
+        .upcoming-cell.observed-no-cost {
+            background-color: #b8b8d9;
+        }
+
+        
 
         @keyframes pulse {
             0% { transform: scale(1); }
@@ -179,7 +287,7 @@
             cursor: pointer;
             transition: all 0.3s;
             width: 45%;
-            background-color: rgba(255, 255, 255, 0.1);
+            background-color: #ffffff; /* Changed to solid white */
         }
 
         .choice-box:hover {
@@ -200,34 +308,6 @@
         .choice-unselected {
             opacity: 0.3;
             transform: scale(0.9);
-        }
-
-        .progress-container {
-            width: 80%;
-            max-width: 500px;
-            margin: 20px auto;
-            background-color: #1c1c33;
-            padding: 15px;
-            border-radius: 10px;
-        }
-
-        .progress-label {
-            margin-bottom: 10px;
-            text-align: center;
-            font-weight: bold;
-        }
-
-        .progress-bar {
-            height: 20px;
-            background-color: #252542;
-            border-radius: 10px;
-            overflow: hidden;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #5dadec, #4ade80);
-            transition: width 0.3s ease-in-out;
         }
 
         .instruction-section {
@@ -285,31 +365,6 @@
             0% { opacity: 1; }
             50% { opacity: 0.3; }
             100% { opacity: 1; }
-        }
-
-        /* Responsive design */
-        @media (max-width: 768px) {
-            .grid-container {
-                grid-template-columns: repeat(11, 30px);
-            }
-
-            .grid-cell {
-                width: 30px;
-                height: 30px;
-                font-size: 14px;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .grid-container {
-                grid-template-columns: repeat(11, 25px);
-            }
-
-            .grid-cell {
-                width: 25px;
-                height: 25px;
-                font-size: 12px;
-            }
         }
     </style>
 </head>

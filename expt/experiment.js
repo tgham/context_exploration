@@ -11,6 +11,9 @@ class Grid {
         this.trialInfo = gridData.trial_info; // Array of trial info
         this.envCosts = gridData.env_costs; // Object of environment costs
         this.gridSize = gridData.env_costs.grid_size; // Grid size (N)
+        this.nTrials = gridData.env_costs.n_trials
+        this.nGrids = gridData.env_costs.n_grids
+        this.nCities = gridData.env_costs.n_cities
         this.observedCosts = {}; // Track observed costs for each grid
         this.currentGrid = 0; // Track the current grid
     }
@@ -46,29 +49,36 @@ class Grid {
     }
 
     // Create the grid HTML for a specific trial
-    createGridHTML(trialIndex) {
+    createGridHTML = function(trialIndex, selectedPath = null) {
         const trial = this.getTrialInfo(trialIndex);
-        const binaryCosts = this.getBinaryCosts(trial.grid);
+        const city = trial.city;
+        const grid = trial.grid;
+        const binaryCosts = this.getBinaryCosts(`city_${city}_grid_${grid}`);
         const gridSize = this.gridSize;
+        const jobNumber = (trialIndex % 4) + 1; // Job number within the grid (1-4)
         
         let gridHTML = `
-            <div class="cost-display-container">
-                <h2 class="cost-total">Total Ship Damage:</h2>
-                <p id="total-cost" class="cost-total">${totalCost} Units</p>
-                <p id="trial-cost" class="cost-trial hidden">+0 Units</p> 
-            </div>
-            <div class="grid-container" style="grid-template-columns: repeat(${gridSize}, 40px);">
+            <div class="current-job-container">
+                <div class="current-job-header">
+                    <h3>Current Job ${jobNumber}</h3>
+                </div>
+                <div class="cost-display-container">
+                    <h2 class="cost-total">Total Tolls Paid:</h2>
+                    <p id="total-cost" class="cost-total">$${totalCost}</p>
+                    <p id="trial-cost" class="cost-trial hidden">-$0</p> 
+                </div>
+                <div class="grid-container" style="grid-template-columns: repeat(${gridSize}, 40px);">
         `;
     
         for (let row = 0; row < gridSize; row++) {
             for (let col = 0; col < gridSize; col++) {
                 const cellId = `cell-${row}-${col}`;
-                const isStartA = row === trial.start_A[0] && col === trial.start_A[1];
-                const isStartB = row === trial.start_B[0] && col === trial.start_B[1];
-                const isGoalA = row === trial.goal_A[0] && col === trial.goal_A[1];
-                const isGoalB = row === trial.goal_B[0] && col === trial.goal_B[1];
-                const isPathA = trial.path_A.some(coord => coord[0] === row && coord[1] === col);
-                const isPathB = trial.path_B.some(coord => coord[0] === row && coord[1] === col);
+                const isStartA = selectedPath !== 'green' && row === trial.start_A[0] && col === trial.start_A[1];
+                const isStartB = selectedPath !== 'blue' && row === trial.start_B[0] && col === trial.start_B[1];
+                const isGoalA = selectedPath !== 'green' && row === trial.goal_A[0] && col === trial.goal_A[1];
+                const isGoalB = selectedPath !== 'blue' && row === trial.goal_B[0] && col === trial.goal_B[1];
+                const isPathA = selectedPath !== 'green' && trial.path_A.some(coord => coord[0] === row && coord[1] === col);
+                const isPathB = selectedPath !== 'blue' && trial.path_B.some(coord => coord[0] === row && coord[1] === col);
     
                 const observedCost = this.observedCosts[`${row}-${col}`];
                 const observedClass = observedCost !== undefined ? 
@@ -79,22 +89,21 @@ class Grid {
                 } else if (isStartB) {
                     gridHTML += `<div class="grid-cell start green-path ${observedClass}" id="${cellId}">S</div>`;
                 } else if (isGoalA) {
-                    gridHTML += `<div class="grid-cell goal blue-path ${observedClass}" id="${cellId}">G</div>`;
+                    gridHTML += `<div class="grid-cell goal blue-path ${observedClass}" id="${cellId}">🏠</div>`;
                 } else if (isGoalB) {
-                    gridHTML += `<div class="grid-cell goal green-path ${observedClass}" id="${cellId}">G</div>`;
+                    gridHTML += `<div class="grid-cell goal green-path ${observedClass}" id="${cellId}">🏠</div>`;
                 } else if (isPathA || isPathB) {
                     const pathClass = isPathA ? 'blue-path' : 'green-path';
-                    gridHTML += `<div class="grid-cell ${observedClass} ${pathClass}" id="${cellId}">⚝</div>`;
+                    gridHTML += `<div class="grid-cell ${observedClass} ${pathClass}" id="${cellId}" style="font-size: 1.5rem;">⚝</div>`;
                 } else {
                     gridHTML += `<div class="grid-cell ${observedClass}" id="${cellId}"></div>`;
                 }
             }
-        }
-    
-        gridHTML += `</div>`;
+        }   
+        gridHTML += `</div></div>`;
     
         return gridHTML;
-    }
+    };
     
     // Record observed costs for a path
     recordObservedCosts(path, binaryCosts) {
@@ -122,7 +131,7 @@ class Grid {
         // Reset trial cost
         const trialCostElement = document.getElementById("trial-cost");
         if (trialCostElement) {
-            trialCostElement.textContent = "+0 Units";
+            trialCostElement.textContent = "-$0";
             trialCostElement.classList.add("hidden");
         }
     
@@ -130,7 +139,7 @@ class Grid {
         totalCost = 0;
         const totalCostElement = document.getElementById("total-cost");
         if (totalCostElement) {
-            totalCostElement.textContent = "0 Units";
+            totalCostElement.textContent = "$0";
         }
     }    
 }
@@ -151,10 +160,10 @@ fetch('assets/expt_info.json') // Updated JSON file path
 // Function to animate the agent along the chosen path
 let totalCost = 0; // Keeps track of total cost across trials
 
-// 1. Add spaceship character with animation
+// 1. Add taxi character with animation
 function createAvatar() {
     return `
-        <img src="assets/ships/ship_black.png" width="30" height="30" alt="Spaceship Avatar" />
+        <img src="assets/vehicles/taxi.png" width="30" height="30" alt="Taxi Avatar" />
     `;
 }
 
@@ -188,22 +197,22 @@ function animateAgent(path, binaryCosts, callback) {
 
                 // Ensure start and goal cells update their color when observed
                 if (cellElement.classList.contains("start") || cellElement.classList.contains("goal")) {
-                    cellElement.style.backgroundColor = cost === -1 ? "#f87171" : "#b8b8d9"; // Red for high-cost, grey for low-cost
+                    cellElement.style.backgroundColor = cost === -1 ? "#f87171" : "#b8b8d9"; // Red for toll, grey for free
                 }
 
                 if (cost === -1) {
                     trialCost++;
 
-                    // Visual burst effect for radiation damage
-                    cellElement.innerHTML += '<div class="cost-burst">+1 Damage</div>';
+                    // Visual burst effect for toll cost
+                    cellElement.innerHTML += '<div class="cost-burst">+$1 Toll</div>';
                     setTimeout(() => {
                         const burst = cellElement.querySelector('.cost-burst');
                         if (burst) burst.remove();
                     }, 600);
 
-                    // Play radiation sound
-                    const radiationSound = new Audio('assets/radiationSound.mp3');
-                    radiationSound.play();
+                    // Play toll sound
+                    const costSound = new Audio('assets/costSound.mp3');
+                    costSound.play();
 
                     if (!trialCostVisible) {
                         const trialCostElement = document.getElementById("trial-cost");
@@ -213,27 +222,27 @@ function animateAgent(path, binaryCosts, callback) {
                         }
                     }
                 } else {
-                    // Visual feedback for safe passage
-                    cellElement.innerHTML += '<div class="free-burst">Safe</div>';
+                    // Visual feedback for free passage
+                    cellElement.innerHTML += '<div class="free-burst">Free</div>';
                     setTimeout(() => {
                         const burst = cellElement.querySelector('.free-burst');
                         if (burst) burst.remove();
                     }, 600);
 
-                    // Play safe passage sound
-                    // const safeSound = new Audio('assets/safeSound.mp3');
-                    // safeSound.play();
+                    // Play free passage sound
+                    // const freeSound = new Audio('assets/freeSound.mp3');
+                    // freeSound.play();
                 }
 
                 const trialCostElement = document.getElementById("trial-cost");
                 if (trialCostElement) {
-                    trialCostElement.textContent = `+${trialCost} Units`;
+                    trialCostElement.textContent = `-$${trialCost}`;
                 }
 
                 // remove the star or S or G, then add the avatar
                 cellElement.textContent = '';
                 cellElement.classList.add('avatar');
-                cellElement.innerHTML += createAvatar(); // Add spaceship avatar on top
+                cellElement.innerHTML += createAvatar(); // Add taxi avatar on top
             } else {
                 console.error(`Cell not found in DOM: cell-${curRow}-${curCol}`);
                 return;
@@ -249,8 +258,6 @@ function animateAgent(path, binaryCosts, callback) {
 
     setTimeout(step, 500);
 }
-
-
 
 // 4. Add animated transitions between trials
 function mergeCosts(trialCost, callback) {
@@ -280,14 +287,14 @@ function mergeCosts(trialCost, callback) {
                 frame++;
                 const progress = frame/totalFrames;
                 const currentCount = Math.floor(startCost + progress * trialCost);
-                totalCostElement.textContent = `${currentCount} Units`;
+                totalCostElement.textContent = `$${currentCount}`;
                 
                 if (frame === totalFrames) {
                     clearInterval(counter);
-                    totalCostElement.textContent = `${totalCost} Units`;
+                    totalCostElement.textContent = `$${totalCost}`;
                     
                     // Reset trial cost display with animation
-                    trialCostElement.textContent = `+0 Units`;
+                    trialCostElement.textContent = `-$0`;
                     trialCostElement.classList.remove("cost-animate");
                     trialCostElement.style.transform = "translateY(0)";
                     trialCostElement.classList.add("hidden");
@@ -312,27 +319,30 @@ function mergeCosts(trialCost, callback) {
     }, 1500);
 }
 
-// 5. Update the path selection trial to include space theme elements
+// 5. Update the path selection trial to include taxi theme elements
 const pathSelectionTrial = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         return `
-            ${grid.createGridHTML(currentTrialIndex)}
-            <div class="choice-container">
-                <div class="choice-box blue-path" id="blue-choice">
-                    <div class="choice-icon">🚀</div>
-                    <div>Left Arrow: <strong>Blue Route</strong></div>
+            <div class="jobs-layout">
+                <div class="current-job-section">
+                    ${grid.createGridHTML(currentTrialIndex)}
+                    <div class="choice-container">
+                        <div class="choice-box blue-path" id="blue-choice">
+                            <div class="choice-icon" style="font-size: 4rem; font-weight: bold;">←</div>
+                        </div>
+                        <div class="choice-box green-path" id="green-choice">
+                            <div class="choice-icon" style="font-size: 4rem; font-weight: bold;">→</div>
+                        </div>
+                    </div>
                 </div>
-                <div class="choice-box green-path" id="green-choice">
-                    <div class="choice-icon">🛸</div>
-                    <div>Right Arrow: <strong>Green Route</strong></div>
-                </div>
+                ${createUpcomingJobsHTML(currentTrialIndex)}
             </div>
         `;
     },
     choices: ['arrowleft', 'arrowright'], 
     on_finish: function(data) {
-        console.log("Key pressed:", data.response); // Log the keypress
+        console.log("Key pressed:", data.response);
     
         let choice;
         if (data.response === 'arrowleft') {
@@ -344,7 +354,7 @@ const pathSelectionTrial = {
             return;
         }
     
-        console.log("Chosen path:", choice); // Log the chosen path
+        console.log("Chosen path:", choice);
     
         // Add "swipe" effect on selection
         const choiceElement = document.getElementById(`${choice}-choice`);
@@ -354,6 +364,12 @@ const pathSelectionTrial = {
             choiceElement.classList.add('choice-selected');
             unchosenElement.classList.add('choice-unselected');
         }
+
+        // Replot the grid with only the chosen path
+        const gridContainer = document.querySelector(".current-job-section");
+        if (gridContainer) {
+            gridContainer.innerHTML = grid.createGridHTML(currentTrialIndex, choice);
+        }
         
         // Store the choice in the trial data
         data.choice = choice;
@@ -361,110 +377,135 @@ const pathSelectionTrial = {
     }
 };
 
+
+
+
+// Add this function to create HTML for upcoming job previews
+function createUpcomingJobsHTML(currentTrialIndex) {
+    // Calculate which grid we're in (since there are 4 trials per grid)
+    const currentGridNumber = Math.floor(currentTrialIndex / 4);
+    const currentGridStartIndex = currentGridNumber * 4;
+    const currentGridEndIndex = currentGridStartIndex + 3; // Last trial index in this grid
+    
+    // Only show jobs within the current grid
+    const remainingTrialsInGrid = currentGridEndIndex - currentTrialIndex;
+    
+    if (remainingTrialsInGrid <= 0) {
+        return ''; // No upcoming jobs in this grid
+    }
+    
+    let upcomingHTML = `
+        <div class="jobs-section">
+            <h3 class="jobs-header">Upcoming Jobs</h3>
+            <div class="upcoming-jobs-container">
+    `;
+    
+    for (let i = 1; i <= remainingTrialsInGrid; i++) {
+        const previewIndex = currentTrialIndex + i;
+        const trial = grid.getTrialInfo(previewIndex);
+        const city = trial.city;
+        const gridId = trial.grid;
+        const jobNumber = (previewIndex % 4) + 1; // Job number within the grid (1-4)
+        
+        upcomingHTML += `
+            <div class="upcoming-job">
+                <div class="upcoming-job-header">Job ${jobNumber}</div>
+                <div class="upcoming-grid" style="grid-template-columns: repeat(${grid.gridSize}, 25px);">
+        `;
+        
+        for (let row = 0; row < grid.gridSize; row++) {
+            for (let col = 0; col < grid.gridSize; col++) {
+                const isStartA = row === trial.start_A[0] && col === trial.start_A[1];
+                const isStartB = row === trial.start_B[0] && col === trial.start_B[1];
+                const isGoalA = row === trial.goal_A[0] && col === trial.goal_A[1];
+                const isGoalB = row === trial.goal_B[0] && col === trial.goal_B[1];
+                const isPathA = trial.path_A.some(coord => coord[0] === row && coord[1] === col);
+                const isPathB = trial.path_B.some(coord => coord[0] === row && coord[1] === col);
+                
+                // Check if this cell has been observed in previous trials
+                const observedCost = grid.observedCosts[`${row}-${col}`];
+                const observedClass = observedCost !== undefined ? 
+                    (observedCost === -1 ? 'observed-cost' : 'observed-no-cost') : '';
+                
+                if (isStartA) {
+                    upcomingHTML += `<div class="upcoming-cell start blue-path ${observedClass}">S</div>`;
+                } else if (isStartB) {
+                    upcomingHTML += `<div class="upcoming-cell start green-path ${observedClass}">S</div>`;
+                } else if (isGoalA) {
+                    upcomingHTML += `<div class="upcoming-cell goal blue-path ${observedClass}">🏠</div>`;
+                } else if (isGoalB) {
+                    upcomingHTML += `<div class="upcoming-cell goal green-path ${observedClass}">🏠</div>`;
+                } else if (isPathA) {
+                    upcomingHTML += `<div class="upcoming-cell blue-path ${observedClass}">⚝</div>`;
+                } else if (isPathB) {
+                    upcomingHTML += `<div class="upcoming-cell green-path ${observedClass}">⚝</div>`;
+                } else {
+                    upcomingHTML += `<div class="upcoming-cell ${observedClass}"></div>`;
+                }
+            }
+        }
+        
+        upcomingHTML += `
+                </div>
+            </div>
+        `;
+    }
+    
+    upcomingHTML += `
+            </div>
+        </div>
+    `;
+    return upcomingHTML;
+}
+
+
 // Modified newGridMessage
 const newGridMessage = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         return `
-            <h2>New Asteroid Field Detected</h2>
-            <p>Your ship has entered a new sector of space.</p>
-            <p>Prepare for the next set of navigation decisions.</p>
-            <p>Press any key to continue the mission.</p>
+            <h2>New City District</h2>
+            <p>Your taxi company is now operating in a new district of the city.</p>
+            <p>Prepare for the next set of route decisions.</p>
+            <p>Press any key to continue dispatching.</p>
         `;
     },
     choices: "ALL_KEYS",
     on_load: function() {
-        // Set a new random planet background when entering a new grid
-        setRandomPlanetBackground();
+        // Set a new random city background when entering a new grid
+        setRandomCityBackground();
     },
     on_finish: function() {
         grid.resetGrid(); // Reset the grid for the new set of trials
     }
 };
 
-// Modified instructions
-const instructions = {
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: `
-        <h1>Space Explorer Mission</h1>
-        <p>Welcome, Space Explorer! Your mission is to navigate through dangerous asteroid fields.</p>
-        
-        <div class="instruction-section">
-            <h2>Mission Briefing:</h2>
-            <p>For each mission, you'll see two possible flight paths marked with stars:</p>
-            <p>- <span class="blue-text">Blue stars</span> mark the first route</p>
-            <p>- <span class="green-text">Green stars</span> mark the second route</p>
-            <p>Each path has a starting point (S) and a destination (G).</p>
-        </div>
-        
-        <div class="instruction-section">
-            <h2>Your Task:</h2>
-            <p>Choose which route to fly using your arrow keys:</p>
-            <p>- Press <strong>LEFT ARROW</strong> to follow the blue route</p>
-            <p>- Press <strong>RIGHT ARROW</strong> to follow the green route</p>
-        </div>
-        
-        <div class="instruction-section">
-            <h2>Radiation Zones:</h2>
-            <p>Some sectors contain dangerous radiation that will damage your ship:</p>
-            <p>- <span class="red-text">Red sectors</span> are radiation zones that cause 1 unit of damage</p>
-            <p>- <span class="grey-text">Grey sectors</span> are safe passages with no damage</p>
-            <p>Your goal is to complete all missions while minimizing total radiation damage to your ship.</p>
-        </div>
-        
-        <p class="start-text">Press any key to begin your mission, Explorer!</p>
-    `,
-    choices: "ALL_KEYS",
-    on_load: function() {
-        // Set the initial planet background
-        setRandomPlanetBackground();
-    }
-};
 
-// Add this function to select a random planet background
-function setRandomPlanetBackground() {
-    // Generate a random number between 1 and 9
-    const planetNum = Math.floor(Math.random() * 9) + 1;
-    // Format the number with leading zero if needed
-    const planetId = planetNum.toString().padStart(2, '0');
+// Add this function to select a random city background
+function setRandomCityBackground() {
+    // Generate a random number between 1 and 8
+    const cityNum = Math.floor(Math.random() * 8) + 1;
+    const cityId = cityNum.toString()
     // Set the background image
-    document.body.style.backgroundImage = `url('assets/planets/planet${planetId}.png')`;
+    document.body.style.backgroundImage = `url('assets/cities/${cityId}.png')`;
     document.body.style.backgroundSize = 'cover';
     document.body.style.backgroundPosition = 'center';
     document.body.style.backgroundRepeat = 'no-repeat';
     
-    // Add a subtle overlay to ensure grid visibility
-    // const overlay = document.getElementById('background-overlay');
-    // if (!overlay) {
-    //     const newOverlay = document.createElement('div');
-    //     newOverlay.id = 'background-overlay';
-    //     newOverlay.style.position = 'fixed';
-    //     newOverlay.style.top = '0';
-    //     newOverlay.style.left = '0';
-    //     newOverlay.style.width = '100%';
-    //     newOverlay.style.height = '100%';
-    //     newOverlay.style.backgroundColor = 'rgba(12, 12, 29, 0.0)';
-    //     newOverlay.style.zIndex = '-1';
-    //     document.body.appendChild(newOverlay);
-    // }
-    
-    console.log(`Set background to planet${planetId}.png`);
+    console.log(`Set background to city${cityId}.png`);
 }
 
-
-// Path animation trial
 const pathAnimationTrial = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         const lastTrialData = jsPsych.data.get().last(1).values()[0];
-        const chosenPath = lastTrialData.choice === 'blue' ? 'blue-choice' : 'green-choice';
-        const unchosenPath = lastTrialData.choice === 'blue' ? 'green-choice' : 'blue-choice';
         
         return `
-            ${grid.createGridHTML(currentTrialIndex)}
-            <div class="choice-container">
-                <div class="choice-box blue-path" id="blue-choice" style="${lastTrialData.choice === 'blue' ? '' : 'visibility: hidden;'}">Route: <strong>Blue Path</strong></div>
-                <div class="choice-box green-path" id="green-choice" style="${lastTrialData.choice === 'green' ? '' : 'visibility: hidden;'}">Route: <strong>Green Path</strong></div>
+            <div class="jobs-layout">
+                <div class="current-job-section">
+                    ${grid.createGridHTML(currentTrialIndex, lastTrialData.choice)}
+                </div>
+                ${createUpcomingJobsHTML(currentTrialIndex)}
             </div>
         `;
     },
@@ -479,7 +520,7 @@ const pathAnimationTrial = {
         }
 
         const chosenPath = lastTrialData.choice === 'blue' ? currentTrial.path_A : currentTrial.path_B;
-        const binaryCosts = grid.getBinaryCosts(currentTrial.grid);
+        const binaryCosts = grid.getBinaryCosts(`city_${currentTrial.city}_grid_${currentTrial.grid}`);
 
         console.log("Animating Trial:", currentTrialIndex);
         console.log("Chosen Path:", lastTrialData.choice, chosenPath);
@@ -499,15 +540,56 @@ const end = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         return `
-            <h1>Mission Complete!</h1>
-            <p>Congratulations, Space Explorer!</p>
-            <p>You've successfully navigated all asteroid fields.</p>
-            <p>Final Ship Damage: <strong>${totalCost} Units</strong></p>
-            <p>Your exploration data has been recorded for analysis.</p>
-            <p>Press any key to see your mission data.</p>
+            <h1>Shift Complete!</h1>
+            <p>Great job, Dispatcher!</p>
+            <p>You've successfully completed all taxi assignments.</p>
+            <p>Total Toll Costs: <strong>$${totalCost}</strong></p>
+            <p>Your performance data has been recorded for evaluation.</p>
+            <p>Press any key to see your dispatch summary.</p>
         `;
     },
     choices: "ALL_KEYS"
+};
+
+// Modified instructions
+const instructions = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `
+        <div class="instruction-section">
+            <h1>Taxi Dispatch Coordinator</h1>
+            <p>Welcome to City Cabs! As the dispatch coordinator, you must decide which taxi jobs to accept.</p>
+        </div>
+        
+        <div class="instruction-section">
+            <h2>Job Selection:</h2>
+            <p>For each dispatch, you'll see two possible routes marked with stars:</p>
+            <p>- <span class="blue-text">Blue stars</span> mark the first route</p>
+            <p>- <span class="green-text">Green stars</span> mark the second route</p>
+            <p>Each route has a pickup point (S) and a drop-off destination (G).</p>
+        </div>
+        
+        <div class="instruction-section">
+            <h2>Your Task:</h2>
+            <p>Choose which route to assign to your taxi using your arrow keys:</p>
+            <p>- Press <strong><span class="blue-text">LEFT ARROW</span></strong> to assign the blue route</p>
+            <p>- Press <strong><span class="green-text">RIGHT ARROW</span></strong> to assign the green route</p>
+        </div>
+        
+        <div class="instruction-section">
+            <h2>Toll Roads:</h2>
+            <p>Some streets contain toll roads that cost money to travel:</p>
+            <p>- <span class="red-text">Red streets</span> are toll roads that cost $1 to pass through</p>
+            <p>- <span class="grey-text">Grey streets</span> are free roads with no tolls</p>
+            <p>Your goal is to complete all taxi jobs while minimizing total toll costs for your company.</p>
+        </div>
+        
+        <p class="start-text">Press any key to begin your shift, Dispatcher!</p>
+    `,
+    choices: "ALL_KEYS",
+    on_load: function() {
+        // Set the initial city background
+        setRandomCityBackground();
+    }
 };
 
 // Create timeline
@@ -532,8 +614,8 @@ function createTimeline() {
 
 // Start experiment when the page loads
 function initializeExperiment() {
-    // Set the initial planet background
-    setRandomPlanetBackground();
+    // Set the initial city background
+    setRandomCityBackground();
     
     const timeline = createTimeline();
     jsPsych.run(timeline);
