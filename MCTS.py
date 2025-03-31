@@ -812,7 +812,7 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         return expected_KL
 
 
-## parallel function for simulating many episodes within the same mountain env
+## parallel function for simulating many episodes within the same grid env
 # def simulate_agent(m, N, env_params=None, metric='cityblock', expt='2AFC', n_episodes=10, agents = ['GP', 'GP-MCTS', 'BAMCP','CE'], n_sims=1000,n_blocks=1, correct_prior=True, n_futures=0, n_iter=10, lazy=False, exploration_constant=2, discount_factor=0.95, progress=False):
 def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, agents= ['BAMCP', 'CE'], progress=False):
     print(' ') # for some reason need this to get the pbar to appear
@@ -856,15 +856,15 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
     seed=os.getpid()
     np.random.seed(seed)
 
-    ## loop through runs of the same mountain-episode set
+    ## loop through runs of the same grid-episode set
     if progress:
         if n_blocks > 1:
-            pbar = tqdm(total=n_blocks*n_episodes, desc='Mountain_'+str(m)+', '+str(n_blocks)+' blocks, '+str(n_episodes)+' episodes', position=0, leave=False, ascii=True)
+            pbar = tqdm(total=n_blocks*n_episodes, desc='Grid_'+str(m)+', '+str(n_blocks)+' blocks, '+str(n_episodes)+' episodes', position=0, leave=False, ascii=True)
     
-    ## loop through blocks - i.e. different mountains drawn from the same prior
+    ## loop through blocks - i.e. different grids drawn from the same prior
     for block in range(n_blocks):   
 
-        ## create base mountain environment
+        ## create base grid environment
         env = make_env(N, n_episodes, expt_info, beta_params, metric)
         
         ## debugging plot env
@@ -904,10 +904,10 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
         # farmer = Farmer(N, context_prior=context_prior)
         # farmer = Farmer(N, context_prior=context_priors[ag])
 
-        ## loop through episodes (i.e. different start and goal states for the same mountain)
+        ## loop through episodes (i.e. different start and goal states for the same grid)
         if progress:
             if n_blocks <= 1:
-                pbar = tqdm(total=n_episodes, desc='Mountain_'+str(m)+', block '+str(block+1)+'/'+str(n_blocks), position=m+1, leave=False)
+                pbar = tqdm(total=n_episodes, desc='Grid_'+str(m)+', block '+str(block+1)+'/'+str(n_blocks), position=m+1, leave=False)
         for e in range(n_episodes):
 
         ## TEMP: just interested in first choice
@@ -1294,14 +1294,14 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         early_terminate = True
 
                     if early_terminate:
-                        print('mountain ',m,': episode ',e,' terminated for agent ',ag,' after ',steps,' steps')
-                        # raise ValueError('mountain ',m,': episode ',e,' terminated for agent ',ag,' after ',steps,' steps')
+                        print('grid ',m,': episode ',e,' terminated for agent ',ag,' after ',steps,' steps')
+                        # raise ValueError('grid ',m,': episode ',e,' terminated for agent ',ag,' after ',steps,' steps')
 
                         ## or just skip to the next episode
                         sim_out['agent'].append(agent)
                         sim_out['block'].append(block)
                         sim_out['episode'].append(e)
-                        sim_out['mountain'].append(m)
+                        sim_out['grid'].append(m)
                         sim_out['start'].append(start)
                         sim_out['goal'].append(goal)
                         sim_out['path_A'].append(env_copy.path_states[e][0])
@@ -1361,7 +1361,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         sim_out['agent'].append(ag)
                         sim_out['block'].append(block)
                         sim_out['episode'].append(e)
-                        sim_out['mountain'].append(m)
+                        sim_out['grid'].append(m)
                         sim_out['start'].append(start)
                         sim_out['goal'].append(goal)
                         sim_out['path_A'].append(env_copy.path_states[e][0])

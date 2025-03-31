@@ -30,25 +30,25 @@ from agents import Farmer
 
 
 
-## create a mountain environment
+## create a grid environment
 def make_env(N, n_episodes, expt_info, beta_params, metric, seed=None):
 
     ## register env
     
     # Unregister the environment if it's already registered
-    env_id = "mountains/MountainEnv-v0"
+    env_id = "grids/GridEnv-v0"
     if env_id in registry:
         del registry[env_id]
 
     # Re-register the updated environment
     register(
         id=env_id,
-        entry_point='mountains.envs:MountainEnv',
+        entry_point='grids.envs:GridEnv',
         max_episode_steps=100,
         kwargs={"size": N},
     )
     
-    env = gym.make("mountains/MountainEnv-v0", N=N, n_episodes=n_episodes, expt_info=expt_info, beta_params=beta_params, metric=metric, seed=seed)
+    env = gym.make("grids/GridEnv-v0", N=N, n_episodes=n_episodes, expt_info=expt_info, beta_params=beta_params, metric=metric, seed=seed)
     return env
 
 
@@ -723,7 +723,7 @@ def get_next_state(current, direction, N):
 data_keys = [
     'agent',
     'block',
-    'mountain',
+    'grid',
     'episode',
     'start',
     'goal',
@@ -752,7 +752,6 @@ data_keys = [
     'actual_trajectory',
     'optimal_trajectory',
     'observations',
-    'search_attempts',
     'action_tree',
     'discounted_costs',
     'total_discounted_cost',
@@ -771,9 +770,9 @@ data_keys = [
     # 'theta_MLE',
 ]
 
-## misc mountain keys
-mountain_keys = [
-    # 'mountain',
+## misc grid keys
+grid_keys = [
+    # 'grid',
     # 'env',
     'p_costs',
     'path_states',

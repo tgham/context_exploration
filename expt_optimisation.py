@@ -25,7 +25,7 @@ import copy
 # from utils import make_env, Node, Tree, argm, value_iteration, data_keys
 # from MCTS import MonteCarloTreeSearch, simulate_agent
 
-from utils import make_env, Node, Tree, argm, data_keys, mountain_keys, parse_lists, KL_divergence, profile_func, KL_sim, value_iteration
+from utils import make_env, Node, Tree, argm, data_keys, grid_keys, parse_lists, KL_divergence, profile_func, KL_sim, value_iteration
 from MCTS import MonteCarloTreeSearch, MonteCarloTreeSearch_Free, MonteCarloTreeSearch_2AFC, simulate_agent
 
 import IPython
@@ -52,12 +52,12 @@ def save_results(sim):
         sim_results[key].extend(sim_out[key])
     
     
-    ## save the mountain surface
-    all_mountains['mountain'].append(sim_out['mountain'][0])
-    # all_mountains['env'].append(env) ## if pushed for space, comment this out
-    for key in mountain_keys:
+    ## save the grid surface
+    all_grids['grid'].append(sim_out['grid'][0])
+    # all_grids['env'].append(env) ## if pushed for space, comment this out
+    for key in grid_keys:
         attribute = getattr(env, key)
-        all_mountains[key].append(attribute)
+        all_grids[key].append(attribute)
 
     ## update progress bar
     master_pbar.update(1)
@@ -69,11 +69,11 @@ n_cores = 12
 sim_results = {}
 for key in data_keys:
     sim_results[key] = []
-all_mountains = {}
-for key in mountain_keys:
-    all_mountains[key] = []
-all_mountains['mountain'] = [] 
-all_mountains['env'] = [] ## in case we want to save the whole thing
+all_grids = {}
+for key in grid_keys:
+    all_grids[key] = []
+all_grids['grid'] = [] 
+all_grids['env'] = [] ## in case we want to save the whole thing
 
 ### env inits
 beta_params = {
@@ -83,7 +83,7 @@ beta_params = {
     'beta_col': 0.5
 }
 N = 7
-n_mountains = 12
+n_grids = 12
 n_episodes = 3
 n_runs = 1
 expt = '2AFC'
@@ -93,7 +93,7 @@ expt_info = {
 }
 env_params = {
     'N': N,
-    'n_mountains': n_mountains,
+    'n_grids': n_grids,
     'n_episodes': n_episodes,
     'n_runs': n_runs,
     'expt_info': expt_info,
@@ -101,7 +101,7 @@ env_params = {
     # 'expt': 'free',
     'beta_params': beta_params,
 }
-n_mountains = env_params['n_mountains']
+n_grids = env_params['n_grids']
 
 ## MCTS params
 n_sims = 1000
@@ -130,26 +130,26 @@ agents = [
           ]
 progress=False
 
-## loop through mountain types
+## loop through grid types
 if __name__ == '__main__':
-    master_pbar = tqdm(total=n_mountains, desc='All_mountains', position=0, leave=True, colour='green')
+    master_pbar = tqdm(total=n_grids, desc='All_grids', position=0, leave=True, colour='green')
 
-    ## begin parallelised simulations of mountains
+    ## begin parallelised simulations of grids
     if parallel:
 
         ## start pool
-        n_cores = np.min([n_cores, n_mountains])
+        n_cores = np.min([n_cores, n_grids])
         with mp.Pool(n_cores) as pool:
-            print('Parallel simulation of ',expt,' expt, ', n_mountains, ' mountains, with ',n_episodes,' episodes, ',n_sims,' simulations per episode')
+            print('Parallel simulation of ',expt,' expt, ', n_grids, ' grids, with ',n_episodes,' episodes, ',n_sims,' simulations per episode')
             sim_out = [pool.apply_async(simulate_agent, args=(m, env_params, MCTS_params, sampler_params, agents, progress),
-                                            callback = save_results) for m in range(n_mountains)]
+                                            callback = save_results) for m in range(n_grids)]
             pool.close()
             pool.join()
 
     else:
 
-        ## loop through mountains
-        for m in tqdm(range(n_mountains)):
+        ## loop through grids
+        for m in tqdm(range(n_grids)):
             sim_out = simulate_agent(m, env_params, MCTS_params, sampler_params, agents, progress)
             save_results(sim_out)
 
@@ -167,11 +167,11 @@ for dk in del_keys:
 df_sim = pd.DataFrame(sim_results)
 
 
-## save simulated mountains + results
-df_sim.to_csv('useful_saves/expt_optimisation/{}_{}x{}_env_{}-{}-{}-{}_beta_{}_mountains_{}_episodes_{}_sims_results.csv'.format(expt,N,N, 
+## save simulated grids + results
+df_sim.to_csv('useful_saves/expt_optimisation/{}_{}x{}_env_{}-{}-{}-{}_beta_{}_grids_{}_episodes_{}_sims_results.csv'.format(expt,N,N, 
                                                                                        beta_params['alpha_row'], beta_params['beta_row'], beta_params['alpha_col'], beta_params['beta_col'],
-                                                                                       n_mountains, n_episodes, n_sims))
-with open('useful_saves/expt_optimisation/{}_{}x{}_env_{}_{}-{}-{}_beta_{}_mountains_{}_episodes_{}_sims_envs.pkl'.format(expt,N,N, 
+                                                                                       n_grids, n_episodes, n_sims))
+with open('useful_saves/expt_optimisation/{}_{}x{}_env_{}_{}-{}-{}_beta_{}_grids_{}_episodes_{}_sims_envs.pkl'.format(expt,N,N, 
                                                                                                          beta_params['alpha_row'], beta_params['beta_row'], beta_params['alpha_col'], beta_params['beta_col'],
-                                                                                                 n_mountains, n_episodes, n_sims), 'wb') as f:
-    pickle.dump(all_mountains, f)
+                                                                                                 n_grids, n_episodes, n_sims), 'wb') as f:
+    pickle.dump(all_grids, f)

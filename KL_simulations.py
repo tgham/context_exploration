@@ -36,7 +36,7 @@ import pingouin as pg
 from scipy.special import expit
 
 from agents import GPAgent, Farmer
-from samplers import GridSampler
+from samplers import GridSampler, GridSamplerCombo
 
 
 warnings.filterwarnings('ignore')
