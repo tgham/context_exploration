@@ -44,10 +44,10 @@
         }
 
         .grid-cell {
-            width: 40px;
-            height: 40px;
+            width: 36px;
+            height: 36px;
             background-color: rgba(51, 51, 77, 0.8); /* Semi-transparent background for better visibility */
-            border: 3px solid #4a4a7f;
+            border: 5px solid rgba(51, 51, 77, 0);
             display: flex;
             justify-content: center;
             align-items: center;
@@ -126,6 +126,7 @@
         .cost-total {
             font-size: 24px;
             margin: 5px 0;
+            color: #ffffff;
         }
 
         .cost-trial {
@@ -151,6 +152,10 @@
 
         /* Current job styling */
         .current-job-section {
+            position: absolute;
+            top: 10%; /* Shift further down the screen */
+            left: 25%; /* Adjusted to allow more space */
+            transform: translateX(-50%);
             flex: 2; /* Take up more space for the current job */
             margin-right: 20px; /* Add spacing between current and upcoming jobs */
         }
@@ -168,18 +173,56 @@
             font-size: 1.5rem;
         }
 
-        /* Upcoming jobs container */
-        .upcoming-jobs-container {
-            flex: 1; /* Take up less space for upcoming jobs */
+        /* Transparent mask container for upcoming jobs */
+        .upcoming-jobs-mask-container {
+            position: absolute;
+            left: 70%; /* Adjusted to allow more space */
+            top: 48%; /* Shift further down the screen */
+            transform: translate(-50%, -50%);
+            width: 55%; /* Reduced width */
+            height: auto;
             display: flex;
-            flex-direction: row; /* Stack upcoming jobs horizontally */
-            gap: 15px;
+            justify-content: center;
+            align-items: center;
+            background-color: transparent; /* Fully transparent */
+        }
+
+        /* Opaque actual container for upcoming jobs */
+        .upcoming-jobs-actual-container {
+            display: flex;
+            flex-direction: row;
+            gap: 14px; /* Slightly reduced gap between grids */
+            background-color: rgba(28, 28, 51, 0.85); /* Opaque background */
+            padding: 14px; /* Slightly reduced padding */
+            border-radius: 9px; /* Slightly reduced border radius */
+            box-shadow: 0 6px 14px rgba(0, 0, 0, 0.5); /* Slightly increased shadow */
+            justify-content: center; /* Center horizontally */
+            align-items: center; /* Center vertically */
+            width: auto; /* Width depends on the number of upcoming jobs */
+        }
+
+        /* upcoming jobs header should match formatting of the container, so that it is positioned directly above it */
+        .upcoming-jobs-header-container {
+            position: absolute;
+            left: 70%; /* Adjusted to allow more space */
+            top: 25%; /* Shift further down the screen */
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: row;
+            gap: 10px; /* Reduced gap for thinner spacing */
             background-color: rgba(28, 28, 51, 0.85);
-            padding: 15px;
+            padding: 10px; /* Reduced padding for thinner appearance */
             border-radius: 10px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
             justify-content: center; /* Center horizontally */
             align-items: center; /* Center vertically */
+        }
+
+        .upcoming-jobs-header {
+            color: #ffffff;
+            font-size: 1.5rem;
+            font-weight: bold;
+            text-align: center;
         }
 
         /* Individual upcoming job styling */
@@ -189,42 +232,48 @@
             flex: 1;
             min-width: 0; /* Allows the flex items to shrink below content size */
             background-color: rgba(51, 51, 77, 0.4);
-            border-radius: 8px;
-            padding: 10px;
-        }
-
-        .upcoming-job-header {
-            color: #5dadec;
-            text-align: center;
-            margin-bottom: 10px;
-            font-size: 1.2rem;
-            font-weight: bold;
+            border-radius: 5px; /* Further reduced border radius */
+            padding: 6px; /* Further reduced padding */
         }
 
         /* Grid styling for upcoming jobs */
         .upcoming-grid {
             display: grid;
-            grid-gap: 5px;
+            grid-gap: 11px; /* Slightly reduced gap between cells */
             margin: 0 auto;
             background-color: rgb(208, 208, 210);
-            padding: 10px;
-            border-radius: 8px;
+            padding: 14px; /* Slightly reduced padding */
+            border-radius: 8px; /* Slightly increased border radius */
+            grid-template-columns: repeat(auto-fit, 36px); /* Slightly reduced cell size */
+            grid-auto-rows: 36px; /* Match width for square cells */
+            justify-content: center; /* Center the grid horizontally */
+            align-content: center; /* Center the grid vertically */
         }
 
         .upcoming-cell {
-            width: 25px;
-            height: 25px;
+            width: 32px; /* Slightly reduced size for square cells */
+            height: 32px; /* Match width to ensure square dimensions */
             background-color: rgba(51, 51, 77, 0.8);
-            border: 2px solid #4a4a7f;
+            border: 4px solid transparent; /* Default transparent border */
             display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 0.8rem;
+            justify-content: center; /* Center content horizontally */
+            align-items: center; /* Center content vertically */
+            font-size: 1.5rem; /* Slightly reduced font size */
+            font-weight: bold;
             position: relative;
+            box-sizing: border-box; /* Include padding and border in size calculations */
         }
 
         .upcoming-cell.start, .upcoming-cell.goal {
-            font-size: 1rem;
+            font-size: 1.2rem; /* Slightly reduced font size */
+        }
+
+        .upcoming-cell.blue-path {
+            border-color: #5dadec; /* Blue border for blue path */
+        }
+
+        .upcoming-cell.green-path {
+            border-color: #4ade80; /* Green border for green path */
         }
 
         /* Shared styles for observed costs */
@@ -235,8 +284,6 @@
         .upcoming-cell.observed-no-cost {
             background-color: #b8b8d9;
         }
-
-        
 
         @keyframes pulse {
             0% { transform: scale(1); }

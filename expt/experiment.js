@@ -82,17 +82,36 @@ class Grid {
                 const observedClass = observedCost !== undefined ? 
                     (observedCost === -1 ? 'observed-cost' : 'observed-no-cost') : '';
     
+                // Handle overlapping paths
+                const isOverlap = isPathA && isPathB;
+                let pathClass = '';
+                let content = ''; // Content for the cell (e.g., star or other marker)
+                if (isOverlap) {
+                    const randomChoice = Math.random() < 0.5;
+                    pathClass = randomChoice ? 'blue-path' : 'green-path';
+                    content = randomChoice ? '<span class="green-text">⚝</span>' : '<span class="blue-text">⚝</span>';
+                } else if (isPathA) {
+                    pathClass = 'blue-path';
+                    content = '⚝';
+                } else if (isPathB) {
+                    pathClass = 'green-path';
+                    content = '⚝';
+                }
+    
                 if (isStartA) {
-                    gridHTML += `<div class="grid-cell start blue-path ${observedClass}" id="${cellId}">S</div>`;
+                    gridHTML += `<div class="grid-cell start blue-path ${observedClass}" id="${cellId}">
+                                    <img src="assets/people/blue_person.png" alt="Blue Start" width="30" height="30">
+                                 </div>`;
                 } else if (isStartB) {
-                    gridHTML += `<div class="grid-cell start green-path ${observedClass}" id="${cellId}">S</div>`;
+                    gridHTML += `<div class="grid-cell start green-path ${observedClass}" id="${cellId}">
+                                    <img src="assets/people/green_person.png" alt="Green Start" width="30" height="30">
+                                 </div>`;
                 } else if (isGoalA) {
                     gridHTML += `<div class="grid-cell goal blue-path ${observedClass}" id="${cellId}">🏠</div>`;
                 } else if (isGoalB) {
                     gridHTML += `<div class="grid-cell goal green-path ${observedClass}" id="${cellId}">🏠</div>`;
-                } else if (isPathA || isPathB) {
-                    const pathClass = isPathA ? 'blue-path' : 'green-path';
-                    gridHTML += `<div class="grid-cell ${observedClass} ${pathClass}" id="${cellId}" style="font-size: 1.5rem;">⚝</div>`;
+                } else if (isPathA || isPathB || isOverlap) {
+                    gridHTML += `<div class="grid-cell ${observedClass} ${pathClass}" id="${cellId}" style="font-size: 2rem;">${content}</div>`;
                 } else {
                     gridHTML += `<div class="grid-cell ${observedClass}" id="${cellId}"></div>`;
                 }
@@ -251,10 +270,6 @@ function animateAgent(path, binaryCosts, callback) {
                         const burst = cellElement.querySelector('.free-burst');
                         if (burst) burst.remove();
                     }, 600);
-
-                    // Play free passage sound
-                    // const freeSound = new Audio('assets/freeSound.mp3');
-                    // freeSound.play();
                 }
 
                 const trialCostElement = document.getElementById("trial-cost");
@@ -262,7 +277,14 @@ function animateAgent(path, binaryCosts, callback) {
                     trialCostElement.textContent = `-$${trialCost}`;
                 }
 
-                // remove the star or S or G, then add the avatar
+                // Update observed costs in upcoming grids
+                const upcomingCells = document.querySelectorAll(`.upcoming-cell[data-row="${curRow}"][data-col="${curCol}"]`);
+                upcomingCells.forEach(upcomingCell => {
+                    upcomingCell.classList.remove("observed-cost", "observed-no-cost");
+                    upcomingCell.classList.add(cost === -1 ? "observed-cost" : "observed-no-cost");
+                });
+
+                // Remove the star or S or G, then add the avatar
                 cellElement.textContent = '';
                 cellElement.classList.add('avatar');
                 cellElement.innerHTML += createAvatar(); // Add taxi avatar on top
@@ -272,14 +294,14 @@ function animateAgent(path, binaryCosts, callback) {
             }
 
             currentStep++;
-            setTimeout(step, 500);
+            setTimeout(step, 400);
         } else {
             // Animation complete
             mergeCosts(trialCost, callback);
         }
     }
 
-    setTimeout(step, 500);
+    setTimeout(step, 400);
 }
 
 // 4. Add animated transitions between trials
@@ -405,33 +427,34 @@ function createUpcomingJobsHTML(currentTrialIndex) {
     // Calculate which grid we're in (nTrials is contained in the grid object)
     const currentGridNumber = Math.floor(currentTrialIndex / grid.nTrials);
     const currentGridStartIndex = currentGridNumber * grid.nTrials;
-    const currentGridEndIndex = currentGridStartIndex + grid.nTrials -1; // Last trial index in this grid
-    
+    const currentGridEndIndex = currentGridStartIndex + grid.nTrials - 1; // Last trial index in this grid
+
     // Only show jobs within the current grid
     const remainingTrialsInGrid = currentGridEndIndex - currentTrialIndex;
-    
+
     if (remainingTrialsInGrid <= 0) {
         return ''; // No upcoming jobs in this grid
     }
-    
+
     let upcomingHTML = `
         <div class="jobs-section">
-            <h3 class="jobs-header">Upcoming Jobs</h3>
-            <div class="upcoming-jobs-container">
+            <div class="upcoming-jobs-header-container">
+                <div class="upcoming-jobs-header">${remainingTrialsInGrid} upcoming jobs</div>
+            </div>
+            <div class="upcoming-jobs-mask-container">
+                <div class="upcoming-jobs-actual-container">
     `;
-    
+
     for (let i = 1; i <= remainingTrialsInGrid; i++) {
         const previewIndex = currentTrialIndex + i;
         const trial = grid.getTrialInfo(previewIndex);
-        const city = trial.city;
-        const gridId = trial.grid;
         const jobNumber = (previewIndex % grid.nTrials) + 1; // Job number within the grid
-        
+
         upcomingHTML += `
             <div class="upcoming-job">
-                <div class="upcoming-grid" style="grid-template-columns: repeat(${grid.gridSize}, 25px);">
+                <div class="upcoming-grid" style="grid-template-columns: repeat(${grid.gridSize}, 30px); grid-auto-rows: 30px;">
         `;
-        
+
         for (let row = 0; row < grid.gridSize; row++) {
             for (let col = 0; col < grid.gridSize; col++) {
                 const isStartA = row === trial.start_A[0] && col === trial.start_A[1];
@@ -440,43 +463,59 @@ function createUpcomingJobsHTML(currentTrialIndex) {
                 const isGoalB = row === trial.goal_B[0] && col === trial.goal_B[1];
                 const isPathA = trial.path_A.some(coord => coord[0] === row && coord[1] === col);
                 const isPathB = trial.path_B.some(coord => coord[0] === row && coord[1] === col);
-                
+
                 // Check if this cell has been observed in previous trials
                 const observedCost = grid.observedCosts[`${row}-${col}`];
                 const observedClass = observedCost !== undefined ? 
                     (observedCost === -1 ? 'observed-cost' : 'observed-no-cost') : '';
-                
-                if (isStartA) {
-                    upcomingHTML += `<div class="upcoming-cell start blue-path ${observedClass}">S</div>`;
-                } else if (isStartB) {
-                    upcomingHTML += `<div class="upcoming-cell start green-path ${observedClass}">S</div>`;
-                } else if (isGoalA) {
-                    upcomingHTML += `<div class="upcoming-cell goal blue-path ${observedClass}">🏠</div>`;
-                } else if (isGoalB) {
-                    upcomingHTML += `<div class="upcoming-cell goal green-path ${observedClass}">🏠</div>`;
+
+                // Handle overlapping paths
+                const isOverlap = isPathA && isPathB;
+                let pathClass = '';
+                let content = ''; // Content for the cell (e.g., star or other marker)
+                if (isOverlap) {
+                    const randomChoice = Math.random() < 0.5;
+                    pathClass = randomChoice ? 'blue-path' : 'green-path';
+                    content = randomChoice ? '<span class="green-text">⚝</span>' : '<span class="blue-text">⚝</span>';
                 } else if (isPathA) {
-                    upcomingHTML += `<div class="upcoming-cell blue-path ${observedClass}">⚝</div>`;
+                    pathClass = 'blue-path';
+                    content = '⚝';
                 } else if (isPathB) {
-                    upcomingHTML += `<div class="upcoming-cell green-path ${observedClass}">⚝</div>`;
+                    pathClass = 'green-path';
+                    content = '⚝';
+                }
+
+                if (isStartA) {
+                    upcomingHTML += `<div class="upcoming-cell ${observedClass} blue-path" data-row="${row}" data-col="${col}">
+                                        <img src="assets/people/blue_person.png" alt="Blue Start" width="20" height="20">
+                                     </div>`;
+                } else if (isStartB) {
+                    upcomingHTML += `<div class="upcoming-cell ${observedClass} green-path" data-row="${row}" data-col="${col}">
+                                        <img src="assets/people/green_person.png" alt="Green Start" width="20" height="20">
+                                     </div>`;
+                } else if (isGoalA || isGoalB || isPathA || isPathB || isOverlap) {
+                    upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" data-row="${row}" data-col="${col}" style="font-size: 1.5rem;">
+                                        ${isGoalA || isGoalB ? '🏠' : content}
+                                     </div>`;
                 } else {
-                    upcomingHTML += `<div class="upcoming-cell ${observedClass}"></div>`;
+                    upcomingHTML += `<div class="upcoming-cell ${observedClass}" data-row="${row}" data-col="${col}"></div>`;
                 }
             }
         }
-        
+
         upcomingHTML += `
                 </div>
             </div>
         `;
     }
-    
+
     upcomingHTML += `
+                </div>
             </div>
         </div>
     `;
     return upcomingHTML;
 }
-
 // Ensure setCityBackground is correctly implemented
 function setCityBackground(cityId) {
     const body = document.body;
@@ -612,8 +651,8 @@ const instructions = {
         <div class="instruction-section">
             <h2>Toll Roads:</h2>
             <p>Some streets contain toll roads that cost money to travel:</p>
-            <p>- <span class="red-text">Red streets</span> are toll roads that cost $1 to pass through</p>
-            <p>- <span class="grey-text">Grey streets</span> are free roads with no tolls</p>
+            <p>- <strong><span class="red-text">Red streets</span></strong> are toll roads that cost $1 to pass through</p>
+            <p>- <strong><span class="white-text">White streets</span></strong> are free roads with no tolls</p>
             <p>Your goal is to complete all taxi jobs while minimizing total toll costs for your company.</p>
         </div>
         
