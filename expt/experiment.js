@@ -205,7 +205,7 @@ let totalCost = 0; // Keeps track of total cost across trials
 // 1. Add taxi character with animation
 function createAvatar() {
     return `
-        <img src="assets/vehicles/taxi.png" width="30" height="30" alt="Taxi Avatar" />
+        🚖
     `;
 }
 
@@ -387,8 +387,7 @@ const pathSelectionTrial = {
     },
     choices: ['arrowleft', 'arrowright'], 
     on_finish: function(data) {
-        console.log("Key pressed:", data.response);
-    
+        // Determine the chosen path based on the key pressed
         let choice;
         if (data.response === 'arrowleft') {
             choice = 'blue';
@@ -398,9 +397,9 @@ const pathSelectionTrial = {
             console.error("Invalid keypress:", data.response);
             return;
         }
-    
+        
         console.log("Chosen path:", choice);
-    
+        
         // Add "swipe" effect on selection
         const choiceElement = document.getElementById(`${choice}-choice`);
         const unchosenElement = document.getElementById(choice === 'blue' ? 'green-choice' : 'blue-choice');
@@ -409,16 +408,34 @@ const pathSelectionTrial = {
             choiceElement.classList.add('choice-selected');
             unchosenElement.classList.add('choice-unselected');
         }
-
+    
         // Replot the grid with only the chosen path
         const gridContainer = document.querySelector(".current-job-section");
         if (gridContainer) {
             gridContainer.innerHTML = grid.createGridHTML(currentTrialIndex, choice);
         }
         
-        // Store the choice in the trial data
+        // Store all the relevant data from the current trial
+        const currentTrial = grid.getTrialInfo(currentTrialIndex);
         data.choice = choice;
-        jsPsych.data.get().addToLast({ choice: data.choice });
+        // data.trial_index = currentTrialIndex;
+        data.trial = currentTrial.trial;
+        data.city = currentTrial.city;
+        data.grid_id = currentTrial.grid;
+        data.path_chosen = choice;
+        data.button_pressed = data.response;
+        data.reaction_time_ms = data.rt;
+
+        // Include all columns from the current trial
+        Object.keys(currentTrial).forEach(key => {
+            data[key] = currentTrial[key];
+        });
+
+        // Include all trial info from the current trial
+        Object.assign(data, currentTrial);
+        
+        // Add the trial data to jsPsych's data collection
+        jsPsych.data.get().addToLast(data);
     }
 };
 
@@ -535,38 +552,94 @@ function setCityBackground(cityId) {
     console.log(`Set background to city${cityId}.png`);
 }
 
-// Modified newGridMessage to ensure city background updates correctly
+function animateDayChange(cityId) {
+    const body = document.body;
+
+    // Create a black cover element
+    let blackCover = document.createElement('div');
+    blackCover.style.position = 'fixed';
+    blackCover.style.top = '0';
+    blackCover.style.left = '0';
+    blackCover.style.width = '100%';
+    blackCover.style.height = '100%';
+    blackCover.style.backgroundColor = 'black';
+    blackCover.style.opacity = '0';
+    blackCover.style.transition = 'opacity 1s ease-in-out';
+    blackCover.style.zIndex = '1000'; // Ensure it covers everything
+    document.body.appendChild(blackCover);
+
+    // Fade to full opacity
+    setTimeout(() => {
+        blackCover.style.opacity = '0.8';
+    }, 0);
+
+    // After 1s, set the new city background and fade back to transparency
+    setTimeout(() => {
+        setCityBackground(cityId);
+        blackCover.style.opacity = '0';
+    }, 1000);
+
+    // Remove the black cover after the transition is complete
+    setTimeout(() => {
+        document.body.removeChild(blackCover);
+    }, 2000);
+}
+
 const newGridMessage = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         const nextTrialIndex = currentTrialIndex; // Next trial will be this index
         const isCityChanged = grid.hasCityChanged(nextTrialIndex);
+        let message;
 
         if (isCityChanged) {
             cityId = grid.getTrialInfo(nextTrialIndex).city;
             console.log("City changed to:", cityId);
-            setCityBackground(cityId);
-            return `
-                <h2>New City!</h2>
-                <p>Your taxi company is now operating in a new city.</p>
-                <p>The streets and traffic patterns may be different here.</p>
-                <p>Prepare for the next set of route decisions.</p>
-                <p>Press any key to continue dispatching.</p>
+            animateDayChange(cityId);
+            message = `
+                <div class="new-day-text">
+                    <h2>New City!</h2>
+                    <p>Your taxi company is now operating in a new city.</p>
+                    <p>The streets and traffic patterns may be different here.</p>
+                    <p>Prepare for the next set of route decisions.</p>
+                    <p id="continue-text" style="display: none;">Press any key to continue dispatching.</p>
+                </div>
             `;
         } else {
-            return `
-                <h2>New Day</h2>
-                <p>A new day has begun, and the tolls in this city have been reset.</p>
-                <p>Prepare for the next set of route decisions.</p>
-                <p>Press any key to continue dispatching.</p>
+            animateDayChange(grid.getCurrentCity());
+            message = `
+                <div class="new-day-text">
+                    <h2>New Day</h2>
+                    <p>A new day has begun, and the tolls in this city have been reset.</p>
+                    <p>Prepare for the next set of route decisions.</p>
+                    <p id="continue-text" style="display: none;">Press any key to continue dispatching.</p>
+                </div>
             `;
         }
+
+        // After 2s, show the text and enable keypresses manually
+        setTimeout(() => {
+            document.getElementById("continue-text").style.display = "block";
+            
+            // Manually register keypress listener
+            jsPsych.pluginAPI.getKeyboardResponse({
+                callback_function: jsPsych.finishTrial, // Ends trial when a key is pressed
+                valid_responses: "ALL_KEYS",
+                rt_method: "performance",
+                persist: false,
+                allow_held_key: false
+            });
+        }, 2000);
+
+        return message;
     },
-    choices: "ALL_KEYS",
+    choices: "NO_KEYS", // Initially disable keypresses
     on_finish: function() {
         grid.resetGrid(); // Reset the grid for the new set of trials
     }
 };
+
+
 
 const pathAnimationTrial = {
     type: jsPsychHtmlKeyboardResponse,
@@ -618,10 +691,23 @@ const end = {
             <p>You've successfully completed all taxi assignments.</p>
             <p>Total Toll Costs: <strong>$${totalCost}</strong></p>
             <p>Your performance data has been recorded for evaluation.</p>
-            <p>Press any key to see your dispatch summary.</p>
+            <div class="button-container">
+                <button id="download-data" class="download-button">Download Data</button>
+                <p>Press any key to finish the experiment.</p>
+            </div>
         `;
     },
-    choices: "ALL_KEYS"
+    choices: "ALL_KEYS",
+    on_load: function() {
+        // Add event listener for the download button
+        document.getElementById('download-data').addEventListener('click', downloadTrialData);
+        
+        // Also create a CSV version of the data with jsPsych's built-in function
+        const csvData = jsPsych.data.get().filter({choice: ['blue', 'green']}).csv();
+        jsPsych.data.addProperties({
+            exported_data: csvData
+        });
+    }
 };
 
 // Modified instructions
@@ -638,7 +724,7 @@ const instructions = {
             <p>For each dispatch, you'll see two possible routes marked with stars:</p>
             <p>- <span class="blue-text">Blue stars</span> mark the first route</p>
             <p>- <span class="green-text">Green stars</span> mark the second route</p>
-            <p>Each route has a pickup point (S) and a drop-off destination (G).</p>
+            <p>Each route has a passenger <img src="assets/people/blue_person.png" alt="Blue Passenger" width="20" height="20"> or <img src="assets/people/green_person.png" alt="Green Passenger" width="20" height="20"> at a pickup point, and a drop-off destination 🏠.</p>
         </div>
         
         <div class="instruction-section">
@@ -661,7 +747,6 @@ const instructions = {
     choices: "ALL_KEYS",
     on_load: function() {
         // Set initial city background from the first trial
-        // Set the city based on the first trial's city
         const firstTrial = grid.getTrialInfo(0);
         const cityId = firstTrial.city;
         grid.currentCity = cityId; // Initialize the current city
@@ -687,6 +772,42 @@ function createTimeline() {
     timeline.push(end);
 
     return timeline;
+}
+
+function downloadTrialData() {
+    // Get all path selection trial data
+    const pathData = jsPsych.data.get().filter({trial_type: 'html-keyboard-response'}).values();
+    
+    // Format the data for CSV
+    const trialData = pathData.map(trial => {
+        // Only include trials where a choice was made
+        if (trial.choice) {
+            if (trial.choice) {
+                return trial; // Return the entire trial object
+            }
+        }
+        return null;
+    }).filter(item => item !== null);
+
+    // Convert the data to CSV format
+    const csvHeaders = "trial,city,grid_id,path_chosen,button_pressed,reaction_time_ms,context,grid\n";
+    const csvRows = trialData.map(trial => 
+        `${trial.trial},${trial.city},${trial.grid_id},${trial.path_chosen},${trial.button_pressed},${trial.reaction_time_ms},${trial.context},${trial.grid}`
+    ).join("\n");
+    const csvContent = csvHeaders + csvRows;
+
+    // Create a Blob with the CSV data
+    const dataBlob = new Blob([csvContent], {type: 'text/csv'});
+    
+    // Create a download link and trigger it
+    const url = URL.createObjectURL(dataBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'path_selection_data.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
 
 // Start experiment when the page loads
