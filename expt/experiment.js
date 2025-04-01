@@ -189,15 +189,45 @@ class Grid {
 // Load the JSON data and initialize the Grid class
 let grid;
 let currentTrialIndex = 0;
+let cityMapping = {}; // This will store our shuffled mapping
 
-fetch('assets/expt_info.json') // Updated JSON file path
+fetch('assets/expt_info.json')
     .then(response => response.json())
     .then(data => {
         grid = new Grid(data); // Initialize the Grid class with the loaded data
+        
+        // Create a shuffled mapping for cities
+        createCityMapping(8); // Assuming you have 8 city files
+        
         console.log('Grid data loaded:', grid);
+        console.log('City mapping created:', cityMapping);
+        
         initializeExperiment(); // Call a function to start the experiment
     })
     .catch(error => console.error('Error loading JSON:', error));
+
+// Function to create a random mapping of city IDs
+function createCityMapping(numCities) {
+    // Create an array of city IDs (1 to numCities)
+    let cityIds = Array.from({length: numCities}, (_, i) => i + 1);
+    
+    // Shuffle the array
+    cityIds = shuffleArray(cityIds);
+    
+    // Create the mapping
+    for (let i = 1; i <= numCities; i++) {
+        cityMapping[i] = cityIds[i-1];
+    }
+}
+
+// Fisher-Yates shuffle algorithm
+function shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
 
 // Function to animate the agent along the chosen path
 let totalCost = 0; // Keeps track of total cost across trials
@@ -324,13 +354,13 @@ function mergeCosts(trialCost, callback) {
             // Animated counter for total cost
             const startCost = totalCost - trialCost;
             const duration = 1000;
-            const frameDuration = 1000/60;
-            const totalFrames = Math.round(duration/frameDuration);
+            const frameDuration = 1000 / 60;
+            const totalFrames = Math.round(duration / frameDuration);
             let frame = 0;
             
             const counter = setInterval(() => {
                 frame++;
-                const progress = frame/totalFrames;
+                const progress = frame / totalFrames;
                 const currentCount = Math.floor(startCost + progress * trialCost);
                 totalCostElement.textContent = `$${currentCount}`;
                 
@@ -349,19 +379,33 @@ function mergeCosts(trialCost, callback) {
     }
 
     setTimeout(() => {
-        // Add transition effect between trials
-        document.querySelector(".grid-container").classList.add("fade-transition");
-        
+        // Add transition effect to fade out the current job
+        const currentJob = document.querySelector(".grid-container");
+        if (currentJob) {
+            currentJob.classList.add("fade-out");
+        }
+
+        // Add transition effect to fade out the leftmost upcoming job
+        const upcomingJobs = document.querySelectorAll(".upcoming-job");
+        if (upcomingJobs.length > 0) {
+            const leftmostJob = upcomingJobs[0];
+            leftmostJob.classList.add("fade-out");
+        }
+
         setTimeout(() => {
             currentTrialIndex++;
             jsPsych.finishTrial();
             
             setTimeout(() => {
-                const grid = document.querySelector(".grid-container");
-                if (grid) grid.classList.remove("fade-transition");
-            }, 100);
-        }, 500);
-    }, 1500);
+                // Remove fade-transition class after the transition
+                if (currentJob) currentJob.classList.remove("fade-out");
+                if (upcomingJobs.length > 0) {
+                    const leftmostJob = upcomingJobs[0];
+                    if (leftmostJob) leftmostJob.classList.remove("fade-out");
+                }
+            }, 400);
+        }, 400);
+    }, 1000);
 }
 
 // 5. Update the path selection trial to include taxi theme elements
@@ -370,18 +414,13 @@ const pathSelectionTrial = {
     stimulus: function() {
         return `
             <div class="jobs-layout">
-                <div class="current-job-section">
+                <div class="current-job-section grid-fade-in">
                     ${grid.createGridHTML(currentTrialIndex)}
-                    <div class="choice-container">
-                        <div class="choice-box blue-path" id="blue-choice">
-                            <div class="choice-icon" style="font-size: 4rem; font-weight: bold;">←</div>
-                        </div>
-                        <div class="choice-box green-path" id="green-choice">
-                            <div class="choice-icon" style="font-size: 4rem; font-weight: bold;">→</div>
-                        </div>
-                    </div>
                 </div>
-                ${createUpcomingJobsHTML(currentTrialIndex)}
+                <div class="upcoming-jobs-container grid-fade-in">
+                    ${createUpcomingJobsHTML(currentTrialIndex)}
+                </div>
+
             </div>
         `;
     },
@@ -456,7 +495,7 @@ function createUpcomingJobsHTML(currentTrialIndex) {
     let upcomingHTML = `
         <div class="jobs-section">
             <div class="upcoming-jobs-header-container">
-                <div class="upcoming-jobs-header">${remainingTrialsInGrid} upcoming jobs</div>
+                <div class="upcoming-jobs-header">Upcoming jobs</div>
             </div>
             <div class="upcoming-jobs-mask-container">
                 <div class="upcoming-jobs-actual-container">
@@ -533,9 +572,13 @@ function createUpcomingJobsHTML(currentTrialIndex) {
     `;
     return upcomingHTML;
 }
-// Ensure setCityBackground is correctly implemented
+
+// Update the setCityBackground function to use the mapping
 function setCityBackground(cityId) {
     const body = document.body;
+    
+    // Use the mapped city ID instead of the original
+    const mappedCityId = cityMapping[cityId];
 
     // Clear any existing background styles before applying a new one
     body.style.backgroundImage = '';
@@ -544,19 +587,66 @@ function setCityBackground(cityId) {
     body.style.backgroundRepeat = '';
 
     // Apply the new background
-    body.style.backgroundImage = `url('assets/cities/${cityId}.png')`;
+    body.style.backgroundImage = `url('assets/cities/${mappedCityId}.png')`;
     body.style.backgroundSize = 'cover';
     body.style.backgroundPosition = 'center';
     body.style.backgroundRepeat = 'no-repeat';
 
-    console.log(`Set background to city${cityId}.png`);
+    console.log(`Set background to city${mappedCityId}.png (original ID: ${cityId})`);
+}
+
+// Modified function structure: separate functions for city change vs day change
+function animateCityChange(oldCityId, newCityId) {
+    console.log(`City Change Animation: from ${oldCityId} to ${newCityId}`);
+    
+    // Create a container for the animation
+    let transitionContainer = document.createElement('div');
+    transitionContainer.style.position = 'fixed';
+    transitionContainer.style.top = '0';
+    transitionContainer.style.left = '0';
+    transitionContainer.style.width = '200%'; // Double width to fit both images
+    transitionContainer.style.height = '100%';
+    transitionContainer.style.zIndex = '1000';
+    transitionContainer.style.display = 'flex';
+    transitionContainer.style.transition = 'transform 1.5s ease-in-out';
+    document.body.appendChild(transitionContainer);
+    
+    // Create old city element
+    let oldCity = document.createElement('div');
+    oldCity.style.width = '50%'; // Half of the container
+    oldCity.style.height = '100%';
+    oldCityMapping = cityMapping[oldCityId];
+    oldCity.style.backgroundImage = `url('assets/cities/${oldCityMapping}.png')`;
+    oldCity.style.backgroundSize = 'cover';
+    oldCity.style.backgroundPosition = 'center';
+    transitionContainer.appendChild(oldCity);
+    
+    // Create new city element
+    let newCity = document.createElement('div');
+    newCity.style.width = '50%'; // Half of the container
+    newCity.style.height = '100%';
+    newCityMapping = cityMapping[newCityId];
+    newCity.style.backgroundImage = `url('assets/cities/${newCityMapping}.png')`;
+    newCity.style.backgroundSize = 'cover';
+    newCity.style.backgroundPosition = 'center';
+    transitionContainer.appendChild(newCity);
+    
+    // Force browser reflow before starting animation
+    void transitionContainer.offsetWidth;
+    
+    // Start the slide animation
+    transitionContainer.style.transform = 'translateX(-50%)';
+    
+    // After animation completes, set the new background and remove the container
+    setTimeout(() => {
+        setCityBackground(newCityId);
+        document.body.removeChild(transitionContainer);
+    }, 1600);
 }
 
 function animateDayChange(cityId) {
-    const body = document.body;
-
-    // Create a black cover element
-    let blackCover = document.createElement('div');
+    console.log(`Day Change Animation: Staying in city ${cityId}`);
+    const blackCover = document.createElement('div');
     blackCover.style.position = 'fixed';
     blackCover.style.top = '0';
     blackCover.style.left = '0';
@@ -565,13 +655,13 @@ function animateDayChange(cityId) {
     blackCover.style.backgroundColor = 'black';
     blackCover.style.opacity = '0';
     blackCover.style.transition = 'opacity 1s ease-in-out';
-    blackCover.style.zIndex = '1000'; // Ensure it covers everything
+    blackCover.style.zIndex = '1000';
     document.body.appendChild(blackCover);
 
     // Fade to full opacity
     setTimeout(() => {
-        blackCover.style.opacity = '0.8';
-    }, 0);
+        blackCover.style.opacity = '0.7';
+    }, 10);
 
     // After 1s, set the new city background and fade back to transparency
     setTimeout(() => {
@@ -585,17 +675,43 @@ function animateDayChange(cityId) {
     }, 2000);
 }
 
+// display feedback after a grid
+const gridFeedback = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        const todayTolls = totalCost; // Assuming totalCost tracks the tolls paid so far
+        return `
+            <div class="new-day-text">
+                <h3>You paid a total of <strong style="color: red;">$${todayTolls}</strong> in tolls today.</h3>
+                <h3>Press any key to continue.</h3>
+            </div>
+        `;
+    },
+    choices: "ALL_KEYS",
+    on_finish: function() {
+        grid.resetGrid(); // Reset the grid for the next set of trials
+    }
+};
+
+
 const newGridMessage = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         const nextTrialIndex = currentTrialIndex; // Next trial will be this index
-        const isCityChanged = grid.hasCityChanged(nextTrialIndex);
+        const nextTrial = grid.getTrialInfo(nextTrialIndex);
+        const nextCityId = nextTrial.city;
+        const currentCityId = grid.getCurrentCity();
         let message;
 
-        if (isCityChanged) {
-            cityId = grid.getTrialInfo(nextTrialIndex).city;
-            console.log("City changed to:", cityId);
-            animateDayChange(cityId);
+        console.log("Current city:", currentCityId);
+        console.log("Next city:", nextCityId);
+        
+        // Explicitly check if city has changed by comparing IDs
+        if (currentCityId !== null && nextCityId !== currentCityId) {
+            console.log("City changed from", currentCityId, "to", nextCityId);
+            // Run slide animation
+            animateCityChange(currentCityId, nextCityId);
+            
             message = `
                 <div class="new-day-text">
                     <h2>New City!</h2>
@@ -605,8 +721,15 @@ const newGridMessage = {
                     <p id="continue-text" style="display: none;">Press any key to continue dispatching.</p>
                 </div>
             `;
+            
+            // Update the current city
+            grid.currentCity = nextCityId;
         } else {
-            animateDayChange(grid.getCurrentCity());
+            console.log("Same city - just a new day");
+            // Run fade animation for new day in same city
+            animateDayChange(currentCityId || nextCityId);
+            
+            const todayTolls = totalCost; // Assuming totalCost tracks the tolls paid so far
             message = `
                 <div class="new-day-text">
                     <h2>New Day</h2>
@@ -615,6 +738,11 @@ const newGridMessage = {
                     <p id="continue-text" style="display: none;">Press any key to continue dispatching.</p>
                 </div>
             `;
+            
+            // Ensure city is set if this is the first trial
+            if (currentCityId === null) {
+                grid.currentCity = nextCityId;
+            }
         }
 
         // After 2s, show the text and enable keypresses manually
@@ -629,7 +757,7 @@ const newGridMessage = {
                 persist: false,
                 allow_held_key: false
             });
-        }, 2000);
+        }, 2500); // Increased delay to allow animation to complete
 
         return message;
     },
@@ -738,11 +866,16 @@ const instructions = {
             <h2>Toll Roads:</h2>
             <p>Some streets contain toll roads that cost money to travel:</p>
             <p>- <strong><span class="red-text">Red streets</span></strong> are toll roads that cost $1 to pass through</p>
-            <p>- <strong><span class="white-text">White streets</span></strong> are free roads with no tolls</p>
+            <p>- <strong><span style="color:rgb(194, 194, 229);">Light grey streets</span></strong> are free roads with no tolls</p>
+            <p>- <strong><span style="color: rgb(114, 114, 150);">Dark grey streets</span></strong> are roads that haven't been visited yet</p>
             <p>Your goal is to complete all taxi jobs while minimizing total toll costs for your company.</p>
         </div>
         
-        <p class="start-text">Press any key to begin your shift, Dispatcher!</p>
+        <div class="instruction-section">
+            <h2>Press any key to begin your shift, Dispatcher!</h2>
+        </div>
+
+
     `,
     choices: "ALL_KEYS",
     on_load: function() {
@@ -762,6 +895,7 @@ function createTimeline() {
     for (let i = 0; i < grid.trialInfo.length; i++) {
         if (i % grid.nTrials === 0 && i !== 0) {
             // Add new grid message after each grid
+            timeline.push(gridFeedback);
             timeline.push(newGridMessage);
         }
         timeline.push(pathSelectionTrial);

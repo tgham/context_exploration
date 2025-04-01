@@ -116,7 +116,7 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
             background-color: #1c1c33;
             padding: 15px;
             border-radius: 10px;
@@ -144,7 +144,8 @@
         /* Updated layout for jobs display */
         .jobs-layout {
             display: flex;
-            flex-direction: row; /* Align current and upcoming jobs horizontally */
+            flex-direction: column; /* Stack current and upcoming jobs vertically */
+            align-items: center; /* Center both sections horizontally */
             width: 100%;
             max-width: 1200px;
             margin: 0 auto;
@@ -152,12 +153,12 @@
 
         /* Current job styling */
         .current-job-section {
-            position: absolute;
-            top: 10%; /* Shift further down the screen */
-            left: 25%; /* Adjusted to allow more space */
-            transform: translateX(-50%);
-            flex: 2; /* Take up more space for the current job */
-            margin-right: 20px; /* Add spacing between current and upcoming jobs */
+            position: relative; /* Changed to relative for stacking */
+            top: auto; /* Reset top positioning */
+            left: auto; /* Reset left positioning */
+            transform: none; /* Reset transform */
+            flex: none; /* Reset flex properties */
+            margin-bottom: 0px; /* Add spacing below the current job */
         }
 
         /* Jobs section header */
@@ -175,16 +176,12 @@
 
         /* Transparent mask container for upcoming jobs */
         .upcoming-jobs-mask-container {
-            position: absolute;
-            left: 70%; /* Adjusted to allow more space */
-            top: 48%; /* Shift further down the screen */
-            transform: translate(-50%, -50%);
-            width: 55%; /* Reduced width */
-            height: auto;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background-color: transparent; /* Fully transparent */
+            position: relative; /* Changed to relative for stacking */
+            left: auto; /* Reset left positioning */
+            top: auto; /* Reset top positioning */
+            transform: none; /* Reset transform */
+            width: 100%; /* Adjust width to fit the container */
+            margin-top: 10px; /* Add spacing above the upcoming jobs */
         }
 
         /* Opaque actual container for upcoming jobs */
@@ -203,10 +200,11 @@
 
         /* upcoming jobs header should match formatting of the container, so that it is positioned directly above it */
         .upcoming-jobs-header-container {
-            position: absolute;
-            left: 70%; /* Adjusted to allow more space */
-            top: 25%; /* Shift further down the screen */
-            transform: translate(-50%, -50%);
+            position: relative; /* Changed to relative for stacking */
+            left: auto; /* Reset left positioning */
+            top: auto; /* Reset top positioning */
+            transform: none; /* Reset transform */
+            margin-bottom: 0px; /* Add spacing below the header */
             display: flex;
             flex-direction: row;
             gap: 10px; /* Reduced gap for thinner spacing */
@@ -319,8 +317,9 @@
         .choice-container {
             display: flex;
             justify-content: space-between;
-            width: 80%;
-            max-width: 500px;
+            align-items: center; /* Align arrows vertically with the grid */
+            width: 100%;
+            max-width: 1200px;
             margin: 20px auto;
         }
 
@@ -333,8 +332,16 @@
             border-radius: 10px;
             cursor: pointer;
             transition: all 0.3s;
-            width: 45%;
-            background-color: #ffffff; /* Changed to solid white */
+            width: auto; /* Adjust width for separate arrows */
+            background-color: #ffffff;
+        }
+
+        .choice-box.blue-path {
+            margin-right: 20px; /* Add spacing between the blue arrow and the grid */
+        }
+
+        .choice-box.green-path {
+            margin-left: 20px; /* Add spacing between the green arrow and the grid */
         }
 
         .choice-box:hover {
@@ -366,7 +373,12 @@
         }
 
         h1, h2 {
-            color: #5dadec;
+            color: #ece75d;
+            text-align: center;
+        }
+        
+        h3 {
+            color: #ffffff;
             text-align: center;
         }
 
@@ -414,6 +426,22 @@
             100% { opacity: 1; }
         }
 
+        .grid-feedback {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2rem;
+            font-weight: bold;
+            color: #ffffff;
+            text-align: center;
+            background-color: rgba(28, 28, 51, 0.9);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            z-index: 1100;
+        }
+
         .new-day-text {
             position: fixed;
             top: 50%;
@@ -428,6 +456,33 @@
             border-radius: 15px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
             z-index: 1100;
+        }
+
+        .fade-out {
+            animation: fadeOut 0.4s ease-in-out forwards;
+        }
+
+        @keyframes fadeOut {
+            0% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        .fade-in {
+            animation: fadeIn 1s ease-in-out forwards;
+        }
+
+        @keyframes fadeIn {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+
+        .grid-fade-in {
+            animation: gridFadeIn 0.2s ease-in-out forwards;
+        }
+
+        @keyframes gridFadeIn {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
         }
 
         .button-container {
