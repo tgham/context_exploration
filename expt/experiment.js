@@ -16,6 +16,7 @@ class Grid {
         this.nCities = gridData.env_costs.n_cities
         this.observedCosts = {}; // Track observed costs for each grid
         this.currentGrid = 0; // Track the current grid
+        this.currentCity = null; // Track the current city
     }
 
     // Get the binary costs for a specific grid
@@ -55,13 +56,10 @@ class Grid {
         const grid = trial.grid;
         const binaryCosts = this.getBinaryCosts(`city_${city}_grid_${grid}`);
         const gridSize = this.gridSize;
-        const jobNumber = (trialIndex % 4) + 1; // Job number within the grid (1-4)
+        const jobNumber = (trialIndex % this.nTrials) + 1; // Job number within the grid
         
         let gridHTML = `
             <div class="current-job-container">
-                <div class="current-job-header">
-                    <h3>Current Job ${jobNumber}</h3>
-                </div>
                 <div class="cost-display-container">
                     <h2 class="cost-total">Total Tolls Paid:</h2>
                     <p id="total-cost" class="cost-total">$${totalCost}</p>
@@ -141,7 +139,32 @@ class Grid {
         if (totalCostElement) {
             totalCostElement.textContent = "$0";
         }
-    }    
+    }
+    
+    // Check if the city has changed for the upcoming trial
+    hasCityChanged(trialIndex) {
+        const upcomingTrial = this.getTrialInfo(trialIndex);
+        const upcomingCity = upcomingTrial.city;
+        
+        // If this is the first trial, set the current city and return false
+        if (this.currentCity === null) {
+            this.currentCity = upcomingCity;
+            return false;
+        }
+        
+        // Check if the city has changed
+        if (upcomingCity !== this.currentCity) {
+            this.currentCity = upcomingCity;
+            return true;
+        }
+        
+        return false;
+    }
+    
+    // Get the current city
+    getCurrentCity() {
+        return this.currentCity;
+    }
 }
 
 // Load the JSON data and initialize the Grid class
@@ -377,15 +400,12 @@ const pathSelectionTrial = {
     }
 };
 
-
-
-
 // Add this function to create HTML for upcoming job previews
 function createUpcomingJobsHTML(currentTrialIndex) {
-    // Calculate which grid we're in (since there are 4 trials per grid)
-    const currentGridNumber = Math.floor(currentTrialIndex / 4);
-    const currentGridStartIndex = currentGridNumber * 4;
-    const currentGridEndIndex = currentGridStartIndex + 3; // Last trial index in this grid
+    // Calculate which grid we're in (nTrials is contained in the grid object)
+    const currentGridNumber = Math.floor(currentTrialIndex / grid.nTrials);
+    const currentGridStartIndex = currentGridNumber * grid.nTrials;
+    const currentGridEndIndex = currentGridStartIndex + grid.nTrials -1; // Last trial index in this grid
     
     // Only show jobs within the current grid
     const remainingTrialsInGrid = currentGridEndIndex - currentTrialIndex;
@@ -405,11 +425,10 @@ function createUpcomingJobsHTML(currentTrialIndex) {
         const trial = grid.getTrialInfo(previewIndex);
         const city = trial.city;
         const gridId = trial.grid;
-        const jobNumber = (previewIndex % 4) + 1; // Job number within the grid (1-4)
+        const jobNumber = (previewIndex % grid.nTrials) + 1; // Job number within the grid
         
         upcomingHTML += `
             <div class="upcoming-job">
-                <div class="upcoming-job-header">Job ${jobNumber}</div>
                 <div class="upcoming-grid" style="grid-template-columns: repeat(${grid.gridSize}, 25px);">
         `;
         
@@ -458,42 +477,57 @@ function createUpcomingJobsHTML(currentTrialIndex) {
     return upcomingHTML;
 }
 
+// Ensure setCityBackground is correctly implemented
+function setCityBackground(cityId) {
+    const body = document.body;
 
-// Modified newGridMessage
+    // Clear any existing background styles before applying a new one
+    body.style.backgroundImage = '';
+    body.style.backgroundSize = '';
+    body.style.backgroundPosition = '';
+    body.style.backgroundRepeat = '';
+
+    // Apply the new background
+    body.style.backgroundImage = `url('assets/cities/${cityId}.png')`;
+    body.style.backgroundSize = 'cover';
+    body.style.backgroundPosition = 'center';
+    body.style.backgroundRepeat = 'no-repeat';
+
+    console.log(`Set background to city${cityId}.png`);
+}
+
+// Modified newGridMessage to ensure city background updates correctly
 const newGridMessage = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
-        return `
-            <h2>New City District</h2>
-            <p>Your taxi company is now operating in a new district of the city.</p>
-            <p>Prepare for the next set of route decisions.</p>
-            <p>Press any key to continue dispatching.</p>
-        `;
+        const nextTrialIndex = currentTrialIndex; // Next trial will be this index
+        const isCityChanged = grid.hasCityChanged(nextTrialIndex);
+
+        if (isCityChanged) {
+            cityId = grid.getTrialInfo(nextTrialIndex).city;
+            console.log("City changed to:", cityId);
+            setCityBackground(cityId);
+            return `
+                <h2>New City!</h2>
+                <p>Your taxi company is now operating in a new city.</p>
+                <p>The streets and traffic patterns may be different here.</p>
+                <p>Prepare for the next set of route decisions.</p>
+                <p>Press any key to continue dispatching.</p>
+            `;
+        } else {
+            return `
+                <h2>New Day</h2>
+                <p>A new day has begun, and the tolls in this city have been reset.</p>
+                <p>Prepare for the next set of route decisions.</p>
+                <p>Press any key to continue dispatching.</p>
+            `;
+        }
     },
     choices: "ALL_KEYS",
-    on_load: function() {
-        // Set a new random city background when entering a new grid
-        setRandomCityBackground();
-    },
     on_finish: function() {
         grid.resetGrid(); // Reset the grid for the new set of trials
     }
 };
-
-
-// Add this function to select a random city background
-function setRandomCityBackground() {
-    // Generate a random number between 1 and 8
-    const cityNum = Math.floor(Math.random() * 8) + 1;
-    const cityId = cityNum.toString()
-    // Set the background image
-    document.body.style.backgroundImage = `url('assets/cities/${cityId}.png')`;
-    document.body.style.backgroundSize = 'cover';
-    document.body.style.backgroundPosition = 'center';
-    document.body.style.backgroundRepeat = 'no-repeat';
-    
-    console.log(`Set background to city${cityId}.png`);
-}
 
 const pathAnimationTrial = {
     type: jsPsychHtmlKeyboardResponse,
@@ -587,8 +621,12 @@ const instructions = {
     `,
     choices: "ALL_KEYS",
     on_load: function() {
-        // Set the initial city background
-        setRandomCityBackground();
+        // Set initial city background from the first trial
+        // Set the city based on the first trial's city
+        const firstTrial = grid.getTrialInfo(0);
+        const cityId = firstTrial.city;
+        grid.currentCity = cityId; // Initialize the current city
+        setCityBackground(cityId);
     }
 };
 
@@ -598,8 +636,8 @@ function createTimeline() {
 
     // Loop through all trials and add them to the timeline
     for (let i = 0; i < grid.trialInfo.length; i++) {
-        if (i % 4 === 0 && i !== 0) {
-            // Add new grid message every 4 trials
+        if (i % grid.nTrials === 0 && i !== 0) {
+            // Add new grid message after each grid
             timeline.push(newGridMessage);
         }
         timeline.push(pathSelectionTrial);
@@ -614,9 +652,6 @@ function createTimeline() {
 
 // Start experiment when the page loads
 function initializeExperiment() {
-    // Set the initial city background
-    setRandomCityBackground();
-    
     const timeline = createTimeline();
     jsPsych.run(timeline);
 }
