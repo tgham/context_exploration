@@ -779,5 +779,6 @@ grid_keys = [
     'path_actions',
     'starts',
     'goals',
+    'context',
     'p0_overlaps'
 ]
