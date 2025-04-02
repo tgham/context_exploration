@@ -272,90 +272,98 @@ class GridEnv(gym.Env):
                     break
 
 
-
+            ## if all the SGs and paths have been found, then we then need to check overlap across episodes
             if len(self.starts)==self.n_episodes:
-                init_done = True
-                self._episode = 0
+        
+                ## hacky fix: make sure all coordinates in the path_states list are tuples of int, rather than tuples of int64
+                for e in range(self.n_episodes):
+                    for p, path in enumerate(self.path_states[e]):
+                        self.path_states[e][p] = [tuple([int(x) for x in state]) for state in path]
+                
+                ## get info on path overlaps in 2AFC expt
+                if self.expt == '2AFC':
+                    self.most_overlap = []
+                    self.path_future_overlaps = []
+
+                    for e in range(self.n_episodes-1):
+
+                        ### calculate the number of states in the current path that appear in the future set
+
+                        ## no repeats (e.g. if [x,y] appears in episodes 2 and 3, only count it once)
+                        # future_states = []
+                        # for next_e in range(e+1, self.n_episodes):
+                        #     for next_path in self.path_states[next_e]:
+                        #         future_states.extend(next_path)
+                        # n_intersections = []
+                        # for path in self.path_states[e]:
+                        #     intersections = set(path).intersection(set(future_states))
+                        #     n_intersections.append(len(intersections) -2) ## -2 if start and end are shared
+                        # self.path_n_intersections.append(n_intersections)
+
+                        ## repeats (e.g. if [x,y] appears in episodes 2 and 3, count it twice)
+                        n_overlaps = []
+                        for path in self.path_states[e]:
+                            path = path
+                            intersections = []
+                            for next_e in range(e+1, self.n_episodes):
+                                for next_path in self.path_states[next_e]:
+                                    next_path = next_path
+                                    intersection = set(path).intersection(set(next_path))
+                                    
+                                    ## if path and next_path share start and end, remove them from the intersection
+                                    if np.array_equal(path[0], next_path[0]):
+                                        intersection = intersection - set([path[0]])
+                                    if np.array_equal(path[-1], next_path[-1]):
+                                        intersection = intersection - set([path[-1]])
+                                    intersections.extend(intersection)
+                            n_overlaps.append(len(intersections))
+                        self.path_future_overlaps.append(n_overlaps)
+                        self.most_overlap.append(np.argmax(n_overlaps))
+                    self.path_future_overlaps.append([0,0]) ## trivially, the final episode has no future overlaps
+
+                    ## for path A and B of the first episode, calculate the number of states that overlap with the first row and column
+                    self.p0_x_overlaps = []
+                    self.p0_y_overlaps = []
+                    self.p0_overlaps = np.zeros((2,2)) ## i.e. dim=0 is path A and B, dim=1 is x and y (rows and cols??)
+                    for p, first_path in enumerate(self.path_states[0]):
+                        p0_x_overlap = []
+                        p0_y_overlap = []
+
+                        ## check if opening path is column first or row first
+                        if first_path[0][0]==first_path[1][0]: ## i.e. the x stays the same, 
+                            p0_x = first_path[0][0]
+                            p0_y = first_path[-1][1]
+                        elif first_path[0][1]==first_path[1][1]:
+                            p0_y = first_path[0][1]
+                            p0_x = first_path[-1][0]
+                        for next_e in range(1, self.n_episodes):
+                            for next_path in self.path_states[next_e]:
+                                for state in next_path[1:-1]:
+                                    if state[0]== p0_x:
+                                        p0_x_overlap.append(state)
+                                    if state[1]==p0_y:
+                                        p0_y_overlap.append(state)
+                        total_x_overlap = len(p0_x_overlap)
+                        total_y_overlap = len(p0_y_overlap)
+                        # total_column_overlap = len(set(p0_column_overlap)) ## if you don't want to count states twice
+                        # total_row_overlap = len(set(p0_row_overlap)) ## if you don't want to count states twice
+                        self.p0_x_overlaps.append(total_x_overlap)
+                        self.p0_y_overlaps.append(total_y_overlap)
+                        self.p0_overlaps[p, 0] = total_x_overlap
+                        self.p0_overlaps[p, 1] = total_y_overlap
+
+
+                    ## check if the two paths in the first episode have the same number of overlaps
+                    if self.path_future_overlaps[0][0] == self.path_future_overlaps[0][1]:
+                        self.same_overlaps = True
+                        self._episode = 0
+                        init_done = True
+                    # init_done = True
+                    # self._episode = 0
+
             t+=1
             if t>500:
                 raise ValueError('couldnt initialise env. SG: ', SG_found, 'paths: ', paths_found)
-        
-        ## hacky fix: make sure all coordinates in the path_states list are tuples of int, rather than tuples of int64
-        for e in range(self.n_episodes):
-            for p, path in enumerate(self.path_states[e]):
-                self.path_states[e][p] = [tuple([int(x) for x in state]) for state in path]
-        
-        ## get info on path overlaps in 2AFC expt
-        if self.expt == '2AFC':
-            self.most_overlap = []
-            self.path_future_overlaps = []
-
-            for e in range(self.n_episodes-1):
-
-                ### calculate the number of states in the current path that appear in the future set
-
-                ## no repeats (e.g. if [x,y] appears in episodes 2 and 3, only count it once)
-                # future_states = []
-                # for next_e in range(e+1, self.n_episodes):
-                #     for next_path in self.path_states[next_e]:
-                #         future_states.extend(next_path)
-                # n_intersections = []
-                # for path in self.path_states[e]:
-                #     intersections = set(path).intersection(set(future_states))
-                #     n_intersections.append(len(intersections) -2) ## -2 if start and end are shared
-                # self.path_n_intersections.append(n_intersections)
-
-                ## repeats (e.g. if [x,y] appears in episodes 2 and 3, count it twice)
-                n_overlaps = []
-                for path in self.path_states[e]:
-                    path = path
-                    intersections = []
-                    for next_e in range(e+1, self.n_episodes):
-                        for next_path in self.path_states[next_e]:
-                            next_path = next_path
-                            intersection = set(path).intersection(set(next_path))
-                            
-                            ## if path and next_path share start and end, remove them from the intersection
-                            if np.array_equal(path[0], next_path[0]):
-                                intersection = intersection - set([path[0]])
-                            if np.array_equal(path[-1], next_path[-1]):
-                                intersection = intersection - set([path[-1]])
-                            intersections.extend(intersection)
-                    n_overlaps.append(len(intersections))
-                self.path_future_overlaps.append(n_overlaps)
-                self.most_overlap.append(np.argmax(n_overlaps))
-            self.path_future_overlaps.append([0,0]) ## trivially, the final episode has no future overlaps
-
-            ## for path A and B of the first episode, calculate the number of states that overlap with the first row and column
-            self.p0_x_overlaps = []
-            self.p0_y_overlaps = []
-            self.p0_overlaps = np.zeros((2,2)) ## i.e. dim=0 is path A and B, dim=1 is x and y (rows and cols??)
-            for p, first_path in enumerate(self.path_states[0]):
-                p0_x_overlap = []
-                p0_y_overlap = []
-
-                ## check if opening path is column first or row first
-                if first_path[0][0]==first_path[1][0]: ## i.e. the x stays the same, 
-                    p0_x = first_path[0][0]
-                    p0_y = first_path[-1][1]
-                elif first_path[0][1]==first_path[1][1]:
-                    p0_y = first_path[0][1]
-                    p0_x = first_path[-1][0]
-                for next_e in range(1, self.n_episodes):
-                    for next_path in self.path_states[next_e]:
-                        for state in next_path[1:-1]:
-                            if state[0]== p0_x:
-                                p0_x_overlap.append(state)
-                            if state[1]==p0_y:
-                                p0_y_overlap.append(state)
-                total_x_overlap = len(p0_x_overlap)
-                total_y_overlap = len(p0_y_overlap)
-                # total_column_overlap = len(set(p0_column_overlap)) ## if you don't want to count states twice
-                # total_row_overlap = len(set(p0_row_overlap)) ## if you don't want to count states twice
-                self.p0_x_overlaps.append(total_x_overlap)
-                self.p0_y_overlaps.append(total_y_overlap)
-                self.p0_overlaps[p, 0] = total_x_overlap
-                self.p0_overlaps[p, 1] = total_y_overlap
 
         self.sim = False
 
@@ -912,14 +920,6 @@ class GridEnv(gym.Env):
                     ## randomly place the start location
                     start = np.random.randint(0, self.N-1, size=2)
                     path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation=transformation)
-
-                    ## or if this is the straight path that spans the whole grid, give it a leg-up by starting it somewhere along the edge
-                    if s_a_s[0] == self.N-1:
-                        start = np.array([0, np.random.randint(0, self.N-1)])
-                        path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation='none')
-                    elif s_a_s[1] == self.N-1:
-                        start = np.array([np.random.randint(0, self.N-1), 0])
-                        path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation='none')
                     
                     ## sanity check: in the corner!
                     # if len(self.starts)==0:
