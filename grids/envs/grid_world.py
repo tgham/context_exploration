@@ -199,7 +199,7 @@ class GridEnv(gym.Env):
             ## generate relevant trial info for each episode
             for e in range(n_episodes):
 
-                # try:
+                try:
                 
                     ## free movement
                     if self.expt == 'free':
@@ -268,8 +268,8 @@ class GridEnv(gym.Env):
                         self.path_actual_costs.append(path_actual_costs)
                         paths_found = True
 
-                # except:
-                #     break
+                except:
+                    break
 
 
 
@@ -804,7 +804,7 @@ class GridEnv(gym.Env):
     def sample_paths_and_SGs(self, max_turns=1):
 
         ### get the sequences of abstract paths
-        path_len = np.random.randint(self.N-4, self.N)
+        path_len = np.random.randint(self.N-3, self.N)
         # path_len = self.N-4
         # path_len = 5
         abstract_sequences = self.generate_abstract_sequences(path_len, max_turns)
@@ -819,7 +819,6 @@ class GridEnv(gym.Env):
             # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
             #     diff_axes = True
 
-            ## or, ensure different axes on first episode, but otherwise same axes on subsequent episodes
             if len(self.starts)==0:
             # if len(self.starts)<=1:
                 # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
@@ -827,8 +826,11 @@ class GridEnv(gym.Env):
                 #     diff_axes = True
                 
                 ## sanity check: choose the longest vertical and horizontal paths
-                # sampled_abstract_sequences = [abstract_sequences[0], abstract_sequences[-1]]
-                # diff_axes=True
+                if self.context == 'column':
+                    sampled_abstract_sequences = [abstract_sequences[0], abstract_sequences[-1]]
+                elif self.context == 'row':
+                    sampled_abstract_sequences = [abstract_sequences[-1], abstract_sequences[0]]
+                diff_axes = True
 
                 ## or, the first path is the rightangle path, and the second path is a long path
                 # sampled_abstract_sequences[0] = abstract_sequences[int(np.round(len(abstract_sequences)/2))]
@@ -843,10 +845,13 @@ class GridEnv(gym.Env):
                 # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
                 #     diff_axes = True
 
-                ## or, one of each L, but for consistency let's keep the first one horizontally dominant
-                if ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
-                    diff_axes = True
-
+                ## or, one of each L, but for consistency let's keep the first one dominant in  the direction of the context
+                # if self.context == 'column':
+                #     if ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
+                #         diff_axes = True
+                # elif self.context == 'row':
+                #     if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])):
+                #         diff_axes = True
 
 
             else:
@@ -888,38 +893,12 @@ class GridEnv(gym.Env):
 
 
         ### get the concrete sequences
-
-        ## same starts
-        # while (n_common_within_ep >= max_common_within_ep) or (n_common_across_eps >= max_common_across_eps):
-        #     both_in_grid = False
-        #     while not both_in_grid:
-        #         path_states = []
-        #         path_actions = []
-        #         goals = []
-        #         start = np.random.randint(0, self.N-1, size=2)
-        #         # start = np.array([0, 0])
-        #         for s_a_s in sampled_abstract_sequences:
-        #             # transformation = 'none'
-        #             transformation = np.random.choice(['none', 'x', 'y'])
-        #             path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start.copy(), transformation=transformation)
-        #             path_states.append(path)
-        #             path_actions.append(actions)
-        #             goals.append(path[-1])
-                    
-        #         ## check to see if all states are in the grid
-        #         # print(path_states)
-        #         if np.all([np.all(path >= 0) and np.all(path < self.N) for path in path_states]):
-        #             both_in_grid = True
-
-        #     ## check overlap between paths
-        #     path_states = [tuple(map(tuple, path)) for path in path_states]
-        #     n_common_within_ep, n_common_across_eps = self.check_overlap(path_states[0], path_states[1],1)
-        #     assert np.array_equal(path_states[0][0], path_states[1][0]), 'start locations are not the same: %s, %s' % (path_states[0][0], path_states[1][0])
-        # starts = start
-
-        
-        ## or, enforce different starts
+        max_attempts = 1000
+        attempt=0
         while (not diff_starts) or (n_common_within_ep >= max_common_within_ep) or (n_common_across_eps >= max_common_across_eps):
+            attempt+=1
+            if attempt>max_attempts:
+                raise RuntimeError(f"Exceeded maximum attempts ({max_attempts}) while generating paths and start-goal pairs for episode {len(self.starts)}. Failed using sequences {sampled_abstract_sequences}; paths {path_states};\n criteria: diff starts: {diff_starts}, n common within ep: {n_common_within_ep}, n common across eps: {n_common_across_eps}, max common within ep: {max_common_within_ep}, max common across eps: {max_common_across_eps}")
             path_states = []
             path_actions = []
             starts = []
@@ -929,13 +908,23 @@ class GridEnv(gym.Env):
                 while not in_grid:
                     transformation = np.random.choice(['none', 'x', 'y'])
                     # transformation = 'none'
+
+                    ## randomly place the start location
                     start = np.random.randint(0, self.N-1, size=2)
+                    path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation=transformation)
+
+                    ## or if this is the straight path that spans the whole grid, give it a leg-up by starting it somewhere along the edge
+                    if s_a_s[0] == self.N-1:
+                        start = np.array([0, np.random.randint(0, self.N-1)])
+                        path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation='none')
+                    elif s_a_s[1] == self.N-1:
+                        start = np.array([np.random.randint(0, self.N-1), 0])
+                        path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation='none')
                     
                     ## sanity check: in the corner!
                     # if len(self.starts)==0:
                     #     start = np.array([0, 0])
                     #     path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation='none')
-                    path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation=transformation)
 
                     ## check to see if all states are in the grid
                     if np.all(path >= 0) and np.all(path < self.N):
