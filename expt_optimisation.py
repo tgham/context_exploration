@@ -45,19 +45,22 @@ warnings.filterwarnings('ignore')
 ## callback function for saving simulation results
 def save_results(sim):
     sim_out = sim[0]
-    env = sim[1]
+    all_block_envs = sim[1]
 
     ## save simulation output
     for key in data_keys:
         sim_results[key].extend(sim_out[key])
     
     
-    ## save the grid surface
-    all_grids['grid'].append(sim_out['grid'][0])
-    # all_grids['env'].append(env) ## if pushed for space, comment this out
-    for key in grid_keys:
-        attribute = getattr(env, key)
-        all_grids[key].append(attribute)
+    ## save the grid surfaces for each of the blocks
+    for block in range(len(all_block_envs)):
+        env = all_block_envs[block]
+        all_grids['grid'].append(sim_out['grid'][0])
+        all_grids['block'].append(block)
+        all_grids['env'].append(env) ## if pushed for space, comment this out
+        for key in grid_keys:
+            attribute = getattr(env, key)
+            all_grids[key].append(attribute)
 
     ## update progress bar
     master_pbar.update(1)
