@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Taxi Coordination Task</title>
+    <script src="https://unpkg.com/jspsych@7.3.0"></script>
+    <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@1.1.1"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #0c0c1d;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(11, 40px);
+            grid-gap: 15px;
+            margin: 20px auto;
+            transition: opacity 0.2s ease-in-out;
+            background-color: rgb(208, 208, 210); /* Semi-transparent background */
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+        }
+
+        .cost-display-container, .choice-container, .instruction-section {
+            background-color: rgba(28, 28, 51, 0.85); /* More opaque for better readability */
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        #jspsych-experiment {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .grid-cell {
+            width: 36px;
+            height: 36px;
+            background-color: rgba(51, 51, 77, 0.8); /* Semi-transparent background for better visibility */
+            border: 5px solid rgba(51, 51, 77, 0);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            position: relative;
+            transition: background-color 0.25s;
+        }
+
+        .grid-cell.start {
+            background-color: rgba(51, 51, 77, 0.8); /* Semi-transparent background for better visibility */
+            font-size: 24px;
+        }
+
+        .grid-cell.start.observed-cost {
+            background-color: #f87171; /* Red background for observed cost */
+        }
+
+        .grid-cell.start.observed-no-cost {
+            background-color: #b8b8d9; /* Grey background for observed no cost */
+        }
+
+        .grid-cell.goal {
+            background-color: rgba(51, 51, 77, 0.8); /* Semi-transparent background for better visibility */
+            font-size: 24px;
+        }
+
+        .grid-cell.goal.observed-cost {
+            background-color: #f87171; /* Red background for observed cost */
+        }
+
+        .grid-cell.goal.observed-no-cost {
+            background-color: #b8b8d9; /* Grey background for observed no cost */
+        }
+
+        .grid-cell.avatar {
+            position: relative;
+            z-index: 10;
+        }
+
+        .grid-cell.avatar svg {
+            filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.7));
+        }
+
+        .blue-path {
+            color: #5dadec;
+            border-color: #5dadec;
+        }
+
+        .green-path {
+            color: #4ade80;
+            border-color: #4ade80;
+        }
+
+        .observed-cost {
+            background-color: #f87171;
+            transition: background-color 0.5s;
+        }
+
+        .observed-no-cost {
+            background-color: #b8b8d9; /* Much lighter grey for better visibility */
+            transition: background-color 0.5s;
+        }
+
+        .cost-display-container {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 10px;
+            background-color: #1c1c33;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .cost-total {
+            font-size: 24px;
+            margin: 5px 0;
+            color: #ffffff;
+        }
+
+        .cost-trial {
+            color: #f87171;
+            font-size: 20px;
+            margin: 5px 0;
+            font-weight: bold;
+            transition: transform 0.5s, opacity 0.5s;
+        }
+
+        .cost-animate {
+            animation: pulse 1s infinite alternate;
+        }
+
+        /* Updated layout for jobs display */
+        .jobs-layout {
+            display: flex;
+            flex-direction: column; /* Stack current and upcoming jobs vertically */
+            align-items: center; /* Center both sections horizontally */
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* Current job styling */
+        .current-job-section {
+            position: relative; /* Changed to relative for stacking */
+            top: auto; /* Reset top positioning */
+            left: auto; /* Reset left positioning */
+            transform: none; /* Reset transform */
+            flex: none; /* Reset flex properties */
+            margin-bottom: 0px; /* Add spacing below the current job */
+        }
+
+        /* Jobs section header */
+        .jobs-section {
+            width: 100%;
+        }
+
+        .jobs-header {
+            color: #5dadec;
+            text-align: center;
+            margin-top: 10px;
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+        }
+
+        /* Transparent mask container for upcoming jobs */
+        .upcoming-jobs-mask-container {
+            position: relative; /* Changed to relative for stacking */
+            left: auto; /* Reset left positioning */
+            top: auto; /* Reset top positioning */
+            transform: none; /* Reset transform */
+            width: 100%; /* Adjust width to fit the container */
+            margin-top: 10px; /* Add spacing above the upcoming jobs */
+        }
+
+        /* Opaque actual container for upcoming jobs */
+        .upcoming-jobs-actual-container {
+            display: flex;
+            flex-direction: row;
+            gap: 14px; /* Slightly reduced gap between grids */
+            background-color: rgba(28, 28, 51, 0.85); /* Opaque background */
+            padding: 14px; /* Slightly reduced padding */
+            border-radius: 9px; /* Slightly reduced border radius */
+            box-shadow: 0 6px 14px rgba(0, 0, 0, 0.5); /* Slightly increased shadow */
+            justify-content: center; /* Center horizontally */
+            align-items: center; /* Center vertically */
+            width: auto; /* Width depends on the number of upcoming jobs */
+        }
+
+        /* upcoming jobs header should match formatting of the container, so that it is positioned directly above it */
+        .upcoming-jobs-header-container {
+            position: relative; /* Changed to relative for stacking */
+            left: auto; /* Reset left positioning */
+            top: auto; /* Reset top positioning */
+            transform: none; /* Reset transform */
+            margin-bottom: 0px; /* Add spacing below the header */
+            display: flex;
+            flex-direction: row;
+            gap: 10px; /* Reduced gap for thinner spacing */
+            background-color: rgba(28, 28, 51, 0.85);
+            padding: 10px; /* Reduced padding for thinner appearance */
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            justify-content: center; /* Center horizontally */
+            align-items: center; /* Center vertically */
+        }
+
+        .upcoming-jobs-header {
+            color: #ffffff;
+            font-size: 1.5rem;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        /* Individual upcoming job styling */
+        .upcoming-job {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-width: 0; /* Allows the flex items to shrink below content size */
+            background-color: rgba(51, 51, 77, 0.4);
+            border-radius: 5px; /* Further reduced border radius */
+            padding: 6px; /* Further reduced padding */
+        }
+
+        /* Grid styling for upcoming jobs */
+        .upcoming-grid {
+            display: grid;
+            grid-gap: 11px; /* Slightly reduced gap between cells */
+            margin: 0 auto;
+            background-color: rgb(208, 208, 210);
+            padding: 14px; /* Slightly reduced padding */
+            border-radius: 8px; /* Slightly increased border radius */
+            grid-template-columns: repeat(auto-fit, 36px); /* Slightly reduced cell size */
+            grid-auto-rows: 36px; /* Match width for square cells */
+            justify-content: center; /* Center the grid horizontally */
+            align-content: center; /* Center the grid vertically */
+        }
+
+        .upcoming-cell {
+            width: 32px; /* Slightly reduced size for square cells */
+            height: 32px; /* Match width to ensure square dimensions */
+            background-color: rgba(51, 51, 77, 0.8);
+            border: 4px solid transparent; /* Default transparent border */
+            display: flex;
+            justify-content: center; /* Center content horizontally */
+            align-items: center; /* Center content vertically */
+            font-size: 1.5rem; /* Slightly reduced font size */
+            font-weight: bold;
+            position: relative;
+            box-sizing: border-box; /* Include padding and border in size calculations */
+        }
+
+        .upcoming-cell.start, .upcoming-cell.goal {
+            font-size: 1.2rem; /* Slightly reduced font size */
+        }
+
+        .upcoming-cell.blue-path {
+            border-color: #5dadec; /* Blue border for blue path */
+        }
+
+        .upcoming-cell.green-path {
+            border-color: #4ade80; /* Green border for green path */
+        }
+
+        /* Shared styles for observed costs */
+        .upcoming-cell.observed-cost {
+            background-color: #f87171;
+        }
+
+        .upcoming-cell.observed-no-cost {
+            background-color: #b8b8d9;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.1); }
+        }
+
+        .hidden {
+            opacity: 0;
+        }
+
+        .cost-burst {
+            position: absolute;
+            color: #f87171;
+            font-weight: bold;
+            animation: burst 0.6s ease-out forwards;
+            z-index: 20;
+        }
+
+        .free-burst {
+            position: absolute;
+            color: #4ade80;
+            font-weight: bold;
+            animation: burst 0.6s ease-out forwards;
+            z-index: 20;
+        }
+
+        @keyframes burst {
+            0% { transform: scale(0); opacity: 0; }
+            50% { transform: scale(1.5); opacity: 1; }
+            100% { transform: scale(1); opacity: 0; }
+        }
+
+        .choice-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center; /* Align arrows vertically with the grid */
+            width: 100%;
+            max-width: 1200px;
+            margin: 20px auto;
+        }
+
+        .choice-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 15px;
+            border: 2px solid;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            width: auto; /* Adjust width for separate arrows */
+            background-color: #ffffff;
+        }
+
+        .choice-box.blue-path {
+            margin-right: 20px; /* Add spacing between the blue arrow and the grid */
+        }
+
+        .choice-box.green-path {
+            margin-left: 20px; /* Add spacing between the green arrow and the grid */
+        }
+
+        .choice-box:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .choice-icon {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .choice-selected {
+            transform: scale(1.1);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+        }
+
+        .choice-unselected {
+            opacity: 0.3;
+            transform: scale(0.9);
+        }
+
+        .instruction-section {
+            background-color: #1c1c33;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 10px;
+            max-width: 700px;
+        }
+
+        h1, h2 {
+            color: #ece75d;
+            text-align: center;
+        }
+        
+        h3 {
+            color: #ffffff;
+            text-align: center;
+        }
+
+        .theme-context {
+            font-size: 22px;
+            text-align: center;
+            margin: 10px 0;
+            color: #4ade80;
+        }
+
+        .blue-text {
+            color: #5dadec;
+            font-weight: bold;
+        }
+
+        .green-text {
+            color: #4ade80;
+            font-weight: bold;
+        }
+
+        .red-text {
+            color: #f87171;
+            font-weight: bold;
+        }
+
+        .grey-text {
+            color: #9ca3af;
+            font-weight: bold;
+        }
+
+        .start-text {
+            font-size: 18px;
+            margin-top: 30px;
+            text-align: center;
+            color: #4ade80;
+        }
+
+        .fade-transition {
+            animation: fade 1s ease-in-out;
+        }
+
+        @keyframes fade {
+            0% { opacity: 1; }
+            50% { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
+
+        .grid-feedback {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2rem;
+            font-weight: bold;
+            color: #ffffff;
+            text-align: center;
+            background-color: rgba(28, 28, 51, 0.9);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            z-index: 1100;
+        }
+
+        .new-day-text {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2rem;
+            /* font-weight: bold; */
+            color: #ffffff;
+            text-align: center;
+            background-color: rgba(28, 28, 51, 0.9);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            z-index: 1100;
+        }
+
+        .fade-out {
+            animation: fadeOut 0.4s ease-in-out forwards;
+        }
+
+        @keyframes fadeOut {
+            0% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        .fade-in {
+            animation: fadeIn 1s ease-in-out forwards;
+        }
+
+        @keyframes fadeIn {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+
+        .grid-fade-in {
+            animation: gridFadeIn 0.2s ease-in-out forwards;
+        }
+
+        @keyframes gridFadeIn {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+
+        .button-container {
+            margin-top: 30px;
+            text-align: center;
+        }
+
+        .download-button {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 15px 32px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: background-color 0.3s;
+        }
+
+        .download-button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div id="jspsych-experiment"></div>
+
+    <script>
+        function initJsPsych(options) {
+            return new jsPsychModule.JsPsych(options);
+        }
+    </script>
+    <script src="experiment.js"></script>
+</body>
+</html>

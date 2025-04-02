@@ -748,11 +748,71 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         # self.tree_costs.append(total_cost)
         self.tree_costs[-1] += total_cost
         return total_cost
+    
+
+    ## expected KL divergence
+    def expected_KL(self, env_copy):
+
+        ### log determinant of covariance matrix
+
+        ## get prior p and q samples
+        prior_p_samples = self.all_posterior_ps
+        prior_q_samples = self.all_posterior_qs
+        prior_samples = np.vstack([prior_p_samples.T, prior_q_samples.T])
+
+        ## log det of prior covariance matrix 
+        # prior_cov = np.cov(prior_samples)
+        # prior_LD = np.linalg.slogdet(prior_cov)[1]
+        # assert prior_cov.shape[0] == N*2, 'covariance matrix is wrong shape'
+        
+        ## order the outcomes (counterfactual, then actual. This is to allow reuse of the posterior samples associated with the actual outcome on the next timestep)
+        actual_outcome = env_copy.obs.copy()[-1, -1]
+        if actual_outcome == env_copy.low_cost:
+            ordered_outcomes = [env_copy.high_cost, env_copy.low_cost]
+        else:
+            ordered_outcomes = [env_copy.low_cost, env_copy.high_cost]
+        posterior_LDs = []
+        KLs = []
+
+        ## posterior samples under each of the possible outcomes of the action that was just taken
+        for o, outcome in enumerate(ordered_outcomes):
+            sim_obs = env_copy.obs.copy()
+            sim_obs[-1, -1] = outcome
+            self.root_samples(sim_obs, n_samples=self.n_sims, n_iter=self.n_iter, lazy=self.lazy, CE=self.CE)
+            posterior_samples = np.vstack([np.array(self.all_posterior_ps).T, np.array(self.all_posterior_qs).T])
+            
+            ## posterior log det
+            # posterior_cov = np.cov(posterior_samples)
+            # assert posterior_cov.shape == prior_cov.shape, 'prior and posterior covariance matrices do not match: {} vs {}'.format(posterior_cov.shape, prior_cov.shape)
+            # LD = np.linalg.slogdet(posterior_cov)[1]
+            # posterior_LDs.append(LD)
+
+            ## or, calculate the KL divergence between two multivariate gaussians
+            KL = KL_divergence(prior_samples, posterior_samples)
+            KLs.append(KL)
 
 
+        ## expected log det, i.e. the difference between the prior and the expected posterior log dets, weighted by the probability of each outcome
+        # p_low = np.mean(prior_p_samples * prior_q_samples)
+        # p_high = 1 - p_low
+        # if actual_outcome == env_copy.low_cost:
+        #     expected_LD = p_low * (posterior_LDs[1] - prior_LD) + p_high * (posterior_LDs[0] - prior_LD)
+        # else:
+        #     expected_LD = p_low * (posterior_LDs[0] - prior_LD) + p_high * (posterior_LDs[1] - prior_LD)
+        # ELDs.append(expected_LD)
+
+        ## expected KL divergence
+        p_low = np.mean(prior_p_samples * prior_q_samples)
+        p_high = 1 - p_low
+        if actual_outcome == env_copy.low_cost:
+            expected_KL = p_low * (KLs[1]) + p_high * (KLs[0])
+        else:
+            expected_KL = p_low * (KLs[0]) + p_high * (KLs[1])
+        
+        return expected_KL
 
 
-## parallel function for simulating many episodes within the same mountain env
+## parallel function for simulating many episodes within the same grid env
 # def simulate_agent(m, N, env_params=None, metric='cityblock', expt='2AFC', n_episodes=10, agents = ['GP', 'GP-MCTS', 'BAMCP','CE'], n_sims=1000,n_blocks=1, correct_prior=True, n_futures=0, n_iter=10, lazy=False, exploration_constant=2, discount_factor=0.95, progress=False):
 def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, agents= ['BAMCP', 'CE'], progress=False):
     print(' ') # for some reason need this to get the pbar to appear
@@ -796,15 +856,15 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
     seed=os.getpid()
     np.random.seed(seed)
 
-    ## loop through runs of the same mountain-episode set
+    ## loop through runs of the same grid-episode set
     if progress:
         if n_blocks > 1:
-            pbar = tqdm(total=n_blocks*n_episodes, desc='Mountain_'+str(m)+', '+str(n_blocks)+' blocks, '+str(n_episodes)+' episodes', position=0, leave=False, ascii=True)
+            pbar = tqdm(total=n_blocks*n_episodes, desc='Grid_'+str(m)+', '+str(n_blocks)+' blocks, '+str(n_episodes)+' episodes', position=0, leave=False, ascii=True)
     
-    ## loop through blocks - i.e. different mountains drawn from the same prior
+    ## loop through blocks - i.e. different grids drawn from the same prior
     for block in range(n_blocks):   
 
-        ## create base mountain environment
+        ## create base grid environment
         env = make_env(N, n_episodes, expt_info, beta_params, metric)
         
         ## debugging plot env
@@ -844,10 +904,10 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
         # farmer = Farmer(N, context_prior=context_prior)
         # farmer = Farmer(N, context_prior=context_priors[ag])
 
-        ## loop through episodes (i.e. different start and goal states for the same mountain)
+        ## loop through episodes (i.e. different start and goal states for the same grid)
         if progress:
             if n_blocks <= 1:
-                pbar = tqdm(total=n_episodes, desc='Mountain_'+str(m)+', block '+str(block+1)+'/'+str(n_blocks), position=m+1, leave=False)
+                pbar = tqdm(total=n_episodes, desc='Grid_'+str(m)+', block '+str(block+1)+'/'+str(n_blocks), position=m+1, leave=False)
         for e in range(n_episodes):
 
         ## TEMP: just interested in first choice
@@ -948,8 +1008,6 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                     max_steps = len(env_copy.o_trajs[e])*1.75
                 elif expt=='2AFC':
                     max_steps = 100 ## just in case
-                max_search_attempts = 3
-
 
                 while not end_episode:
 
@@ -964,8 +1022,6 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         current, _, terminated, truncated, _ = env_copy.step(action)
                         # current = observation['agent']
                         steps += 1
-
-                        search_attempts = 0 # could do nan
 
                     ## certainty-equivalent
                     elif (ag == 'CE') or (ag == 'CE w/ BAMCP'):
@@ -1033,7 +1089,6 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                             # path_cost = np.sum(costs)
                             block_terminated = e == (n_episodes-1)
                         steps += 1
-                        search_attempts = 0 # could do nan
                         leaf_visits = []
 
                         ## update observations
@@ -1168,10 +1223,6 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                             ep_obs = env_copy.ep_obs.copy()
                             next_node_id = MCTS.init_node_id(ep_obs, init_info_state, e)
 
-                        
-
-                        search_attempts = 0 # could do nan here
-
 
                         ## check for backtracking
                         if len(actions)>1:
@@ -1231,155 +1282,11 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                     context_posterior = farmer.quick_context_posterior(env_copy.obs)
                     # print('posterior context:', context_posterior)
                     # print()
-                    
-                    ### log determinant of covariance matrix
+
+                    ## expected KL
                     # if (ag=='BAMCP') or (ag=='BAMCP w/ CE'):
-
-                    #     ## get prior p and q samples
-                    #     prior_p_samples = agent.all_posterior_ps
-                    #     prior_q_samples = agent.all_posterior_qs
-                    #     prior_samples = np.vstack([prior_p_samples.T, prior_q_samples.T])
-
-                    #     ## log det of prior covariance matrix 
-                    #     # prior_cov = np.cov(prior_samples)
-                    #     # prior_LD = np.linalg.slogdet(prior_cov)[1]
-                    #     # assert prior_cov.shape[0] == N*2, 'covariance matrix is wrong shape'
-                        
-                        
-                    #     ## order the outcomes (counterfactual, then actual. This is to allow reuse of the posterior samples associated with the actual outcome on the next timestep)
-                    #     actual_outcome = env_copy.obs.copy()[-1, -1]
-                    #     if actual_outcome == env_copy.low_cost:
-                    #         ordered_outcomes = [env_copy.high_cost, env_copy.low_cost]
-                    #     else:
-                    #         ordered_outcomes = [env_copy.low_cost, env_copy.high_cost]
-                    #     posterior_LDs = []
-                    #     KLs = []
-
-                    #     ## posterior samples under each of the possible outcomes of the action that was just taken
-                    #     for o, outcome in enumerate(ordered_outcomes):
-                    #         sim_obs = env_copy.obs.copy()
-                    #         sim_obs[-1, -1] = outcome
-                    #         agent.root_samples(sim_obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy, CE=False)
-                    #         posterior_samples = np.vstack([np.array(agent.all_posterior_ps).T, np.array(agent.all_posterior_qs).T])
-                            
-                    #         ## posterior log det
-                    #         # posterior_cov = np.cov(posterior_samples)
-                    #         # assert posterior_cov.shape == prior_cov.shape, 'prior and posterior covariance matrices do not match: {} vs {}'.format(posterior_cov.shape, prior_cov.shape)
-                    #         # LD = np.linalg.slogdet(posterior_cov)[1]
-                    #         # posterior_LDs.append(LD)
-
-                    #         ## or, calculate the KL divergence between two multivariate gaussians
-                    #         KL = KL_divergence(prior_samples, posterior_samples)
-                    #         KLs.append(KL)
-
-
-                    #     ## expected log det, i.e. the difference between the prior and the expected posterior log dets, weighted by the probability of each outcome
-                    #     # p_low = np.mean(prior_p_samples * prior_q_samples)
-                    #     # p_high = 1 - p_low
-                    #     # if actual_outcome == env_copy.low_cost:
-                    #     #     expected_LD = p_low * (posterior_LDs[1] - prior_LD) + p_high * (posterior_LDs[0] - prior_LD)
-                    #     # else:
-                    #     #     expected_LD = p_low * (posterior_LDs[0] - prior_LD) + p_high * (posterior_LDs[1] - prior_LD)
-                    #     # ELDs.append(expected_LD)
-
-                    #     ## expected KL divergence
-                    #     p_low = np.mean(prior_p_samples * prior_q_samples)
-                    #     p_high = 1 - p_low
-                    #     if actual_outcome == env_copy.low_cost:
-                    #         expected_KL = p_low * (KLs[1]) + p_high * (KLs[0])
-                    #     else:
-                    #         expected_KL = p_low * (KLs[0]) + p_high * (KLs[1])
+                    #     expected_KL = MCTS.expected_KL(env_copy)
                     #     EKLs.append(expected_KL)
-
-                        ## debugging
-                        # print(ag)
-                        # if actual_outcome == env_copy.low_cost:
-                        #     print('posterior KLs: low = ',KLs[1], ', high = ',KLs[0], ', probs: ',p_low, p_high)
-                        # else:
-                        #     print('posterior KLs: low = ',KLs[0], ', high = ',KLs[1], ', probs: ',p_low, p_high)
-                        # print('expected KL: ',expected_KL)
-                        # print()
-
-                        ## reorder the posterior LDs to match low and high cost outcomes (i.e. 0th element is the low cost outcome)
-                        # if ordered_outcomes[1] == env_copy.low_cost:
-                        #     posterior_LDs = [posterior_LDs[1], posterior_LDs[0]]
-                        # expected_LD2 = p_low * (posterior_LDs[0] - prior_LD) + p_high * (posterior_LDs[1] - prior_LD)
-                        # assert expected_LD==expected_LD2, 'expected LDs when actual outcome is {} do not match: {} vs {}'.format(actual_outcome, expected_LD, expected_LD2)
-
-                        # CE_deviation = action==action_CE
-                        # print('action {} deviate from CE'.format(['did','did not'][CE_deviation]))
-                        # print('prior LD: ',prior_LD)
-                        # if actual_outcome == env_copy.low_cost:
-                        #     print('posterior LDs: low = ',posterior_LDs[1], ', high = ',posterior_LDs[0], ', probs: ',p_low, p_high)
-                        # else:
-                        #     print('posterior LDs: low = ',posterior_LDs[0], ', high = ',posterior_LDs[1], ', probs: ',p_low, p_high)
-                        # print('expected change in LD: ',expected_LD)
-                        # print()
-
-                        ## reuse samples associated with the actual outcome on the next timestep
-                        # reuse_samples = True
-
-
-
-                    ### KL divergence
-                    # if (ag=='BAMCP') or (ag=='BAMCP w/ CE'):
-
-                    #     ## get the relevant prior samples, i.e. the p and q samples for the state that has just been reached
-                    #     i, j = current
-                    #     prior_p_samples = MCTS.all_posterior_p[:,i]
-                    #     prior_q_samples = MCTS.all_posterior_q[:,j]
-
-                    #     ##clipping
-                    #     prior_joint = np.vstack([prior_p_samples, prior_q_samples])
-
-                    #     ## debugging: plot kde of prior p and q samples
-                    #     # fig, axs = plt.subplots(1, 3, figsize=(15,5))
-                    #     # sns.kdeplot(prior_p_samples, ax=axs[0], label='prior p')
-                    #     # sns.kdeplot(prior_q_samples, ax=axs[0], label='prior q')
-                    #     # axs[0].set_title('prior')
-                    #     # axs[0].legend()
-
-                    #     ### simulate a set of posterior (root) samples under each of the possible outcomes of the action that was just taken
-                    #     kl_divs = []
-                    #     for o, outcome in enumerate([env_copy.low_cost, env_copy.high_cost]):
-                    #         farmer_copy = copy.deepcopy(agent)
-                    #         posterior_p_samples = []
-                    #         posterior_q_samples = []
-                    #         sim_obs = env_copy.obs.copy()
-                    #         sim_obs[-1, -1] = outcome
-                    #         state_to_update = np.array([i, j, outcome])
-                    #         for t in range(n_sims):
-                    #             farmer_copy.root_sample(sim_obs, lazy=True, CE=False, state=state_to_update)
-                    #             posterior_p_samples.append(farmer_copy.posterior_p[i])
-                    #             posterior_q_samples.append(farmer_copy.posterior_q[j])
-                    #         posterior_joint = np.vstack([posterior_p_samples, posterior_q_samples])
-
-                    #         # KL = KL_divergence(prior_joint, posterior_joint)
-
-                    #         ## calculate KL divergence
-                    #         kde_prior = gaussian_kde(prior_joint)
-                    #         kde_posterior = gaussian_kde(posterior_joint)
-                    #         eval_points = posterior_joint
-                    #         p_posterior = kde_posterior.evaluate(eval_points)
-                    #         p_prior = kde_prior.evaluate(eval_points)
-                    #         kl_div = np.mean(np.log(p_posterior / p_prior))
-                    #         kl_divs.append(kl_div)
-
-                    #         ## debugging: plot kde of prior p and q samples
-                    #         # sns.kdeplot(posterior_p_samples, ax=axs[o+1], label='posterior p')
-                    #         # sns.kdeplot(posterior_q_samples, ax=axs[o+1], label='posterior q')
-                    #         # axs[o+1].legend()
-                    #         # axs[o+1].set_title('posterior for outcome {}'.format(outcome))
-                    #     # plt.show()
-                        
-                    #     # ## compute the expected KL divergence
-                    #     p_low = np.mean(prior_p_samples * prior_q_samples) 
-                    #     # p_low2 = np.mean(prior_p_samples) * np.mean(prior_q_samples)
-                    #     p_high = 1 - p_low
-                    #     expected_kl_div = p_low * kl_divs[0] + p_high * kl_divs[1]
-                    #     EKLs.append(expected_kl_div)
-
-
 
                     
                     ## prevent endless episode 
@@ -1387,14 +1294,14 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         early_terminate = True
 
                     if early_terminate:
-                        print('mountain ',m,': episode ',e,' terminated for agent ',ag,' after ',steps,' steps')
-                        # raise ValueError('mountain ',m,': episode ',e,' terminated for agent ',ag,' after ',steps,' steps')
+                        print('grid ',m,': episode ',e,' terminated for agent ',ag,' after ',steps,' steps')
+                        # raise ValueError('grid ',m,': episode ',e,' terminated for agent ',ag,' after ',steps,' steps')
 
                         ## or just skip to the next episode
                         sim_out['agent'].append(agent)
                         sim_out['block'].append(block)
                         sim_out['episode'].append(e)
-                        sim_out['mountain'].append(m)
+                        sim_out['grid'].append(m)
                         sim_out['start'].append(start)
                         sim_out['goal'].append(goal)
                         sim_out['path_A'].append(env_copy.path_states[e][0])
@@ -1425,7 +1332,6 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         sim_out['actual_trajectory'].append(env_copy.a_traj)
                         sim_out['optimal_trajectory'].append(env_copy.o_trajs[e])
                         sim_out['observations'].append(env_copy.obs)
-                        sim_out['search_attempts'].append(search_attempts)
                         # sim_out['action_tree'].append(MCTS.tree.action_tree())
                         sim_out['action_tree'].append(np.nan)
                         sim_out['expected_LD'].append(ELDs)
@@ -1455,7 +1361,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         sim_out['agent'].append(ag)
                         sim_out['block'].append(block)
                         sim_out['episode'].append(e)
-                        sim_out['mountain'].append(m)
+                        sim_out['grid'].append(m)
                         sim_out['start'].append(start)
                         sim_out['goal'].append(goal)
                         sim_out['path_A'].append(env_copy.path_states[e][0])
@@ -1486,7 +1392,6 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         sim_out['actual_trajectory'].append(env_copy.a_traj)
                         sim_out['optimal_trajectory'].append(env_copy.o_trajs[e])
                         sim_out['observations'].append(env_copy.obs)
-                        sim_out['search_attempts'].append(search_attempts)
                         # sim_out['action_tree'].append(MCTS.tree.action_tree())
                         sim_out['action_tree'].append(np.nan)
                         sim_out['expected_LD'].append(ELDs)
@@ -1505,7 +1410,6 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         # EXC START AND END COSTS
                         sim_out['total_cost'].append(np.sum(env_copy.a_traj_costs[1:-1]))
                         sim_out['total_optimal_cost'].append(np.sum(env_copy.o_traj_costs[e][1:-1]))
-
 
 
                         ## calculate discounted actual and optimal costs
@@ -1531,12 +1435,6 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         sim_out['total_discounted_optimal_cost'].append(np.sum(discounted_costs))
 
                         
-                        ## GP-specific
-                        # sim_out['true_k'].append(true_k)
-                        # sim_out['RPE'].append(np.mean(np.abs(GP.posterior_mean.reshape(N,N) - env_copy.costs)))
-                        # sim_out['posterior_mean'].append(GP.posterior_mean)
-                        # sim_out['theta_MLE'].append(best_theta)
-                        
                         ## update the agent env
                         # agent_envs[a] = copy.deepcopy(env_copy)
                         agent_envs[ag] = env_copy
@@ -1552,7 +1450,6 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
             
             if progress:
                 pbar.update(1)
-
         if progress & (n_blocks <= 1):
             pbar.close()
     if progress & (n_blocks > 1):
