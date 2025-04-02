@@ -140,7 +140,7 @@ env.reset()
 ## sampler init
 n_iter = 10
 lazy=False
-n_samples = 50000
+n_samples = 100000
 
 ## initial set of root samples ('prior' samples)
 farmer = Farmer(N)
@@ -172,7 +172,7 @@ for i, o in enumerate(obs_set):
 obs_set = np.array(obs_set)
 
 ## set number of sims
-n_tests = 120
+n_tests = 1000
 KL_dict = {
     't': [],
     'sequence': [],
@@ -190,7 +190,7 @@ n_seqs = len(obs_set[0])
 
 ## parallel fitting
 parallel = True
-n_cores = 12
+n_cores = 50
 if __name__ == '__main__':
     if parallel:
         print('Parallel KL tests')
@@ -220,6 +220,6 @@ print('parallel complete')
 df_KL = pd.DataFrame(KL_dict)
 
 ## save
-df_KL.to_csv('KL_divergence_{}x{}_env_{}-{}-{}-{}_beta_{}_samples_{}_tests.csv'.format(N,N, 
+df_KL.to_csv('useful_saves/KL/KL_divergence_{}x{}_env_{}-{}-{}-{}_beta_{}_samples_{}_tests.csv'.format(N,N, 
                                                                     beta_params['alpha_row'], beta_params['beta_row'], beta_params['alpha_col'], beta_params['beta_col'],
                                                                     n_samples, n_tests))
