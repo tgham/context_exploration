@@ -861,7 +861,8 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
         if n_blocks > 1:
             pbar = tqdm(total=n_blocks*n_episodes, desc='Grid_'+str(m)+', '+str(n_blocks)+' blocks, '+str(n_episodes)+' episodes', position=0, leave=False, ascii=True)
     
-    ## loop through blocks - i.e. different grids drawn from the same prior
+    ## loop through blocks - i.e. different grids drawn from the same prior. we will collect these for saving at the end
+    all_block_envs = []
     for block in range(n_blocks):   
 
         ## create base grid environment
@@ -1452,9 +1453,13 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                 pbar.update(1)
         if progress & (n_blocks <= 1):
             pbar.close()
+
+        ## save the env for this block
+        all_block_envs.append(env_copy)
+
     if progress & (n_blocks > 1):
         pbar.close()
                     
 
-    return sim_out,env_copy
+    return sim_out,all_block_envs
     # return sim_out, _
