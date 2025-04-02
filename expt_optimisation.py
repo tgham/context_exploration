@@ -77,23 +77,25 @@ all_grids['env'] = [] ## in case we want to save the whole thing
 
 ### env inits
 beta_params = {
-    'alpha_row': 0.5,
-    'beta_row': 0.5,
-    'alpha_col': 0.5,
-    'beta_col': 0.5
+    'alpha_row': 0.25,
+    'beta_row': 0.25,
+    'alpha_col': 0.25,
+    'beta_col': 0.25
     # 'alpha_row': 1,
     # 'beta_row': 1,
     # 'alpha_col': 1,
     # 'beta_col': 1
 }
-N = 11
+N = 10
 n_grids = 400
 n_episodes = 4
-n_blocks = 3
+n_blocks = 4
 expt = '2AFC'
 expt_info = {
     'type': expt,
     'same_SGs': False,
+    'context': 'column',
+    # 'context': 'row',
 }
 env_params = {
     'N': N,
@@ -127,7 +129,7 @@ sampler_params = {
 agents = [
     # 'GP',
            'BAMCP',
-        #    'CE',
+           'CE',
         #    'BAMCP_wrong',
         #    'BAMCP w/ CE',
         #    'CE w/ BAMCP'
@@ -172,10 +174,10 @@ df_sim = pd.DataFrame(sim_results)
 
 
 ## save simulated grids + results
-df_sim.to_csv('useful_saves/expt_optimisation/{}_{}x{}_env_{}-{}-{}-{}_beta_{}_grids_{}_episodes_{}_sims_{}_blocks_results.csv'.format(expt,N,N, 
+df_sim.to_csv('useful_saves/expt_optimisation/{}_{}x{}_env_{}_context_{}-{}-{}-{}_beta_{}_grids_{}_episodes_{}_sims_{}_blocks_results.csv'.format(expt,N,N, expt_info['context'],
                                                                                        beta_params['alpha_row'], beta_params['beta_row'], beta_params['alpha_col'], beta_params['beta_col'],
                                                                                        n_grids, n_episodes,n_sims, n_blocks))
-with open('useful_saves/expt_optimisation/{}_{}x{}_env_{}-{}-{}-{}_beta_{}_grids_{}_episodes_{}_sims_{}_blocks_envs.pkl'.format(expt,N,N, 
+with open('useful_saves/expt_optimisation/{}_{}x{}_env_{}_context_{}-{}-{}-{}_beta_{}_grids_{}_episodes_{}_sims_{}_blocks_envs.pkl'.format(expt,N,N, expt_info['context'],
                                                                                                          beta_params['alpha_row'], beta_params['beta_row'], beta_params['alpha_col'], beta_params['beta_col'],
                                                                                                  n_grids, n_episodes, n_sims, n_blocks), 'wb') as f:
     pickle.dump(all_grids, f)
