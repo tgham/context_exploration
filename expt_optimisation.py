@@ -87,7 +87,7 @@ beta_params = {
     # 'beta_col': 1
 }
 N = 11
-n_mountains = 502
+n_grids = 400
 n_episodes = 4
 n_blocks = 3
 expt = '2AFC'
@@ -127,7 +127,7 @@ sampler_params = {
 agents = [
     # 'GP',
            'BAMCP',
-           'CE',
+        #    'CE',
         #    'BAMCP_wrong',
         #    'BAMCP w/ CE',
         #    'CE w/ BAMCP'
@@ -171,11 +171,11 @@ for dk in del_keys:
 df_sim = pd.DataFrame(sim_results)
 
 
-## save simulated mountains + results
-df_sim.to_csv('useful_saves/expt_optimisation/{}_{}x{}_env_{}-{}-{}-{}_beta_{}_mountains_{}_episodes_{}_sims_{}_blocks_results.csv'.format(expt,N,N, 
+## save simulated grids + results
+df_sim.to_csv('useful_saves/expt_optimisation/{}_{}x{}_env_{}-{}-{}-{}_beta_{}_grids_{}_episodes_{}_sims_{}_blocks_results.csv'.format(expt,N,N, 
                                                                                        beta_params['alpha_row'], beta_params['beta_row'], beta_params['alpha_col'], beta_params['beta_col'],
-                                                                                       n_mountains, n_episodes,n_sims, n_blocks))
-with open('useful_saves/expt_optimisation/{}_{}x{}_env_{}-{}-{}-{}_beta_{}_mountains_{}_episodes_{}_sims_{}_blocks_envs.pkl'.format(expt,N,N, 
+                                                                                       n_grids, n_episodes,n_sims, n_blocks))
+with open('useful_saves/expt_optimisation/{}_{}x{}_env_{}-{}-{}-{}_beta_{}_grids_{}_episodes_{}_sims_{}_blocks_envs.pkl'.format(expt,N,N, 
                                                                                                          beta_params['alpha_row'], beta_params['beta_row'], beta_params['alpha_col'], beta_params['beta_col'],
-                                                                                                 n_mountains, n_episodes, n_sims, n_blocks), 'wb') as f:
-    pickle.dump(all_mountains, f)
+                                                                                                 n_grids, n_episodes, n_sims, n_blocks), 'wb') as f:
+    pickle.dump(all_grids, f)
