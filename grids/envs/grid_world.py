@@ -895,6 +895,7 @@ class GridEnv(gym.Env):
             n_common_across_eps = 0
         max_common_within_ep = (path_len-1)/2.5
         max_common_across_eps = (path_len-1)/2.5
+        vals_diff = False
         ## debugging
         # max_common_within_ep = np.inf
         # max_common_across_eps = np.inf
@@ -903,7 +904,7 @@ class GridEnv(gym.Env):
         ### get the concrete sequences
         max_attempts = 1000
         attempt=0
-        while (not diff_starts) or (n_common_within_ep >= max_common_within_ep) or (n_common_across_eps >= max_common_across_eps):
+        while (not diff_starts) or (n_common_within_ep >= max_common_within_ep) or (n_common_across_eps >= max_common_across_eps) or (not vals_diff):
             attempt+=1
             if attempt>max_attempts:
                 raise RuntimeError(f"Exceeded maximum attempts ({max_attempts}) while generating paths and start-goal pairs for episode {len(self.starts)}. Failed using sequences {sampled_abstract_sequences}; paths {path_states};\n criteria: diff starts: {diff_starts}, n common within ep: {n_common_within_ep}, n common across eps: {n_common_across_eps}, max common within ep: {max_common_within_ep}, max common across eps: {max_common_across_eps}")
@@ -962,6 +963,14 @@ class GridEnv(gym.Env):
             ## check overlap between paths
             path_states = [tuple(map(tuple, path)) for path in path_states]
             n_common_within_ep, n_common_across_eps = self.check_overlap(path_states[0], path_states[1],0)
+
+            ## check that the costs of the paths are sufficiently different
+            e = len(self.starts)
+            path_A_cost = np.sum([self.costss[e][x, y] for x, y in path_states[0]])
+            path_B_cost = np.sum([self.costss[e][x, y] for x, y in path_states[1]])
+            cost_tol = 0.75
+            vals_ratio = min(np.abs([path_A_cost, path_B_cost])) / max(np.abs([path_A_cost, path_B_cost]))
+            vals_diff = vals_ratio < cost_tol
 
         return sampled_abstract_sequences, path_actions, path_states, starts, goals
 
