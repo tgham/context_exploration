@@ -50,7 +50,7 @@ class Grid {
     }
 
     // Create the grid HTML for a specific trial
-    createGridHTML = function(trialIndex, selectedPath = null) {
+    createGridHTML = function(trialIndex, selectedPath = null, keyAssignment = null) {
         const trial = this.getTrialInfo(trialIndex);
         const city = trial.city;
         const grid = trial.grid;
@@ -85,17 +85,36 @@ class Grid {
                 // Handle overlapping paths
                 const isOverlap = isPathA && isPathB;
                 let pathClass = '';
-                let content = ''; // Content for the cell (e.g., star or other marker)
-                if (isOverlap) {
-                    const randomChoice = Math.random() < 0.5;
-                    pathClass = randomChoice ? 'blue-path' : 'green-path';
-                    content = randomChoice ? '<span class="green-text">⚝</span>' : '<span class="blue-text">⚝</span>';
-                } else if (isPathA) {
-                    pathClass = 'blue-path';
-                    content = '⚝';
-                } else if (isPathB) {
-                    pathClass = 'green-path';
-                    content = '⚝';
+                let content = ''; // Content for the cell (e.g., letter or other marker)
+                
+                // Determine content based on key assignment if provided
+                if (keyAssignment) {
+                    if (isOverlap) {
+                        const randomChoice = Math.random() < 0.5;
+                        pathClass = randomChoice ? 'blue-path' : 'green-path';
+                        content = randomChoice ? 
+                            `<span class="green-text">${keyAssignment.green}</span>` : 
+                            `<span class="blue-text">${keyAssignment.blue}</span>`;
+                    } else if (isPathA) {
+                        pathClass = 'blue-path';
+                        content = keyAssignment.blue;
+                    } else if (isPathB) {
+                        pathClass = 'green-path';
+                        content = keyAssignment.green;
+                    }
+                } else {
+                    // Fall back to stars if no key assignment provided
+                    if (isOverlap) {
+                        const randomChoice = Math.random() < 0.5;
+                        pathClass = randomChoice ? 'blue-path' : 'green-path';
+                        content = randomChoice ? '<span class="green-text">⚝</span>' : '<span class="blue-text">⚝</span>';
+                    } else if (isPathA) {
+                        pathClass = 'blue-path';
+                        content = '⚝';
+                    } else if (isPathB) {
+                        pathClass = 'green-path';
+                        content = '⚝';
+                    }
                 }
     
                 if (isStartA) {
@@ -191,7 +210,7 @@ let grid;
 let currentTrialIndex = 0;
 let cityMapping = {}; // This will store our shuffled mapping
 
-fetch('assets/expt_info.json')
+fetch('assets/trial_sequences/expt_info_1.json')
     .then(response => response.json())
     .then(data => {
         grid = new Grid(data); // Initialize the Grid class with the loaded data
@@ -412,26 +431,42 @@ function mergeCosts(trialCost, callback) {
 const pathSelectionTrial = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
+        // Randomly assign F and J to blue and green paths
+        const keyAssignment = Math.random() < 0.5 ? 
+            { blue: 'F', green: 'J' } : 
+            { blue: 'J', green: 'F' };
+        
+        // Store the assignment for this trial
+        jsPsych.data.addProperties({
+            blue_key: keyAssignment.blue,
+            green_key: keyAssignment.green
+        });
+        
         return `
             <div class="jobs-layout">
                 <div class="current-job-section grid-fade-in">
-                    ${grid.createGridHTML(currentTrialIndex)}
+                    ${grid.createGridHTML(currentTrialIndex, null, keyAssignment)}
                 </div>
                 <div class="upcoming-jobs-container grid-fade-in">
                     ${createUpcomingJobsHTML(currentTrialIndex)}
                 </div>
-
             </div>
         `;
     },
-    choices: ['arrowleft', 'arrowright'], 
+    choices: ['f', 'j'], 
     on_finish: function(data) {
+        // Get the key assignment for this trial
+        const keyAssignment = {
+            blue: jsPsych.data.get().last(1).values()[0].blue_key,
+            green: jsPsych.data.get().last(1).values()[0].green_key
+        };
+        
         // Determine the chosen path based on the key pressed
         let choice;
-        if (data.response === 'arrowleft') {
-            choice = 'blue';
-        } else if (data.response === 'arrowright') {
-            choice = 'green';
+        if (data.response === 'f') {
+            choice = keyAssignment.blue === 'F' ? 'blue' : 'green';
+        } else if (data.response === 'j') {
+            choice = keyAssignment.blue === 'J' ? 'blue' : 'green';
         } else {
             console.error("Invalid keypress:", data.response);
             return;
@@ -451,19 +486,19 @@ const pathSelectionTrial = {
         // Replot the grid with only the chosen path
         const gridContainer = document.querySelector(".current-job-section");
         if (gridContainer) {
-            gridContainer.innerHTML = grid.createGridHTML(currentTrialIndex, choice);
+            gridContainer.innerHTML = grid.createGridHTML(currentTrialIndex, choice, keyAssignment);
         }
         
         // Store all the relevant data from the current trial
         const currentTrial = grid.getTrialInfo(currentTrialIndex);
         data.choice = choice;
-        // data.trial_index = currentTrialIndex;
         data.trial = currentTrial.trial;
         data.city = currentTrial.city;
         data.grid_id = currentTrial.grid;
         data.path_chosen = choice;
         data.button_pressed = data.response;
         data.reaction_time_ms = data.rt;
+        data.key_assignment = keyAssignment;
 
         // Include all columns from the current trial
         Object.keys(currentTrial).forEach(key => {
@@ -577,8 +612,8 @@ function createUpcomingJobsHTML(currentTrialIndex) {
 function setCityBackground(cityId) {
     const body = document.body;
     
-    // Use the mapped city ID instead of the original
-    const mappedCityId = cityMapping[cityId];
+    // Use the mapped city ID if cityId is not 'practice1' or 'practice2'
+    const mappedCityId = (cityId === 'practice1' || cityId === 'practice2') ? cityId : cityMapping[cityId];
 
     // Clear any existing background styles before applying a new one
     body.style.backgroundImage = '';
@@ -591,8 +626,6 @@ function setCityBackground(cityId) {
     body.style.backgroundSize = 'cover';
     body.style.backgroundPosition = 'center';
     body.style.backgroundRepeat = 'no-repeat';
-
-    console.log(`Set background to city${mappedCityId}.png (original ID: ${cityId})`);
 }
 
 // Modified function structure: separate functions for city change vs day change
@@ -660,7 +693,7 @@ function animateDayChange(cityId) {
 
     // Fade to full opacity
     setTimeout(() => {
-        blackCover.style.opacity = '0.7';
+        blackCover.style.opacity = '0.6';
     }, 10);
 
     // After 1s, set the new city background and fade back to transparency
@@ -767,19 +800,49 @@ const newGridMessage = {
     }
 };
 
+const firstGridMessage = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+
+        // Set initial city background from the first trial
+        const firstTrial = grid.getTrialInfo(0);
+        const cityId = firstTrial.city;
+        grid.currentCity = cityId; // Initialize the current city
+        setCityBackground(cityId); // Plot the first city background
+
+        return `
+            <div class="new-day-text">
+                <h2>Welcome to the Experiment!</h2>
+                <p>Your taxi company is starting operations</p>
+                <p>Make the best route decisions to minimize toll costs.</p>
+                <p>Press any key to begin dispatching.</p>
+            </div>
+        `;
+    },
+    choices: "ALL_KEYS",
+    on_finish: function() {
+        console.log("Experiment has begun in City:", grid.getCurrentCity());
+    }
+};
+
+
+
 
 
 const pathAnimationTrial = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         const lastTrialData = jsPsych.data.get().last(1).values()[0];
+        const keyAssignment = lastTrialData.key_assignment;
         
         return `
             <div class="jobs-layout">
                 <div class="current-job-section">
-                    ${grid.createGridHTML(currentTrialIndex, lastTrialData.choice)}
+                    ${grid.createGridHTML(currentTrialIndex, lastTrialData.choice, keyAssignment)}
                 </div>
-                ${createUpcomingJobsHTML(currentTrialIndex)}
+                <div class="upcoming-jobs-container">
+                    ${createUpcomingJobsHTML(currentTrialIndex)}
+                </div>
             </div>
         `;
     },
@@ -874,22 +937,21 @@ const instructions = {
         <div class="instruction-section">
             <h2>Press any key to begin your shift, Dispatcher!</h2>
         </div>
-
-
     `,
     choices: "ALL_KEYS",
     on_load: function() {
-        // Set initial city background from the first trial
-        const firstTrial = grid.getTrialInfo(0);
-        const cityId = firstTrial.city;
-        grid.currentCity = cityId; // Initialize the current city
-        setCityBackground(cityId);
+        // Set initial city background to 'practice1.png'
+        setCityBackground('practice1');
+        grid.currentCity = 'practice1'; // Initialize the current city
     }
 };
 
 // Create timeline
 function createTimeline() {
     const timeline = [instructions];
+
+    // Add the first grid message
+    timeline.push(firstGridMessage);
 
     // Loop through all trials and add them to the timeline
     for (let i = 0; i < grid.trialInfo.length; i++) {
