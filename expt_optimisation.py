@@ -57,7 +57,7 @@ def save_results(sim):
         env = all_block_envs[block]
         all_grids['grid'].append(sim_out['grid'][0])
         all_grids['block'].append(block)
-        all_grids['env'].append(env) ## if pushed for space, comment this out
+        # all_grids['env'].append(env) ## if pushed for space, comment this out
         for key in grid_keys:
             attribute = getattr(env, key)
             all_grids[key].append(attribute)
@@ -77,6 +77,8 @@ for key in grid_keys:
     all_grids[key] = []
 all_grids['grid'] = [] 
 all_grids['env'] = [] ## in case we want to save the whole thing
+all_grids['block'] = [] ## in case we want to save the whole thing
+
 
 ### env inits
 beta_params = {
@@ -90,15 +92,15 @@ beta_params = {
     # 'beta_col': 1
 }
 N = 10
-n_grids = 400
+n_grids = 500
 n_episodes = 4
 n_blocks = 4
 expt = '2AFC'
 expt_info = {
     'type': expt,
     'same_SGs': False,
-    'context': 'column',
-    # 'context': 'row',
+    # 'context': 'column',
+    'context': 'row',
 }
 env_params = {
     'N': N,
