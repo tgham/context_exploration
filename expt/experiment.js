@@ -5,6 +5,10 @@ const jsPsych = initJsPsych({
     }
 });
 
+import { createQuizTrials } from './test.js';
+
+
+
 // Define the Grid class
 class Grid {
     constructor(gridData) {
@@ -50,7 +54,7 @@ class Grid {
     }
 
     // Create the grid HTML for a specific trial
-    createGridHTML = function(trialIndex, selectedPath = null, keyAssignment = null) {
+    createGridHTML = function(trialIndex, selectedPath = null, keyAssignment = null, includeCostDisplay = true) {
         const trial = this.getTrialInfo(trialIndex);
         const city = trial.city;
         const grid = trial.grid;
@@ -60,23 +64,34 @@ class Grid {
         
         let gridHTML = `
             <div class="current-job-container">
+        `;
+
+        if (includeCostDisplay) {
+            gridHTML += `
                 <div class="cost-display-container">
-                    <h2 class="cost-total">Total Tolls Paid:</h2>
+                    <h2 class="cost-total">Total Tolls Paid Today:</h2>
                     <p id="total-cost" class="cost-total">$${totalCost}</p>
                     <p id="trial-cost" class="cost-trial hidden">-$0</p> 
                 </div>
+            `;
+        }
+
+        gridHTML += `
                 <div class="grid-container" style="grid-template-columns: repeat(${gridSize}, 40px);">
         `;
+
+        // debugging: check the observed costs
+        console.log("Observed Costs:", this.observedCosts);
     
         for (let row = 0; row < gridSize; row++) {
             for (let col = 0; col < gridSize; col++) {
                 const cellId = `cell-${row}-${col}`;
-                const isStartA = selectedPath !== 'green' && row === trial.start_A[0] && col === trial.start_A[1];
-                const isStartB = selectedPath !== 'blue' && row === trial.start_B[0] && col === trial.start_B[1];
-                const isGoalA = selectedPath !== 'green' && row === trial.goal_A[0] && col === trial.goal_A[1];
-                const isGoalB = selectedPath !== 'blue' && row === trial.goal_B[0] && col === trial.goal_B[1];
-                const isPathA = selectedPath !== 'green' && trial.path_A.some(coord => coord[0] === row && coord[1] === col);
-                const isPathB = selectedPath !== 'blue' && trial.path_B.some(coord => coord[0] === row && coord[1] === col);
+                const isStartA = selectedPath !== 'green' && selectedPath !== 'none' && row === trial.start_A[0] && col === trial.start_A[1];
+                const isStartB = selectedPath !== 'blue' && selectedPath !== 'none' && row === trial.start_B[0] && col === trial.start_B[1];
+                const isGoalA = selectedPath !== 'green' && selectedPath !== 'none' && row === trial.goal_A[0] && col === trial.goal_A[1];
+                const isGoalB = selectedPath !== 'blue' && selectedPath !== 'none' && row === trial.goal_B[0] && col === trial.goal_B[1];
+                const isPathA = selectedPath !== 'green' && selectedPath !== 'none' && trial.path_A.some(coord => coord[0] === row && coord[1] === col);
+                const isPathB = selectedPath !== 'blue' && selectedPath !== 'none' && trial.path_B.some(coord => coord[0] === row && coord[1] === col);
     
                 const observedCost = this.observedCosts[`${row}-${col}`];
                 const observedClass = observedCost !== undefined ? 
@@ -140,6 +155,44 @@ class Grid {
     
         return gridHTML;
     };
+
+    // method for plotting a grid, either blank or with all costs revealed
+    createBlankGridHTML(trialIndex = null, revealCosts = false) {
+        let gridHTML = `
+            <div class="grid-container" style="grid-template-columns: repeat(${this.gridSize}, 40px);">
+        `;
+    
+        let binaryCosts = null; // Initialize binaryCosts
+    
+        if (trialIndex !== null) {
+            const trial = this.getTrialInfo(trialIndex);
+            const city = trial.city;
+            const grid = trial.grid;
+    
+            // Attempt to get binaryCosts
+            binaryCosts = this.getBinaryCosts(`city_${city}_grid_${grid}`);
+            if (!binaryCosts) {
+                console.warn(`binaryCosts is undefined for city_${city}_grid_${grid}`);
+                binaryCosts = Array.from({ length: this.gridSize }, () => Array(this.gridSize).fill(0)); // Default grid
+            }
+        }
+    
+        for (let row = 0; row < this.gridSize; row++) {
+            for (let col = 0; col < this.gridSize; col++) {
+                const cellId = `cell-${row}-${col}`;
+    
+                if (revealCosts) {
+                    const cost = binaryCosts ? binaryCosts[row][col] : 0; // Safely access binaryCosts
+                    const costClass = cost === -1 ? 'observed-cost' : 'observed-no-cost';
+                    gridHTML += `<div class="grid-cell ${costClass}" id="${cellId}"></div>`;
+                } else {
+                    gridHTML += `<div class="grid-cell" id="${cellId}"></div>`;
+                }
+            }
+        }
+        gridHTML += `</div>`;
+        return gridHTML;
+    }
     
     // Record observed costs for a path
     recordObservedCosts(path, binaryCosts) {
@@ -203,6 +256,95 @@ class Grid {
     getCurrentCity() {
         return this.currentCity;
     }
+
+    // Add createUpcomingJobsHTML as a method of the Grid class
+    createUpcomingJobsHTML(currentTrialIndex) {
+        const currentGridNumber = Math.floor(currentTrialIndex / this.nTrials);
+        const currentGridStartIndex = currentGridNumber * this.nTrials;
+        const currentGridEndIndex = currentGridStartIndex + this.nTrials - 1;
+
+        const remainingTrialsInGrid = currentGridEndIndex - currentTrialIndex;
+        if (remainingTrialsInGrid <= 0) {
+            return '';
+        }
+
+        let upcomingHTML = `
+            <div class="jobs-section">
+                <div class="upcoming-jobs-header-container">
+                    <div class="upcoming-jobs-header">Upcoming jobs</div>
+                </div>
+                <div class="upcoming-jobs-mask-container">
+                    <div class="upcoming-jobs-actual-container">
+        `;
+
+        for (let i = 1; i <= remainingTrialsInGrid; i++) {
+            const previewIndex = currentTrialIndex + i;
+            const trial = this.getTrialInfo(previewIndex);
+
+            upcomingHTML += `
+                <div class="upcoming-job">
+                    <div class="upcoming-grid" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
+            `;
+
+            for (let row = 0; row < this.gridSize; row++) {
+                for (let col = 0; col < this.gridSize; col++) {
+                    const isStartA = row === trial.start_A[0] && col === trial.start_A[1];
+                    const isStartB = row === trial.start_B[0] && col === trial.start_B[1];
+                    const isGoalA = row === trial.goal_A[0] && col === trial.goal_A[1];
+                    const isGoalB = row === trial.goal_B[0] && col === trial.goal_B[1];
+                    const isPathA = trial.path_A.some(coord => coord[0] === row && coord[1] === col);
+                    const isPathB = trial.path_B.some(coord => coord[0] === row && coord[1] === col);
+
+                    const observedCost = this.observedCosts[`${row}-${col}`];
+                    const observedClass = observedCost !== undefined ? 
+                        (observedCost === -1 ? 'observed-cost' : 'observed-no-cost') : '';
+
+                    const isOverlap = isPathA && isPathB;
+                    let pathClass = '';
+                    let content = '';
+                    if (isOverlap) {
+                        const randomChoice = Math.random() < 0.5;
+                        pathClass = randomChoice ? 'blue-path' : 'green-path';
+                        content = randomChoice ? '<span class="green-text">⚝</span>' : '<span class="blue-text">⚝</span>';
+                    } else if (isPathA) {
+                        pathClass = 'blue-path';
+                        content = '⚝';
+                    } else if (isPathB) {
+                        pathClass = 'green-path';
+                        content = '⚝';
+                    }
+
+                    if (isStartA) {
+                        upcomingHTML += `<div class="upcoming-cell ${observedClass} blue-path" data-row="${row}" data-col="${col}">
+                                            <img src="assets/people/blue_person.png" alt="Blue Start" width="20" height="20">
+                                         </div>`;
+                    } else if (isStartB) {
+                        upcomingHTML += `<div class="upcoming-cell ${observedClass} green-path" data-row="${row}" data-col="${col}">
+                                            <img src="assets/people/green_person.png" alt="Green Start" width="20" height="20">
+                                         </div>`;
+                    } else if (isGoalA || isGoalB || isPathA || isPathB || isOverlap) {
+                        upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" data-row="${row}" data-col="${col}" style="font-size: 1.5rem;">
+                                            ${isGoalA || isGoalB ? '🏠' : content}
+                                         </div>`;
+                    } else {
+                        upcomingHTML += `<div class="upcoming-cell ${observedClass}" data-row="${row}" data-col="${col}"></div>`;
+                    }
+                }
+            }
+
+            upcomingHTML += `
+                    </div>
+                </div>
+            `;
+        }
+
+        upcomingHTML += `
+                    </div>
+                </div>
+            </div>
+        `;
+        return upcomingHTML;
+    }
 }
 
 // Load the JSON data and initialize the Grid class
@@ -216,7 +358,9 @@ fetch('assets/trial_sequences/expt_info_1.json')
         grid = new Grid(data); // Initialize the Grid class with the loaded data
         
         // Create a shuffled mapping for cities
-        createCityMapping(8); // Assuming you have 8 city files
+        const numCities = data.env_costs.n_cities; // Assuming this is the number of cities
+        createCityMapping(numCities);
+        // createCityMapping(8); // Assuming you have 8 city files
         
         console.log('Grid data loaded:', grid);
         console.log('City mapping created:', cityMapping);
@@ -224,6 +368,34 @@ fetch('assets/trial_sequences/expt_info_1.json')
         initializeExperiment(); // Call a function to start the experiment
     })
     .catch(error => console.error('Error loading JSON:', error));
+
+// Function to load practice grid data
+function loadPracticeGrid(filePath, gridVariableName) {
+    return fetch(filePath)
+        .then(response => response.json())
+        .then(data => {
+            const practiceGrid = new Grid(data); // Initialize the Grid class with the loaded data
+            console.log(`${gridVariableName} data loaded:`, practiceGrid);
+            return practiceGrid;
+        })
+        .catch(error => console.error(`Error loading ${gridVariableName} JSON:`, error));
+}
+
+// Load practice grids
+let practice1Grid, practice2Grid, practice3Grid, practice4Grid;
+let practice1TrialIndex = 0, practice2TrialIndex = 0, practice3TrialIndex = 0, practice4TrialIndex = 0;
+
+Promise.all([
+    loadPracticeGrid('assets/trial_sequences/practice_sequence1.json', 'practice1Grid').then(grid => practice1Grid = grid),
+    loadPracticeGrid('assets/trial_sequences/practice_sequence2.json', 'practice2Grid').then(grid => practice2Grid = grid),
+    loadPracticeGrid('assets/trial_sequences/practice_sequence3.json', 'practice3Grid').then(grid => practice3Grid = grid),
+    loadPracticeGrid('assets/trial_sequences/practice_sequence4.json', 'practice4Grid').then(grid => practice4Grid = grid)
+]).then(() => {
+    console.log('Both practice grids loaded successfully.');
+}).catch(error => {
+    console.error('Error loading practice grids:', error);
+});
+
 
 // Function to create a random mapping of city IDs
 function createCityMapping(numCities) {
@@ -343,7 +515,7 @@ function animateAgent(path, binaryCosts, callback) {
             }
 
             currentStep++;
-            setTimeout(step, 400);
+            setTimeout(step, 300);
         } else {
             // Animation complete
             mergeCosts(trialCost, callback);
@@ -372,7 +544,7 @@ function mergeCosts(trialCost, callback) {
             
             // Animated counter for total cost
             const startCost = totalCost - trialCost;
-            const duration = 1000;
+            const duration = 500;
             const frameDuration = 1000 / 60;
             const totalFrames = Math.round(duration / frameDuration);
             let frame = 0;
@@ -394,7 +566,7 @@ function mergeCosts(trialCost, callback) {
                     trialCostElement.classList.add("hidden");
                 }
             }, frameDuration);
-        }, 500);
+        }, 100);
     }
 
     setTimeout(() => {
@@ -448,7 +620,7 @@ const pathSelectionTrial = {
                     ${grid.createGridHTML(currentTrialIndex, null, keyAssignment)}
                 </div>
                 <div class="upcoming-jobs-container grid-fade-in">
-                    ${createUpcomingJobsHTML(currentTrialIndex)}
+                    ${grid.createUpcomingJobsHTML(currentTrialIndex)}
                 </div>
             </div>
         `;
@@ -513,107 +685,151 @@ const pathSelectionTrial = {
     }
 };
 
-// Add this function to create HTML for upcoming job previews
-function createUpcomingJobsHTML(currentTrialIndex) {
-    // Calculate which grid we're in (nTrials is contained in the grid object)
-    const currentGridNumber = Math.floor(currentTrialIndex / grid.nTrials);
-    const currentGridStartIndex = currentGridNumber * grid.nTrials;
-    const currentGridEndIndex = currentGridStartIndex + grid.nTrials - 1; // Last trial index in this grid
-
-    // Only show jobs within the current grid
-    const remainingTrialsInGrid = currentGridEndIndex - currentTrialIndex;
-
-    if (remainingTrialsInGrid <= 0) {
-        return ''; // No upcoming jobs in this grid
-    }
-
-    let upcomingHTML = `
-        <div class="jobs-section">
-            <div class="upcoming-jobs-header-container">
-                <div class="upcoming-jobs-header">Upcoming jobs</div>
+const pathAnimationTrial = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        const lastTrialData = jsPsych.data.get().last(1).values()[0];
+        const keyAssignment = lastTrialData.key_assignment;
+        
+        return `
+            <div class="jobs-layout">
+                <div class="current-job-section">
+                    ${grid.createGridHTML(currentTrialIndex, lastTrialData.choice, keyAssignment)}
+                </div>
+                <div class="upcoming-jobs-container">
+                    ${grid.createUpcomingJobsHTML(currentTrialIndex)}
+                </div>
             </div>
-            <div class="upcoming-jobs-mask-container">
-                <div class="upcoming-jobs-actual-container">
-    `;
-
-    for (let i = 1; i <= remainingTrialsInGrid; i++) {
-        const previewIndex = currentTrialIndex + i;
-        const trial = grid.getTrialInfo(previewIndex);
-        const jobNumber = (previewIndex % grid.nTrials) + 1; // Job number within the grid
-
-        upcomingHTML += `
-            <div class="upcoming-job">
-                <div class="upcoming-grid" style="grid-template-columns: repeat(${grid.gridSize}, 30px); grid-auto-rows: 30px;">
         `;
+    },
+    choices: "NO_KEYS",
+    on_load: function() {
+        const currentTrial = grid.getTrialInfo(currentTrialIndex);
+        const lastTrialData = jsPsych.data.get().last(1).values()[0];
 
-        for (let row = 0; row < grid.gridSize; row++) {
-            for (let col = 0; col < grid.gridSize; col++) {
-                const isStartA = row === trial.start_A[0] && col === trial.start_A[1];
-                const isStartB = row === trial.start_B[0] && col === trial.start_B[1];
-                const isGoalA = row === trial.goal_A[0] && col === trial.goal_A[1];
-                const isGoalB = row === trial.goal_B[0] && col === trial.goal_B[1];
-                const isPathA = trial.path_A.some(coord => coord[0] === row && coord[1] === col);
-                const isPathB = trial.path_B.some(coord => coord[0] === row && coord[1] === col);
-
-                // Check if this cell has been observed in previous trials
-                const observedCost = grid.observedCosts[`${row}-${col}`];
-                const observedClass = observedCost !== undefined ? 
-                    (observedCost === -1 ? 'observed-cost' : 'observed-no-cost') : '';
-
-                // Handle overlapping paths
-                const isOverlap = isPathA && isPathB;
-                let pathClass = '';
-                let content = ''; // Content for the cell (e.g., star or other marker)
-                if (isOverlap) {
-                    const randomChoice = Math.random() < 0.5;
-                    pathClass = randomChoice ? 'blue-path' : 'green-path';
-                    content = randomChoice ? '<span class="green-text">⚝</span>' : '<span class="blue-text">⚝</span>';
-                } else if (isPathA) {
-                    pathClass = 'blue-path';
-                    content = '⚝';
-                } else if (isPathB) {
-                    pathClass = 'green-path';
-                    content = '⚝';
-                }
-
-                if (isStartA) {
-                    upcomingHTML += `<div class="upcoming-cell ${observedClass} blue-path" data-row="${row}" data-col="${col}">
-                                        <img src="assets/people/blue_person.png" alt="Blue Start" width="20" height="20">
-                                     </div>`;
-                } else if (isStartB) {
-                    upcomingHTML += `<div class="upcoming-cell ${observedClass} green-path" data-row="${row}" data-col="${col}">
-                                        <img src="assets/people/green_person.png" alt="Green Start" width="20" height="20">
-                                     </div>`;
-                } else if (isGoalA || isGoalB || isPathA || isPathB || isOverlap) {
-                    upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" data-row="${row}" data-col="${col}" style="font-size: 1.5rem;">
-                                        ${isGoalA || isGoalB ? '🏠' : content}
-                                     </div>`;
-                } else {
-                    upcomingHTML += `<div class="upcoming-cell ${observedClass}" data-row="${row}" data-col="${col}"></div>`;
-                }
-            }
+        if (!lastTrialData || !lastTrialData.choice) {
+            console.error("No valid path choice found. Restarting trial.");
+            return jsPsych.finishTrial();
         }
 
-        upcomingHTML += `
-                </div>
-            </div>
-        `;
-    }
+        const chosenPath = lastTrialData.choice === 'blue' ? currentTrial.path_A : currentTrial.path_B;
+        const binaryCosts = grid.getBinaryCosts(`city_${currentTrial.city}_grid_${currentTrial.grid}`);
 
-    upcomingHTML += `
-                </div>
-            </div>
-        </div>
-    `;
-    return upcomingHTML;
-}
+        console.log("Animating Trial:", currentTrialIndex);
+        console.log("Chosen Path:", lastTrialData.choice, chosenPath);
+
+        grid.recordObservedCosts(chosenPath, binaryCosts);
+
+        setTimeout(() => {
+            animateAgent(chosenPath, binaryCosts, function() {
+                jsPsych.finishTrial();
+            });
+        }, 100);
+    }
+};
+
+// // Add this function to create HTML for upcoming job previews
+// function createUpcomingJobsHTML(currentTrialIndex) {
+
+//     // Calculate which grid we're in (nTrials is contained in the grid object)
+//     const currentGridNumber = Math.floor(currentTrialIndex / grid.nTrials);
+//     const currentGridStartIndex = currentGridNumber * grid.nTrials;
+//     const currentGridEndIndex = currentGridStartIndex + grid.nTrials - 1; // Last trial index in this grid
+
+//     // Only show jobs within the current grid
+//     const remainingTrialsInGrid = currentGridEndIndex - currentTrialIndex;
+
+//     if (remainingTrialsInGrid <= 0) {
+//         return ''; // No upcoming jobs in this grid
+//     }
+
+//     let upcomingHTML = `
+//         <div class="jobs-section">
+//             <div class="upcoming-jobs-header-container">
+//                 <div class="upcoming-jobs-header">Upcoming jobs</div>
+//             </div>
+//             <div class="upcoming-jobs-mask-container">
+//                 <div class="upcoming-jobs-actual-container">
+//     `;
+
+//     for (let i = 1; i <= remainingTrialsInGrid; i++) {
+//         const previewIndex = currentTrialIndex + i;
+//         const trial = grid.getTrialInfo(previewIndex);
+//         const jobNumber = (previewIndex % grid.nTrials) + 1; // Job number within the grid
+
+//         upcomingHTML += `
+//             <div class="upcoming-job">
+//                 <div class="upcoming-grid" style="grid-template-columns: repeat(${grid.gridSize}, 30px); grid-auto-rows: 30px;">
+//         `;
+
+//         for (let row = 0; row < grid.gridSize; row++) {
+//             for (let col = 0; col < grid.gridSize; col++) {
+//                 const isStartA = row === trial.start_A[0] && col === trial.start_A[1];
+//                 const isStartB = row === trial.start_B[0] && col === trial.start_B[1];
+//                 const isGoalA = row === trial.goal_A[0] && col === trial.goal_A[1];
+//                 const isGoalB = row === trial.goal_B[0] && col === trial.goal_B[1];
+//                 const isPathA = trial.path_A.some(coord => coord[0] === row && coord[1] === col);
+//                 const isPathB = trial.path_B.some(coord => coord[0] === row && coord[1] === col);
+
+//                 // Check if this cell has been observed in previous trials
+//                 const observedCost = grid.observedCosts[`${row}-${col}`];
+//                 const observedClass = observedCost !== undefined ? 
+//                     (observedCost === -1 ? 'observed-cost' : 'observed-no-cost') : '';
+
+//                 // Handle overlapping paths
+//                 const isOverlap = isPathA && isPathB;
+//                 let pathClass = '';
+//                 let content = ''; // Content for the cell (e.g., star or other marker)
+//                 if (isOverlap) {
+//                     const randomChoice = Math.random() < 0.5;
+//                     pathClass = randomChoice ? 'blue-path' : 'green-path';
+//                     content = randomChoice ? '<span class="green-text">⚝</span>' : '<span class="blue-text">⚝</span>';
+//                 } else if (isPathA) {
+//                     pathClass = 'blue-path';
+//                     content = '⚝';
+//                 } else if (isPathB) {
+//                     pathClass = 'green-path';
+//                     content = '⚝';
+//                 }
+
+//                 if (isStartA) {
+//                     upcomingHTML += `<div class="upcoming-cell ${observedClass} blue-path" data-row="${row}" data-col="${col}">
+//                                         <img src="assets/people/blue_person.png" alt="Blue Start" width="20" height="20">
+//                                      </div>`;
+//                 } else if (isStartB) {
+//                     upcomingHTML += `<div class="upcoming-cell ${observedClass} green-path" data-row="${row}" data-col="${col}">
+//                                         <img src="assets/people/green_person.png" alt="Green Start" width="20" height="20">
+//                                      </div>`;
+//                 } else if (isGoalA || isGoalB || isPathA || isPathB || isOverlap) {
+//                     upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" data-row="${row}" data-col="${col}" style="font-size: 1.5rem;">
+//                                         ${isGoalA || isGoalB ? '🏠' : content}
+//                                      </div>`;
+//                 } else {
+//                     upcomingHTML += `<div class="upcoming-cell ${observedClass}" data-row="${row}" data-col="${col}"></div>`;
+//                 }
+//             }
+//         }
+
+//         upcomingHTML += `
+//                 </div>
+//             </div>
+//         `;
+//     }
+
+//     upcomingHTML += `
+//                 </div>
+//             </div>
+//         </div>
+//     `;
+//     return upcomingHTML;
+// }
 
 // Update the setCityBackground function to use the mapping
 function setCityBackground(cityId) {
     const body = document.body;
     
     // Use the mapped city ID if cityId is not 'practice1' or 'practice2'
-    const mappedCityId = (cityId === 'practice1' || cityId === 'practice2') ? cityId : cityMapping[cityId];
+    const mappedCityId = (cityId === 'practice1' || cityId === 'practice2' || cityId === 'practice3') ? cityId : cityMapping[cityId];
 
     // Clear any existing background styles before applying a new one
     body.style.backgroundImage = '';
@@ -646,9 +862,11 @@ function animateCityChange(oldCityId, newCityId) {
     
     // Create old city element
     let oldCity = document.createElement('div');
+    let oldCityMapping;
     oldCity.style.width = '50%'; // Half of the container
     oldCity.style.height = '100%';
     oldCityMapping = cityMapping[oldCityId];
+    console.log("Old city mapping:", oldCityMapping);
     oldCity.style.backgroundImage = `url('assets/cities/${oldCityMapping}.png')`;
     oldCity.style.backgroundSize = 'cover';
     oldCity.style.backgroundPosition = 'center';
@@ -656,6 +874,7 @@ function animateCityChange(oldCityId, newCityId) {
     
     // Create new city element
     let newCity = document.createElement('div');
+    let newCityMapping;
     newCity.style.width = '50%'; // Half of the container
     newCity.style.height = '100%';
     newCityMapping = cityMapping[newCityId];
@@ -693,7 +912,7 @@ function animateDayChange(cityId) {
 
     // Fade to full opacity
     setTimeout(() => {
-        blackCover.style.opacity = '0.6';
+        blackCover.style.opacity = '0.5';
     }, 10);
 
     // After 1s, set the new city background and fade back to transparency
@@ -716,14 +935,29 @@ const gridFeedback = {
         return `
             <div class="new-day-text">
                 <h3>You paid a total of <strong style="color: red;">$${todayTolls}</strong> in tolls today.</h3>
-                <h3>Press any key to continue.</h3>
+                <h3>Press spacebar to continue.</h3>
             </div>
         `;
     },
-    choices: "ALL_KEYS",
+choices: [' '], // spacebar to continue
     on_finish: function() {
         grid.resetGrid(); // Reset the grid for the next set of trials
     }
+};
+
+// display feedback after a grid
+const practiceGridFeedback = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        const todayTolls = totalCost; // Assuming totalCost tracks the tolls paid so far
+        return `
+            <div class="new-day-text">
+                <h3>You paid a total of <strong style="color: red;">$${todayTolls}</strong> in tolls today.</h3>
+                <h3>Press spacebar to continue.</h3>
+            </div>
+        `;
+    },
+choices: [' '], // spacebar to continue
 };
 
 
@@ -749,9 +983,9 @@ const newGridMessage = {
                 <div class="new-day-text">
                     <h2>New City!</h2>
                     <p>Your taxi company is now operating in a new city.</p>
-                    <p>The streets and traffic patterns may be different here.</p>
-                    <p>Prepare for the next set of route decisions.</p>
-                    <p id="continue-text" style="display: none;">Press any key to continue dispatching.</p>
+                    <p>Note: his may be a different type of city - i.e. the traffic may run from north-south, or east-west.</p>
+                    <p>Prepare for your first day in this new city.</p>
+                    <p id="continue-text" style="display: none;">Press spacebar to continue dispatching.</p>
                 </div>
             `;
             
@@ -767,8 +1001,9 @@ const newGridMessage = {
                 <div class="new-day-text">
                     <h2>New Day</h2>
                     <p>A new day has begun, and the tolls in this city have been reset.</p>
-                    <p>Prepare for the next set of route decisions.</p>
-                    <p id="continue-text" style="display: none;">Press any key to continue dispatching.</p>
+                    <p>Remember: you're still in the same city as before. Traffic still tends to run from north-south or east-west in the same way that it did on previous days.</p>
+                    <p>Prepare for your next day.</p>
+                    <p id="continue-text" style="display: none;">Press spacebar to continue dispatching.</p>
                 </div>
             `;
             
@@ -804,73 +1039,32 @@ const firstGridMessage = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
 
+        // revert back to first trial
+        currentTrialIndex = 0;
+
         // Set initial city background from the first trial
         const firstTrial = grid.getTrialInfo(0);
         const cityId = firstTrial.city;
+        console.log('trialIndex:', currentTrialIndex);
+        console.log('cityId:', cityId);
         grid.currentCity = cityId; // Initialize the current city
         setCityBackground(cityId); // Plot the first city background
 
         return `
             <div class="new-day-text">
-                <h2>Welcome to the Experiment!</h2>
-                <p>Your taxi company is starting operations</p>
-                <p>Make the best route decisions to minimize toll costs.</p>
-                <p>Press any key to begin dispatching.</p>
+                <h2>Ready?</h2>
+                <p>Your taxi company is starting operations in its first city.</p>
+                <p>Remember: your goal is to minimise the total tolls paid each day.</p>
+                <p>Press spacebar to begin dispatching.</p>
             </div>
         `;
     },
-    choices: "ALL_KEYS",
+choices: [' '], // spacebar to continue
     on_finish: function() {
-        console.log("Experiment has begun in City:", grid.getCurrentCity());
+        console.log("Experiment has begun in City:", grid.getCurrentCity()), ', Trial:', currentTrialIndex,', Grid:', grid.getTrialInfo(currentTrialIndex).grid;
     }
 };
 
-
-
-
-
-const pathAnimationTrial = {
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: function() {
-        const lastTrialData = jsPsych.data.get().last(1).values()[0];
-        const keyAssignment = lastTrialData.key_assignment;
-        
-        return `
-            <div class="jobs-layout">
-                <div class="current-job-section">
-                    ${grid.createGridHTML(currentTrialIndex, lastTrialData.choice, keyAssignment)}
-                </div>
-                <div class="upcoming-jobs-container">
-                    ${createUpcomingJobsHTML(currentTrialIndex)}
-                </div>
-            </div>
-        `;
-    },
-    choices: "NO_KEYS",
-    on_load: function() {
-        const currentTrial = grid.getTrialInfo(currentTrialIndex);
-        const lastTrialData = jsPsych.data.get().last(1).values()[0];
-
-        if (!lastTrialData || !lastTrialData.choice) {
-            console.error("No valid path choice found. Restarting trial.");
-            return jsPsych.finishTrial();
-        }
-
-        const chosenPath = lastTrialData.choice === 'blue' ? currentTrial.path_A : currentTrial.path_B;
-        const binaryCosts = grid.getBinaryCosts(`city_${currentTrial.city}_grid_${currentTrial.grid}`);
-
-        console.log("Animating Trial:", currentTrialIndex);
-        console.log("Chosen Path:", lastTrialData.choice, chosenPath);
-
-        grid.recordObservedCosts(chosenPath, binaryCosts);
-
-        setTimeout(() => {
-            animateAgent(chosenPath, binaryCosts, function() {
-                jsPsych.finishTrial();
-            });
-        }, 100);
-    }
-};
 
 // End message
 const end = {
@@ -884,11 +1078,11 @@ const end = {
             <p>Your performance data has been recorded for evaluation.</p>
             <div class="button-container">
                 <button id="download-data" class="download-button">Download Data</button>
-                <p>Press any key to finish the experiment.</p>
+                <p>Press spacebar to finish the experiment.</p>
             </div>
         `;
     },
-    choices: "ALL_KEYS",
+choices: [' '], // spacebar to continue
     on_load: function() {
         // Add event listener for the download button
         document.getElementById('download-data').addEventListener('click', downloadTrialData);
@@ -935,10 +1129,10 @@ const instructions = {
         </div>
         
         <div class="instruction-section">
-            <h2>Press any key to begin your shift, Dispatcher!</h2>
+            <h2>Press spacebar to begin your shift, Dispatcher!</h2>
         </div>
     `,
-    choices: "ALL_KEYS",
+choices: [' '], // spacebar to continue
     on_load: function() {
         // Set initial city background to 'practice1.png'
         setCityBackground('practice1');
@@ -946,9 +1140,683 @@ const instructions = {
     }
 };
 
+// First instruction page
+const instructions1 = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `
+        <div class="instruction-section">
+            <h1>Welcome to City Cabs!</h1>
+            <p>As the dispatch coordinator, you are responsible for managing taxi routes across the city.</p>
+            <p>At any given time, you will be offered two possible jobs, corresponding to two different pick-up and drop-off routes. Your task is to decide which job you want to accept.</p>
+            <p>To help you get started, we'll go through a series of short practice trials.</p>
+        </div>
+
+        <div class="instruction-section">
+            <h2>Press spacebar to continue </h2>
+        </div>
+    `,
+    choices: [' '], // spacebar to continue
+    on_load: function() {
+        // Set initial city background to 'practice1.png'
+        setCityBackground('practice1');
+        grid.currentCity = 'practice1'; // Initialize the current city
+    }  
+};
+
+const instructions2 = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `
+        <div class="instruction-section">
+            <h1>Dispatch Instructions</h1>
+            <p>For each dispatch, you'll see two possible jobs marked in <span class="blue-text">blue</span> and <span class="green-text">green</span>.</p>
+            <p>Each route has a passenger <img src="assets/people/blue_person.png" alt="Blue Passenger" width="20" height="20"> or <img src="assets/people/green_person.png" alt="Green Passenger" width="20" height="20"> at a pickup point, and a drop-off destination 🏠.</p>
+            <p>The route of each job is marked with one of two letters:</p>
+            <p>- The letter <strong>F</strong> marks one route</p>
+            <p>- The letter <strong>J</strong> marks the other route</p>
+            <p>To send out a taxi to one of these jobs, you need to press the corresponding key on your keyboard.</p>
+            <p>For any given choice, the lengths of the two possible jobs are the same. However, some are more costly than others, because of the tolls in the city...</p>
+        </div>
+
+        <div class="instruction-section">
+            <h1>Toll roads:</h1>
+            <p>Some roads are busier than others, meaning that tolls apply in certain intersections. This means that it costs money to travel here.</p>
+            <p>Visiting an intersection reveals whether or not you have to pay a toll there.</p>
+            <p>- <strong><span style="color: rgb(114, 114, 150);">Dark grey streets</span></strong> are roads that haven't been visited yet</p>
+            <p>- <strong><span class="red-text">Red streets</span></strong> are toll roads that cost $1 to pass through</p>
+            <p>- <strong><span style="color:rgb(194, 194, 229);">Light grey streets</span></strong> are free roads with no tolls</p>
+            <p>Your goal is to complete all taxi jobs while minimizing total toll costs for your company.</p>
+        </div>
+
+        <div class="instruction-section">
+            <h2>Let’s get you familiar with selecting a job.</h2>
+            <h2>Press spacebar to continue </h2>
+
+        </div>
+    `,
+    choices: [' '], // Spacebar to continue
+};
+
+const practice1SelectionTrial = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        
+
+        // Determine the key assignment based on the trial index
+        const keyAssignment = { blue: 'F', green: 'J' };
+        const instruction = practice1TrialIndex === 0 
+            ? `<h3>Please select the <span style="color: blue; font-weight: bold;">BLUE</span> path by pressing the <span style="font-weight: bold;">${keyAssignment.blue}</span> key.</h3>`
+            : `<h3>Please select the <span style="color: green; font-weight: bold;">GREEN</span> path by pressing the <span style="font-weight: bold;">${keyAssignment.green}</span> key.</h3>`;
+        
+        // Store the assignment for this trial
+        jsPsych.data.addProperties({
+            blue_key: keyAssignment.blue,
+            green_key: keyAssignment.green
+        });
+        
+        return `
+            <div class="instruction-section" style="text-align: center; margin-bottom: 20px; font-size: 18px; color: #3a3a3a;">
+                <h3><strong>PRACTICE TRIAL:</strong><h3>
+                ${instruction}
+            </div>
+            <div class="jobs-layout">
+                <div class="current-job-section grid-fade-in">
+                    <div class="current-job-container">
+                        </div>
+                        ${practice1Grid.createGridHTML(practice1TrialIndex, null, keyAssignment)}
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+    choices: function() {
+        return practice1TrialIndex === 0 ? ['f'] : ['j'];
+    },
+    on_finish: function(data) {
+        // Get the key assignment for this trial
+        const keyAssignment = {
+            blue: jsPsych.data.get().last(1).values()[0].blue_key,
+            green: jsPsych.data.get().last(1).values()[0].green_key
+        };
+        
+        // Determine the choice based on the key pressed
+        let choice;
+        if (data.response === 'f') {
+            choice = keyAssignment.blue === 'F' ? 'blue' : 'green';
+        } else if (data.response === 'j') {
+            choice = keyAssignment.green === 'J' ? 'green' : 'blue';
+        }
+        
+        // Record their choice
+        data.choice = choice;
+        data.practice_trial = true;
+        
+        // Check if they selected the correct path
+        const correctChoice = (practice1TrialIndex === 0 && choice === 'blue') || (practice1TrialIndex === 1 && choice === 'green');
+        data.correct = correctChoice;
+        
+        // Add swipe effect to visualize their selection
+        const choiceElement = document.getElementById(`${choice}-choice`);
+        const unchosenElement = document.getElementById(choice === 'blue' ? 'green-choice' : 'blue-choice');
+        
+        if (choiceElement && unchosenElement) {
+            choiceElement.classList.add('choice-selected');
+            unchosenElement.classList.add('choice-unselected');
+        }
+    
+        // Replot the grid with only the chosen path
+        const gridContainer = document.querySelector(".current-job-section");
+        if (gridContainer) {
+            gridContainer.innerHTML = `
+                <div class="current-job-container">
+                    <div class="cost-display-container">
+                        <h2 class="cost-total">Total Tolls Paid:</h2>
+                        <p id="total-cost" class="cost-total">$0</p>
+                        <p id="trial-cost" class="cost-trial hidden">-$0</p> 
+                    </div>
+                    ${practice1Grid.createGridHTML(practice1TrialIndex, choice, keyAssignment)}
+                </div>
+            `;
+        }
+
+        // Increment the practice trial index
+        practice1TrialIndex++;
+    }
+};
+
+// Practice animation trial
+const practice1AnimationTrial = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        const lastTrialData = jsPsych.data.get().last(1).values()[0];
+        const keyAssignment = { blue: lastTrialData.blue_key, green: lastTrialData.green_key };
+        
+        return `
+            <div class="instruction-section" style="text-align: center; margin-bottom: 20px; font-size: 18px; color: #3a3a3a;">
+                <h3><strong>PRACTICE TRIAL:</strong><h3>
+                <h3>Watch the taxi follow the selected path.</h3>
+            </div>
+            <div class="jobs-layout">
+                <div class="current-job-section">
+                    <div class="current-job-container">
+                        ${practice1Grid.createGridHTML(practice1TrialIndex - 1, lastTrialData.choice, keyAssignment)}
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+    choices: "NO_KEYS",
+    on_load: function() {
+        const currentTrial = practice1Grid.getTrialInfo(practice1TrialIndex - 1);
+        const lastTrialData = jsPsych.data.get().last(1).values()[0];
+
+        if (!lastTrialData || !lastTrialData.choice) {
+            console.error("No valid path choice found in practice trial.");
+            return jsPsych.finishTrial();
+        }
+
+        const chosenPath = lastTrialData.choice === 'blue' ? currentTrial.path_A : currentTrial.path_B;
+        const binaryCosts = practice1Grid.getBinaryCosts(`city_${currentTrial.city}_grid_${currentTrial.grid}`);
+
+        console.log("Animating Practice Trial");
+        console.log("Chosen Path:", lastTrialData.choice, chosenPath);
+ 
+        practice1Grid.recordObservedCosts(chosenPath, binaryCosts);
+
+        setTimeout(() => {
+            animateAgent(chosenPath, binaryCosts, function() {
+                jsPsych.finishTrial();
+            });
+        }, 100);
+    }
+};
+
+const instructions3 = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `
+        <div class="instruction-section">
+            <h1>Daily shift:</h1>
+            <p>Each day, you will manage four jobs, meaning you have four choices to make.</p>
+            <p>Your current job is presented towards the top of the screen.</p>
+            <p>You can see the upcoming jobs below your current job.</p>
+        </div>
+
+        <div class="instruction-section">
+            <h1>Toll locations:</h1>
+            <p>The locations of tolls remain fixed throughout the day. Once you visit an intersection, you find out how busy it is, and hence whether or not you have to pay a toll whenever you reach that intersection again on the same day. This information is reflected in your upcoming jobs.</p>
+            <p>This information may help you the rest of the day by allowing you to select jobs where you don’t have to pay any tolls.</p>
+        </div>
+
+        <div class="instruction-section">
+            <h2>Let’s practise your first full day.</h2>
+            <h2>Press spacebar to continue </h2>
+        </div>
+    `,
+    choices: [' '], // Spacebar to continue
+};
+
+const practice2SelectionTrial = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        // Randomly assign F and J to blue and green paths
+        const keyAssignment = Math.random() < 0.5 ? 
+            { blue: 'F', green: 'J' } : 
+            { blue: 'J', green: 'F' };
+        
+        // Store the assignment for this trial
+        jsPsych.data.addProperties({
+            blue_key: keyAssignment.blue,
+            green_key: keyAssignment.green
+        });
+
+        // Reset total cost for practice if first practice trial
+        if (practice2TrialIndex === 0) {
+            totalCost = 0;
+        }
+        const totalCostElement = document.getElementById("total-cost");
+        if (totalCostElement) {
+            totalCostElement.textContent = "$0";
+        }
+        
+        return `
+            <div class="jobs-layout">
+                <div class="current-job-section grid-fade-in">
+                    ${practice2Grid.createGridHTML(practice2TrialIndex, null, keyAssignment)}
+                </div>
+                <div class="upcoming-jobs-container grid-fade-in">
+                    ${practice2Grid.createUpcomingJobsHTML(practice2TrialIndex)}
+                </div>
+            </div>
+        `;
+    },
+    choices: ['f', 'j'], 
+    on_finish: function(data) {
+        // Get the key assignment for this trial
+        const keyAssignment = {
+            blue: jsPsych.data.get().last(1).values()[0].blue_key,
+            green: jsPsych.data.get().last(1).values()[0].green_key
+        };
+        
+        // Determine the chosen path based on the key pressed
+        let choice;
+        if (data.response === 'f') {
+            choice = keyAssignment.blue === 'F' ? 'blue' : 'green';
+        } else if (data.response === 'j') {
+            choice = keyAssignment.blue === 'J' ? 'blue' : 'green';
+        } else {
+            console.error("Invalid keypress:", data.response);
+            return;
+        }
+        
+        console.log("Chosen path:", choice);
+        
+        // Add "swipe" effect on selection
+        const choiceElement = document.getElementById(`${choice}-choice`);
+        const unchosenElement = document.getElementById(choice === 'blue' ? 'green-choice' : 'blue-choice');
+        
+        if (choiceElement && unchosenElement) {
+            choiceElement.classList.add('choice-selected');
+            unchosenElement.classList.add('choice-unselected');
+        }
+    
+        // Replot the grid with only the chosen path
+        const gridContainer = document.querySelector(".current-job-section");
+        if (gridContainer) {
+            gridContainer.innerHTML = practice2Grid.createGridHTML(practice2TrialIndex, choice, keyAssignment);
+        }
+        
+        // // Store all the relevant data from the current trial
+        const currentTrial = practice2Grid.getTrialInfo(practice2TrialIndex);
+        console.log('practice2TrialIndex:', practice2TrialIndex);
+        data.choice = choice;
+        data.trial = currentTrial.trial;
+        data.city = currentTrial.city;
+        data.grid_id = currentTrial.practice2Grid;
+        data.path_chosen = choice;
+        data.button_pressed = data.response;
+        data.reaction_time_ms = data.rt;
+        data.key_assignment = keyAssignment;
+
+        // Include all columns from the current trial
+        Object.keys(currentTrial).forEach(key => {
+            data[key] = currentTrial[key];
+        });
+
+        // Include all trial info from the current trial
+        Object.assign(data, currentTrial);
+        
+        // Add the trial data to jsPsych's data collection
+        jsPsych.data.get().addToLast(data);
+
+    }
+};
+
+const practice2AnimationTrial = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        const lastTrialData = jsPsych.data.get().last(1).values()[0];
+        const keyAssignment = lastTrialData.key_assignment;
+        
+        return `
+            <div class="jobs-layout">
+                <div class="current-job-section">
+                    ${practice2Grid.createGridHTML(practice2TrialIndex, lastTrialData.choice, keyAssignment)}
+                </div>
+                <div class="upcoming-jobs-container">
+                    ${practice2Grid.createUpcomingJobsHTML(practice2TrialIndex)}
+                </div>
+            </div>
+        `;
+    },
+    choices: "NO_KEYS",
+    on_load: function() {
+        const currentTrial = practice2Grid.getTrialInfo(practice2TrialIndex);
+        const lastTrialData = jsPsych.data.get().last(1).values()[0];
+
+        if (!lastTrialData || !lastTrialData.choice) {
+            console.error("No valid path choice found. Restarting trial.");
+            return jsPsych.finishTrial();
+        }
+
+        const chosenPath = lastTrialData.choice === 'blue' ? currentTrial.path_A : currentTrial.path_B;
+        const binaryCosts = practice2Grid.getBinaryCosts(`city_${currentTrial.city}_grid_${currentTrial.grid}`);
+
+        console.log("Animating Trial:", practice2TrialIndex);
+        console.log("Chosen Path:", lastTrialData.choice, chosenPath);
+
+        practice2Grid.recordObservedCosts(chosenPath, binaryCosts);
+        
+
+        setTimeout(() => {
+            animateAgent(chosenPath, binaryCosts, function() {
+                jsPsych.finishTrial();
+            });
+        }, 100);
+        
+        // Increment the practice trial index
+        practice2TrialIndex++;
+    }
+};
+
+// show how the grid resets at the end of the day
+const instructions4 = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `
+        <div class="instruction-section" style="z-index: 2001; position: relative;">
+            <h1>End of the Day</h1>
+            <p>At the end of the day, the tolls are reset, so you have to find out about the new locations of the tolls once the new day begins.</p>
+            <p>Watch the grid reset for the next day.</p>
+        </div>
+        <div class="jobs-layout" style="z-index: 2001; position: relative;">
+            <div id="grid-container" class="current-job-section"></div>
+        </div>
+        <div class="instruction-section" style="z-index: 2001; position: relative;">
+            <h2 id="continue-text" style="display: none;">Press spacebar to practise your next shift.</h2>
+        </div>
+    `,
+    choices: "NO_KEYS", // Initially disable keypresses
+    on_load: function() {
+        // Show the current state of the grid for 1 second
+        const gridContainer = document.getElementById('grid-container');
+        gridContainer.innerHTML = practice2Grid.createGridHTML(practice2TrialIndex, 'none', null, false); // Render the current state of the grid without cost display, nor any current paths
+
+        const blackCover = document.createElement('div');
+        blackCover.style.position = 'fixed';
+        blackCover.style.top = '0';
+        blackCover.style.left = '0';
+        blackCover.style.width = '100%';
+        blackCover.style.height = '100%';
+        blackCover.style.backgroundColor = 'black';
+        blackCover.style.opacity = '0';
+        blackCover.style.transition = 'opacity 1s ease-in-out';
+        blackCover.style.zIndex = '1000'; // Ensure the black cover is behind the instructions and grid
+        document.body.appendChild(blackCover);
+
+        // Fade to full opacity
+        setTimeout(() => {
+            blackCover.style.opacity = '0.5';
+        }, 10);
+
+        // After 1s, set the new grid and fade back to transparency
+        setTimeout(() => {
+            gridContainer.innerHTML = practice2Grid.createBlankGridHTML(); // Render a blank grid
+            gridContainer.style.opacity = "2";
+            blackCover.style.opacity = '0'; // Fade back out
+        }, 1000);
+
+        // Remove the black cover after the transition is complete
+        setTimeout(() => {
+            document.body.removeChild(blackCover);
+
+            // Show the continue text and enable spacebar
+            document.getElementById("continue-text").style.display = "block";
+            jsPsych.pluginAPI.getKeyboardResponse({
+                callback_function: jsPsych.finishTrial, // Ends trial when spacebar is pressed
+                valid_responses: [' '], // Spacebar
+                rt_method: "performance",
+                persist: false,
+                allow_held_key: false
+            });
+        }, 2000);
+    },
+    on_finish: function() {
+        console.log("Grid reset animation completed.");
+        practice2Grid.resetGrid(); // Reset the grid for the new set of trials
+    }
+};
+
+// illustrate city change
+const instructions5 = {
+    type: jsPsychHtmlKeyboardResponse, 
+    stimulus: `
+        <div class="instruction-section" style="z-index: 2000; position: relative;">
+            <h1>New City</h1>
+            <p>After 4 days of working in one city, your taxi company starts operating in a new city.</p>
+            <p>When you move cities, the background changes.</p>
+            
+        </div>
+        <div class="instruction-section">
+            <h2>Press spacebar to continue.</h2>
+        </div>
+    `,
+    choices: [' '], // Wait for spacebar to continue
+    on_load: function() {
+        // Create a container for the animation
+        let transitionContainer = document.createElement('div');
+        transitionContainer.style.position = 'fixed';
+        transitionContainer.style.top = '0';
+        transitionContainer.style.left = '0';
+        transitionContainer.style.width = '200%'; // Double width to fit both images
+        transitionContainer.style.height = '100%';
+        transitionContainer.style.zIndex = '1000';
+        transitionContainer.style.display = 'flex';
+        transitionContainer.style.transition = 'transform 1.5s ease-in-out';
+        document.body.appendChild(transitionContainer);
+        
+        // Create old city element
+        let oldCity = document.createElement('div');
+        oldCity.style.width = '50%'; // Half of the container
+        oldCity.style.height = '100%';
+        oldCity.style.backgroundImage = `url('assets/cities/practice1.png')`;
+        oldCity.style.backgroundSize = 'cover';
+        oldCity.style.backgroundPosition = 'center';
+        transitionContainer.appendChild(oldCity);
+        
+        // Create new city element
+        let newCity = document.createElement('div');
+        newCity.style.width = '50%'; // Half of the container
+        newCity.style.height = '100%';
+        newCity.style.backgroundImage = `url('assets/cities/practice2.png')`;
+        newCity.style.backgroundSize = 'cover';
+        newCity.style.backgroundPosition = 'center';
+        transitionContainer.appendChild(newCity);
+        
+        // Force browser reflow before starting animation
+        void transitionContainer.offsetWidth;
+        
+        // Start the slide animation
+        transitionContainer.style.transform = 'translateX(-50%)';
+        
+        // After animation completes, set the new background and remove the container
+        setTimeout(() => {
+            setCityBackground('practice2');
+            document.body.removeChild(transitionContainer);
+        }, 1600);
+    }
+};
+    
+
+
+// illustrate column city
+const instructions6 = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        return `
+            <div class="instruction-section" style="margin: 10px;">
+            <h1>How do you figure out where the tolls are?</h1>
+            <p>Each city has particular traffic properties, such that the busy streets tend to be related to one another in one of two ways.</p>
+            </div>
+            <div class="instruction-section" style="margin: 10px;">
+            <h1>'Column cities'</h1>
+            <p>In column cities, traffic tends to run from north to south every day, meaning that tolls tend to be clustered in columns.</p>
+            <p>That is, a column may have a lot of tolls, or not many tolls.</p>
+            <p>The locations of these busy columns may change each day, but the city will always have this column-dependent feature.</p>
+            </div>
+            <div class="jobs-layout" >
+            <div class="instruction-section" style="text-align: center; font-size: 20px; color: #3a3a3a; margin: 10px;">
+                <h3><strong>Example day ${practice3TrialIndex + 1}</strong><h3>
+            </div>
+            <div id="grid-container" class="current-job-section"></div>
+            </div>
+            <div class="instruction-section" style="margin: 10px;">
+            <h2>Press spacebar to continue.</h2>
+            </div>
+        `;
+    },
+    choices: [' '], // Wait for spacebar to continue
+    on_load: function() {
+        const gridContainer = document.getElementById('grid-container');
+        const revealCosts = true; // Set to true to show costs
+        console.log("Rendering grid for practice3TrialIndex:", practice3TrialIndex);
+        gridContainer.innerHTML = practice3Grid.createBlankGridHTML(practice3TrialIndex, revealCosts); // Render a blank grid
+        practice3TrialIndex++;
+    },
+};
+
+// illustrate city change
+const instructions7 = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `
+        <div class="instruction-section" style="z-index: 2000; position: relative;">
+            <h1>How do you figure out where the tolls are?</h1>
+            <p>Each city has particular traffic properties, such that the busy streets tend to be related to one another in one of two ways.</p>
+    `,
+    choices: "NO_KEYS", // No keypress required
+    on_load: function() {
+        // Create a container for the animation
+        let transitionContainer = document.createElement('div');
+        transitionContainer.style.position = 'fixed';
+        transitionContainer.style.top = '0';
+        transitionContainer.style.left = '0';
+        transitionContainer.style.width = '200%'; // Double width to fit both images
+        transitionContainer.style.height = '100%';
+        transitionContainer.style.zIndex = '1000';
+        transitionContainer.style.display = 'flex';
+        transitionContainer.style.transition = 'transform 1.5s ease-in-out';
+        document.body.appendChild(transitionContainer);
+
+        // Create old city element
+        let oldCity = document.createElement('div');
+        oldCity.style.width = '50%'; // Half of the container
+        oldCity.style.height = '100%';
+        oldCity.style.backgroundImage = `url('assets/cities/practice2.png')`;
+        oldCity.style.backgroundSize = 'cover';
+        oldCity.style.backgroundPosition = 'center';
+        transitionContainer.appendChild(oldCity);
+
+        // Create new city element
+        let newCity = document.createElement('div');
+        newCity.style.width = '50%'; // Half of the container
+        newCity.style.height = '100%';
+        newCity.style.backgroundImage = `url('assets/cities/practice3.png')`;
+        newCity.style.backgroundSize = 'cover';
+        newCity.style.backgroundPosition = 'center';
+        transitionContainer.appendChild(newCity);
+
+        // Force browser reflow before starting animation
+        void transitionContainer.offsetWidth;
+
+        // Start the slide animation
+        transitionContainer.style.transform = 'translateX(-50%)';
+        
+        // After animation completes, set the new background and finish the trial
+        setTimeout(() => {
+            setCityBackground('practice3');
+            document.body.removeChild(transitionContainer);
+            jsPsych.finishTrial(); // Automatically move to the next trial
+        }, 1600);
+    },
+};
+
+const instructions8 = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        return `
+            <div class="instruction-section" style="z-index: 2000; position: relative;">
+                <h1>How do you figure out where the tolls are?</h1>
+                <p>Each city has particular traffic properties, such that the busy streets tend to be related to one another in one of two ways.</p>
+            </div>
+            <div class="instruction-section"> 
+                <h1>'Row cities'</h1>
+                <p>In row cities, the opposite is true: traffic tends to run from east to west every day, meaning that tolls tend to be clustered in rows.</p>
+                <p>That is, a row may have a lot of tolls, or not many tolls.</p>
+                <p>The locations of these busy rows may change each day, but the city will always have this row-dependent feature.</p>
+            </div>
+            <div class="jobs-layout">
+                <div class="instruction-section" style="text-align: center;  font-size: 20px; color: #3a3a3a;">
+                    <h3><strong>Example day ${practice4TrialIndex + 1}</strong><h3>
+                </div>
+                <div id="grid-container" class="current-job-section"></div>
+            </div>
+            <div class="instruction-section">
+                <h2>Press spacebar to continue.</h2>
+            </div>
+        `;
+    },
+    choices: [' '], // Wait for spacebar to continue
+    on_load: function() {
+        const gridContainer = document.getElementById('grid-container');
+        const revealCosts = true; // Set to true to show costs
+        gridContainer.innerHTML = practice4Grid.createBlankGridHTML(practice4TrialIndex, revealCosts); // Render a blank grid
+        practice4TrialIndex++;
+    },
+};
+
+
+const fullscreenTrial = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `
+        <div class="instruction-section">
+            <h1>Enter Full Screen</h1>
+            <p>The experiment will switch to full screen mode when you press the Enter key.</p>
+            <p>This ensures the best experience during the experiment.</p>
+        </div>
+    `,
+    choices: ["Enter"], // Listens for the Enter key
+    on_finish: function() {
+        document.documentElement.requestFullscreen(); // Forces full-screen mode
+    }
+};
+
+
+
+  
+
 // Create timeline
 function createTimeline() {
-    const timeline = [instructions];
+    const timeline = []
+
+    
+    // welcome message
+    timeline.push(fullscreenTrial);
+    // timeline.push(instructions1); 
+
+    // // practise selection
+    // timeline.push(instructions2); 
+    // timeline.push(practice1SelectionTrial); 
+    // timeline.push(practice1AnimationTrial); 
+    // timeline.push(practice1SelectionTrial); 
+    // timeline.push(practice1AnimationTrial); 
+    
+    // // practise a full day
+    // timeline.push(instructions3); 
+    // for (let i = 0; i < 1 ; i++) {
+    //     timeline.push(practice2SelectionTrial);
+    //     timeline.push(practice2AnimationTrial); 
+    // }
+    // timeline.push(practiceGridFeedback);
+    
+    // // Animation to show grid resetting, and then another day
+    // timeline.push(instructions4);
+    // for (let i = 0; i < 1 ; i++) {
+    //     timeline.push(practice2SelectionTrial);
+    //     timeline.push(practice2AnimationTrial); 
+    // }
+    // timeline.push(practiceGridFeedback);
+
+    // // new city animation
+    // timeline.push(instructions5)
+
+    // for (let i = 1; i <= 4; i++) {
+    //     timeline.push(instructions6)
+    // }
+    // timeline.push(instructions7)
+    // for (let i = 1; i <= 4; i++) {
+    //     timeline.push(instructions8)
+    // }
+
+    // // // understanding checks
+    // const quizTrials = createQuizTrials(jsPsych);
+    // timeline.push(...quizTrials);
 
     // Add the first grid message
     timeline.push(firstGridMessage);
