@@ -7,6 +7,7 @@ const jsPsych = initJsPsych({
 
 import { createQuizTrials } from './test.js';
 
+document.body.style.zoom = "80%";
 
 
 // Define the Grid class
@@ -54,7 +55,7 @@ class Grid {
     }
 
     // Create the grid HTML for a specific trial
-    createGridHTML = function(trialIndex, selectedPath = null, keyAssignment = null, includeCostDisplay = true) {
+    createGridHTML = function(trialIndex, selectedPath = null, keyAssignment = null, includeCostDisplay = true, practice=false) {
         const trial = this.getTrialInfo(trialIndex);
         const city = trial.city;
         const grid = trial.grid;
@@ -68,6 +69,7 @@ class Grid {
 
         if (includeCostDisplay) {
             let currentDay = this.currentGrid; 
+            if (!practice) {
             gridHTML += `
             <div class="cost-display-container">
                 <h2 class="day-display">Day ${currentDay+1}/${this.nGrids}</h2>
@@ -76,6 +78,16 @@ class Grid {
                 <p id="trial-cost" class="cost-trial hidden">-$0</p> 
             </div>
             `;
+            } else {
+            gridHTML += `
+            <div class="cost-display-container">
+                <h2 class="day-display">Practice Day ${currentDay+1}/${this.nGrids}</h2>
+                <h2 class="cost-total">Total Tolls Paid:</h2>
+                <p id="total-cost" class="cost-total">$${totalCost}</p>
+                <p id="trial-cost" class="cost-trial hidden">-$0</p> 
+            </div>
+            `;
+            }
         }
 
         gridHTML += `
@@ -1100,51 +1112,6 @@ choices: [' '], // spacebar to continue
     }
 };
 
-// Modified instructions
-const instructions = {
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: `
-        <div class="instruction-section">
-            <h1>Taxi Dispatch Coordinator</h1>
-            <p>Welcome to City Cabs! As the dispatch coordinator, you must decide which taxi jobs to accept.</p>
-        </div>
-        
-        <div class="instruction-section">
-            <h2>Job Selection:</h2>
-            <p>For each dispatch, you'll see two possible routes marked with stars:</p>
-            <p>- <span class="blue-text">Blue stars</span> mark the first route</p>
-            <p>- <span class="green-text">Green stars</span> mark the second route</p>
-            <p>Each route has a passenger <img src="assets/people/blue_person.png" alt="Blue Passenger" width="20" height="20"> or <img src="assets/people/green_person.png" alt="Green Passenger" width="20" height="20"> at a pickup point, and a drop-off destination 🏠.</p>
-        </div>
-        
-        <div class="instruction-section">
-            <h2>Your Task:</h2>
-            <p>Choose which route to assign to your taxi using your arrow keys:</p>
-            <p>- Press <strong><span class="blue-text">LEFT ARROW</span></strong> to assign the blue route</p>
-            <p>- Press <strong><span class="green-text">RIGHT ARROW</span></strong> to assign the green route</p>
-        </div>
-        
-        <div class="instruction-section">
-            <h2>Toll Roads:</h2>
-            <p>Some streets contain toll roads that cost money to travel:</p>
-            <p>- <strong><span class="red-text">Red streets</span></strong> are toll roads that cost $1 to pass through</p>
-            <p>- <strong><span style="color:rgb(194, 194, 229);">Light grey streets</span></strong> are free roads with no tolls</p>
-            <p>- <strong><span style="color: rgb(114, 114, 150);">Dark grey streets</span></strong> are roads that haven't been visited yet</p>
-            <p>Your goal is to complete all taxi jobs while minimizing total toll costs for your company.</p>
-        </div>
-        
-        <div class="instruction-section">
-            <h2>Press spacebar to begin your shift, Dispatcher!</h2>
-        </div>
-    `,
-choices: [' '], // spacebar to continue
-    on_load: function() {
-        // Set initial city background to 'practice1.png'
-        setCityBackground('practice1');
-        grid.currentCity = 'practice1'; // Initialize the current city
-    }
-};
-
 // First instruction page
 const instructions1 = {
     type: jsPsychHtmlKeyboardResponse,
@@ -1173,9 +1140,7 @@ const instructions2 = {
     stimulus: `
         <div class="instruction-section">
             <h1>Dispatch Instructions</h1>
-            <p>For each dispatch, you'll see two possible jobs marked in <span class="blue-text">blue</span> and <span class="green-text">green</span>.</p>
-            <p>Each route has a passenger <img src="assets/people/blue_person.png" alt="Blue Passenger" width="20" height="20"> or <img src="assets/people/green_person.png" alt="Green Passenger" width="20" height="20"> at a pickup point, and a drop-off destination 🏠.</p>
-            <p>The route of each job is marked with one of two letters:</p>
+            <p>For each dispatch, you'll see two possible jobs marked in <span class="blue-text">blue</span> and <span class="green-text">green</span>. Each route has a passenger <img src="assets/people/blue_person.png" alt="Blue Passenger" width="20" height="20"> or <img src="assets/people/green_person.png" alt="Green Passenger" width="20" height="20"> at a pickup point, and a drop-off destination 🏠. The route of each job is marked with one of two letters:</p>
             <p>- The letter <strong>F</strong> marks one route</p>
             <p>- The letter <strong>J</strong> marks the other route</p>
             <p>To send out a taxi to one of these jobs, you need to press the corresponding key on your keyboard.</p>
@@ -1183,12 +1148,11 @@ const instructions2 = {
         </div>
 
         <div class="instruction-section">
-            <h1>Toll roads:</h1>
-            <p>Some roads are busier than others, meaning that tolls apply in certain intersections. This means that it costs money to travel here.</p>
-            <p>Visiting an intersection reveals whether or not you have to pay a toll there.</p>
-            <p>- <strong><span style="color: rgb(114, 114, 150);">Dark grey streets</span></strong> are roads that haven't been visited yet</p>
-            <p>- <strong><span class="red-text">Red streets</span></strong> are toll roads that cost $1 to pass through</p>
-            <p>- <strong><span style="color:rgb(194, 194, 229);">Light grey streets</span></strong> are free roads with no tolls</p>
+            <h1>Toll Intersections:</h1>
+            <p>Some roads are busier than others, meaning that tolls apply in certain intersections. This means that it costs money to travel here. Visiting an intersection reveals whether or not you have to pay a toll there.</p>
+            <p>- <strong><span style="color: rgb(114, 114, 150);">Dark grey streets</span></strong> are Intersections that haven't been visited yet</p>
+            <p>- <strong><span class="red-text">Red streets</span></strong> are toll intersections that cost $1 to pass through</p>
+            <p>- <strong><span style="color:rgb(194, 194, 229);">Light grey streets</span></strong> are free intersections with no tolls</p>
             <p>Your goal is to complete all taxi jobs while minimizing total toll costs for your company.</p>
         </div>
 
@@ -1217,6 +1181,7 @@ const practice1SelectionTrial = {
             blue_key: keyAssignment.blue,
             green_key: keyAssignment.green
         });
+        const practice=true 
         
         return `
             <div class="instruction-section" style="text-align: center; margin-bottom: 20px; font-size: 18px; color: #3a3a3a;">
@@ -1227,7 +1192,7 @@ const practice1SelectionTrial = {
                 <div class="current-job-section grid-fade-in">
                     <div class="current-job-container">
                         </div>
-                        ${practice1Grid.createGridHTML(practice1TrialIndex, null, keyAssignment)}
+                        ${practice1Grid.createGridHTML(practice1TrialIndex, null, keyAssignment, true, true)}
                     </div>
                 </div>
             </div>
@@ -1278,7 +1243,7 @@ const practice1SelectionTrial = {
                         <p id="total-cost" class="cost-total">$0</p>
                         <p id="trial-cost" class="cost-trial hidden">-$0</p> 
                     </div>
-                    ${practice1Grid.createGridHTML(practice1TrialIndex, choice, keyAssignment)}
+                    ${practice1Grid.createGridHTML(practice1TrialIndex, choice, keyAssignment,true,true)}
                 </div>
             `;
         }
@@ -1303,7 +1268,7 @@ const practice1AnimationTrial = {
             <div class="jobs-layout">
                 <div class="current-job-section">
                     <div class="current-job-container">
-                        ${practice1Grid.createGridHTML(practice1TrialIndex - 1, lastTrialData.choice, keyAssignment)}
+                        ${practice1Grid.createGridHTML(practice1TrialIndex - 1, lastTrialData.choice, keyAssignment,true,true)}
                     </div>
                 </div>
             </div>
@@ -1385,7 +1350,7 @@ const practice2SelectionTrial = {
         return `
             <div class="jobs-layout">
                 <div class="current-job-section grid-fade-in">
-                    ${practice2Grid.createGridHTML(practice2TrialIndex, null, keyAssignment)}
+                    ${practice2Grid.createGridHTML(practice2TrialIndex, null, keyAssignment,true,true)}
                 </div>
                 <div class="upcoming-jobs-container grid-fade-in">
                     ${practice2Grid.createUpcomingJobsHTML(practice2TrialIndex)}
@@ -1426,7 +1391,7 @@ const practice2SelectionTrial = {
         // Replot the grid with only the chosen path
         const gridContainer = document.querySelector(".current-job-section");
         if (gridContainer) {
-            gridContainer.innerHTML = practice2Grid.createGridHTML(practice2TrialIndex, choice, keyAssignment);
+            gridContainer.innerHTML = practice2Grid.createGridHTML(practice2TrialIndex, choice, keyAssignment,true,true);
         }
         
         // // Store all the relevant data from the current trial
@@ -1464,7 +1429,7 @@ const practice2AnimationTrial = {
         return `
             <div class="jobs-layout">
                 <div class="current-job-section">
-                    ${practice2Grid.createGridHTML(practice2TrialIndex, lastTrialData.choice, keyAssignment)}
+                    ${practice2Grid.createGridHTML(practice2TrialIndex, lastTrialData.choice, keyAssignment,true,true)}
                 </div>
                 <div class="upcoming-jobs-container">
                     ${practice2Grid.createUpcomingJobsHTML(practice2TrialIndex)}
@@ -1665,10 +1630,6 @@ const instructions6 = {
                 <h3><strong>Example day ${practice3TrialIndex + 1}</strong><h3>
             </div>
             <div id="grid-container" class="current-job-section"></div>
-            </div>
-            <div class="instruction-section" style="margin: 10px;">
-            <h2>Press spacebar to continue.</h2>
-            </div>
         `;
     },
     choices: [' '], // Wait for spacebar to continue
@@ -1756,9 +1717,6 @@ const instructions8 = {
                 </div>
                 <div id="grid-container" class="current-job-section"></div>
             </div>
-            <div class="instruction-section">
-                <h2>Press spacebar to continue.</h2>
-            </div>
         `;
     },
     choices: [' '], // Wait for spacebar to continue
@@ -1786,57 +1744,77 @@ const fullscreenTrial = {
     }
 };
 
-
-
+// instructions review - i.e. ask participants if they want to review the instructions pages (instructions1-instructions8, without the practices)
+const instructionsReview = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `
+        <div class="instruction-section">
+            <h1>Review Instructions</h1>
+            <p>We will now ask you a few questions to check your understanding of the task. Before doing so, you have the opportunity to review the instructions.</p>
+            <p>Would you like to see the instructions again?</p>
+            <p>To review all the instructions from the beginning, press the backspace key.</p>
+            <p>If you feel ready to continue, please press the spacebar.</p>
+        </div>
+    `,
+    choices: [' ', 'backspace'],
+    on_finish: function(data) {
+        if (data.response === 'backspace') {
+            // Restart the experiment by reloading the page
+            location.reload();
+        }
+    }
+};
   
 
 // Create timeline
 function createTimeline() {
-    const timeline = []
+    const timeline = [];
 
+    // Welcome message
+    timeline.push(fullscreenTrial);
+    timeline.push(instructions1);
+
+    // Practice selection
+    timeline.push(instructions2);
+    timeline.push(practice1SelectionTrial);
+    timeline.push(practice1AnimationTrial);
+    timeline.push(practice1SelectionTrial);
+    timeline.push(practice1AnimationTrial);
+
+    // Practice a full day
+    timeline.push(instructions3);
+    for (let i = 0; i < grid.nTrials; i++) {
+        timeline.push(practice2SelectionTrial);
+        timeline.push(practice2AnimationTrial);
+    }
+    timeline.push(practiceGridFeedback);
+
+    // Animation to show grid resetting, and then another day
+    timeline.push(instructions4);
+    for (let i = 0; i < grid.nTrials; i++) {
+        timeline.push(practice2SelectionTrial);
+        timeline.push(practice2AnimationTrial);
+    }
+    timeline.push(practiceGridFeedback);
+
+    // New city animation
+    timeline.push(instructions5);
+
+    for (let i = 1; i <= grid.nGrids; i++) {
+        timeline.push(instructions6);
+    }
+    timeline.push(instructions7);
+    for (let i = 1; i <= grid.nGrids; i++) {
+        timeline.push(instructions8);
+    }
+
+    // Add the option to review the instructions
+    timeline.push(instructionsReview);
     
-    // welcome message
-    // timeline.push(fullscreenTrial);
-    // timeline.push(instructions1); 
+    // Understanding checks
+    const quizTrials = createQuizTrials(jsPsych);
+    timeline.push(...quizTrials);
 
-
-    // // practise selection
-    // timeline.push(instructions2); 
-    // timeline.push(practice1SelectionTrial); 
-    // timeline.push(practice1AnimationTrial); 
-    // timeline.push(practice1SelectionTrial); 
-    // timeline.push(practice1AnimationTrial); 
-    
-    // // practise a full day
-    // timeline.push(instructions3); 
-    // for (let i = 0; i < grid.nTrials ; i++) {
-    //     timeline.push(practice2SelectionTrial);
-    //     timeline.push(practice2AnimationTrial); 
-    // }
-    // timeline.push(practiceGridFeedback);
-    
-    // // Animation to show grid resetting, and then another day
-    // timeline.push(instructions4);
-    // for (let i = 0; i < grid.nTrials ; i++) {
-    //     timeline.push(practice2SelectionTrial);
-    //     timeline.push(practice2AnimationTrial); 
-    // }
-    // timeline.push(practiceGridFeedback);
-
-    // // new city animation
-    // timeline.push(instructions5)
-
-    // for (let i = 1; i <= grid.nGrids; i++) {
-    //     timeline.push(instructions6)
-    // }
-    // timeline.push(instructions7)
-    // for (let i = 1; i <= grid.nGrids; i++) {
-    //     timeline.push(instructions8)
-    // }
-
-    // // understanding checks
-    // const quizTrials = createQuizTrials(jsPsych);
-    // timeline.push(...quizTrials);
 
     // Add the first grid message
     timeline.push(firstGridMessage);
@@ -1849,7 +1827,7 @@ function createTimeline() {
             timeline.push(newGridMessage);
         }
         timeline.push(pathSelectionTrial);
-        timeline.push(pathAnimationTrial); 
+        timeline.push(pathAnimationTrial);
     }
 
     // Add the end message
@@ -1896,6 +1874,10 @@ function downloadTrialData() {
 
 // Start experiment when the page loads
 function initializeExperiment() {
+
+
+    // Run the instruction timeline first
     const timeline = createTimeline();
     jsPsych.run(timeline);
+
 }
