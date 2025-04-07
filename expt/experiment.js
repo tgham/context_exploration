@@ -67,12 +67,14 @@ class Grid {
         `;
 
         if (includeCostDisplay) {
+            let currentDay = this.currentGrid; 
             gridHTML += `
-                <div class="cost-display-container">
-                    <h2 class="cost-total">Total Tolls Paid Today:</h2>
-                    <p id="total-cost" class="cost-total">$${totalCost}</p>
-                    <p id="trial-cost" class="cost-trial hidden">-$0</p> 
-                </div>
+            <div class="cost-display-container">
+                <h2 class="day-display">Day ${currentDay+1}/${this.nGrids}</h2>
+                <h2 class="cost-total">Total Tolls Paid Today:</h2>
+                <p id="total-cost" class="cost-total">$${totalCost}</p>
+                <p id="trial-cost" class="cost-trial hidden">-$0</p> 
+            </div>
             `;
         }
 
@@ -216,6 +218,7 @@ class Grid {
     resetGrid() {
         this.observedCosts = {}; 
         this.currentGrid++; 
+        console.log('currentGrid:', this.currentGrid);
     
         // Reset trial cost
         const trialCostElement = document.getElementById("trial-cost");
@@ -940,9 +943,9 @@ const gridFeedback = {
         `;
     },
 choices: [' '], // spacebar to continue
-    on_finish: function() {
-        grid.resetGrid(); // Reset the grid for the next set of trials
-    }
+    // on_finish: function() {
+    //     grid.resetGrid(); // Reset the grid for the next set of trials
+    // }
 };
 
 // display feedback after a grid
@@ -997,9 +1000,11 @@ const newGridMessage = {
             animateDayChange(currentCityId || nextCityId);
             
             const todayTolls = totalCost; // Assuming totalCost tracks the tolls paid so far
+            const currentDay = grid.currentGrid+1; // Grid numbers are 0-based, so add 1
+            const totalDays = grid.nGrids; // Total number of grids
             message = `
                 <div class="new-day-text">
-                    <h2>New Day</h2>
+                    <h2>Day ${currentDay + 1}/${totalDays}</h2>
                     <p>A new day has begun, and the tolls in this city have been reset.</p>
                     <p>Remember: you're still in the same city as before. Traffic still tends to run from north-south or east-west in the same way that it did on previous days.</p>
                     <p>Prepare for your next day.</p>
@@ -1204,8 +1209,8 @@ const practice1SelectionTrial = {
         // Determine the key assignment based on the trial index
         const keyAssignment = { blue: 'F', green: 'J' };
         const instruction = practice1TrialIndex === 0 
-            ? `<h3>Please select the <span style="color: blue; font-weight: bold;">BLUE</span> path by pressing the <span style="font-weight: bold;">${keyAssignment.blue}</span> key.</h3>`
-            : `<h3>Please select the <span style="color: green; font-weight: bold;">GREEN</span> path by pressing the <span style="font-weight: bold;">${keyAssignment.green}</span> key.</h3>`;
+            ? `<h3>Please select the <span style="color: #5dadec; font-weight: bold;">BLUE</span> path by pressing the <span style="font-weight: bold;">${keyAssignment.blue}</span> key.</h3>`
+            : `<h3>Please select the <span style="color:  #4ade80; font-weight: bold;">GREEN</span> path by pressing the <span style="font-weight: bold;">${keyAssignment.green}</span> key.</h3>`;
         
         // Store the assignment for this trial
         jsPsych.data.addProperties({
@@ -1567,18 +1572,20 @@ const instructions4 = {
 // illustrate city change
 const instructions5 = {
     type: jsPsychHtmlKeyboardResponse, 
-    stimulus: `
-        <div class="instruction-section" style="z-index: 2000; position: relative;">
-            <h1>New City</h1>
-            <p>After 4 days of working in one city, your taxi company starts operating in a new city.</p>
-            <p>When you move cities, the background changes.</p>
-            
-        </div>
-        <div class="instruction-section">
-            <h2>Press spacebar to continue.</h2>
-        </div>
-    `,
-    choices: [' '], // Wait for spacebar to continue
+    stimulus: function() {
+        const n = grid.nGrids;
+        return `
+            <div class="instruction-section" style="z-index: 2000; position: relative;">
+                <h1>New City</h1>
+                <p>After ${n} days of working in one city, your taxi company starts operating in a new city.</p>
+                <p>When you move cities, the background changes.</p>
+            </div>
+            <div class="instruction-section">
+                <h2 id="continue-text" style="display: none;">Press spacebar to continue.</h2>
+            </div>
+        `;
+    },
+    choices: "NO_KEYS", // Initially disable keypresses
     on_load: function() {
         // Create a container for the animation
         let transitionContainer = document.createElement('div');
@@ -1616,10 +1623,22 @@ const instructions5 = {
         // Start the slide animation
         transitionContainer.style.transform = 'translateX(-50%)';
         
-        // After animation completes, set the new background and remove the container
+        // After animation completes, set the new background and enable spacebar
         setTimeout(() => {
             setCityBackground('practice2');
             document.body.removeChild(transitionContainer);
+
+            // Show the "Press spacebar to continue" text
+            document.getElementById("continue-text").style.display = "block";
+
+            // Enable spacebar input
+            jsPsych.pluginAPI.getKeyboardResponse({
+                callback_function: jsPsych.finishTrial, // Ends trial when spacebar is pressed
+                valid_responses: [' '], // Spacebar
+                rt_method: "performance",
+                persist: false,
+                allow_held_key: false
+            });
         }, 1600);
     }
 };
@@ -1777,8 +1796,9 @@ function createTimeline() {
 
     
     // welcome message
-    timeline.push(fullscreenTrial);
+    // timeline.push(fullscreenTrial);
     // timeline.push(instructions1); 
+
 
     // // practise selection
     // timeline.push(instructions2); 
@@ -1789,7 +1809,7 @@ function createTimeline() {
     
     // // practise a full day
     // timeline.push(instructions3); 
-    // for (let i = 0; i < 1 ; i++) {
+    // for (let i = 0; i < grid.nTrials ; i++) {
     //     timeline.push(practice2SelectionTrial);
     //     timeline.push(practice2AnimationTrial); 
     // }
@@ -1797,7 +1817,7 @@ function createTimeline() {
     
     // // Animation to show grid resetting, and then another day
     // timeline.push(instructions4);
-    // for (let i = 0; i < 1 ; i++) {
+    // for (let i = 0; i < grid.nTrials ; i++) {
     //     timeline.push(practice2SelectionTrial);
     //     timeline.push(practice2AnimationTrial); 
     // }
@@ -1806,15 +1826,15 @@ function createTimeline() {
     // // new city animation
     // timeline.push(instructions5)
 
-    // for (let i = 1; i <= 4; i++) {
+    // for (let i = 1; i <= grid.nGrids; i++) {
     //     timeline.push(instructions6)
     // }
     // timeline.push(instructions7)
-    // for (let i = 1; i <= 4; i++) {
+    // for (let i = 1; i <= grid.nGrids; i++) {
     //     timeline.push(instructions8)
     // }
 
-    // // // understanding checks
+    // // understanding checks
     // const quizTrials = createQuizTrials(jsPsych);
     // timeline.push(...quizTrials);
 
