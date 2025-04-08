@@ -68,11 +68,11 @@ class Grid {
         `;
 
         if (includeCostDisplay) {
-            let currentDay = this.currentGrid; 
+            // let currentDay = this.currentGrid; 
             if (!practice) {
             gridHTML += `
             <div class="cost-display-container">
-                <h2 class="day-display">Day ${currentDay+1}/${this.nGrids}</h2>
+                <h2 class="day-display">Day ${trial.grid}/${this.nGrids}</h2>
                 <h2 class="cost-total">Total Tolls Paid Today:</h2>
                 <p id="total-cost" class="cost-total">$${totalCost}</p>
                 <p id="trial-cost" class="cost-trial hidden">-$0</p> 
@@ -81,7 +81,7 @@ class Grid {
             } else {
             gridHTML += `
             <div class="cost-display-container">
-                <h2 class="day-display">Practice Day ${currentDay+1}/${this.nGrids}</h2>
+                <h2 class="day-display">Practice Day ${trial.grid}/${this.nGrids}</h2>
                 <h2 class="cost-total">Total Tolls Paid:</h2>
                 <p id="total-cost" class="cost-total">$${totalCost}</p>
                 <p id="trial-cost" class="cost-trial hidden">-$0</p> 
@@ -93,9 +93,6 @@ class Grid {
         gridHTML += `
                 <div class="grid-container" style="grid-template-columns: repeat(${gridSize}, 40px);">
         `;
-
-        // debugging: check the observed costs
-        console.log("Observed Costs:", this.observedCosts);
     
         for (let row = 0; row < gridSize; row++) {
             for (let col = 0; col < gridSize; col++) {
@@ -221,8 +218,6 @@ class Grid {
     
             const cost = binaryCosts[row][col];
             this.observedCosts[`${row}-${col}`] = cost;
-    
-            console.log(`Recorded observed cost for cell (${row}, ${col}): ${cost}`);
         });
     }    
 
@@ -659,8 +654,6 @@ const pathSelectionTrial = {
             return;
         }
         
-        console.log("Chosen path:", choice);
-        
         // Add "swipe" effect on selection
         const choiceElement = document.getElementById(`${choice}-choice`);
         const unchosenElement = document.getElementById(choice === 'blue' ? 'green-choice' : 'blue-choice');
@@ -686,6 +679,21 @@ const pathSelectionTrial = {
         data.button_pressed = data.response;
         data.reaction_time_ms = data.rt;
         data.key_assignment = keyAssignment;
+        data.path_A_expected_cost = currentTrial.path_A_expected_cost;
+        data.path_B_expected_cost = currentTrial.path_B_expected_cost;
+        data.path_A_actual_cost = currentTrial.path_A_actual_cost;
+        data.path_B_actual_cost = currentTrial.path_B_actual_cost;
+        data.path_A_future_overlap = currentTrial.path_A_future_overlap;
+        data.path_B_future_overlap = currentTrial.path_B_future_overlap;
+        data.abstract_sequence_A = JSON.stringify(currentTrial.abstract_sequence_A);
+        data.abstract_sequence_B = JSON.stringify(currentTrial.abstract_sequence_B);
+        data.better_path = currentTrial.better_path;
+        const better_path_ID = currentTrial.better_path === 'a' ? 'blue' : currentTrial.better_path === 'b' ? 'green' : null;
+        if (choice === better_path_ID) {
+            data.chose_better_path = 1;
+        } else {
+            data.chose_better_path = 0;
+        }
 
         // Include all columns from the current trial
         Object.keys(currentTrial).forEach(key => {
@@ -729,9 +737,6 @@ const pathAnimationTrial = {
 
         const chosenPath = lastTrialData.choice === 'blue' ? currentTrial.path_A : currentTrial.path_B;
         const binaryCosts = grid.getBinaryCosts(`city_${currentTrial.city}_grid_${currentTrial.grid}`);
-
-        console.log("Animating Trial:", currentTrialIndex);
-        console.log("Chosen Path:", lastTrialData.choice, chosenPath);
 
         grid.recordObservedCosts(chosenPath, binaryCosts);
 
@@ -861,7 +866,6 @@ function setCityBackground(cityId) {
 
 // Modified function structure: separate functions for city change vs day change
 function animateCityChange(oldCityId, newCityId) {
-    console.log(`City Change Animation: from ${oldCityId} to ${newCityId}`);
     
     // Create a container for the animation
     let transitionContainer = document.createElement('div');
@@ -881,7 +885,6 @@ function animateCityChange(oldCityId, newCityId) {
     oldCity.style.width = '50%'; // Half of the container
     oldCity.style.height = '100%';
     oldCityMapping = cityMapping[oldCityId];
-    console.log("Old city mapping:", oldCityMapping);
     oldCity.style.backgroundImage = `url('assets/cities/${oldCityMapping}.png')`;
     oldCity.style.backgroundSize = 'cover';
     oldCity.style.backgroundPosition = 'center';
@@ -1012,11 +1015,12 @@ const newGridMessage = {
             animateDayChange(currentCityId || nextCityId);
             
             const todayTolls = totalCost; // Assuming totalCost tracks the tolls paid so far
-            const currentDay = grid.currentGrid+1; // Grid numbers are 0-based, so add 1
+            // const currentDay = grid.currentGrid+1; // Grid numbers are 0-based, so add 1
+            const currentDay = nextTrial.grid;
             const totalDays = grid.nGrids; // Total number of grids
             message = `
                 <div class="new-day-text">
-                    <h2>Day ${currentDay + 1}/${totalDays}</h2>
+                    <h2>Day ${currentDay}/${totalDays}</h2>
                     <p>A new day has begun, and the tolls in this city have been reset.</p>
                     <p>Remember: you're still in the same city as before. Traffic still tends to run from north-south or east-west in the same way that it did on previous days.</p>
                     <p>Prepare for your next day.</p>
@@ -1082,28 +1086,64 @@ choices: [' '], // spacebar to continue
     }
 };
 
-
 // End message
 const end = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         return `
-            <h1>Shift Complete!</h1>
-            <p>Great job, Dispatcher!</p>
-            <p>You've successfully completed all taxi assignments.</p>
-            <p>Total Toll Costs: <strong>$${totalCost}</strong></p>
-            <p>Your performance data has been recorded for evaluation.</p>
-            <div class="button-container">
-                <button id="download-data" class="download-button">Download Data</button>
-                <p>Press spacebar to finish the experiment.</p>
+            <div class="new-day-text">
+                <h1>Shift Complete!</h1>
+                <p>Great job, Dispatcher!</p>
+                <p>You've successfully completed all taxi assignments.</p>
+                <p>Your performance data has been recorded for evaluation.</p>
+                <p>Press spacebar to see if you received your bonus.</p>
             </div>
         `;
     },
 choices: [' '], // spacebar to continue
     on_load: function() {
+    }
+};
+
+// calculate bonus
+const bonus = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        return `
+            <div class="new-day-text">
+                <h1>Shift Complete!</h1>
+                <p>You've successfully completed all taxi assignments.</p>
+                <div class="button-container">
+                    <button id="download-data" class="download-button">Download Data</button>
+                    <p>Press spacebar to finish the experiment.</p>
+                </div>
+            </div>
+        `;
+    },
+choices: [' '], // spacebar to continue
+    on_load: function() {
+
+        // Determine whether the participant receives a bonus
+            
         // Add event listener for the download button
         document.getElementById('download-data').addEventListener('click', downloadTrialData);
+    
+        // Calculate bonus
+        const bonusAchieved = calculateBonus();
+    
+        // Create a new container for the bonus result
+        const bonusContainer = document.createElement('div');
+        bonusContainer.classList.add('new-day-text');
         
+        // Display bonus result
+        const bonusMessage = bonusAchieved
+            ? "Congratulations! You earned a bonus!"
+            : "Unfortunately, you did not earn a bonus this time.";
+        bonusContainer.innerHTML = `<p>${bonusMessage}</p>`;
+        
+        // Append the new container to the document
+        document.body.appendChild(bonusContainer);
+    
         // Also create a CSV version of the data with jsPsych's built-in function
         const csvData = jsPsych.data.get().filter({choice: ['blue', 'green']}).csv();
         jsPsych.data.addProperties({
@@ -1111,6 +1151,50 @@ choices: [' '], // spacebar to continue
         });
     }
 };
+
+// Function to calculate bonus
+function calculateBonus() {
+    
+    // Randomly select nGrids cities without replacement
+    const cityIndices = Array.from({ length: grid.nCities }, (_, i) => i + 1); // Create an array of city indices (1 to nCities)
+    const shuffledCities = shuffleArray(cityIndices); // Shuffle the array
+    const selectedCities = shuffledCities.slice(0, grid.nGrids); // Take the first nGrids cities
+
+    // Calculate the average accuracy for the selected grids
+    let totalAccuracy = 0;
+    selectedCities.forEach((cityIndex, gridIndex) => {
+        console.log("City Index:", cityIndex, "Grid Index:", gridIndex);
+        const trials = jsPsych.data.get().filterCustom(function(trial) {
+            return trial.city === cityIndex && trial.grid === gridIndex+1;
+        }).values();
+        console.log("Trials for City:", cityIndex, "Grid:", gridIndex, trials);
+        if (trials.length === 0) {
+            console.warn(`No trials found for city ${cityIndex} in grid ${gridIndex}.`);
+            return;
+        }
+        // sum the accuracy in these trials
+        const accuracy = trials.reduce((sum, trial) => {
+            return sum + (trial.chose_better_path ? 1 : 0);
+        }, 0) / trials.length; // Average accuracy for this grid
+        console.log("Accuracy for City:", cityIndex, "Grid:", gridIndex, accuracy);
+        totalAccuracy += accuracy;
+    });
+
+    const averageAccuracy = totalAccuracy / grid.nGrids;
+
+    // debugging: print everything
+    console.log("Selected Cities:", selectedCities);
+    console.log("Total Accuracy:", totalAccuracy);
+    console.log("Average Accuracy:", averageAccuracy);
+    console.log("Bonus Achieved:", averageAccuracy > 0.7);
+
+    // Check if the average accuracy exceeds the threshold
+    const bonusAchieved = averageAccuracy > 0.7;
+    return bonusAchieved;
+}
+
+
+// ...existing code...
 
 // First instruction page
 const instructions1 = {
@@ -1287,8 +1371,6 @@ const practice1AnimationTrial = {
         const chosenPath = lastTrialData.choice === 'blue' ? currentTrial.path_A : currentTrial.path_B;
         const binaryCosts = practice1Grid.getBinaryCosts(`city_${currentTrial.city}_grid_${currentTrial.grid}`);
 
-        console.log("Animating Practice Trial");
-        console.log("Chosen Path:", lastTrialData.choice, chosenPath);
  
         practice1Grid.recordObservedCosts(chosenPath, binaryCosts);
 
@@ -1377,7 +1459,6 @@ const practice2SelectionTrial = {
             return;
         }
         
-        console.log("Chosen path:", choice);
         
         // Add "swipe" effect on selection
         const choiceElement = document.getElementById(`${choice}-choice`);
@@ -1405,6 +1486,21 @@ const practice2SelectionTrial = {
         data.button_pressed = data.response;
         data.reaction_time_ms = data.rt;
         data.key_assignment = keyAssignment;
+        data.path_A_expected_cost = currentTrial.path_A_expected_cost;
+        data.path_B_expected_cost = currentTrial.path_B_expected_cost;
+        data.path_A_actual_cost = currentTrial.path_A_actual_cost;
+        data.path_B_actual_cost = currentTrial.path_B_actual_cost;
+        data.path_A_future_overlap = currentTrial.path_A_future_overlap;
+        data.path_B_future_overlap = currentTrial.path_B_future_overlap;
+        data.abstract_sequence_A = JSON.stringify(currentTrial.abstract_sequence_A);
+        data.abstract_sequence_B = JSON.stringify(currentTrial.abstract_sequence_B);
+        data.better_path = currentTrial.better_path;
+        const better_path_ID = currentTrial.better_path === 'a' ? 'blue' : currentTrial.better_path === 'b' ? 'green' : null;
+        if (choice === better_path_ID) {
+            data.chose_better_path = 1;
+        } else {
+            data.chose_better_path = 0;
+        }
 
         // Include all columns from the current trial
         Object.keys(currentTrial).forEach(key => {
@@ -1449,9 +1545,6 @@ const practice2AnimationTrial = {
 
         const chosenPath = lastTrialData.choice === 'blue' ? currentTrial.path_A : currentTrial.path_B;
         const binaryCosts = practice2Grid.getBinaryCosts(`city_${currentTrial.city}_grid_${currentTrial.grid}`);
-
-        console.log("Animating Trial:", practice2TrialIndex);
-        console.log("Chosen Path:", lastTrialData.choice, chosenPath);
 
         practice2Grid.recordObservedCosts(chosenPath, binaryCosts);
         
@@ -1764,7 +1857,25 @@ const instructionsReview = {
         }
     }
 };
-  
+
+// Explanation of bonus
+const instructions9 = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        const nDays = grid.nGrids; // Retrieve the number of days from grid.nGrids
+        return `
+            <div class="instruction-section">
+                <h1>Bonus Payment</h1>
+                <p>Remember: your aim is to minimise the cost paid each day by predicting where the tolls will be, and selecting jobs that you think will not incur tolls.</p>
+                <p>At the end of the experiment, we will assess your performance across cities by randomly selecting a single choice set, across cities, for each of the ${nDays} days.</p>
+                <p>Your performance on these randomly selected days will determine how much bonus payment you receive.</p>
+                <p>So, you should pay attention throughout the experiment - i.e., on every day, and in every city.</p>
+                <p>When you are ready to begin the experiment, press the spacebar.</p>
+            </div>
+        `;
+    },
+    choices: [' '], // Spacebar to continue
+};
 
 // Create timeline
 function createTimeline() {
@@ -1775,45 +1886,48 @@ function createTimeline() {
     timeline.push(instructions1);
 
     // Practice selection
-    timeline.push(instructions2);
-    timeline.push(practice1SelectionTrial);
-    timeline.push(practice1AnimationTrial);
-    timeline.push(practice1SelectionTrial);
-    timeline.push(practice1AnimationTrial);
+    // timeline.push(instructions2);
+    // timeline.push(practice1SelectionTrial);
+    // timeline.push(practice1AnimationTrial);
+    // timeline.push(practice1SelectionTrial);
+    // timeline.push(practice1AnimationTrial);
 
-    // Practice a full day
-    timeline.push(instructions3);
-    for (let i = 0; i < grid.nTrials; i++) {
-        timeline.push(practice2SelectionTrial);
-        timeline.push(practice2AnimationTrial);
-    }
-    timeline.push(practiceGridFeedback);
+    // // Practice a full day
+    // timeline.push(instructions3);
+    // for (let i = 0; i < grid.nTrials; i++) {
+    //     timeline.push(practice2SelectionTrial);
+    //     timeline.push(practice2AnimationTrial);
+    // }
+    // timeline.push(practiceGridFeedback);
 
-    // Animation to show grid resetting, and then another day
-    timeline.push(instructions4);
-    for (let i = 0; i < grid.nTrials; i++) {
-        timeline.push(practice2SelectionTrial);
-        timeline.push(practice2AnimationTrial);
-    }
-    timeline.push(practiceGridFeedback);
+    // // Animation to show grid resetting, and then another day
+    // timeline.push(instructions4);
+    // for (let i = 0; i < grid.nTrials; i++) {
+    //     timeline.push(practice2SelectionTrial);
+    //     timeline.push(practice2AnimationTrial);
+    // }
+    // timeline.push(practiceGridFeedback);
 
-    // New city animation
-    timeline.push(instructions5);
+    // // New city animation
+    // timeline.push(instructions5);
 
-    for (let i = 1; i <= grid.nGrids; i++) {
-        timeline.push(instructions6);
-    }
-    timeline.push(instructions7);
-    for (let i = 1; i <= grid.nGrids; i++) {
-        timeline.push(instructions8);
-    }
+    // for (let i = 1; i <= grid.nGrids; i++) {
+    //     timeline.push(instructions6);
+    // }
+    // timeline.push(instructions7);
+    // for (let i = 1; i <= grid.nGrids; i++) {
+    //     timeline.push(instructions8);
+    // }
 
-    // Add the option to review the instructions
-    timeline.push(instructionsReview);
+    // // Add the option to review the instructions
+    // timeline.push(instructionsReview);
     
     // Understanding checks
-    const quizTrials = createQuizTrials(jsPsych);
-    timeline.push(...quizTrials);
+    // const quizTrials = createQuizTrials(jsPsych);
+    // timeline.push(...quizTrials);
+
+    // bonus message
+    timeline.push(instructions9)
 
 
     // Add the first grid message
@@ -1830,8 +1944,9 @@ function createTimeline() {
         timeline.push(pathAnimationTrial);
     }
 
-    // Add the end message
+    // Add the end and bonus message
     timeline.push(end);
+    timeline.push(bonus);
 
     return timeline;
 }
@@ -1852,9 +1967,9 @@ function downloadTrialData() {
     }).filter(item => item !== null);
 
     // Convert the data to CSV format
-    const csvHeaders = "trial,city,grid_id,path_chosen,button_pressed,reaction_time_ms,context,grid\n";
+    const csvHeaders = "trial,city,grid_id,path_chosen,button_pressed,reaction_time_ms,context,grid,path_A_expected_cost,path_B_expected_cost,path_A_actual_cost,path_B_actual_cost,path_A_future_overlap,path_B_future_overlap,abstract_sequence_A,abstract_sequence_B,better_path,chose_better_path\n";
     const csvRows = trialData.map(trial => 
-        `${trial.trial},${trial.city},${trial.grid_id},${trial.path_chosen},${trial.button_pressed},${trial.reaction_time_ms},${trial.context},${trial.grid}`
+        `${trial.trial},${trial.city},${trial.grid_id},${trial.path_chosen},${trial.button_pressed},${trial.reaction_time_ms},${trial.context},${trial.grid},${trial.path_A_expected_cost},${trial.path_B_expected_cost},${trial.path_A_actual_cost},${trial.path_B_actual_cost},${trial.path_A_future_overlap},${trial.path_B_future_overlap},"${trial.abstract_sequence_A}","${trial.abstract_sequence_B}",${trial.better_path},${trial.chose_better_path}`
     ).join("\n");
     const csvContent = csvHeaders + csvRows;
 

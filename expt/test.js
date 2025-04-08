@@ -5,7 +5,6 @@ export const quizQuestions = [
     options: [
       "Click on the passenger icon.",
       "Press the corresponding key on your keyboard.",
-      "Drag and drop the taxi onto the route.",
       "Wait for the system to assign a job automatically."
     ],
     correct: 1 // Index of correct answer (0-based)
@@ -16,39 +15,35 @@ export const quizQuestions = [
       "You will definitely receive a toll.",
       "You will definitely not receive a toll.",
       "You might receive a toll, or you might not.",
-      "Impossible, because your taxi can't travel via intersections that have already been visited."
     ],
     correct: 0
   },
   {
     question: "How can previous tolls help you make smarter decisions later in the day?",
     options: [
-      "You can avoid jobs that pass through expensive intersections.",
-      "You can remove tolls by revisiting intersections.",
+      "If visit an intersection again, you will not pay a toll there.",
       "The toll cost decreases if you use the same route multiple times.",
-      "You can see all toll locations before making a choice."
+      "You can avoid jobs that pass through expensive intersections.",
     ],
-    correct: 0
+    correct: 2
   },
   {
     question: "Where can you see information about the jobs you will need to choose between later in the day?",
     options: [
       "You can't - you can only see your current job.",
-      "In a separate menu that you need to click to access.",
       "At the top of the screen, above your current job.",
       "Below your current job, in the upcoming jobs section."
     ],
-    correct: 3
+    correct: 2
   },
   {
     question: "What happens to the tolls at the end of the day?",
     options: [
       "They remain in the same locations.",
-      "They disappear permanently.",
       "They reset to new locations.",
       "You only keep toll information for the route you chose last."
     ],
-    correct: 2
+    correct: 1
   },
   {
     question: "What happens after working in the same city for 5 days?",
@@ -56,7 +51,6 @@ export const quizQuestions = [
       "You continue working in the same city, but with new toll locations.",
       "You move to a new city, with a new background and a potentially different traffic pattern.",
       "The toll costs become permanently visible.",
-      "The number of jobs you manage per day increases."
     ],
     correct: 1
   },
@@ -65,10 +59,9 @@ export const quizQuestions = [
     options: [
       "In column cities, tolls are randomly placed, while in row cities, they are fixed.",
       "Column cities have higher tolls overall.",
-      "Row cities reset their tolls less often.",
       "In column cities, tolls tend to cluster in columns, while in row cities, they cluster in rows."
     ],
-    correct: 3
+    correct: 2
   },
   {
     question: "How can you figure out what type of city you are in (i.e. a column city or a row city)?",
@@ -76,7 +69,6 @@ export const quizQuestions = [
       "By checking the city background color.",
       "By noticing whether tolls tend to appear in columns or rows.",
       "By counting how many jobs you complete each day.",
-      "By comparing today's tolls to yesterday's tolls."
     ],
     correct: 1
   },
@@ -85,7 +77,6 @@ export const quizQuestions = [
     options: [
       "Nothing—tolls are randomly placed each day.",
       "Other tolls are likely to be in the same row or column, depending on the city pattern.",
-      "The next intersection you visit will definitely have a toll.",
       "This intersection will have a toll for the rest of the experiment."
     ],
     correct: 1
@@ -93,12 +84,11 @@ export const quizQuestions = [
   {
     question: "At the end of each day within a city, what pattern will the new set of tolls have?",
     options: [
-      "A completely random pattern with no relation to previous days.",
       "The same pattern as previous days (clustered in columns or rows).",
+      "A completely random pattern with no relation to previous days.",
       "A pattern that depends on the jobs you selected.",
-      "A mix of both column and row clustering."
     ],
-    correct: 1
+    correct: 0
   }
 ];
 
