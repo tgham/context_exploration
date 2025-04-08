@@ -55,7 +55,7 @@ class Grid {
     }
 
     // Create the grid HTML for a specific trial
-    createGridHTML = function(trialIndex, selectedPath = null, keyAssignment = null, includeCostDisplay = true, practice=false) {
+    createGridHTML = function(trialIndex, selectedPath = null, keyAssignment = null, includeCostDisplay = true, practice=false, feedback=false) {
         const trial = this.getTrialInfo(trialIndex);
         const city = trial.city;
         const grid = trial.grid;
@@ -88,6 +88,24 @@ class Grid {
             </div>
             `;
             }
+        }   
+        
+
+        if (feedback) {
+            // gridHTML += `
+            // <div class="cost-display-container">
+            //     <h3>You paid a total of <strong style="color: red;">$${totalCost}</strong> in tolls today.</h3>
+            //     <p>A new day has begun, and the tolls in this city have been reset.</p>
+            // </div>
+            // `;
+            gridHTML += `
+            <div class="cost-display-container">
+                <h2>You paid <strong style="color: red;">$${totalCost}</strong> today.</h2>
+                <p id="trial-cost" class="cost-trial hidden">-$0</p> 
+                <p id="total-cost" class="cost-total">A new day has begun.</p>
+                <p id="total-cost" class="cost-total">The tolls in this city have been reset.</p>
+            </div>
+            `;
         }
 
         gridHTML += `
@@ -168,8 +186,24 @@ class Grid {
     };
 
     // method for plotting a grid, either blank or with all costs revealed
-    createBlankGridHTML(trialIndex = null, revealCosts = false) {
+    createBlankGridHTML(trialIndex = null, revealCosts = false, feedback=false) {
+
         let gridHTML = `
+            <div class="current-job-container">
+        `;
+        
+        if (feedback){
+            gridHTML += `
+            <div class="cost-display-container">
+                <h2>You paid <strong style="color: red;">$${totalCost}</strong> today.</h2>
+                <p id="trial-cost" class="cost-trial hidden">-$0</p> 
+                <p id="total-cost" class="cost-total">A new day has begun.</p>
+                <p id="total-cost" class="cost-total">The tolls in this city have been reset.</p>
+            </div>
+            `;
+        } 
+
+        gridHTML += `
             <div class="grid-container" style="grid-template-columns: repeat(${this.gridSize}, 40px);">
         `;
     
@@ -532,7 +566,7 @@ function animateAgent(path, binaryCosts, callback) {
         }
     }
 
-    setTimeout(step, 400);
+    setTimeout(step, 600);
 }
 
 // 4. Add animated transitions between trials
@@ -580,32 +614,36 @@ function mergeCosts(trialCost, callback) {
     }
 
     setTimeout(() => {
-        // Add transition effect to fade out the current job
         const currentJob = document.querySelector(".grid-container");
-        if (currentJob) {
-            currentJob.classList.add("fade-out");
-        }
-
-        // Add transition effect to fade out the leftmost upcoming job
         const upcomingJobs = document.querySelectorAll(".upcoming-job");
         if (upcomingJobs.length > 0) {
-            const leftmostJob = upcomingJobs[0];
-            leftmostJob.classList.add("fade-out");
-        }
+            // Add transition effect to fade out the current job
+            if (currentJob) {
+                currentJob.classList.add("fade-out");
+            }
 
-        setTimeout(() => {
-            currentTrialIndex++;
-            jsPsych.finishTrial();
-            
+            // Add transition effect to fade out the leftmost upcoming job
+            const leftmostJob = upcomingJobs[0];
+            if (leftmostJob) {
+                leftmostJob.classList.add("fade-out");
+            }
+
             setTimeout(() => {
-                // Remove fade-transition class after the transition
-                if (currentJob) currentJob.classList.remove("fade-out");
-                if (upcomingJobs.length > 0) {
-                    const leftmostJob = upcomingJobs[0];
+                currentTrialIndex++;
+                jsPsych.finishTrial();
+
+                setTimeout(() => {
+                    // Remove fade-transition class after the transition
+                    if (currentJob) currentJob.classList.remove("fade-out");
                     if (leftmostJob) leftmostJob.classList.remove("fade-out");
-                }
+                }, 400);
             }, 400);
-        }, 400);
+        } else {
+            setTimeout(() => {
+                currentTrialIndex++;
+                jsPsych.finishTrial();
+            }, 400);
+        }
     }, 1000);
 }
 
@@ -675,6 +713,7 @@ const pathSelectionTrial = {
         data.trial = currentTrial.trial;
         data.city = currentTrial.city;
         data.grid_id = currentTrial.grid;
+        data.cityID = cityMapping[currentTrial.city];
         data.path_chosen = choice;
         data.button_pressed = data.response;
         data.reaction_time_ms = data.rt;
@@ -694,6 +733,7 @@ const pathSelectionTrial = {
         } else {
             data.chose_better_path = 0;
         }
+
 
         // Include all columns from the current trial
         Object.keys(currentTrial).forEach(key => {
@@ -915,7 +955,7 @@ function animateCityChange(oldCityId, newCityId) {
 }
 
 function animateDayChange(cityId) {
-    console.log(`Day Change Animation: Staying in city ${cityId}`);
+
     const blackCover = document.createElement('div');
     blackCover.style.position = 'fixed';
     blackCover.style.top = '0';
@@ -939,7 +979,7 @@ function animateDayChange(cityId) {
         blackCover.style.opacity = '0';
     }, 1000);
 
-    // Remove the black cover after the transition is complete
+    // Remove the black cover and grid after the transition is complete
     setTimeout(() => {
         document.body.removeChild(blackCover);
     }, 2000);
@@ -987,9 +1027,6 @@ const newGridMessage = {
         const nextCityId = nextTrial.city;
         const currentCityId = grid.getCurrentCity();
         let message;
-
-        console.log("Current city:", currentCityId);
-        console.log("Next city:", nextCityId);
         
         // Explicitly check if city has changed by comparing IDs
         if (currentCityId !== null && nextCityId !== currentCityId) {
@@ -998,55 +1035,99 @@ const newGridMessage = {
             animateCityChange(currentCityId, nextCityId);
             
             message = `
-                <div class="new-day-text">
+            <div class="new-day-text">
+                <div style="margin-bottom: 20px;">
+                    <h2>End of Day</h2>
+                    <p>You paid a total of <strong style="color: red;">$${totalCost}</strong> in tolls today.</p>
+                </div>
+                <div>
                     <h2>New City!</h2>
                     <p>Your taxi company is now operating in a new city.</p>
-                    <p>Note: his may be a different type of city - i.e. the traffic may run from north-south, or east-west.</p>
+                    <p>Note: this may be a different type of city - i.e. the traffic may run from north-south, or east-west.</p>
                     <p>Prepare for your first day in this new city.</p>
                     <p id="continue-text" style="display: none;">Press spacebar to continue dispatching.</p>
                 </div>
+            </div>
             `;
             
             // Update the current city
             grid.currentCity = nextCityId;
-        } else {
-            console.log("Same city - just a new day");
-            // Run fade animation for new day in same city
-            animateDayChange(currentCityId || nextCityId);
-            
-            const todayTolls = totalCost; // Assuming totalCost tracks the tolls paid so far
-            // const currentDay = grid.currentGrid+1; // Grid numbers are 0-based, so add 1
-            const currentDay = nextTrial.grid;
-            const totalDays = grid.nGrids; // Total number of grids
-            message = `
-                <div class="new-day-text">
-                    <h2>Day ${currentDay}/${totalDays}</h2>
-                    <p>A new day has begun, and the tolls in this city have been reset.</p>
-                    <p>Remember: you're still in the same city as before. Traffic still tends to run from north-south or east-west in the same way that it did on previous days.</p>
-                    <p>Prepare for your next day.</p>
-                    <p id="continue-text" style="display: none;">Press spacebar to continue dispatching.</p>
-                </div>
-            `;
-            
-            // Ensure city is set if this is the first trial
-            if (currentCityId === null) {
-                grid.currentCity = nextCityId;
-            }
-        }
 
-        // After 2s, show the text and enable keypresses manually
-        setTimeout(() => {
+            // After 2s, show the text and enable keypresses manually
+            setTimeout(() => {
             document.getElementById("continue-text").style.display = "block";
             
             // Manually register keypress listener
             jsPsych.pluginAPI.getKeyboardResponse({
-                callback_function: jsPsych.finishTrial, // Ends trial when a key is pressed
-                valid_responses: "ALL_KEYS",
+                callback_function: jsPsych.finishTrial, // Ends trial when the spacebar is pressed
+                valid_responses: [' '], // Only allow the spacebar
                 rt_method: "performance",
                 persist: false,
                 allow_held_key: false
             });
-        }, 2500); // Increased delay to allow animation to complete
+            }, 2500); // Increased delay to allow animation to complete
+        
+        } else {
+            console.log("Same city - just a new day");
+
+            const todayTolls = totalCost; // Assuming totalCost tracks the tolls paid so far
+            const currentDay = nextTrial.grid;
+            const totalDays = grid.nGrids; // Total number of grids
+        
+            // Create and append the grid container
+            const gridContainer = document.createElement('div');
+            gridContainer.className = 'jobs-layout';
+            gridContainer.style.zIndex = '2000'; // Ensure the grid remains at the front of the screen
+            gridContainer.style.position = 'relative'; // Ensure proper stacking context
+        
+            const innerContainer = document.createElement('div');
+            innerContainer.className = 'current-job-section';
+            innerContainer.innerHTML = grid.createGridHTML(currentTrialIndex-1, 'none', null, false, false, true); // Render the current state of the grid without cost display, nor any current paths
+        
+            gridContainer.appendChild(innerContainer);
+            document.body.appendChild(gridContainer);
+        
+            // Run fade animation for new day in same city after 1s
+            setTimeout(() => {
+                animateDayChange(currentCityId || nextCityId);
+            }, 1000);
+
+            // After 1 second, plot a blank grid
+            setTimeout(() => {
+                gridContainer.innerHTML = grid.createBlankGridHTML(null, false, true); // Render a blank grid
+
+                // After 2 seconds, remove the grid container and end the trial
+                setTimeout(() => {
+                    document.body.removeChild(gridContainer);
+                    jsPsych.finishTrial();
+                }, 2000);
+            }, 2000);
+
+            message = `
+            <div class="new-day-text">
+                <p id="continue-text" style="display: none;">Press spacebar to continue dispatching.</p>
+            </div>
+            `;
+            
+            // Ensure city is set if this is the first trial
+            if (currentCityId === null) {
+            grid.currentCity = nextCityId;
+            }
+        }
+
+        // // After 2s, show the text and enable keypresses manually
+        // setTimeout(() => {
+        //     document.getElementById("continue-text").style.display = "block";
+            
+        //     // Manually register keypress listener
+        //     jsPsych.pluginAPI.getKeyboardResponse({
+        //         callback_function: jsPsych.finishTrial, // Ends trial when a key is pressed
+                // valid_responses: [' '], // Only allow the spacebar
+        //         rt_method: "performance",
+        //         persist: false,
+        //         allow_held_key: false
+        //     });
+        // }, 2500); // Increased delay to allow animation to complete
 
         return message;
     },
@@ -1922,12 +2003,12 @@ function createTimeline() {
     // // Add the option to review the instructions
     // timeline.push(instructionsReview);
     
-    // Understanding checks
+    // // Understanding checks
     // const quizTrials = createQuizTrials(jsPsych);
     // timeline.push(...quizTrials);
 
-    // bonus message
-    timeline.push(instructions9)
+    // // bonus message
+    // timeline.push(instructions9)
 
 
     // Add the first grid message
@@ -1937,7 +2018,7 @@ function createTimeline() {
     for (let i = 0; i < grid.trialInfo.length; i++) {
         if (i % grid.nTrials === 0 && i !== 0) {
             // Add new grid message after each grid
-            timeline.push(gridFeedback);
+            // timeline.push(gridFeedback);
             timeline.push(newGridMessage);
         }
         timeline.push(pathSelectionTrial);
@@ -1967,9 +2048,9 @@ function downloadTrialData() {
     }).filter(item => item !== null);
 
     // Convert the data to CSV format
-    const csvHeaders = "trial,city,grid_id,path_chosen,button_pressed,reaction_time_ms,context,grid,path_A_expected_cost,path_B_expected_cost,path_A_actual_cost,path_B_actual_cost,path_A_future_overlap,path_B_future_overlap,abstract_sequence_A,abstract_sequence_B,better_path,chose_better_path\n";
+    const csvHeaders = "trial,city,grid_id,path_chosen,button_pressed,reaction_time_ms,context,grid,cityID,path_A_expected_cost,path_B_expected_cost,path_A_actual_cost,path_B_actual_cost,path_A_future_overlap,path_B_future_overlap,abstract_sequence_A,abstract_sequence_B,better_path,chose_better_path\n";
     const csvRows = trialData.map(trial => 
-        `${trial.trial},${trial.city},${trial.grid_id},${trial.path_chosen},${trial.button_pressed},${trial.reaction_time_ms},${trial.context},${trial.grid},${trial.path_A_expected_cost},${trial.path_B_expected_cost},${trial.path_A_actual_cost},${trial.path_B_actual_cost},${trial.path_A_future_overlap},${trial.path_B_future_overlap},"${trial.abstract_sequence_A}","${trial.abstract_sequence_B}",${trial.better_path},${trial.chose_better_path}`
+        `${trial.trial},${trial.city},${trial.grid_id},${trial.path_chosen},${trial.button_pressed},${trial.reaction_time_ms},${trial.context},${trial.grid},${trial.cityID},${trial.path_A_expected_cost},${trial.path_B_expected_cost},${trial.path_A_actual_cost},${trial.path_B_actual_cost},${trial.path_A_future_overlap},${trial.path_B_future_overlap},"${trial.abstract_sequence_A}","${trial.abstract_sequence_B}",${trial.better_path},${trial.chose_better_path}`
     ).join("\n");
     const csvContent = csvHeaders + csvRows;
 
