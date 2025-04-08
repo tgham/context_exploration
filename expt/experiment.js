@@ -724,6 +724,8 @@ const pathSelectionTrial = {
         data.path_B_actual_cost = currentTrial.path_B_actual_cost;
         data.path_A_future_overlap = currentTrial.path_A_future_overlap;
         data.path_B_future_overlap = currentTrial.path_B_future_overlap;
+        data.dominant_axis_A = currentTrial.dominant_axis_A;
+        data.dominant_axis_B = currentTrial.dominant_axis_B;
         data.abstract_sequence_A = JSON.stringify(currentTrial.abstract_sequence_A);
         data.abstract_sequence_B = JSON.stringify(currentTrial.abstract_sequence_B);
         data.better_path = currentTrial.better_path;
@@ -1575,6 +1577,8 @@ const practice2SelectionTrial = {
         data.path_B_future_overlap = currentTrial.path_B_future_overlap;
         data.abstract_sequence_A = JSON.stringify(currentTrial.abstract_sequence_A);
         data.abstract_sequence_B = JSON.stringify(currentTrial.abstract_sequence_B);
+        data.dominant_axis_A = currentTrial.dominant_axis_A;
+        data.dominant_axis_B = currentTrial.dominant_axis_B;
         data.better_path = currentTrial.better_path;
         const better_path_ID = currentTrial.better_path === 'a' ? 'blue' : currentTrial.better_path === 'b' ? 'green' : null;
         if (choice === better_path_ID) {
@@ -2048,9 +2052,9 @@ function downloadTrialData() {
     }).filter(item => item !== null);
 
     // Convert the data to CSV format
-    const csvHeaders = "trial,city,grid_id,path_chosen,button_pressed,reaction_time_ms,context,grid,cityID,path_A_expected_cost,path_B_expected_cost,path_A_actual_cost,path_B_actual_cost,path_A_future_overlap,path_B_future_overlap,abstract_sequence_A,abstract_sequence_B,better_path,chose_better_path\n";
+    const csvHeaders = "trial,city,grid_id,path_chosen,button_pressed,reaction_time_ms,context,grid,cityID,path_A_expected_cost,path_B_expected_cost,path_A_actual_cost,path_B_actual_cost,path_A_future_overlap,path_B_future_overlap,abstract_sequence_A,abstract_sequence_B,dominant_axis_A,dominant_axis_B,better_path,chose_better_path\n";
     const csvRows = trialData.map(trial => 
-        `${trial.trial},${trial.city},${trial.grid_id},${trial.path_chosen},${trial.button_pressed},${trial.reaction_time_ms},${trial.context},${trial.grid},${trial.cityID},${trial.path_A_expected_cost},${trial.path_B_expected_cost},${trial.path_A_actual_cost},${trial.path_B_actual_cost},${trial.path_A_future_overlap},${trial.path_B_future_overlap},"${trial.abstract_sequence_A}","${trial.abstract_sequence_B}",${trial.better_path},${trial.chose_better_path}`
+        `${trial.trial},${trial.city},${trial.grid_id},${trial.path_chosen},${trial.button_pressed},${trial.reaction_time_ms},${trial.context},${trial.grid},${trial.cityID},${trial.path_A_expected_cost},${trial.path_B_expected_cost},${trial.path_A_actual_cost},${trial.path_B_actual_cost},${trial.path_A_future_overlap},${trial.path_B_future_overlap},"${trial.abstract_sequence_A}","${trial.abstract_sequence_B}",${trial.dominant_axis_A}",${trial.dominant_axis_B}",${trial.better_path},${trial.chose_better_path}`
     ).join("\n");
     const csvContent = csvHeaders + csvRows;
 

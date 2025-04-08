@@ -176,6 +176,8 @@ class GridEnv(gym.Env):
             ## init trial info, depending on the expt type
             self.starts = []
             self.goals = []
+            self.dominant_axis_A = []
+            self.dominant_axis_B = []
             self.path_states = []
             self.path_actions = []
             self.sampled_abstract_sequences = []
@@ -240,6 +242,14 @@ class GridEnv(gym.Env):
                             self.path_states.append(path_states)
                             self.path_actions.append(path_actions)
                             self.sampled_abstract_sequences.append(sampled_abstract_sequences)
+
+                            # determine the dominant axis - i.e. is the path more vertical or horizontal?
+                            if sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]:
+                                self.dominant_axis_A.append('vertical')
+                                self.dominant_axis_B.append('horizontal')
+                            elif sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]:
+                                self.dominant_axis_A.append('horizontal')
+                                self.dominant_axis_B.append('vertical')
                             SG_found = True
 
 
