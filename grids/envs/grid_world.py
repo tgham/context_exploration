@@ -848,6 +848,8 @@ class GridEnv(gym.Env):
                     sampled_abstract_sequences = [abstract_sequences[0], abstract_sequences[-1]]
                 elif self.context == 'row':
                     sampled_abstract_sequences = [abstract_sequences[-1], abstract_sequences[0]]
+                # randomly shuffle these!
+                # sampled_abstract_sequences = np.random.permutation(sampled_abstract_sequences)
                 diff_axes = True
 
                 ## or, the first path is the rightangle path, and the second path is a long path
@@ -978,7 +980,7 @@ class GridEnv(gym.Env):
             e = len(self.starts)
             path_A_cost = np.sum([self.costss[e][x, y] for x, y in path_states[0]])
             path_B_cost = np.sum([self.costss[e][x, y] for x, y in path_states[1]])
-            cost_tol = 0.75
+            cost_tol = 0.6
             vals_ratio = min(np.abs([path_A_cost, path_B_cost])) / max(np.abs([path_A_cost, path_B_cost]))
             vals_diff = vals_ratio < cost_tol
 

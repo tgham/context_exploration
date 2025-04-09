@@ -1,13 +1,42 @@
 // Initialize jsPsych
 const jsPsych = initJsPsych({
     on_finish: function() {
-        jsPsych.data.displayData();
+        // jsPsych.data.displayData();
+        var ppt_data = jsPsych.data.get().json();
+        send_complete(subject_id, ppt_data);
     }
 });
 
 import { createQuizTrials } from './test.js';
-
 document.body.style.zoom = "80%";
+
+//   // capture info from Prolific
+var pid = get_prolific_id();
+// let subject_id = null;
+var subject_id = 1
+
+// fetch id from backend. if the id is null, then redirect to error page
+// create_participant(pid).then((value) => {
+//     if (value['id'] == null) {
+//       console.error(`${pid} is not unique or an error occurred.`);
+//       window.location.replace("error.html");
+//       return;
+//     }
+  
+//     id = value['id'];
+//     console.log(`id => ${id}`);
+//   }).catch((error) => {
+//     console.error('Failed to fetch participant ID:', error);
+//     window.location.replace("error.html");
+//   });
+  
+  
+
+jsPsych.data.addProperties({
+    subject_id: subject_id,
+});
+var ppt_data = jsPsych.data.get().json();
+send_incomplete(subject_id, ppt_data);
 
 
 // Define the Grid class
@@ -1136,6 +1165,8 @@ const newGridMessage = {
     choices: "NO_KEYS", // Initially disable keypresses
     on_finish: function() {
         grid.resetGrid(); // Reset the grid for the new set of trials
+        var ppt_data = jsPsych.data.get().json();
+        send_incomplete(subject_id, ppt_data);
     }
 };
 
@@ -1166,6 +1197,9 @@ const firstGridMessage = {
 choices: [' '], // spacebar to continue
     on_finish: function() {
         console.log("Experiment has begun in City:", grid.getCurrentCity()), ', Trial:', currentTrialIndex,', Grid:', grid.getTrialInfo(currentTrialIndex).grid;
+        var ppt_data = jsPsych.data.get().json();
+        send_incomplete(subject_id, ppt_data);
+        // send_incomplete(subject_id, jsPsych.data);
     }
 };
 
@@ -1192,15 +1226,17 @@ choices: [' '], // spacebar to continue
 const bonus = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
+        // return `
+        //     <div class="new-day-text">
+        //         <h1>Shift Complete!</h1>
+        //         <p>You've successfully completed all taxi assignments.</p>
+        //         <div class="button-container">
+        //             <button id="download-data" class="download-button">Download Data</button>
+        //             <p>Press spacebar to finish the experiment.</p>
+        //         </div>
+        //     </div>
+        // `;
         return `
-            <div class="new-day-text">
-                <h1>Shift Complete!</h1>
-                <p>You've successfully completed all taxi assignments.</p>
-                <div class="button-container">
-                    <button id="download-data" class="download-button">Download Data</button>
-                    <p>Press spacebar to finish the experiment.</p>
-                </div>
-            </div>
         `;
     },
 choices: [' '], // spacebar to continue
@@ -1209,7 +1245,7 @@ choices: [' '], // spacebar to continue
         // Determine whether the participant receives a bonus
             
         // Add event listener for the download button
-        document.getElementById('download-data').addEventListener('click', downloadTrialData);
+        // document.getElementById('download-data').addEventListener('click', downloadTrialData);
     
         // Calculate bonus
         const bonusAchieved = calculateBonus();
@@ -1971,48 +2007,48 @@ function createTimeline() {
     timeline.push(instructions1);
 
     // Practice selection
-    // timeline.push(instructions2);
-    // timeline.push(practice1SelectionTrial);
-    // timeline.push(practice1AnimationTrial);
-    // timeline.push(practice1SelectionTrial);
-    // timeline.push(practice1AnimationTrial);
+    timeline.push(instructions2);
+    timeline.push(practice1SelectionTrial);
+    timeline.push(practice1AnimationTrial);
+    timeline.push(practice1SelectionTrial);
+    timeline.push(practice1AnimationTrial);
 
-    // // Practice a full day
-    // timeline.push(instructions3);
-    // for (let i = 0; i < grid.nTrials; i++) {
-    //     timeline.push(practice2SelectionTrial);
-    //     timeline.push(practice2AnimationTrial);
-    // }
-    // timeline.push(practiceGridFeedback);
+    // Practice a full day
+    timeline.push(instructions3);
+    for (let i = 0; i < grid.nTrials; i++) {
+        timeline.push(practice2SelectionTrial);
+        timeline.push(practice2AnimationTrial);
+    }
+    timeline.push(practiceGridFeedback);
 
-    // // Animation to show grid resetting, and then another day
-    // timeline.push(instructions4);
-    // for (let i = 0; i < grid.nTrials; i++) {
-    //     timeline.push(practice2SelectionTrial);
-    //     timeline.push(practice2AnimationTrial);
-    // }
-    // timeline.push(practiceGridFeedback);
+    // Animation to show grid resetting, and then another day
+    timeline.push(instructions4);
+    for (let i = 0; i < grid.nTrials; i++) {
+        timeline.push(practice2SelectionTrial);
+        timeline.push(practice2AnimationTrial);
+    }
+    timeline.push(practiceGridFeedback);
 
-    // // New city animation
-    // timeline.push(instructions5);
+    // New city animation
+    timeline.push(instructions5);
 
-    // for (let i = 1; i <= grid.nGrids; i++) {
-    //     timeline.push(instructions6);
-    // }
-    // timeline.push(instructions7);
-    // for (let i = 1; i <= grid.nGrids; i++) {
-    //     timeline.push(instructions8);
-    // }
+    for (let i = 1; i <= grid.nGrids; i++) {
+        timeline.push(instructions6);
+    }
+    timeline.push(instructions7);
+    for (let i = 1; i <= grid.nGrids; i++) {
+        timeline.push(instructions8);
+    }
 
-    // // Add the option to review the instructions
-    // timeline.push(instructionsReview);
+    // Add the option to review the instructions
+    timeline.push(instructionsReview);
     
-    // // Understanding checks
-    // const quizTrials = createQuizTrials(jsPsych);
-    // timeline.push(...quizTrials);
+    // Understanding checks
+    const quizTrials = createQuizTrials(jsPsych);
+    timeline.push(...quizTrials);
 
-    // // bonus message
-    // timeline.push(instructions9)
+    // bonus message
+    timeline.push(instructions9)
 
 
     // Add the first grid message
