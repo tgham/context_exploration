@@ -13,6 +13,7 @@ document.body.style.zoom = "80%";
 // capture info from Prolific and fetch ID from backend. If null, then redirect to error page
 // var pid = get_prolific_id();
 // let subject_id = null;
+// let sequence = null;
 // create_participant(pid).then((value) => {
 //     if (value['id'] == null) {
 //         console.error(`${pid} is not unique or an error occurred.`);
@@ -21,20 +22,55 @@ document.body.style.zoom = "80%";
 //     }
     
 //     subject_id = value['id'];
+//     sequence = value['sequence'];
 //     console.log(`id => ${subject_id}`);
+//     console.log(`sequence => ${sequence}`);
 // }).catch((error) => {
 //     console.error('Failed to fetch participant ID:', error);
 //     window.location.replace("error.html");
 // });
 
 
-// var subject_id = 1
-
 jsPsych.data.addProperties({
     subject_id: subject_id,
 });
 var ppt_data = jsPsych.data.get().json();
 send_incomplete(subject_id, ppt_data);
+
+
+// Load the JSON data and initialize the Grid class
+let grid;
+let currentTrialIndex = 0;
+
+// or just test with this...
+var subject_id = 1
+console.log('debugging with subject_id 1');
+fetch('assets/trial_sequences/expt_info_1.json')
+.then(response => response.json())
+.then(data => {
+    grid = new Grid(data); // Initialize the Grid class with the loaded data
+    
+    // Create a shuffled mapping for cities
+    const numCities = data.env_costs.n_cities; // Assuming this is the number of cities
+    createCityMapping(numCities);
+    
+    console.log('Grid data loaded:', grid);
+    console.log('City mapping created:', cityMapping);
+    
+    initializeExperiment(); // Call a function to start the experiment
+})
+.catch(error => console.error('Error loading JSON:', error));
+
+// rename sequence to data, and then use this to generate the grid
+// let data;
+// data = sequence;
+// grid = new Grid(data); // Initialize the Grid class with the loaded data
+// const numCities = data.env_costs.n_cities; // Assuming this is the number of cities
+// createCityMapping(numCities);
+// console.log('Grid data loaded:', grid);
+// console.log('City mapping created:', cityMapping);
+// initializeExperiment();
+
 
 
 // Define the Grid class
@@ -418,38 +454,16 @@ class Grid {
     }
 }
 
-// Load the JSON data and initialize the Grid class
-let grid;
-let currentTrialIndex = 0;
-let cityMapping = {}; // This will store our shuffled mapping
-
-fetch('assets/trial_sequences/expt_info_1.json')
-    .then(response => response.json())
-    .then(data => {
-        grid = new Grid(data); // Initialize the Grid class with the loaded data
-        
-        // Create a shuffled mapping for cities
-        const numCities = data.env_costs.n_cities; // Assuming this is the number of cities
-        createCityMapping(numCities);
-        // createCityMapping(8); // Assuming you have 8 city files
-        
-        console.log('Grid data loaded:', grid);
-        console.log('City mapping created:', cityMapping);
-        
-        initializeExperiment(); // Call a function to start the experiment
-    })
-    .catch(error => console.error('Error loading JSON:', error));
-
 // Function to load practice grid data
 function loadPracticeGrid(filePath, gridVariableName) {
     return fetch(filePath)
-        .then(response => response.json())
-        .then(data => {
-            const practiceGrid = new Grid(data); // Initialize the Grid class with the loaded data
-            console.log(`${gridVariableName} data loaded:`, practiceGrid);
-            return practiceGrid;
-        })
-        .catch(error => console.error(`Error loading ${gridVariableName} JSON:`, error));
+    .then(response => response.json())
+    .then(data => {
+        const practiceGrid = new Grid(data); // Initialize the Grid class with the loaded data
+        console.log(`${gridVariableName} data loaded:`, practiceGrid);
+        return practiceGrid;
+    })
+    .catch(error => console.error(`Error loading ${gridVariableName} JSON:`, error));
 }
 
 // Load practice grids
@@ -469,6 +483,7 @@ Promise.all([
 
 
 // Function to create a random mapping of city IDs
+let cityMapping = {}; // This will store our shuffled mapping
 function createCityMapping(numCities) {
     // Create an array of city IDs (1 to numCities)
     let cityIds = Array.from({length: numCities}, (_, i) => i + 1);
@@ -2005,48 +2020,48 @@ function createTimeline() {
     timeline.push(instructions1);
 
     // Practice selection
-    timeline.push(instructions2);
-    timeline.push(practice1SelectionTrial);
-    timeline.push(practice1AnimationTrial);
-    timeline.push(practice1SelectionTrial);
-    timeline.push(practice1AnimationTrial);
+    // timeline.push(instructions2);
+    // timeline.push(practice1SelectionTrial);
+    // timeline.push(practice1AnimationTrial);
+    // timeline.push(practice1SelectionTrial);
+    // timeline.push(practice1AnimationTrial);
 
-    // Practice a full day
-    timeline.push(instructions3);
-    for (let i = 0; i < grid.nTrials; i++) {
-        timeline.push(practice2SelectionTrial);
-        timeline.push(practice2AnimationTrial);
-    }
-    timeline.push(practiceGridFeedback);
+    // // Practice a full day
+    // timeline.push(instructions3);
+    // for (let i = 0; i < grid.nTrials; i++) {
+    //     timeline.push(practice2SelectionTrial);
+    //     timeline.push(practice2AnimationTrial);
+    // }
+    // timeline.push(practiceGridFeedback);
 
-    // Animation to show grid resetting, and then another day
-    timeline.push(instructions4);
-    for (let i = 0; i < grid.nTrials; i++) {
-        timeline.push(practice2SelectionTrial);
-        timeline.push(practice2AnimationTrial);
-    }
-    timeline.push(practiceGridFeedback);
+    // // Animation to show grid resetting, and then another day
+    // timeline.push(instructions4);
+    // for (let i = 0; i < grid.nTrials; i++) {
+    //     timeline.push(practice2SelectionTrial);
+    //     timeline.push(practice2AnimationTrial);
+    // }
+    // timeline.push(practiceGridFeedback);
 
-    // New city animation
-    timeline.push(instructions5);
+    // // New city animation
+    // timeline.push(instructions5);
 
-    for (let i = 1; i <= grid.nGrids; i++) {
-        timeline.push(instructions6);
-    }
-    timeline.push(instructions7);
-    for (let i = 1; i <= grid.nGrids; i++) {
-        timeline.push(instructions8);
-    }
+    // for (let i = 1; i <= grid.nGrids; i++) {
+    //     timeline.push(instructions6);
+    // }
+    // timeline.push(instructions7);
+    // for (let i = 1; i <= grid.nGrids; i++) {
+    //     timeline.push(instructions8);
+    // }
 
-    // Add the option to review the instructions
-    timeline.push(instructionsReview);
+    // // Add the option to review the instructions
+    // timeline.push(instructionsReview);
     
-    // Understanding checks
-    const quizTrials = createQuizTrials(jsPsych);
-    timeline.push(...quizTrials);
+    // // Understanding checks
+    // const quizTrials = createQuizTrials(jsPsych);
+    // timeline.push(...quizTrials);
 
-    // bonus message
-    timeline.push(instructions9)
+    // // bonus message
+    // timeline.push(instructions9)
 
 
     // Add the first grid message
