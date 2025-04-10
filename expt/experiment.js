@@ -11,24 +11,34 @@ import { createQuizTrials } from './test.js';
 document.body.style.zoom = "80%";
 
 // capture info from Prolific and fetch ID from backend. If null, then redirect to error page
-// var pid = get_prolific_id();
-// let subject_id = null;
-// let sequence = null;
-// create_participant(pid).then((value) => {
-//     if (value['id'] == null) {
-//         console.error(`${pid} is not unique or an error occurred.`);
-//         window.location.replace("error.html");
-//         return;
-//     }
+var pid = get_prolific_id();
+let subject_id = null;
+let sequence = null;
+create_participant(pid).then((value) => {
+    if (value['id'] == null) {
+        console.error(`${pid} is not unique or an error occurred.`);
+        window.location.replace("error.html");
+        return;
+    }
     
-//     subject_id = value['id'];
-//     sequence = value['sequence'];
-//     console.log(`id => ${subject_id}`);
-//     console.log(`sequence => ${sequence}`);
-// }).catch((error) => {
-//     console.error('Failed to fetch participant ID:', error);
-//     window.location.replace("error.html");
-// });
+    subject_id = value['id'];
+    sequence = value['sequence'];
+    console.log(`id => ${subject_id}`);
+    console.log(`sequence => ${sequence}`);
+}).catch((error) => {
+    console.error('Failed to fetch participant ID:', error);
+    window.location.replace("error.html");
+});
+
+// rename sequence to data, and then use this to generate the grid
+let data;
+data = sequence;
+grid = new Grid(data); // Initialize the Grid class with the loaded data
+const numCities = data.env_costs.n_cities; // Assuming this is the number of cities
+createCityMapping(numCities);
+console.log('Grid data loaded:', grid);
+console.log('City mapping created:', cityMapping);
+initializeExperiment();
 
 
 jsPsych.data.addProperties({
@@ -43,34 +53,23 @@ let grid;
 let currentTrialIndex = 0;
 
 // or just test with this...
-var subject_id = 1
-console.log('debugging with subject_id 1');
-fetch('assets/trial_sequences/expt_info_1.json')
-.then(response => response.json())
-.then(data => {
-    grid = new Grid(data); // Initialize the Grid class with the loaded data
+// var subject_id = 1
+// console.log('debugging with subject_id 1');
+// fetch('assets/trial_sequences/expt_info_1.json')
+// .then(response => response.json())
+// .then(data => {
+//     grid = new Grid(data); // Initialize the Grid class with the loaded data
     
-    // Create a shuffled mapping for cities
-    const numCities = data.env_costs.n_cities; // Assuming this is the number of cities
-    createCityMapping(numCities);
+//     // Create a shuffled mapping for cities
+//     const numCities = data.env_costs.n_cities; // Assuming this is the number of cities
+//     createCityMapping(numCities);
     
-    console.log('Grid data loaded:', grid);
-    console.log('City mapping created:', cityMapping);
+//     console.log('Grid data loaded:', grid);
+//     console.log('City mapping created:', cityMapping);
     
-    initializeExperiment(); // Call a function to start the experiment
-})
-.catch(error => console.error('Error loading JSON:', error));
-
-// rename sequence to data, and then use this to generate the grid
-// let data;
-// data = sequence;
-// grid = new Grid(data); // Initialize the Grid class with the loaded data
-// const numCities = data.env_costs.n_cities; // Assuming this is the number of cities
-// createCityMapping(numCities);
-// console.log('Grid data loaded:', grid);
-// console.log('City mapping created:', cityMapping);
-// initializeExperiment();
-
+//     initializeExperiment(); // Call a function to start the experiment
+// })
+// .catch(error => console.error('Error loading JSON:', error));
 
 
 // Define the Grid class

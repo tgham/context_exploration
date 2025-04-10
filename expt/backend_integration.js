@@ -1,9 +1,9 @@
 // The backend URL is composed of a hostname (localhost for testing, kyblab2.etc
 // for running) and a port (which is specific to a particular experiment)
 // These should be set for each experiment
-const BACKEND_HOST = "http://127.0.0.1"; // eventually this has the URL that Andrew gives
-const BACKEND_PORT = "8000";
-const BACKEND_URL = `${BACKEND_HOST}:${BACKEND_PORT}`;
+const BACKEND_HOST = "kyblab2.tuebingen.mpg.de";
+const BACKEND_PORT = "8009";
+const BACKEND_URL = `https://${BACKEND_HOST}:${BACKEND_PORT}`;
 
 // These are the routes the backend understands. They allow creation of a new
 // participant, saving of complete or incomplete data, and finalisation of the
