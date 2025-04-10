@@ -476,8 +476,17 @@ class Grid {
             const previewIndex = currentGridStartIndex + i;
             const trial = this.getTrialInfo(previewIndex);
 
+            // Define the full set of clock characters
+            const clockCharacters = ['&#x00E6;', '&#x00DD;', '&#x0026;', '&#x263A;']; // Add more characters if needed
+            
+            // Get the clock character for the current trial
+            const clockCharacter = clockCharacters[previewIndex]; // Cycle through the characters based on the trial index
+            
             upcomingHTML += `
                 <div class="upcoming-job">
+                    <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px;">
+                        ${clockCharacter}
+                    </div>
                     <div class="upcoming-grid" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
             `;
 
@@ -541,6 +550,16 @@ class Grid {
                 </div>
             </div>
         `;
+
+        // add the clocks underneath?
+        // upcomingHTML += `
+        //     <div class="cost-display-container">
+        //         <div class="clock-container" style="font-size: 24px; text-align: center; display: flex; justify-content: space-evenly; width: 100%;">
+        //             &#x00E6; &#x00DD; &#x0026; &#x263A;
+        //         </div>
+        //     </div>
+        // `;
+
         return upcomingHTML;
     }
 }
