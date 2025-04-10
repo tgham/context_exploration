@@ -30,6 +30,7 @@ document.body.style.zoom = "80%";
 //     window.location.replace("error.html");
 // });
 
+var subject_id = 1
 
 jsPsych.data.addProperties({
     subject_id: subject_id,
@@ -42,8 +43,7 @@ send_incomplete(subject_id, ppt_data);
 let grid;
 let currentTrialIndex = 0;
 
-// or just test with this...
-var subject_id = 1
+// just test with this...
 console.log('debugging with subject_id 1');
 fetch('assets/trial_sequences/expt_info_1.json')
 .then(response => response.json())
@@ -61,7 +61,10 @@ fetch('assets/trial_sequences/expt_info_1.json')
 })
 .catch(error => console.error('Error loading JSON:', error));
 
-// rename sequence to data, and then use this to generate the grid
+// or, do it properly
+// let properly = true;
+
+// // rename sequence to data, and then use this to generate the grid
 // let data;
 // data = sequence;
 // grid = new Grid(data); // Initialize the Grid class with the loaded data
@@ -70,7 +73,6 @@ fetch('assets/trial_sequences/expt_info_1.json')
 // console.log('Grid data loaded:', grid);
 // console.log('City mapping created:', cityMapping);
 // initializeExperiment();
-
 
 
 // Define the Grid class
@@ -155,12 +157,6 @@ class Grid {
         
 
         if (feedback) {
-            // gridHTML += `
-            // <div class="cost-display-container">
-            //     <h3>You paid a total of <strong style="color: red;">$${totalCost}</strong> in tolls today.</h3>
-            //     <p>A new day has begun, and the tolls in this city have been reset.</p>
-            // </div>
-            // `;
             gridHTML += `
             <div class="cost-display-container">
                 <h2>You paid <strong style="color: red;">$${totalCost}</strong> today.</h2>
@@ -487,17 +483,19 @@ class Grid {
 
             for (let row = 0; row < this.gridSize; row++) {
                 for (let col = 0; col < this.gridSize; col++) {
+                    // const cellId = `cell-${row}-${col}`;
+                    const cellId = `cell-${row}-${col}-trial-${trial.trial}`;
                     const isStartA = row === trial.start_A[0] && col === trial.start_A[1];
                     const isStartB = row === trial.start_B[0] && col === trial.start_B[1];
                     const isGoalA = row === trial.goal_A[0] && col === trial.goal_A[1];
                     const isGoalB = row === trial.goal_B[0] && col === trial.goal_B[1];
                     const isPathA = trial.path_A.some(coord => coord[0] === row && coord[1] === col);
                     const isPathB = trial.path_B.some(coord => coord[0] === row && coord[1] === col);
-
+            
                     const observedCost = this.observedCosts[`${row}-${col}`];
                     const observedClass = observedCost !== undefined ? 
                         (observedCost === -1 ? 'observed-cost' : 'observed-no-cost') : '';
-
+            
                     const isOverlap = isPathA && isPathB;
                     let pathClass = '';
                     let content = '';
@@ -512,24 +510,25 @@ class Grid {
                         pathClass = 'green-path';
                         content = '⚝';
                     }
-
+            
                     if (isStartA) {
-                        upcomingHTML += `<div class="upcoming-cell ${observedClass} blue-path" data-row="${row}" data-col="${col}">
+                        upcomingHTML += `<div class="upcoming-cell ${observedClass} blue-path" id="${cellId}" data-row="${row}" data-col="${col}">
                                             <img src="assets/people/blue_person.png" alt="Blue Start" width="20" height="20">
                                          </div>`;
                     } else if (isStartB) {
-                        upcomingHTML += `<div class="upcoming-cell ${observedClass} green-path" data-row="${row}" data-col="${col}">
+                        upcomingHTML += `<div class="upcoming-cell ${observedClass} green-path" id="${cellId}" data-row="${row}" data-col="${col}">
                                             <img src="assets/people/green_person.png" alt="Green Start" width="20" height="20">
                                          </div>`;
                     } else if (isGoalA || isGoalB || isPathA || isPathB || isOverlap) {
-                        upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" data-row="${row}" data-col="${col}" style="font-size: 1.5rem;">
+                        upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.5rem;">
                                             ${isGoalA || isGoalB ? '🏠' : content}
                                          </div>`;
                     } else {
-                        upcomingHTML += `<div class="upcoming-cell ${observedClass}" data-row="${row}" data-col="${col}"></div>`;
+                        upcomingHTML += `<div class="upcoming-cell ${observedClass}" id="${cellId}" data-row="${row}" data-col="${col}"></div>`;
                     }
                 }
             }
+            
 
             upcomingHTML += `
                     </div>
@@ -617,7 +616,9 @@ function animateAgent(path, binaryCosts, callback) {
     function step() {
         if (currentStep > 0) {
             const [prevRow, prevCol] = path[currentStep - 1];
-            const prevCellElement = document.getElementById(`cell-${prevRow}-${prevCol}`);
+            // const prevCellElement = document.getElementById(`cell-${prevRow}-${prevCol}`);
+            const trial = grid.getTrialInfo(currentTrialIndex);
+            const prevCellElement = document.getElementById(`cell-${prevRow}-${prevCol}-trial-${trial.trial}`);
 
             if (prevCellElement) {
                 prevCellElement.classList.remove('avatar');
@@ -627,7 +628,9 @@ function animateAgent(path, binaryCosts, callback) {
 
         if (currentStep < path.length) {
             const [curRow, curCol] = path[currentStep];
-            const cellElement = document.getElementById(`cell-${curRow}-${curCol}`);
+            // const cellElement = document.getElementById(`cell-${curRow}-${curCol}`);
+            const trial = grid.getTrialInfo(currentTrialIndex);
+            const cellElement = document.getElementById(`cell-${curRow}-${curCol}-trial-${trial.trial}`);
 
             if (cellElement) {
                 const cost = binaryCosts[curRow][curCol];
