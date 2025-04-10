@@ -10,27 +10,25 @@ const jsPsych = initJsPsych({
 import { createQuizTrials } from './test.js';
 document.body.style.zoom = "80%";
 
-//   // capture info from Prolific
-var pid = get_prolific_id();
+// capture info from Prolific and fetch ID from backend. If null, then redirect to error page
+// var pid = get_prolific_id();
 // let subject_id = null;
-var subject_id = 1
-
-// fetch id from backend. if the id is null, then redirect to error page
 // create_participant(pid).then((value) => {
 //     if (value['id'] == null) {
-//       console.error(`${pid} is not unique or an error occurred.`);
-//       window.location.replace("error.html");
-//       return;
+//         console.error(`${pid} is not unique or an error occurred.`);
+//         window.location.replace("error.html");
+//         return;
 //     }
-  
-//     id = value['id'];
-//     console.log(`id => ${id}`);
-//   }).catch((error) => {
+    
+//     subject_id = value['id'];
+//     console.log(`id => ${subject_id}`);
+// }).catch((error) => {
 //     console.error('Failed to fetch participant ID:', error);
 //     window.location.replace("error.html");
-//   });
-  
-  
+// });
+
+
+// var subject_id = 1
 
 jsPsych.data.addProperties({
     subject_id: subject_id,
@@ -1264,10 +1262,10 @@ choices: [' '], // spacebar to continue
         document.body.appendChild(bonusContainer);
     
         // Also create a CSV version of the data with jsPsych's built-in function
-        const csvData = jsPsych.data.get().filter({choice: ['blue', 'green']}).csv();
-        jsPsych.data.addProperties({
-            exported_data: csvData
-        });
+        // const csvData = jsPsych.data.get().filter({choice: ['blue', 'green']}).csv();
+        // jsPsych.data.addProperties({
+        //     exported_data: csvData
+        // });
     }
 };
 
