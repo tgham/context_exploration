@@ -137,7 +137,7 @@ class Grid {
             <div class="cost-display-container">
                 <h2 class="day-display">Day ${trial.grid}/${this.nGrids}</h2>
                 <h2 class="cost-total">Total Tolls Paid Today:</h2>
-                <p id="total-cost" class="cost-total">$${totalCost}</p>
+                <p id="total-cost" class="cost-total.">$${totalCost}</p>
                 <p id="trial-cost" class="cost-trial hidden">-$0</p> 
             </div>
             `;
@@ -386,6 +386,98 @@ class Grid {
 
         for (let i = 1; i <= remainingTrialsInGrid; i++) {
             const previewIndex = currentTrialIndex + i;
+            const trial = this.getTrialInfo(previewIndex);
+
+            upcomingHTML += `
+                <div class="upcoming-job">
+                    <div class="upcoming-grid" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
+            `;
+
+            for (let row = 0; row < this.gridSize; row++) {
+                for (let col = 0; col < this.gridSize; col++) {
+                    const isStartA = row === trial.start_A[0] && col === trial.start_A[1];
+                    const isStartB = row === trial.start_B[0] && col === trial.start_B[1];
+                    const isGoalA = row === trial.goal_A[0] && col === trial.goal_A[1];
+                    const isGoalB = row === trial.goal_B[0] && col === trial.goal_B[1];
+                    const isPathA = trial.path_A.some(coord => coord[0] === row && coord[1] === col);
+                    const isPathB = trial.path_B.some(coord => coord[0] === row && coord[1] === col);
+
+                    const observedCost = this.observedCosts[`${row}-${col}`];
+                    const observedClass = observedCost !== undefined ? 
+                        (observedCost === -1 ? 'observed-cost' : 'observed-no-cost') : '';
+
+                    const isOverlap = isPathA && isPathB;
+                    let pathClass = '';
+                    let content = '';
+                    if (isOverlap) {
+                        const randomChoice = Math.random() < 0.5;
+                        pathClass = randomChoice ? 'blue-path' : 'green-path';
+                        content = randomChoice ? '<span class="green-text">⚝</span>' : '<span class="blue-text">⚝</span>';
+                    } else if (isPathA) {
+                        pathClass = 'blue-path';
+                        content = '⚝';
+                    } else if (isPathB) {
+                        pathClass = 'green-path';
+                        content = '⚝';
+                    }
+
+                    if (isStartA) {
+                        upcomingHTML += `<div class="upcoming-cell ${observedClass} blue-path" data-row="${row}" data-col="${col}">
+                                            <img src="assets/people/blue_person.png" alt="Blue Start" width="20" height="20">
+                                         </div>`;
+                    } else if (isStartB) {
+                        upcomingHTML += `<div class="upcoming-cell ${observedClass} green-path" data-row="${row}" data-col="${col}">
+                                            <img src="assets/people/green_person.png" alt="Green Start" width="20" height="20">
+                                         </div>`;
+                    } else if (isGoalA || isGoalB || isPathA || isPathB || isOverlap) {
+                        upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" data-row="${row}" data-col="${col}" style="font-size: 1.5rem;">
+                                            ${isGoalA || isGoalB ? '🏠' : content}
+                                         </div>`;
+                    } else {
+                        upcomingHTML += `<div class="upcoming-cell ${observedClass}" data-row="${row}" data-col="${col}"></div>`;
+                    }
+                }
+            }
+
+            upcomingHTML += `
+                    </div>
+                </div>
+            `;
+        }
+
+        upcomingHTML += `
+                    </div>
+                </div>
+            </div>
+        `;
+        return upcomingHTML;
+    }
+
+
+    // Add createUpcomingJobsHTML as a method of the Grid class
+    createAllJobsHTML(currentTrialIndex) {
+        const trial = this.getTrialInfo(currentTrialIndex);
+        const currentGridNumber = Math.floor(currentTrialIndex / this.nTrials);
+        const currentGridStartIndex = currentGridNumber * this.nTrials;
+        const currentGridEndIndex = currentGridStartIndex + this.nTrials - 1;
+
+        const totalTrialsInGrid = currentGridEndIndex - currentGridStartIndex + 1;
+
+        let upcomingHTML = `
+            <div class="jobs-section">
+            <div class="cost-display-container">
+                <h2 class="day-display">Day ${trial.grid}/${this.nGrids}</h2>
+                <h2 class="cost-total">Total Tolls Paid Today:</h2>
+                <p id="total-cost" class="cost-total">$${totalCost}</p>
+                <p id="trial-cost" class="cost-trial hidden">-$0</p> 
+            </div>
+            <div class="upcoming-jobs-mask-container">
+                <div class="upcoming-jobs-actual-container">
+        `;
+        
+
+        for (let i = 0; i < totalTrialsInGrid; i++) {
+            const previewIndex = currentGridStartIndex + i;
             const trial = this.getTrialInfo(previewIndex);
 
             upcomingHTML += `
@@ -704,13 +796,20 @@ const pathSelectionTrial = {
             green_key: keyAssignment.green
         });
         
+        // return `
+        //     <div class="jobs-layout">
+        //         <div class="current-job-section grid-fade-in">
+        //             ${grid.createGridHTML(currentTrialIndex, null, keyAssignment)}
+        //         </div>
+        //         <div class="upcoming-jobs-container grid-fade-in">
+        //             ${grid.createAllJobsHTML(currentTrialIndex)}
+        //         </div>
+        //     </div>
+        // `;
         return `
             <div class="jobs-layout">
-                <div class="current-job-section grid-fade-in">
-                    ${grid.createGridHTML(currentTrialIndex, null, keyAssignment)}
-                </div>
                 <div class="upcoming-jobs-container grid-fade-in">
-                    ${grid.createUpcomingJobsHTML(currentTrialIndex)}
+                    ${grid.createAllJobsHTML(currentTrialIndex)}
                 </div>
             </div>
         `;
@@ -798,13 +897,20 @@ const pathAnimationTrial = {
         const lastTrialData = jsPsych.data.get().last(1).values()[0];
         const keyAssignment = lastTrialData.key_assignment;
         
+        // return `
+        //     <div class="jobs-layout">
+        //         <div class="current-job-section">
+        //             ${grid.createGridHTML(currentTrialIndex, lastTrialData.choice, keyAssignment)}
+        //         </div>
+        //         <div class="upcoming-jobs-container">
+        //             ${grid.createAllJobsHTML(currentTrialIndex)}
+        //         </div>
+        //     </div>
+        // `;
         return `
             <div class="jobs-layout">
-                <div class="current-job-section">
-                    ${grid.createGridHTML(currentTrialIndex, lastTrialData.choice, keyAssignment)}
-                </div>
                 <div class="upcoming-jobs-container">
-                    ${grid.createUpcomingJobsHTML(currentTrialIndex)}
+                    ${grid.createAllJobsHTML(currentTrialIndex)}
                 </div>
             </div>
         `;
