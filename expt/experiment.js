@@ -1,7 +1,6 @@
 // Initialize jsPsych
 const jsPsych = initJsPsych({
     on_finish: function() {
-        // jsPsych.data.displayData();
         var ppt_data = jsPsych.data.get().json();
         send_complete(subject_id, ppt_data);
     }
@@ -11,34 +10,38 @@ import { createQuizTrials } from './test.js';
 document.body.style.zoom = "100%";
 
 // capture info from Prolific and fetch ID from backend. If null, then redirect to error page
-// var pid = get_prolific_id();
-// let subject_id = null;
-// let sequence = null;
-// create_participant(pid).then((value) => {
-//     if (value['id'] == null) {
-//         console.error(`${pid} is not unique or an error occurred.`);
-//         window.location.replace("error.html");
-//         return;
-//     }
-    
-//     subject_id = value['id'];
-//     sequence = value['sequence'];
-//     console.log(`id => ${subject_id}`);
-//     console.log(`sequence => ${sequence}`);
-// }).catch((error) => {
-//     console.error('Failed to fetch participant ID:', error);
-//     window.location.replace("error.html");
-// });
+var pid = get_prolific_id();
+let subject_id = null;
+let sequence = null;
+console.log('PID:',pid)
+console.log('subject_id:',subject_id)
+create_participant(pid).then((value) => {
+    if (value['id'] == null) {
+        console.error(`${pid} is not unique or an error occurred.`);
+        window.location.replace("error.html");
+        return;
+    }
+    subject_id = value['id'];
+    sequence = value['sequence'];
+    console.log(`id => ${subject_id}`);
+    console.log(`sequence => ${sequence}`);
+}).catch((error) => {
+    console.error('Failed to fetch participant ID:', error);
+    window.location.replace("error.html");
+});
+
 
 // rename sequence to data, and then use this to generate the grid
-// let data;
-// data = sequence;
-// grid = new Grid(data); // Initialize the Grid class with the loaded data
-// const numCities = data.env_costs.n_cities; // Assuming this is the number of cities
-// createCityMapping(numCities);
-// console.log('Grid data loaded:', grid);
-// console.log('City mapping created:', cityMapping);
-// initializeExperiment();
+let grid;
+let currentTrialIndex = 0;
+let data;
+data = sequence;
+grid = new Grid(data); // Initialize the Grid class with the loaded data
+const numCities = data.env_costs.n_cities; // Assuming this is the number of cities
+createCityMapping(numCities);
+console.log('Grid data loaded:', grid);
+console.log('City mapping created:', cityMapping);
+initializeExperiment();
 
 // var subject_id = 1
 
@@ -50,8 +53,8 @@ document.body.style.zoom = "100%";
 
 
 // Load the JSON data and initialize the Grid class
-let grid;
-let currentTrialIndex = 0;
+// let grid;
+// let currentTrialIndex = 0;
 
 // just test with this...
 console.log('debugging with subject_id 1');
