@@ -16,7 +16,6 @@ from IPython.display import display, clear_output
 from utils import *
 from scipy.stats import rankdata, truncnorm
 from scipy.linalg import cholesky
-from minimax_tilting_sampler import TruncatedMVN
 from base_kernels import *
 from itertools import permutations
 

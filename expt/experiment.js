@@ -8,7 +8,7 @@ const jsPsych = initJsPsych({
 });
 
 import { createQuizTrials } from './test.js';
-document.body.style.zoom = "80%";
+document.body.style.zoom = "100%";
 
 // capture info from Prolific and fetch ID from backend. If null, then redirect to error page
 var pid = get_prolific_id();
@@ -40,6 +40,7 @@ console.log('Grid data loaded:', grid);
 console.log('City mapping created:', cityMapping);
 initializeExperiment();
 
+var subject_id = 1
 
 jsPsych.data.addProperties({
     subject_id: subject_id,
@@ -52,13 +53,12 @@ send_incomplete(subject_id, ppt_data);
 let grid;
 let currentTrialIndex = 0;
 
-// or just test with this...
-// var subject_id = 1
-// console.log('debugging with subject_id 1');
-// fetch('assets/trial_sequences/expt_info_1.json')
-// .then(response => response.json())
-// .then(data => {
-//     grid = new Grid(data); // Initialize the Grid class with the loaded data
+// just test with this...
+console.log('debugging with subject_id 1');
+fetch('assets/trial_sequences/expt_info_1.json')
+.then(response => response.json())
+.then(data => {
+    grid = new Grid(data); // Initialize the Grid class with the loaded data
     
 //     // Create a shuffled mapping for cities
 //     const numCities = data.env_costs.n_cities; // Assuming this is the number of cities
@@ -67,9 +67,22 @@ let currentTrialIndex = 0;
 //     console.log('Grid data loaded:', grid);
 //     console.log('City mapping created:', cityMapping);
     
-//     initializeExperiment(); // Call a function to start the experiment
-// })
-// .catch(error => console.error('Error loading JSON:', error));
+    initializeExperiment(); // Call a function to start the experiment
+})
+.catch(error => console.error('Error loading JSON:', error));
+
+// or, do it properly
+// let properly = true;
+
+// // rename sequence to data, and then use this to generate the grid
+// let data;
+// data = sequence;
+// grid = new Grid(data); // Initialize the Grid class with the loaded data
+// const numCities = data.env_costs.n_cities; // Assuming this is the number of cities
+// createCityMapping(numCities);
+// console.log('Grid data loaded:', grid);
+// console.log('City mapping created:', cityMapping);
+// initializeExperiment();
 
 
 // Define the Grid class
@@ -82,8 +95,12 @@ class Grid {
         this.nGrids = gridData.env_costs.n_grids
         this.nCities = gridData.env_costs.n_cities
         this.observedCosts = {}; // Track observed costs for each grid
+        for (let i = 0; i < this.nTrials; i++) {
+            this[`observedCosts${i}`] = {};
+        }
         this.currentGrid = 0; // Track the current grid
         this.currentCity = null; // Track the current city
+
     }
 
     // Get the binary costs for a specific grid
@@ -136,7 +153,7 @@ class Grid {
             <div class="cost-display-container">
                 <h2 class="day-display">Day ${trial.grid}/${this.nGrids}</h2>
                 <h2 class="cost-total">Total Tolls Paid Today:</h2>
-                <p id="total-cost" class="cost-total">$${totalCost}</p>
+                <p id="total-cost" class="cost-total.">$${totalCost}</p>
                 <p id="trial-cost" class="cost-trial hidden">-$0</p> 
             </div>
             `;
@@ -154,18 +171,12 @@ class Grid {
         
 
         if (feedback) {
-            // gridHTML += `
-            // <div class="cost-display-container">
-            //     <h3>You paid a total of <strong style="color: red;">$${totalCost}</strong> in tolls today.</h3>
-            //     <p>A new day has begun, and the tolls in this city have been reset.</p>
-            // </div>
-            // `;
             gridHTML += `
             <div class="cost-display-container">
                 <h2>You paid <strong style="color: red;">$${totalCost}</strong> today.</h2>
                 <p id="trial-cost" class="cost-trial hidden">-$0</p> 
                 <p id="total-cost" class="cost-total">A new day has begun.</p>
-                <p id="total-cost" class="cost-total">The tolls in this city have been reset.</p>
+                <p id="total-cost" class="cost-total">Tolls in this city have been reset.</p>
             </div>
             `;
         }
@@ -176,7 +187,8 @@ class Grid {
     
         for (let row = 0; row < gridSize; row++) {
             for (let col = 0; col < gridSize; col++) {
-                const cellId = `cell-${row}-${col}`;
+                // const cellId = `cell-${row}-${col}`;
+                const cellId = `cell-${row}-${col}-trial-${trial.trial}`;
                 const isStartA = selectedPath !== 'green' && selectedPath !== 'none' && row === trial.start_A[0] && col === trial.start_A[1];
                 const isStartB = selectedPath !== 'blue' && selectedPath !== 'none' && row === trial.start_B[0] && col === trial.start_B[1];
                 const isGoalA = selectedPath !== 'green' && selectedPath !== 'none' && row === trial.goal_A[0] && col === trial.goal_A[1];
@@ -196,11 +208,16 @@ class Grid {
                 // Determine content based on key assignment if provided
                 if (keyAssignment) {
                     if (isOverlap) {
-                        const randomChoice = Math.random() < 0.5;
-                        pathClass = randomChoice ? 'blue-path' : 'green-path';
-                        content = randomChoice ? 
-                            `<span class="green-text">${keyAssignment.green}</span>` : 
-                            `<span class="blue-text">${keyAssignment.blue}</span>`;
+
+                        // for simplicity, let's just keep it consistent
+                        pathClass = 'blue-path';
+                        content = `<span class="green-text">⚝</span>`;
+
+                        // random 
+                        // const randomChoice = Math.random() < 0.5;
+                        // pathClass = randomChoice ? 'blue-path' : 'green-path';
+                        // content = randomChoice ? `<span class="green-text">⚝</span>` : `<span class="blue-text">⚝</span>`;
+
                     } else if (isPathA) {
                         pathClass = 'blue-path';
                         content = keyAssignment.blue;
@@ -260,7 +277,7 @@ class Grid {
                 <h2>You paid <strong style="color: red;">$${totalCost}</strong> today.</h2>
                 <p id="trial-cost" class="cost-trial hidden">-$0</p> 
                 <p id="total-cost" class="cost-total">A new day has begun.</p>
-                <p id="total-cost" class="cost-total">The tolls in this city have been reset.</p>
+                <p id="total-cost" class="cost-total">Tolls in this city have been reset.</p>
             </div>
             `;
         } 
@@ -314,6 +331,24 @@ class Grid {
     
             const cost = binaryCosts[row][col];
             this.observedCosts[`${row}-${col}`] = cost;
+
+            // trialwise observed costs
+            // const t = Math.floor(currentTrialIndex / this.nTrials);
+            const t = currentTrialIndex - Math.floor(currentTrialIndex / grid.nTrials) * grid.nTrials;
+            if (this[`observedCosts${t}`]) {
+                this[`observedCosts${t}`][`${row}-${col}`] = cost;
+            } else {
+                console.error(`Error: observedCosts${t} is not defined.`);
+            }
+
+            // these costs are also available on all subsequent trials up to nTrials
+            for (let i = t + 1; i < this.nTrials; i++) {
+                if (this[`observedCosts${i}`]) {
+                    this[`observedCosts${i}`][`${row}-${col}`] = cost;
+                } else {
+                    console.error(`Error: observedCosts${i} is not defined.`);
+                }
+            }
         });
     }    
 
@@ -322,6 +357,11 @@ class Grid {
         this.observedCosts = {}; 
         this.currentGrid++; 
         console.log('currentGrid:', this.currentGrid);
+
+        // Reset observed costs for each grid
+        for (let i = 0; i < this.nTrials; i++) {
+            this[`observedCosts${i}`] = {};
+        }
     
         // Reset trial cost
         const trialCostElement = document.getElementById("trial-cost");
@@ -451,6 +491,220 @@ class Grid {
         `;
         return upcomingHTML;
     }
+
+
+    // Add createUpcomingJobsHTML as a method of the Grid class
+    createAllJobsHTML(currentTrialIndex, selectedPath=null, keyAssignment=null, feedback=false) {
+        const trial = this.getTrialInfo(currentTrialIndex);
+        const currentGridNumber = Math.floor(currentTrialIndex / this.nTrials);
+        const currentGridStartIndex = currentGridNumber * this.nTrials;
+        const currentGridEndIndex = currentGridStartIndex + this.nTrials - 1;
+        const clockCharacters = ['&#x00E6;', '&#x00DD;', '&#x0026;', '&#x263A;']; // Add more characters if needed
+
+        const totalTrialsInGrid = currentGridEndIndex - currentGridStartIndex + 1;
+
+        let upcomingHTML = `
+            <div class="jobs-section">
+        `;
+
+        if (!feedback) {
+            upcomingHTML += `
+            <div id="cost-message" class="cost-display-container">
+            <h2 class="day-display">Day ${trial.grid}/${this.nGrids}</h2>
+            <h2 class="cost-total">Total Tolls Paid Today:</h2>
+            <p id="total-cost" class="cost-total">$${totalCost}</p>
+            <p id="trial-cost" class="cost-trial hidden">-$0</p> 
+            </div>
+            `;
+        } else {
+            upcomingHTML += `
+            <div id="cost-message" class="cost-display-container">
+            <h2 class="day-display">Day ${trial.grid}/${this.nGrids} Complete</h2>
+            <h2 class="cost-total">You paid a total of <strong style="color: red;">$${totalCost}</strong> today.</h2>
+            <p id="total-cost" class="cost-total">Tolls will now reset for the next day. Press spacebar to continue.</p>
+            <p id="trial-cost" class="cost-trial hidden">-$0</p> 
+            </div>
+            `;
+        }
+
+        upcomingHTML += `
+            <div class="upcoming-jobs-mask-container">
+            <div class="upcoming-jobs-actual-container">
+        `;
+        
+
+        for (let i = 0; i < totalTrialsInGrid; i++) {
+            const previewIndex = currentGridStartIndex + i;
+            const trial = this.getTrialInfo(previewIndex);
+            const clockCharacter = clockCharacters[i]; // Cycle through the characters based on the trial index
+            
+            if (!feedback) {
+                if (previewIndex < currentTrialIndex) {
+                    upcomingHTML += `
+                        <div class="upcoming-job">
+                            <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; color: transparent;">
+                                ${clockCharacter}
+                            </div>
+                            <div class="upcoming-grid-done" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
+                    `;
+                } else if (previewIndex === currentTrialIndex) {
+                    upcomingHTML += `
+                        <div class="upcoming-job">
+                            <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; color: #ece75d;">
+                                ${clockCharacter}
+                            </div>
+                            <div class="upcoming-grid" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px; background-color: #ece75d;">
+                    `;
+                } else {
+                    upcomingHTML += `
+                        <div class="upcoming-job">  
+                            <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; color: ${previewIndex === currentTrialIndex ? '#ece75d' : 'inherit'};">
+                                ${clockCharacter}
+                            </div>
+                            <div class="upcoming-grid" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
+                    `;
+                }
+            } else if (feedback) {
+                upcomingHTML += `
+                        <div class="upcoming-job">
+                            <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; color: transparent;">
+                                ${clockCharacter}
+                            </div>
+                            <div class="upcoming-grid-done" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
+                `;
+            }
+
+            for (let row = 0; row < this.gridSize; row++) {
+                for (let col = 0; col < this.gridSize; col++) {
+                    const cellId = `cell-${row}-${col}-trial-${trial.trial}`;
+                    let isStartA, isStartB, isGoalA, isGoalB, isPathA, isPathB;
+
+                    // if (previewIndex !== currentTrialIndex) {
+                    if (previewIndex > currentTrialIndex) {
+                        isStartA = row === trial.start_A[0] && col === trial.start_A[1];
+                        isStartB = row === trial.start_B[0] && col === trial.start_B[1];
+                        isGoalA = row === trial.goal_A[0] && col === trial.goal_A[1];
+                        isGoalB = row === trial.goal_B[0] && col === trial.goal_B[1];
+                        isPathA = trial.path_A.some(coord => coord[0] === row && coord[1] === col);
+                        isPathB = trial.path_B.some(coord => coord[0] === row && coord[1] === col);
+                    } else if (previewIndex < currentTrialIndex) {
+                            isStartA = false;
+                            isStartB = false;
+                            isGoalA = false;
+                            isGoalB = false;
+                            isPathA = false;
+                            isPathB = false;
+                    } else {
+                        isStartA = selectedPath !== 'green' && selectedPath !== 'none' && row === trial.start_A[0] && col === trial.start_A[1];
+                        isStartB = selectedPath !== 'blue' && selectedPath !== 'none' && row === trial.start_B[0] && col === trial.start_B[1];
+                        isGoalA = selectedPath !== 'green' && selectedPath !== 'none' && row === trial.goal_A[0] && col === trial.goal_A[1];
+                        isGoalB = selectedPath !== 'blue' && selectedPath !== 'none' && row === trial.goal_B[0] && col === trial.goal_B[1];
+                        isPathA = selectedPath !== 'green' && selectedPath !== 'none' && trial.path_A.some(coord => coord[0] === row && coord[1] === col);
+                        isPathB = selectedPath !== 'blue' && selectedPath !== 'none' && trial.path_B.some(coord => coord[0] === row && coord[1] === col);
+                    } 
+                    
+                    // plot observed costs in every grid
+                    // const observedCost = this.observedCosts[`${row}-${col}`];
+                    // const observedClass = observedCost !== undefined ? 
+                    // (observedCost === -1 ? 'observed-cost' : 'observed-no-cost') : '';
+
+                    // or, only plot costs observed up to the current trial, i.e. use this.observedCostsT to get the observed costs
+                    const observedCost = this[`observedCosts${i}`][`${row}-${col}`];
+                    const observedClass = observedCost !== undefined ?
+                        (observedCost === -1 ? 'observed-cost' : 'observed-no-cost') : '';
+                        
+                    // Handle overlapping paths
+                    const isOverlap = isPathA && isPathB;
+                    let pathClass = '';
+                    let content = '';
+
+                    // Use key assignment if previewIndex matches currentTrialIndex
+                    if (previewIndex === currentTrialIndex && keyAssignment) {
+                        if (isOverlap) {
+                            if (previewIndex % 2 === 0) {
+                                pathClass = 'blue-path';
+                                content = `<span class="green-text">⚝</span>`;
+                            } else {
+                                pathClass = 'green-path';
+                                content = `<span class="blue-text">⚝</span>`;
+                            }
+                        } else if (isPathA) {
+                            pathClass = 'blue-path';
+                            content = keyAssignment.blue;
+                        } else if (isPathB) {
+                            pathClass = 'green-path';
+                            content = keyAssignment.green;
+                        }
+                    } else {
+                        // Default behavior for other previews
+                        if (isOverlap) {
+                            if (i % 2 === 0) {
+                                pathClass = 'blue-path';
+                                content = '<span class="green-text">⚝</span>';
+                            } else {
+                                pathClass = 'green-path';
+                                content = '<span class="blue-text">⚝</span>';
+                            }
+                        } else if (isPathA) {
+                            pathClass = 'blue-path';
+                            content = '⚝';
+                        } else if (isPathB) {
+                            pathClass = 'green-path';
+                            content = '⚝';
+                        }
+                    }
+
+                    if (previewIndex < currentTrialIndex || feedback) {
+                        if (isStartA) {
+                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass} blue-path" id="${cellId}" data-row="${row}" data-col="${col}">
+                                                <img src="assets/people/blue_person.png" alt="Blue Start" width="20" height="20">
+                                             </div>`;
+                        } else if (isStartB) {
+                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass} green-path" id="${cellId}" data-row="${row}" data-col="${col}">
+                                                <img src="assets/people/green_person.png" alt="Green Start" width="20" height="20">
+                                             </div>`;
+                        } else if (isGoalA || isGoalB || isPathA || isPathB || isOverlap) {
+                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.5rem;">
+                                                ${isGoalA || isGoalB ? '🏠' : content}
+                                             </div>`;
+                        } else {
+                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass}" id="${cellId}" data-row="${row}" data-col="${col}"></div>`;
+                        }
+                    } else {
+                        if (isStartA) {
+                            upcomingHTML += `<div class="upcoming-cell ${observedClass} blue-path" id="${cellId}" data-row="${row}" data-col="${col}">
+                                                <img src="assets/people/blue_person.png" alt="Blue Start" width="20" height="20">
+                                             </div>`;
+                        } else if (isStartB) {
+                            upcomingHTML += `<div class="upcoming-cell ${observedClass} green-path" id="${cellId}" data-row="${row}" data-col="${col}">
+                                                <img src="assets/people/green_person.png" alt="Green Start" width="20" height="20">
+                                             </div>`;
+                        } else if (isGoalA || isGoalB || isPathA || isPathB || isOverlap) {
+                            upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.5rem;">
+                                                ${isGoalA || isGoalB ? '🏠' : content}
+                                             </div>`;
+                        } else {
+                            upcomingHTML += `<div class="upcoming-cell ${observedClass}" id="${cellId}" data-row="${row}" data-col="${col}"></div>`;
+                        }
+                    }
+                }
+            }
+            
+
+            upcomingHTML += `
+                    </div>
+                </div>
+            `;
+        }
+
+        upcomingHTML += `
+                    </div>
+                </div>
+            </div>
+        `;
+
+        return upcomingHTML;
+    }
 }
 
 // Function to load practice grid data
@@ -521,172 +775,273 @@ function animateAgent(path, binaryCosts, callback) {
     let trialCost = 0;
     let trialCostVisible = false;
 
-    function step() {
-        if (currentStep > 0) {
-            const [prevRow, prevCol] = path[currentStep - 1];
-            const prevCellElement = document.getElementById(`cell-${prevRow}-${prevCol}`);
+    if (path) {
+        function step() {
+            if (currentStep > 0) {
+                const [prevRow, prevCol] = path[currentStep - 1];
+                const trial = grid.getTrialInfo(currentTrialIndex);
+                const prevCellElement = document.getElementById(`cell-${prevRow}-${prevCol}-trial-${trial.trial}`);
 
-            if (prevCellElement) {
-                prevCellElement.classList.remove('avatar');
-                prevCellElement.innerHTML = ''; // Remove avatar
-            }
-        }
-
-        if (currentStep < path.length) {
-            const [curRow, curCol] = path[currentStep];
-            const cellElement = document.getElementById(`cell-${curRow}-${curCol}`);
-
-            if (cellElement) {
-                const cost = binaryCosts[curRow][curCol];
-
-                // Update observed cost classes
-                cellElement.classList.remove("observed-cost", "observed-no-cost");
-                cellElement.classList.add(cost === -1 ? "observed-cost" : "observed-no-cost");
-
-                // Ensure start and goal cells update their color when observed
-                if (cellElement.classList.contains("start") || cellElement.classList.contains("goal")) {
-                    cellElement.style.backgroundColor = cost === -1 ? "#f87171" : "#b8b8d9"; // Red for toll, grey for free
+                if (prevCellElement) {
+                    prevCellElement.classList.remove('avatar');
+                    prevCellElement.innerHTML = ''; // Remove avatar
                 }
+            }
 
-                if (cost === -1) {
-                    trialCost++;
+            if (currentStep < path.length) {
+                const [curRow, curCol] = path[currentStep];
+                const trial = grid.getTrialInfo(currentTrialIndex);
+                const cellElement = document.getElementById(`cell-${curRow}-${curCol}-trial-${trial.trial}`);
 
-                    // Visual burst effect for toll cost
-                    cellElement.innerHTML += '<div class="cost-burst">+$1 Toll</div>';
-                    setTimeout(() => {
-                        const burst = cellElement.querySelector('.cost-burst');
-                        if (burst) burst.remove();
-                    }, 600);
+                if (cellElement) {
+                    const cost = binaryCosts[curRow][curCol];
 
-                    // Play toll sound
-                    const costSound = new Audio('assets/costSound.mp3');
-                    costSound.play();
+                    // Update observed cost classes
+                    cellElement.classList.remove("observed-cost", "observed-no-cost");
+                    cellElement.classList.add(cost === -1 ? "observed-cost" : "observed-no-cost");
 
-                    if (!trialCostVisible) {
-                        const trialCostElement = document.getElementById("trial-cost");
-                        if (trialCostElement) {
-                            trialCostElement.classList.remove("hidden");
-                            trialCostVisible = true;
-                        }
+                    // Ensure start and goal cells update their color when observed
+                    if (cellElement.classList.contains("start") || cellElement.classList.contains("goal")) {
+                        cellElement.style.backgroundColor = cost === -1 ? "#f87171" : "#b8b8d9"; // Red for toll, grey for free
                     }
+
+                    if (cost === -1) {
+                        trialCost++;
+
+                        // Visual burst effect for toll cost
+                        cellElement.innerHTML += '<div class="cost-burst">+$1 Toll</div>';
+                        setTimeout(() => {
+                            const burst = cellElement.querySelector('.cost-burst');
+                            if (burst) burst.remove();
+                        }, 600);
+
+                        // Play toll sound
+                        const costSound = new Audio('assets/costSound.mp3');
+                        costSound.play();
+
+                        if (!trialCostVisible) {
+                            const trialCostElement = document.getElementById("trial-cost");
+                            if (trialCostElement) {
+                                trialCostElement.classList.remove("hidden");
+                                trialCostVisible = true;
+                            }
+                        }
+                    } else {
+                        // Visual feedback for free passage
+                        cellElement.innerHTML += '<div class="free-burst">Free</div>';
+                        setTimeout(() => {
+                            const burst = cellElement.querySelector('.free-burst');
+                            if (burst) burst.remove();
+                        }, 600);
+                    }
+
+                    const trialCostElement = document.getElementById("trial-cost");
+                    if (trialCostElement) {
+                        trialCostElement.textContent = `-$${trialCost}`;
+                    }
+
+                    // Update observed costs in upcoming grids
+                    const upcomingCells = document.querySelectorAll(`.upcoming-cell[data-row="${curRow}"][data-col="${curCol}"]`);
+                    upcomingCells.forEach(upcomingCell => {
+                        upcomingCell.classList.remove("observed-cost", "observed-no-cost");
+                        upcomingCell.classList.add(cost === -1 ? "observed-cost" : "observed-no-cost");
+                    });
+
+                    // Remove the star or S or G, then add the avatar
+                    cellElement.textContent = '';
+                    cellElement.classList.add('avatar');
+                    cellElement.innerHTML += createAvatar(); // Add taxi avatar on top
                 } else {
-                    // Visual feedback for free passage
-                    cellElement.innerHTML += '<div class="free-burst">Free</div>';
-                    setTimeout(() => {
-                        const burst = cellElement.querySelector('.free-burst');
-                        if (burst) burst.remove();
-                    }, 600);
+                    console.error(`Cell not found in DOM: cell-${curRow}-${curCol}`);
+                    return;
                 }
 
-                const trialCostElement = document.getElementById("trial-cost");
-                if (trialCostElement) {
-                    trialCostElement.textContent = `-$${trialCost}`;
-                }
-
-                // Update observed costs in upcoming grids
-                const upcomingCells = document.querySelectorAll(`.upcoming-cell[data-row="${curRow}"][data-col="${curCol}"]`);
-                upcomingCells.forEach(upcomingCell => {
-                    upcomingCell.classList.remove("observed-cost", "observed-no-cost");
-                    upcomingCell.classList.add(cost === -1 ? "observed-cost" : "observed-no-cost");
-                });
-
-                // Remove the star or S or G, then add the avatar
-                cellElement.textContent = '';
-                cellElement.classList.add('avatar');
-                cellElement.innerHTML += createAvatar(); // Add taxi avatar on top
+                currentStep++;
+                setTimeout(step, 300);
             } else {
-                console.error(`Cell not found in DOM: cell-${curRow}-${curCol}`);
-                return;
+                // Animation complete
+                mergeCosts(trialCost, callback);
             }
-
-            currentStep++;
-            setTimeout(step, 300);
-        } else {
-            // Animation complete
-            mergeCosts(trialCost, callback);
         }
+        
+        // Start the animation sequence after a short delay
+        setTimeout(step, 600);
+    } else {
+        // If there's no path, just merge costs and execute callback
+        mergeCosts(null, callback);
     }
-
-    setTimeout(step, 600);
+    // Remove this line: setTimeout(step, 600);
 }
 
+// 4. Add animated transitions between trials
 // 4. Add animated transitions between trials
 function mergeCosts(trialCost, callback) {
     const totalCostElement = document.getElementById("total-cost");
     const trialCostElement = document.getElementById("trial-cost");
 
-    if (totalCostElement && trialCostElement) {
-        // Add warning animation to cost display
-        if (trialCost > 0) {
-            trialCostElement.classList.add("cost-animate");
-        }
+    let trialFine;
+    console.log("trialCost:", trialCost);
+    if (trialCost === null) {
+        trialFine = true;
+        trialCost = 10;
         
-        trialCostElement.style.transition = "transform 0.5s ease-in-out";
-        trialCostElement.style.transform = "translateY(-20px)";
-
-        setTimeout(() => {
-            totalCost += trialCost;
+        // Show missed response message in red for n seconds
+        if (totalCostElement) {
+            const originalContent = totalCostElement.textContent;
+            const originalColor = totalCostElement.style.color;
             
-            // Animated counter for total cost
-            const startCost = totalCost - trialCost;
-            const duration = 500;
-            const frameDuration = 1000 / 60;
-            const totalFrames = Math.round(duration / frameDuration);
-            let frame = 0;
+            totalCostElement.textContent = `You ran out of time! -$${trialCost}`;
+            totalCostElement.style.color = "#f87171";
             
-            const counter = setInterval(() => {
-                frame++;
-                const progress = frame / totalFrames;
-                const currentCount = Math.floor(startCost + progress * trialCost);
-                totalCostElement.textContent = `$${currentCount}`;
+            // Wait n seconds before continuing
+            setTimeout(() => {
+                totalCostElement.style.color = originalColor;
                 
-                if (frame === totalFrames) {
-                    clearInterval(counter);
-                    totalCostElement.textContent = `$${totalCost}`;
+                // Continue with normal animation flow after showing the message
+                if (totalCostElement && trialCostElement) {
+                    // Add warning animation to cost display
+                    if (trialCost > 0) {
+                        trialCostElement.classList.add("cost-animate");
+                    }
                     
-                    // Reset trial cost display with animation
-                    trialCostElement.textContent = `-$0`;
-                    trialCostElement.classList.remove("cost-animate");
-                    trialCostElement.style.transform = "translateY(0)";
-                    trialCostElement.classList.add("hidden");
+                    trialCostElement.style.transition = "transform 0.5s ease-in-out";
+                    trialCostElement.style.transform = "translateY(-20px)";
+
+                    setTimeout(() => {
+                        totalCost += trialCost;
+                        
+                        // Animated counter for total cost
+                        const startCost = totalCost - trialCost;
+                        const duration = 500;
+                        const frameDuration = 1000 / 60;
+                        const totalFrames = Math.round(duration / frameDuration);
+                        let frame = 0;
+                        
+                        const counter = setInterval(() => {
+                            frame++;
+                            const progress = frame / totalFrames;
+                            const currentCount = Math.floor(startCost + progress * trialCost);
+                            totalCostElement.textContent = `$${currentCount}`;
+                            
+                            if (frame === totalFrames) {
+                                clearInterval(counter);
+                                totalCostElement.textContent = `$${totalCost}`;
+
+                                // Reset trial cost display with animation
+                                trialCostElement.textContent = `-$0`;
+                                trialCostElement.classList.remove("cost-animate");
+                                trialCostElement.style.transform = "translateY(0)";
+                                trialCostElement.classList.add("hidden");
+                            }
+                        }, frameDuration);
+                    }, 100);
                 }
-            }, frameDuration);
-        }, 100);
+            }, 1000);
+        }
+    } else {
+        trialFine = false;
+        
+        // Regular flow without missed response
+        if (totalCostElement && trialCostElement) {
+            // Add warning animation to cost display
+            if (trialCost > 0) {
+                trialCostElement.classList.add("cost-animate");
+            }
+            
+            trialCostElement.style.transition = "transform 0.5s ease-in-out";
+            trialCostElement.style.transform = "translateY(-20px)";
+
+            setTimeout(() => {
+                totalCost += trialCost;
+                
+                // Animated counter for total cost
+                const startCost = totalCost - trialCost;
+                const duration = 500;
+                const frameDuration = 1000 / 60;
+                const totalFrames = Math.round(duration / frameDuration);
+                let frame = 0;
+                
+                const counter = setInterval(() => {
+                    frame++;
+                    const progress = frame / totalFrames;
+                    const currentCount = Math.floor(startCost + progress * trialCost);
+                    totalCostElement.textContent = `$${currentCount}`;
+                    
+                    if (frame === totalFrames) {
+                        clearInterval(counter);
+                        totalCostElement.textContent = `$${totalCost}`;
+
+                        // Reset trial cost display with animation
+                        trialCostElement.textContent = `-$0`;
+                        trialCostElement.classList.remove("cost-animate");
+                        trialCostElement.style.transform = "translateY(0)";
+                        trialCostElement.classList.add("hidden");
+                    }
+                }, frameDuration);
+            }, 100);
+        }
     }
 
     setTimeout(() => {
         const currentJob = document.querySelector(".grid-container");
         const upcomingJobs = document.querySelectorAll(".upcoming-job");
         if (upcomingJobs.length > 0) {
+            
             // Add transition effect to fade out the current job
-            if (currentJob) {
-                currentJob.classList.add("fade-out");
-            }
+            // if (currentJob) {
+            //     currentJob.classList.add("fade-out");
+            // }
+
+            // define currentJob as the upcoming job indexed by the current trial
+            const currentI = currentTrialIndex - Math.floor(currentTrialIndex / grid.nTrials) * grid.nTrials;
+            const currentJob = upcomingJobs[currentI];
+            // currentJob.classList.add("transparent");
+            currentJob.classList.add("fade-out");
+
 
             // Add transition effect to fade out the leftmost upcoming job
-            const leftmostJob = upcomingJobs[0];
-            if (leftmostJob) {
-                leftmostJob.classList.add("fade-out");
-            }
+            // const leftmostJob = upcomingJobs[0];
+            // if (leftmostJob) {
+            //     leftmostJob.classList.add("fade-out");
+            // }
 
             setTimeout(() => {
                 currentTrialIndex++;
                 jsPsych.finishTrial();
-
                 setTimeout(() => {
                     // Remove fade-transition class after the transition
                     if (currentJob) currentJob.classList.remove("fade-out");
-                    if (leftmostJob) leftmostJob.classList.remove("fade-out");
-                }, 400);
-            }, 400);
+                    // if (currentJob) currentJob.classList.remove("transparent");
+                    // if (leftmostJob) leftmostJob.classList.remove("fade-out");
+                }, 500);
+            }, 500);
         } else {
             setTimeout(() => {
                 currentTrialIndex++;
                 jsPsych.finishTrial();
-            }, 400);
+            }, 500);
         }
     }, 1000);
 }
+
+
+const pathPreSelectionTrial = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        return `
+            <div class="jobs-layout">
+            <div class="upcoming-jobs-container grid ${currentTrialIndex % grid.nTrials === 0 ? 'grid-fade-in' : ''}">
+                ${grid.createAllJobsHTML(currentTrialIndex, null, null)} 
+            </div>
+            </div>
+        `;
+    },
+    choices: "NO_KEYS",
+    trial_duration: 1500, // Ends after 1.5 seconds
+    on_finish: function() {
+        console.log("Pre-selection trial completed.");
+    }
+};
 
 // 5. Update the path selection trial to include taxi theme elements
 const pathSelectionTrial = {
@@ -705,16 +1060,14 @@ const pathSelectionTrial = {
         
         return `
             <div class="jobs-layout">
-                <div class="current-job-section grid-fade-in">
-                    ${grid.createGridHTML(currentTrialIndex, null, keyAssignment)}
-                </div>
-                <div class="upcoming-jobs-container grid-fade-in">
-                    ${grid.createUpcomingJobsHTML(currentTrialIndex)}
+                <div class="upcoming-jobs-container">
+                    ${grid.createAllJobsHTML(currentTrialIndex, null, keyAssignment)} 
                 </div>
             </div>
         `;
     },
     choices: ['f', 'j'], 
+    trial_duration: 5000, // Automatically ends after 5 seconds
     on_finish: function(data) {
         // Get the key assignment for this trial
         const keyAssignment = {
@@ -729,8 +1082,7 @@ const pathSelectionTrial = {
         } else if (data.response === 'j') {
             choice = keyAssignment.blue === 'J' ? 'blue' : 'green';
         } else {
-            console.error("Invalid keypress:", data.response);
-            return;
+            choice = 'nan'; // Log as 'nan' if no response is made
         }
         
         // Add "swipe" effect on selection
@@ -777,7 +1129,6 @@ const pathSelectionTrial = {
             data.chose_better_path = 0;
         }
 
-
         // Include all columns from the current trial
         Object.keys(currentTrial).forEach(key => {
             data[key] = currentTrial[key];
@@ -796,14 +1147,10 @@ const pathAnimationTrial = {
     stimulus: function() {
         const lastTrialData = jsPsych.data.get().last(1).values()[0];
         const keyAssignment = lastTrialData.key_assignment;
-        
         return `
             <div class="jobs-layout">
-                <div class="current-job-section">
-                    ${grid.createGridHTML(currentTrialIndex, lastTrialData.choice, keyAssignment)}
-                </div>
                 <div class="upcoming-jobs-container">
-                    ${grid.createUpcomingJobsHTML(currentTrialIndex)}
+                    ${grid.createAllJobsHTML(currentTrialIndex, lastTrialData.choice, keyAssignment)} 
                 </div>
             </div>
         `;
@@ -818,10 +1165,14 @@ const pathAnimationTrial = {
             return jsPsych.finishTrial();
         }
 
-        const chosenPath = lastTrialData.choice === 'blue' ? currentTrial.path_A : currentTrial.path_B;
+        const chosenPath = lastTrialData.choice === 'blue' ? currentTrial.path_A : 
+                   lastTrialData.choice === 'green' ? currentTrial.path_B : 
+                   null;
         const binaryCosts = grid.getBinaryCosts(`city_${currentTrial.city}_grid_${currentTrial.grid}`);
 
-        grid.recordObservedCosts(chosenPath, binaryCosts);
+        if (chosenPath !== null) {
+            grid.recordObservedCosts(chosenPath, binaryCosts);
+        }
 
         setTimeout(() => {
             animateAgent(chosenPath, binaryCosts, function() {
@@ -831,101 +1182,6 @@ const pathAnimationTrial = {
     }
 };
 
-// // Add this function to create HTML for upcoming job previews
-// function createUpcomingJobsHTML(currentTrialIndex) {
-
-//     // Calculate which grid we're in (nTrials is contained in the grid object)
-//     const currentGridNumber = Math.floor(currentTrialIndex / grid.nTrials);
-//     const currentGridStartIndex = currentGridNumber * grid.nTrials;
-//     const currentGridEndIndex = currentGridStartIndex + grid.nTrials - 1; // Last trial index in this grid
-
-//     // Only show jobs within the current grid
-//     const remainingTrialsInGrid = currentGridEndIndex - currentTrialIndex;
-
-//     if (remainingTrialsInGrid <= 0) {
-//         return ''; // No upcoming jobs in this grid
-//     }
-
-//     let upcomingHTML = `
-//         <div class="jobs-section">
-//             <div class="upcoming-jobs-header-container">
-//                 <div class="upcoming-jobs-header">Upcoming jobs</div>
-//             </div>
-//             <div class="upcoming-jobs-mask-container">
-//                 <div class="upcoming-jobs-actual-container">
-//     `;
-
-//     for (let i = 1; i <= remainingTrialsInGrid; i++) {
-//         const previewIndex = currentTrialIndex + i;
-//         const trial = grid.getTrialInfo(previewIndex);
-//         const jobNumber = (previewIndex % grid.nTrials) + 1; // Job number within the grid
-
-//         upcomingHTML += `
-//             <div class="upcoming-job">
-//                 <div class="upcoming-grid" style="grid-template-columns: repeat(${grid.gridSize}, 30px); grid-auto-rows: 30px;">
-//         `;
-
-//         for (let row = 0; row < grid.gridSize; row++) {
-//             for (let col = 0; col < grid.gridSize; col++) {
-//                 const isStartA = row === trial.start_A[0] && col === trial.start_A[1];
-//                 const isStartB = row === trial.start_B[0] && col === trial.start_B[1];
-//                 const isGoalA = row === trial.goal_A[0] && col === trial.goal_A[1];
-//                 const isGoalB = row === trial.goal_B[0] && col === trial.goal_B[1];
-//                 const isPathA = trial.path_A.some(coord => coord[0] === row && coord[1] === col);
-//                 const isPathB = trial.path_B.some(coord => coord[0] === row && coord[1] === col);
-
-//                 // Check if this cell has been observed in previous trials
-//                 const observedCost = grid.observedCosts[`${row}-${col}`];
-//                 const observedClass = observedCost !== undefined ? 
-//                     (observedCost === -1 ? 'observed-cost' : 'observed-no-cost') : '';
-
-//                 // Handle overlapping paths
-//                 const isOverlap = isPathA && isPathB;
-//                 let pathClass = '';
-//                 let content = ''; // Content for the cell (e.g., star or other marker)
-//                 if (isOverlap) {
-//                     const randomChoice = Math.random() < 0.5;
-//                     pathClass = randomChoice ? 'blue-path' : 'green-path';
-//                     content = randomChoice ? '<span class="green-text">⚝</span>' : '<span class="blue-text">⚝</span>';
-//                 } else if (isPathA) {
-//                     pathClass = 'blue-path';
-//                     content = '⚝';
-//                 } else if (isPathB) {
-//                     pathClass = 'green-path';
-//                     content = '⚝';
-//                 }
-
-//                 if (isStartA) {
-//                     upcomingHTML += `<div class="upcoming-cell ${observedClass} blue-path" data-row="${row}" data-col="${col}">
-//                                         <img src="assets/people/blue_person.png" alt="Blue Start" width="20" height="20">
-//                                      </div>`;
-//                 } else if (isStartB) {
-//                     upcomingHTML += `<div class="upcoming-cell ${observedClass} green-path" data-row="${row}" data-col="${col}">
-//                                         <img src="assets/people/green_person.png" alt="Green Start" width="20" height="20">
-//                                      </div>`;
-//                 } else if (isGoalA || isGoalB || isPathA || isPathB || isOverlap) {
-//                     upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" data-row="${row}" data-col="${col}" style="font-size: 1.5rem;">
-//                                         ${isGoalA || isGoalB ? '🏠' : content}
-//                                      </div>`;
-//                 } else {
-//                     upcomingHTML += `<div class="upcoming-cell ${observedClass}" data-row="${row}" data-col="${col}"></div>`;
-//                 }
-//             }
-//         }
-
-//         upcomingHTML += `
-//                 </div>
-//             </div>
-//         `;
-//     }
-
-//     upcomingHTML += `
-//                 </div>
-//             </div>
-//         </div>
-//     `;
-//     return upcomingHTML;
-// }
 
 // Update the setCityBackground function to use the mapping
 function setCityBackground(cityId) {
@@ -941,7 +1197,7 @@ function setCityBackground(cityId) {
     body.style.backgroundRepeat = '';
 
     // Apply the new background
-    body.style.backgroundImage = `url('assets/cities/${mappedCityId}.png')`;
+    body.style.backgroundImage = `url('assets/cities/cropped/${mappedCityId}.png')`;
     body.style.backgroundSize = 'cover';
     body.style.backgroundPosition = 'center';
     body.style.backgroundRepeat = 'no-repeat';
@@ -968,7 +1224,7 @@ function animateCityChange(oldCityId, newCityId) {
     oldCity.style.width = '50%'; // Half of the container
     oldCity.style.height = '100%';
     oldCityMapping = cityMapping[oldCityId];
-    oldCity.style.backgroundImage = `url('assets/cities/${oldCityMapping}.png')`;
+    oldCity.style.backgroundImage = `url('assets/cities/cropped/${oldCityMapping}.png')`;
     oldCity.style.backgroundSize = 'cover';
     oldCity.style.backgroundPosition = 'center';
     transitionContainer.appendChild(oldCity);
@@ -979,7 +1235,7 @@ function animateCityChange(oldCityId, newCityId) {
     newCity.style.width = '50%'; // Half of the container
     newCity.style.height = '100%';
     newCityMapping = cityMapping[newCityId];
-    newCity.style.backgroundImage = `url('assets/cities/${newCityMapping}.png')`;
+    newCity.style.backgroundImage = `url('assets/cities/cropped/${newCityMapping}.png')`;
     newCity.style.backgroundSize = 'cover';
     newCity.style.backgroundPosition = 'center';
     transitionContainer.appendChild(newCity);
@@ -1062,19 +1318,19 @@ choices: [' '], // spacebar to continue
 };
 
 
-const newGridMessage = {
+const newCityMessage = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         const nextTrialIndex = currentTrialIndex; // Next trial will be this index
         const nextTrial = grid.getTrialInfo(nextTrialIndex);
         const nextCityId = nextTrial.city;
         const currentCityId = grid.getCurrentCity();
-        let message;
+        // let message;
         
         // Explicitly check if city has changed by comparing IDs
         if (currentCityId !== null && nextCityId !== currentCityId) {
+            let message;
             console.log("City changed from", currentCityId, "to", nextCityId);
-            // Run slide animation
             animateCityChange(currentCityId, nextCityId);
             
             message = `
@@ -1113,49 +1369,49 @@ const newGridMessage = {
         } else {
             console.log("Same city - just a new day");
 
-            const todayTolls = totalCost; // Assuming totalCost tracks the tolls paid so far
-            const currentDay = nextTrial.grid;
-            const totalDays = grid.nGrids; // Total number of grids
+            // const todayTolls = totalCost; // Assuming totalCost tracks the tolls paid so far
+            // const currentDay = nextTrial.grid;
+            // const totalDays = grid.nGrids; // Total number of grids
         
-            // Create and append the grid container
-            const gridContainer = document.createElement('div');
-            gridContainer.className = 'jobs-layout';
-            gridContainer.style.zIndex = '2000'; // Ensure the grid remains at the front of the screen
-            gridContainer.style.position = 'relative'; // Ensure proper stacking context
+            // // Create and append the grid container
+            // const gridContainer = document.createElement('div');
+            // gridContainer.className = 'jobs-layout';
+            // gridContainer.style.zIndex = '2000'; // Ensure the grid remains at the front of the screen
+            // gridContainer.style.position = 'relative'; // Ensure proper stacking context
         
-            const innerContainer = document.createElement('div');
-            innerContainer.className = 'current-job-section';
-            innerContainer.innerHTML = grid.createGridHTML(currentTrialIndex-1, 'none', null, false, false, true); // Render the current state of the grid without cost display, nor any current paths
+            // const innerContainer = document.createElement('div');
+            // innerContainer.className = 'current-job-section';
+            // innerContainer.innerHTML = grid.createGridHTML(currentTrialIndex-1, 'none', null, false, false, true); // Render the current state of the grid without cost display, nor any current paths
         
-            gridContainer.appendChild(innerContainer);
-            document.body.appendChild(gridContainer);
+            // gridContainer.appendChild(innerContainer);
+            // document.body.appendChild(gridContainer);
         
-            // Run fade animation for new day in same city after 1s
-            setTimeout(() => {
-                animateDayChange(currentCityId || nextCityId);
-            }, 1000);
+            // // Run fade animation for new day in same city after 1s
+            // setTimeout(() => {
+            //     animateDayChange(currentCityId || nextCityId);
+            // }, 1000);
 
-            // After 1 second, plot a blank grid
-            setTimeout(() => {
-                gridContainer.innerHTML = grid.createBlankGridHTML(null, false, true); // Render a blank grid
+            // // After 1 second, plot a blank grid
+            // setTimeout(() => {
+            //     gridContainer.innerHTML = grid.createBlankGridHTML(null, false, true); // Render a blank grid
 
-                // After 2 seconds, remove the grid container and end the trial
-                setTimeout(() => {
-                    document.body.removeChild(gridContainer);
-                    jsPsych.finishTrial();
-                }, 2000);
-            }, 2000);
+            //     // After 2 seconds, remove the grid container and end the trial
+            //     setTimeout(() => {
+            //         document.body.removeChild(gridContainer);
+            //         jsPsych.finishTrial();
+            //     }, 2000);
+            // }, 2000);
 
-            message = `
-            <div class="new-day-text">
-                <p id="continue-text" style="display: none;">Press spacebar to continue dispatching.</p>
-            </div>
-            `;
+            // message = `
+            // <div class="new-day-text">
+            //     <p id="continue-text" style="display: none;">Press spacebar to continue dispatching.</p>
+            // </div>
+            // `;
             
-            // Ensure city is set if this is the first trial
-            if (currentCityId === null) {
-            grid.currentCity = nextCityId;
-            }
+            // // Ensure city is set if this is the first trial
+            // if (currentCityId === null) {
+            // grid.currentCity = nextCityId;
+            // }
         }
 
         // // After 2s, show the text and enable keypresses manually
@@ -1182,12 +1438,34 @@ const newGridMessage = {
     }
 };
 
+const newDayMessage = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        console.log("Same city - just a new day");
+        const feedback = true;
+        return `
+            <div class="jobs-layout">
+                <div class="upcoming-jobs-container grid">
+                    ${grid.createAllJobsHTML(currentTrialIndex - 1, 'none', null, feedback)} 
+                </div>
+            </div>
+        `;
+    },
+    choices: [' '], // Spacebar to continue
+    on_finish: function() {
+        grid.resetGrid(); // Reset the grid for the new set of trials
+        var ppt_data = jsPsych.data.get().json();
+        send_incomplete(subject_id, ppt_data);
+    }
+};
+
 const firstGridMessage = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
 
         // revert back to first trial
         currentTrialIndex = 0;
+        totalCost = 0;
 
         // Set initial city background from the first trial
         const firstTrial = grid.getTrialInfo(0);
@@ -1352,31 +1630,31 @@ const instructions1 = {
 
 const instructions2 = {
     type: jsPsychHtmlKeyboardResponse,
-    stimulus: `
-        <div class="instruction-section">
-            <h1>Dispatch Instructions</h1>
-            <p>For each dispatch, you'll see two possible jobs marked in <span class="blue-text">blue</span> and <span class="green-text">green</span>. Each route has a passenger <img src="assets/people/blue_person.png" alt="Blue Passenger" width="20" height="20"> or <img src="assets/people/green_person.png" alt="Green Passenger" width="20" height="20"> at a pickup point, and a drop-off destination 🏠. The route of each job is marked with one of two letters:</p>
-            <p>- The letter <strong>F</strong> marks one route</p>
-            <p>- The letter <strong>J</strong> marks the other route</p>
-            <p>To send out a taxi to one of these jobs, you need to press the corresponding key on your keyboard.</p>
-            <p>For any given choice, the lengths of the two possible jobs are the same. However, some are more costly than others, because of the tolls in the city...</p>
-        </div>
+    stimulus: function() {
+        const fontSize = "20px"; // Define font size as a variable
+        return `
+            <div class="instruction-section" style="font-size: 20px;">
+                <h1>Dispatch Instructions</h1>
+                <p style="font-size: ${fontSize};">For each dispatch, you'll see two possible jobs marked in <span class="blue-text">blue</span> and <span class="green-text">green</span>. Each job has a passenger <img src="assets/people/blue_person.png" alt="Blue Passenger" width="20" height="20"> or <img src="assets/people/green_person.png" alt="Green Passenger" width="20" height="20"> at a pickup point, and a drop-off destination 🏠. The route of each job is marked with one of two letters:</p>
+                <p style="font-size: ${fontSize};">- The letter <strong>F</strong> marks one job</p>
+                <p style="font-size: ${fontSize};">- The letter <strong>J</strong> marks the other job</p>
+                <p style="font-size: ${fontSize};">To send out a taxi to one of these jobs, you need to press the corresponding key on your keyboard.</p>
+                <p style="font-size: ${fontSize};">For any given choice, the lengths of the two possible jobs are the same, meaning the fare from your customer is the same. However, some jobs are more costly than others, because of tolls in the city...</p>
+            </div>
+            <div class="instruction-section" style="font-size: 20px;">
+                <h1>Toll Intersections:</h1>
+                <p style="font-size: ${fontSize};">Traffic in some parts of the city is busier than in others, meaning that tolls apply at certain intersections. Visiting an intersection reveals whether or not you have to pay a toll there.</p>
+                <p style="font-size: ${fontSize};">- <strong><span style="color: rgb(114, 114, 150);">Dark grey intersections</span></strong> have not been visited yet</p>
+                <p style="font-size: ${fontSize};">- <strong><span class="red-text">Red intersections</span></strong> cost a $1 toll to pass through</p>
+                <p style="font-size: ${fontSize};">- <strong><span style="color:rgb(194, 194, 229);">Light grey intersections</span></strong> are free with no tolls</p>
+                <p style="font-size: ${fontSize};">Your goal is to complete all taxi jobs while minimizing total toll costs for your company.</p>
+            </div>
 
-        <div class="instruction-section">
-            <h1>Toll Intersections:</h1>
-            <p>Some roads are busier than others, meaning that tolls apply in certain intersections. This means that it costs money to travel here. Visiting an intersection reveals whether or not you have to pay a toll there.</p>
-            <p>- <strong><span style="color: rgb(114, 114, 150);">Dark grey streets</span></strong> are Intersections that haven't been visited yet</p>
-            <p>- <strong><span class="red-text">Red streets</span></strong> are toll intersections that cost $1 to pass through</p>
-            <p>- <strong><span style="color:rgb(194, 194, 229);">Light grey streets</span></strong> are free intersections with no tolls</p>
-            <p>Your goal is to complete all taxi jobs while minimizing total toll costs for your company.</p>
-        </div>
-
-        <div class="instruction-section">
-            <h2>Let’s get you familiar with selecting a job.</h2>
-            <h2>Press spacebar to continue </h2>
-
-        </div>
-    `,
+            <div class="instruction-section" style="font-size: 20px;">
+                <h2>Press spacebar to practise selecting a job.</h2>
+            </div>
+        `;
+    },
     choices: [' '], // Spacebar to continue
 };
 
@@ -1412,6 +1690,20 @@ const practice1SelectionTrial = {
                 </div>
             </div>
         `;
+        // return `
+        //     <div class="instruction-section" style="text-align: center; margin-bottom: 20px; font-size: 18px; color: #3a3a3a;">
+        //         <h3><strong>PRACTICE TRIAL:</strong><h3>
+        //         ${instruction}
+        //     </div>
+        //     <div class="jobs-layout">
+        //         <div class="current-job-section grid-fade-in">
+        //             <div class="current-job-container">
+        //                 </div>
+        //                 ${practice1Grid.createGridHTML(practice1TrialIndex, null, keyAssignment, true, true)}
+        //             </div>
+        //         </div>
+        //     </div>
+        // `;
     },
     choices: function() {
         return practice1TrialIndex === 0 ? ['f'] : ['j'];
@@ -1515,26 +1807,51 @@ const practice1AnimationTrial = {
 
 const instructions3 = {
     type: jsPsychHtmlKeyboardResponse,
-    stimulus: `
+    stimulus: function() {
+        const n = grid.nTrials;
+        const fontSize = "20px"; // Define font size as a variable
+        return `
         <div class="instruction-section">
-            <h1>Daily shift:</h1>
-            <p>Each day, you will manage four jobs, meaning you have four choices to make.</p>
-            <p>Your current job is presented towards the top of the screen.</p>
-            <p>You can see the upcoming jobs below your current job.</p>
+            <h1>Daily Shift:</h1>
+            <p style="font-size: ${fontSize};">Each day, you will manage ${n} dispatches, meaning you have ${n} jobs to select.</p>
+            <p style="font-size: ${fontSize};">All ${n} pairs of jobs will be presented on screen at once, side-by-side. Each dispatch takes place at a different time of the day and is marked with one of the following clock icons, displayed above the dispatch:</p>
+            <p style="font-family: golemClocks; text-align: center; font-size: ${fontSize};">&#x00E6; &#x00DD; &#x0026; &#x263A;</p>
+            <p style="font-size: ${fontSize};">You will move through these dispatches from left to right. Your current dispatch is highlighted in <span style="color: #ece75d;">yellow</span>, while your past dispatches are <span style="color: rgb(138, 138, 184);">greyed out</span>.</p>
+            <p style="font-size: ${fontSize};">You can only select a job once the keys have been assigned to the paths - i.e. once 'F' or 'J' has been assigned to the green or blue job in your current dispatch.</p>
         </div>
-
         <div class="instruction-section">
-            <h1>Toll locations:</h1>
-            <p>The locations of tolls remain fixed throughout the day. Once you visit an intersection, you find out how busy it is, and hence whether or not you have to pay a toll whenever you reach that intersection again on the same day. This information is reflected in your upcoming jobs.</p>
-            <p>This information may help you the rest of the day by allowing you to select jobs where you don’t have to pay any tolls.</p>
+            <h1>Toll Locations:</h1>
+            <p style="font-size: ${fontSize};">The locations of tolls remain fixed throughout the day. Once you visit an intersection, you find out how busy it is, and hence whether or not you have to pay a toll whenever you reach that intersection again on the same day. This information is reflected in your upcoming dispatches, too.</p>
+            <p style="font-size: ${fontSize};">This information may help you the rest of the day by allowing you to select jobs where you don’t have to pay any tolls.</p>
         </div>
-
         <div class="instruction-section">
-            <h2>Let’s practise your first full day.</h2>
-            <h2>Press spacebar to continue </h2>
+            <h2 style="font-size: ${fontSize};">Press spacebar to practise your first full day.</h2>
         </div>
-    `,
+        `;
+    },
     choices: [' '], // Spacebar to continue
+};
+
+const practice2PreSelectionTrial = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        // Reset total cost for practice if first practice trial
+        if (practice2TrialIndex === 0) {
+            totalCost = 0;
+        }
+        return `
+            <div class="jobs-layout">
+            <div class="upcoming-jobs-container grid ${practice2TrialIndex % practice2Grid.nTrials === 0 ? 'grid-fade-in' : ''}">
+                ${practice2Grid.createAllJobsHTML(practice2TrialIndex, null, null)} 
+            </div>
+            </div>
+        `;
+    },
+    choices: "NO_KEYS",
+    trial_duration: 1500, // Ends after 1.5 seconds
+    on_finish: function() {
+        console.log("Pre-selection trial completed.");
+    }
 };
 
 const practice2SelectionTrial = {
@@ -1562,11 +1879,8 @@ const practice2SelectionTrial = {
         
         return `
             <div class="jobs-layout">
-                <div class="current-job-section grid-fade-in">
-                    ${practice2Grid.createGridHTML(practice2TrialIndex, null, keyAssignment,true,true)}
-                </div>
-                <div class="upcoming-jobs-container grid-fade-in">
-                    ${practice2Grid.createUpcomingJobsHTML(practice2TrialIndex)}
+                <div class="upcoming-jobs-container">
+                    ${practice2Grid.createAllJobsHTML(practice2TrialIndex, null, keyAssignment)} 
                 </div>
             </div>
         `;
@@ -1609,6 +1923,7 @@ const practice2SelectionTrial = {
         // // Store all the relevant data from the current trial
         const currentTrial = practice2Grid.getTrialInfo(practice2TrialIndex);
         console.log('practice2TrialIndex:', practice2TrialIndex);
+        console.log('currentTrialIndex:', currentTrialIndex);
         data.choice = choice;
         data.trial = currentTrial.trial;
         data.city = currentTrial.city;
@@ -1657,11 +1972,8 @@ const practice2AnimationTrial = {
         
         return `
             <div class="jobs-layout">
-                <div class="current-job-section">
-                    ${practice2Grid.createGridHTML(practice2TrialIndex, lastTrialData.choice, keyAssignment,true,true)}
-                </div>
                 <div class="upcoming-jobs-container">
-                    ${practice2Grid.createUpcomingJobsHTML(practice2TrialIndex)}
+                    ${practice2Grid.createAllJobsHTML(practice2TrialIndex, lastTrialData.choice, keyAssignment)} 
                 </div>
             </div>
         `;
@@ -1670,6 +1982,9 @@ const practice2AnimationTrial = {
     on_load: function() {
         const currentTrial = practice2Grid.getTrialInfo(practice2TrialIndex);
         const lastTrialData = jsPsych.data.get().last(1).values()[0];
+
+        // hacky
+        currentTrialIndex = practice2TrialIndex;
 
         if (!lastTrialData || !lastTrialData.choice) {
             console.error("No valid path choice found. Restarting trial.");
@@ -1698,8 +2013,8 @@ const instructions4 = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: `
         <div class="instruction-section" style="z-index: 2001; position: relative;">
-            <h1>End of the Day</h1>
-            <p>At the end of the day, the tolls are reset, so you have to find out about the new locations of the tolls once the new day begins.</p>
+            <h1>New Day</h1>
+            <p>At the start of a new day, the traffic in the city resets, meaning that the intersections where you do (or do not) have to pay a toll have reset.</p>
             <p>Watch the grid reset for the next day.</p>
         </div>
         <div class="jobs-layout" style="z-index: 2001; position: relative;">
@@ -1794,7 +2109,7 @@ const instructions5 = {
         let oldCity = document.createElement('div');
         oldCity.style.width = '50%'; // Half of the container
         oldCity.style.height = '100%';
-        oldCity.style.backgroundImage = `url('assets/cities/practice1.png')`;
+        oldCity.style.backgroundImage = `url('assets/cities/cropped/practice1.png')`;
         oldCity.style.backgroundSize = 'cover';
         oldCity.style.backgroundPosition = 'center';
         transitionContainer.appendChild(oldCity);
@@ -1803,7 +2118,7 @@ const instructions5 = {
         let newCity = document.createElement('div');
         newCity.style.width = '50%'; // Half of the container
         newCity.style.height = '100%';
-        newCity.style.backgroundImage = `url('assets/cities/practice2.png')`;
+        newCity.style.backgroundImage = `url('assets/cities/cropped/practice2.png')`;
         newCity.style.backgroundSize = 'cover';
         newCity.style.backgroundPosition = 'center';
         transitionContainer.appendChild(newCity);
@@ -1840,20 +2155,22 @@ const instructions5 = {
 const instructions6 = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
+        const fontSize = "22px"; // Define font size as a variable
+        document.body.style.zoom = "75%";
         return `
             <div class="instruction-section" style="margin: 10px;">
-            <h1>How do you figure out where the tolls are?</h1>
-            <p>Each city has particular traffic properties, such that the busy streets tend to be related to one another in one of two ways.</p>
+            <h1>How do you figure out where intersections with tolls (or no tolls) are?</h1>
+            <p style="font-size: ${fontSize};">Each city has particular traffic properties, such that the busy streets tend to be related to one another in one of two ways.</p>
             </div>
             <div class="instruction-section" style="margin: 10px;">
             <h1>'Column cities'</h1>
-            <p>In column cities, traffic tends to run from north to south every day, meaning that tolls tend to be clustered in columns.</p>
-            <p>That is, a column may have a lot of tolls, or not many tolls.</p>
-            <p>The locations of these busy columns may change each day, but the city will always have this column-dependent feature.</p>
+            <p style="font-size: ${fontSize};">In column cities, traffic tends to run from north to south every day, meaning that tolls tend to be clustered in columns.</p>
+            <p style="font-size: ${fontSize};">That is, a column may have a lot of tolls, or not many tolls.</p>
+            <p style="font-size: ${fontSize};">The locations of these busy columns may change each day, but the city will always have this column-dependent feature.</p>
             </div>
             <div class="jobs-layout" >
             <div class="instruction-section" style="text-align: center; font-size: 20px; color: #3a3a3a; margin: 10px;">
-                <h3><strong>Example day ${practice3TrialIndex + 1}</strong><h3>
+            <h3><strong>Example day ${practice3TrialIndex + 1}</strong><h3>
             </div>
             <div id="grid-container" class="current-job-section"></div>
         `;
@@ -1873,7 +2190,7 @@ const instructions7 = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: `
         <div class="instruction-section" style="z-index: 2000; position: relative;">
-            <h1>How do you figure out where the tolls are?</h1>
+            <h1>How do you figure out where the intersections with tolls are?</h1>
             <p>Each city has particular traffic properties, such that the busy streets tend to be related to one another in one of two ways.</p>
     `,
     choices: "NO_KEYS", // No keypress required
@@ -1894,7 +2211,7 @@ const instructions7 = {
         let oldCity = document.createElement('div');
         oldCity.style.width = '50%'; // Half of the container
         oldCity.style.height = '100%';
-        oldCity.style.backgroundImage = `url('assets/cities/practice2.png')`;
+        oldCity.style.backgroundImage = `url('assets/cities/cropped/practice2.png')`;
         oldCity.style.backgroundSize = 'cover';
         oldCity.style.backgroundPosition = 'center';
         transitionContainer.appendChild(oldCity);
@@ -1903,7 +2220,7 @@ const instructions7 = {
         let newCity = document.createElement('div');
         newCity.style.width = '50%'; // Half of the container
         newCity.style.height = '100%';
-        newCity.style.backgroundImage = `url('assets/cities/practice3.png')`;
+        newCity.style.backgroundImage = `url('assets/cities/cropped/practice3.png')`;
         newCity.style.backgroundSize = 'cover';
         newCity.style.backgroundPosition = 'center';
         transitionContainer.appendChild(newCity);
@@ -1928,7 +2245,7 @@ const instructions8 = {
     stimulus: function() {
         return `
             <div class="instruction-section" style="z-index: 2000; position: relative;">
-                <h1>How do you figure out where the tolls are?</h1>
+                <h1>How do you figure out where the intersections with tolls are?</h1>
                 <p>Each city has particular traffic properties, such that the busy streets tend to be related to one another in one of two ways.</p>
             </div>
             <div class="instruction-section"> 
@@ -1973,15 +2290,18 @@ const fullscreenTrial = {
 // instructions review - i.e. ask participants if they want to review the instructions pages (instructions1-instructions8, without the practices)
 const instructionsReview = {
     type: jsPsychHtmlKeyboardResponse,
-    stimulus: `
-        <div class="instruction-section">
-            <h1>Review Instructions</h1>
-            <p>We will now ask you a few questions to check your understanding of the task. Before doing so, you have the opportunity to review the instructions.</p>
-            <p>Would you like to see the instructions again?</p>
-            <p>To review all the instructions from the beginning, press the backspace key.</p>
-            <p>If you feel ready to continue, please press the spacebar.</p>
-        </div>
-    `,
+    stimulus: function() {
+        document.body.style.zoom = "100%";
+        return `
+            <div class="instruction-section">
+                <h1>Review Instructions</h1>
+                <p>We will now ask you a few questions to check your understanding of the task. Before doing so, you have the opportunity to review the instructions.</p>
+                <p>Would you like to see the instructions again?</p>
+                <p>To review all the instructions from the beginning, press the backspace key.</p>
+                <p>If you feel ready to continue, please press the spacebar.</p>
+            </div>
+        `;
+    },
     choices: [' ', 'backspace'],
     on_finish: function(data) {
         if (data.response === 'backspace') {
@@ -1999,10 +2319,9 @@ const instructions9 = {
         return `
             <div class="instruction-section">
                 <h1>Bonus Payment</h1>
-                <p>Remember: your aim is to minimise the cost paid each day by predicting where the tolls will be, and selecting jobs that you think will not incur tolls.</p>
-                <p>At the end of the experiment, we will assess your performance across cities by randomly selecting a single choice set, across cities, for each of the ${nDays} days.</p>
-                <p>Your performance on these randomly selected days will determine how much bonus payment you receive.</p>
-                <p>So, you should pay attention throughout the experiment - i.e., on every day, and in every city.</p>
+                <p>Remember: your aim is to minimise the cost paid each day by predicting which intersections will incur a toll, and hence selecting jobs that you think will be least costly.</p>
+                <p>At the end of the experiment, we will assess your performance by assessing how well you chose jobs that were least costly on a randomly selected set of days and cities. This will determine how much bonus payment you receive.</p>
+                <p>So, you should pay attention throughout the experiment - i.e. on every day, and in every city.</p>
                 <p>When you are ready to begin the experiment, press the spacebar.</p>
             </div>
         `;
@@ -2018,50 +2337,51 @@ function createTimeline() {
     timeline.push(fullscreenTrial);
     timeline.push(instructions1);
 
-    // Practice selection
-    // timeline.push(instructions2);
-    // timeline.push(practice1SelectionTrial);
-    // timeline.push(practice1AnimationTrial);
-    // timeline.push(practice1SelectionTrial);
-    // timeline.push(practice1AnimationTrial);
+    // // Practice selection
+    timeline.push(instructions2);
+    timeline.push(practice1SelectionTrial);
+    timeline.push(practice1AnimationTrial);
+    timeline.push(practice1SelectionTrial);
+    timeline.push(practice1AnimationTrial);
 
-    // // Practice a full day
-    // timeline.push(instructions3);
-    // for (let i = 0; i < grid.nTrials; i++) {
-    //     timeline.push(practice2SelectionTrial);
-    //     timeline.push(practice2AnimationTrial);
-    // }
-    // timeline.push(practiceGridFeedback);
+    // Practice a full day
+    timeline.push(instructions3);
+    for (let i = 0; i < grid.nTrials; i++) {
+        timeline.push(practice2PreSelectionTrial);
+        timeline.push(practice2SelectionTrial);
+        timeline.push(practice2AnimationTrial);
+    }
+    timeline.push(practiceGridFeedback);
 
-    // // Animation to show grid resetting, and then another day
-    // timeline.push(instructions4);
-    // for (let i = 0; i < grid.nTrials; i++) {
-    //     timeline.push(practice2SelectionTrial);
-    //     timeline.push(practice2AnimationTrial);
-    // }
-    // timeline.push(practiceGridFeedback);
+    // Animation to show grid resetting, and then another day
+    timeline.push(instructions4);
+    for (let i = 0; i < grid.nTrials; i++) {
+        timeline.push(practice2PreSelectionTrial);
+        timeline.push(practice2SelectionTrial);
+        timeline.push(practice2AnimationTrial);
+    }
+    timeline.push(practiceGridFeedback);
 
-    // // New city animation
-    // timeline.push(instructions5);
+    // New city animation
+    timeline.push(instructions5);
 
-    // for (let i = 1; i <= grid.nGrids; i++) {
-    //     timeline.push(instructions6);
-    // }
-    // timeline.push(instructions7);
-    // for (let i = 1; i <= grid.nGrids; i++) {
-    //     timeline.push(instructions8);
-    // }
+    for (let i = 1; i <= grid.nGrids; i++) {
+        timeline.push(instructions6);
+    }
+    timeline.push(instructions7);
+    for (let i = 1; i <= grid.nGrids; i++) {
+        timeline.push(instructions8);
+    }
 
-    // // Add the option to review the instructions
-    // timeline.push(instructionsReview);
+    // Add the option to review the instructions
+    timeline.push(instructionsReview);
     
-    // // Understanding checks
-    // const quizTrials = createQuizTrials(jsPsych);
-    // timeline.push(...quizTrials);
+    // Understanding checks
+    const quizTrials = createQuizTrials(jsPsych);
+    timeline.push(...quizTrials);
 
-    // // bonus message
-    // timeline.push(instructions9)
-
+    // bonus message
+    timeline.push(instructions9)
 
     // Add the first grid message
     timeline.push(firstGridMessage);
@@ -2069,10 +2389,15 @@ function createTimeline() {
     // Loop through all trials and add them to the timeline
     for (let i = 0; i < grid.trialInfo.length; i++) {
         if (i % grid.nTrials === 0 && i !== 0) {
-            // Add new grid message after each grid
-            // timeline.push(gridFeedback);
-            timeline.push(newGridMessage);
+            // add new grid message if the city changes, i.e. if i is a multiple of nTrials*nGrids
+            if (i % (grid.nTrials * grid.nGrids) === 0) {
+                timeline.push(newCityMessage);
+            } else {
+                timeline.push(newDayMessage);
+            }
+
         }
+        timeline.push(pathPreSelectionTrial);
         timeline.push(pathSelectionTrial);
         timeline.push(pathAnimationTrial);
     }

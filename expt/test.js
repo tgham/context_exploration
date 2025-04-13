@@ -28,16 +28,7 @@ export const quizQuestions = [
     correct: 2
   },
   {
-    question: "Where can you see information about the jobs you will need to choose between later in the day?",
-    options: [
-      "You can't - you can only see your current job.",
-      "At the top of the screen, above your current job.",
-      "Below your current job, in the upcoming jobs section."
-    ],
-    correct: 2
-  },
-  {
-    question: "What happens to the tolls at the end of the day?",
+    question: "What happens to tolls at the end of the day?",
     options: [
       "They remain in the same locations.",
       "They reset to new locations.",
@@ -290,7 +281,7 @@ export function createQuizTrials(jsPsych) {
       // Retrieve the correct answer count
       const correctCount = jsPsych.data.get().last(1).values()[0]?.correctCount || 0;
       const percentage = Math.round((correctCount / quizQuestions.length) * 100);
-      const passed = percentage >= 60;
+      const passed = percentage >= 70;
       
       return `
         <div class="quiz-section">
@@ -298,7 +289,7 @@ export function createQuizTrials(jsPsych) {
           <p>You answered ${correctCount} out of ${quizQuestions.length} questions correctly (${percentage}%).</p>
           ${passed 
             ? '<p>Congratulations! You passed the quiz. Press the spacebar to continue with the experiment.</p>' 
-            : '<p>Unfortunately, you did not pass the quiz. Please review the instructions and try again.</p>'}
+            : '<p>Unfortunately, you did not pass the quiz. Please return to Prolific.</p>'}
         </div>
       `;
     },
@@ -306,10 +297,25 @@ export function createQuizTrials(jsPsych) {
       // Allow spacebar only if participant passed
       const correctCount = jsPsych.data.get().last(1).values()[0]?.correctCount || 0;
       const percentage = Math.round((correctCount / quizQuestions.length) * 100);
-      return percentage >= 60 ? [' '] : [];
+      return percentage >= 70 ? [' '] : [];
+    
+    },
+    on_finish: function() {
+      const correctCount = jsPsych.data.get().last(1).values()[0]?.correctCount || 0;
+      const percentage = Math.round((correctCount / quizQuestions.length) * 100);
+      const passed = percentage >= 70;
+
+      // if (!passed) {
+      //   const ppt_data = jsPsych.data.get().json();
+      //   send_complete(id, ppt_data);
+      //   setTimeout(function () {
+      //     // Redirect to another website
+      //     window.location.replace(SOME_OTHER_WEBSITE);
+      //   }, 1500);
+      // }
     }
   };
-  
+
   quizTrials.push(finalTrial);
   
   return quizTrials;
