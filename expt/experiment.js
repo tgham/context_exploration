@@ -1,7 +1,6 @@
 // Initialize jsPsych
 const jsPsych = initJsPsych({
     on_finish: function() {
-        // jsPsych.data.displayData();
         var ppt_data = jsPsych.data.get().json();
         send_complete(subject_id, ppt_data);
     }
@@ -14,13 +13,14 @@ document.body.style.zoom = "80%";
 var pid = get_prolific_id();
 let subject_id = null;
 let sequence = null;
+console.log('PID:',pid)
+console.log('subject_id:',subject_id)
 create_participant(pid).then((value) => {
     if (value['id'] == null) {
         console.error(`${pid} is not unique or an error occurred.`);
         window.location.replace("error.html");
         return;
     }
-    
     subject_id = value['id'];
     sequence = value['sequence'];
     console.log(`id => ${subject_id}`);
@@ -30,7 +30,10 @@ create_participant(pid).then((value) => {
     window.location.replace("error.html");
 });
 
+
 // rename sequence to data, and then use this to generate the grid
+let grid;
+let currentTrialIndex = 0;
 let data;
 data = sequence;
 grid = new Grid(data); // Initialize the Grid class with the loaded data
@@ -49,8 +52,8 @@ send_incomplete(subject_id, ppt_data);
 
 
 // Load the JSON data and initialize the Grid class
-let grid;
-let currentTrialIndex = 0;
+// let grid;
+// let currentTrialIndex = 0;
 
 // or just test with this...
 // var subject_id = 1
