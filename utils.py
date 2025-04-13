@@ -17,7 +17,6 @@ from IPython.display import display, clear_output
 import uuid
 import random
 from collections import deque
-from minimax_tilting_sampler import TruncatedMVN
 import ast
 from scipy.spatial import cKDTree as KDTree
 import cProfile
