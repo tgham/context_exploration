@@ -10,12 +10,18 @@ import { createQuizTrials } from './test.js';
 document.body.style.zoom = "100%";
 
 // decide whether we're doing this properly or not...
-let test = true;
+let test = false;
+let subject_id = null;
+let sequence = null;
+let data = null;
+let grid = null;
+let currentTrialIndex = 0;
+
 
 // just test with this...
-if (!test) {
+if (test) {
 
-    var subject_id = 1
+    // var subject_id = 1
     jsPsych.data.addProperties({
         subject_id: subject_id,
     });
@@ -44,27 +50,29 @@ if (!test) {
 
     // capture info from Prolific and fetch ID from backend. If null, then redirect to error page
     var pid = get_prolific_id();
-    let subject_id = null;
-    let sequence = null;
     console.log('PID:',pid)
-    console.log('subject_id:',subject_id)
     create_participant(pid).then((value) => {
         if (value['id'] == null) {
             console.error(`${pid} is not unique or an error occurred.`);
-            window.location.replace("error.html");
+            // window.location.replace("error.html");
             return;
         }
         subject_id = value['id'];
-        sequence = value['sequence'];
+        data = value['sequence'];
+        console.log('subject_id:',subject_id)
         console.log(`id => ${subject_id}`);
-        console.log(`sequence => ${sequence}`);
+        console.log(`sequence => ${data}`);
+        grid = new Grid(data); // Initialize the Grid class with the loaded data        
+        initializeExperiment(); // Call a function to start the experiment
     }).catch((error) => {
         console.error('Failed to fetch participant ID:', error);
-        window.location.replace("error.html");
+        // window.location.replace("error.html");
     });
-    let data;
-    data = sequence;
-    grid = new Grid(data); // Initialize the Grid class with the loaded data
+    console.log('loaded PID etc.')
+    // let data;
+    // data = sequence;
+    // grid = new Grid(data); // Initialize the Grid class with the loaded data
+    
 }
 
 // Define the Grid class
@@ -691,15 +699,14 @@ class Grid {
 
 // rename sequence to data, and then use this to generate the grid
 // let grid;
-// let currentTrialIndex = 0;
 // let data;
 // data = sequence;
+// let currentTrialIndex = 0;
 // grid = new Grid(data); // Initialize the Grid class with the loaded data
 // const numCities = data.env_costs.n_cities; // Assuming this is the number of cities
 // createCityMapping(numCities);
 // console.log('Grid data loaded:', grid);
 // console.log('City mapping created:', cityMapping);
-// initializeExperiment();
 
 // Function to load practice grid data
 function loadPracticeGrid(filePath, gridVariableName) {
@@ -874,7 +881,6 @@ function mergeCosts(trialCost, callback) {
     const trialCostElement = document.getElementById("trial-cost");
 
     let trialFine;
-    console.log("trialCost:", trialCost);
     if (trialCost === null) {
         trialFine = true;
         trialCost = 10;
@@ -1031,9 +1037,8 @@ const pathPreSelectionTrial = {
         `;
     },
     choices: "NO_KEYS",
-    trial_duration: 1500, // Ends after 1.5 seconds
+    trial_duration: 2000, // Ends after 2 seconds
     on_finish: function() {
-        console.log("Pre-selection trial completed.");
     }
 };
 
@@ -1319,108 +1324,43 @@ const newCityMessage = {
         const nextTrial = grid.getTrialInfo(nextTrialIndex);
         const nextCityId = nextTrial.city;
         const currentCityId = grid.getCurrentCity();
-        // let message;
         
-        // Explicitly check if city has changed by comparing IDs
-        if (currentCityId !== null && nextCityId !== currentCityId) {
-            let message;
-            console.log("City changed from", currentCityId, "to", nextCityId);
-            animateCityChange(currentCityId, nextCityId);
-            
-            message = `
-            <div class="new-day-text">
-                <div style="margin-bottom: 20px;">
-                    <h2>End of Day</h2>
-                    <p>You paid a total of <strong style="color: red;">$${totalCost}</strong> in tolls today.</p>
-                </div>
-                <div>
-                    <h2>New City!</h2>
-                    <p>Your taxi company is now operating in a new city.</p>
-                    <p>Note: this may be a different type of city - i.e. the traffic may run from north-south, or east-west.</p>
-                    <p>Prepare for your first day in this new city.</p>
-                    <p id="continue-text" style="display: none;">Press spacebar to continue dispatching.</p>
-                </div>
+        let message;
+        console.log("City changed from", currentCityId, "to", nextCityId);
+        animateCityChange(currentCityId, nextCityId);
+        
+        message = `
+        <div class="new-day-text">
+            <div style="margin-bottom: 20px;">
+                <h2>End of Day</h2>
+                <p>You paid a total of <strong style="color: red;">$${totalCost}</strong> in tolls today.</p>
             </div>
-            `;
-            
-            // Update the current city
-            grid.currentCity = nextCityId;
-
-            // After 2s, show the text and enable keypresses manually
-            setTimeout(() => {
-            document.getElementById("continue-text").style.display = "block";
-            
-            // Manually register keypress listener
-            jsPsych.pluginAPI.getKeyboardResponse({
-                callback_function: jsPsych.finishTrial, // Ends trial when the spacebar is pressed
-                valid_responses: [' '], // Only allow the spacebar
-                rt_method: "performance",
-                persist: false,
-                allow_held_key: false
-            });
-            }, 2500); // Increased delay to allow animation to complete
+            <div>
+                <h2>New City!</h2>
+                <p>Your taxi company is now operating in a new city.</p>
+                <p>Note: this may be a different type of city - i.e. the traffic may run from north-south, or east-west.</p>
+                <p>Prepare for your first day in this new city.</p>
+                <p id="continue-text" style="display: none;">Press spacebar to continue dispatching.</p>
+            </div>
+        </div>
+        `;
         
-        } else {
-            console.log("Same city - just a new day");
+        // Update the current city
+        grid.currentCity = nextCityId;
 
-            // const todayTolls = totalCost; // Assuming totalCost tracks the tolls paid so far
-            // const currentDay = nextTrial.grid;
-            // const totalDays = grid.nGrids; // Total number of grids
+        // After 2s, show the text and enable keypresses manually
+        setTimeout(() => {
+        document.getElementById("continue-text").style.display = "block";
         
-            // // Create and append the grid container
-            // const gridContainer = document.createElement('div');
-            // gridContainer.className = 'jobs-layout';
-            // gridContainer.style.zIndex = '2000'; // Ensure the grid remains at the front of the screen
-            // gridContainer.style.position = 'relative'; // Ensure proper stacking context
-        
-            // const innerContainer = document.createElement('div');
-            // innerContainer.className = 'current-job-section';
-            // innerContainer.innerHTML = grid.createGridHTML(currentTrialIndex-1, 'none', null, false, false, true); // Render the current state of the grid without cost display, nor any current paths
-        
-            // gridContainer.appendChild(innerContainer);
-            // document.body.appendChild(gridContainer);
-        
-            // // Run fade animation for new day in same city after 1s
-            // setTimeout(() => {
-            //     animateDayChange(currentCityId || nextCityId);
-            // }, 1000);
-
-            // // After 1 second, plot a blank grid
-            // setTimeout(() => {
-            //     gridContainer.innerHTML = grid.createBlankGridHTML(null, false, true); // Render a blank grid
-
-            //     // After 2 seconds, remove the grid container and end the trial
-            //     setTimeout(() => {
-            //         document.body.removeChild(gridContainer);
-            //         jsPsych.finishTrial();
-            //     }, 2000);
-            // }, 2000);
-
-            // message = `
-            // <div class="new-day-text">
-            //     <p id="continue-text" style="display: none;">Press spacebar to continue dispatching.</p>
-            // </div>
-            // `;
-            
-            // // Ensure city is set if this is the first trial
-            // if (currentCityId === null) {
-            // grid.currentCity = nextCityId;
-            // }
-        }
-
-        // // After 2s, show the text and enable keypresses manually
-        // setTimeout(() => {
-        //     document.getElementById("continue-text").style.display = "block";
-            
-        //     // Manually register keypress listener
-        //     jsPsych.pluginAPI.getKeyboardResponse({
-        //         callback_function: jsPsych.finishTrial, // Ends trial when a key is pressed
-                // valid_responses: [' '], // Only allow the spacebar
-        //         rt_method: "performance",
-        //         persist: false,
-        //         allow_held_key: false
-        //     });
-        // }, 2500); // Increased delay to allow animation to complete
+        // Manually register keypress listener
+        jsPsych.pluginAPI.getKeyboardResponse({
+            callback_function: jsPsych.finishTrial, // Ends trial when the spacebar is pressed
+            valid_responses: [' '], // Only allow the spacebar
+            rt_method: "performance",
+            persist: false,
+            allow_held_key: false
+        });
+        }, 2500); // Increased delay to allow animation to complete
 
         return message;
     },
@@ -1435,7 +1375,6 @@ const newCityMessage = {
 const newDayMessage = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
-        console.log("Same city - just a new day");
         const feedback = true;
         return `
             <div class="jobs-layout">
@@ -1811,7 +1750,7 @@ const instructions3 = {
             <p style="font-size: ${fontSize};">All ${n} pairs of jobs will be presented on screen at once, side-by-side. Each dispatch takes place at a different time of the day and is marked with one of the following clock icons, displayed above the dispatch:</p>
             <p style="font-family: golemClocks; text-align: center; font-size: ${fontSize};">&#x00E6; &#x00DD; &#x0026; &#x263A;</p>
             <p style="font-size: ${fontSize};">You will move through these dispatches from left to right. Your current dispatch is highlighted in <span style="color: #ece75d;">yellow</span>, while your past dispatches are <span style="color: rgb(138, 138, 184);">greyed out</span>.</p>
-            <p style="font-size: ${fontSize};">You can only select a job once the keys have been assigned to the paths - i.e. once 'F' or 'J' has been assigned to the green or blue job in your current dispatch.</p>
+            <p style="font-size: ${fontSize};">You will first have a couple of seconds to think about which job you would like to select. Then, once the keys have been assigned to the paths - i.e. once 'F' or 'J' has been assigned to the green or blue job in your current dispatch -, you can actually select your desired job.</p>
         </div>
         <div class="instruction-section">
             <h1>Toll Locations:</h1>
@@ -1842,7 +1781,7 @@ const practice2PreSelectionTrial = {
         `;
     },
     choices: "NO_KEYS",
-    trial_duration: 1500, // Ends after 1.5 seconds
+    trial_duration: 2000, // Ends after 2 seconds
     on_finish: function() {
         console.log("Pre-selection trial completed.");
     }
@@ -2325,7 +2264,12 @@ const instructions9 = {
 
 // Create timeline
 function createTimeline() {
+    
     const timeline = [];
+
+    // city assignments
+    const numCities = data.env_costs.n_cities; // Assuming this is the number of cities
+    createCityMapping(numCities);
 
     // Welcome message
     timeline.push(fullscreenTrial);
