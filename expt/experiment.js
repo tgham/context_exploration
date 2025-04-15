@@ -17,7 +17,6 @@ let data = null;
 let grid = null;
 let currentTrialIndex = 0;
 
-
 // just test with this...
 if (test) {
 
@@ -59,7 +58,6 @@ if (test) {
         }
         subject_id = value['id'];
         data = value['sequence'];
-        console.log('subject_id:',subject_id)
         console.log(`id => ${subject_id}`);
         console.log(`sequence => ${data}`);
         grid = new Grid(data); // Initialize the Grid class with the loaded data        
@@ -69,10 +67,25 @@ if (test) {
         // window.location.replace("error.html");
     });
     console.log('loaded PID etc.')
-    // let data;
-    // data = sequence;
-    // grid = new Grid(data); // Initialize the Grid class with the loaded data
-    
+}
+
+// get sound ready
+const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+let costSoundBuffer;
+fetch('assets/costSound.mp3')
+    .then(response => response.arrayBuffer())
+    .then(data => audioContext.decodeAudioData(data))
+    .then(buffer => {
+        costSoundBuffer = buffer;
+    });
+
+function playCostSound() {
+    if (costSoundBuffer) {
+        const source = audioContext.createBufferSource();
+        source.buffer = costSoundBuffer;
+        source.connect(audioContext.destination);
+        source.start(0); // Play the sound
+    }
 }
 
 // Define the Grid class
@@ -163,7 +176,7 @@ class Grid {
         if (feedback) {
             gridHTML += `
             <div class="cost-display-container">
-                <h2>You paid <strong style="color: red;">$${totalCost}</strong> today.</h2>
+                <h2>You paid <strong style="color: #f87171;">$${totalCost}</strong> today.</h2>
                 <p id="trial-cost" class="cost-trial hidden">-$0</p> 
                 <p id="total-cost" class="cost-total">A new day has begun.</p>
                 <p id="total-cost" class="cost-total">Tolls in this city have been reset.</p>
@@ -264,7 +277,7 @@ class Grid {
         if (feedback){
             gridHTML += `
             <div class="cost-display-container">
-                <h2>You paid <strong style="color: red;">$${totalCost}</strong> today.</h2>
+                <h2>You paid <strong style="color:  #f87171;">$${totalCost}</strong> today.</h2>
                 <p id="trial-cost" class="cost-trial hidden">-$0</p> 
                 <p id="total-cost" class="cost-total">A new day has begun.</p>
                 <p id="total-cost" class="cost-total">Tolls in this city have been reset.</p>
@@ -510,7 +523,7 @@ class Grid {
             upcomingHTML += `
             <div id="cost-message" class="cost-display-container">
             <h2 class="day-display">Day ${trial.grid}/${this.nGrids} Complete</h2>
-            <h2 class="cost-total">You paid a total of <strong style="color: red;">$${totalCost}</strong> today.</h2>
+            <h2 class="cost-total">You paid a total of <strong style="color:  #f87171;">$${totalCost}</strong> today.</h2>
             <p id="total-cost" class="cost-total">Tolls will now reset for the next day. Press spacebar to continue.</p>
             <p id="trial-cost" class="cost-trial hidden">-$0</p> 
             </div>
@@ -817,8 +830,8 @@ function animateAgent(path, binaryCosts, callback) {
                         }, 600);
 
                         // Play toll sound
-                        const costSound = new Audio('assets/costSound.mp3');
-                        costSound.play();
+                        // costSound.play();
+                        playCostSound();
 
                         if (!trialCostVisible) {
                             const trialCostElement = document.getElementById("trial-cost");
@@ -1290,7 +1303,7 @@ const gridFeedback = {
         const todayTolls = totalCost; // Assuming totalCost tracks the tolls paid so far
         return `
             <div class="new-day-text">
-                <h3>You paid a total of <strong style="color: red;">$${todayTolls}</strong> in tolls today.</h3>
+                <h3>You paid a total of <strong style="color:  #f87171;">$${todayTolls}</strong> in tolls today.</h3>
                 <h3>Press spacebar to continue.</h3>
             </div>
         `;
@@ -1308,7 +1321,7 @@ const practiceGridFeedback = {
         const todayTolls = totalCost; // Assuming totalCost tracks the tolls paid so far
         return `
             <div class="new-day-text">
-                <h3>You paid a total of <strong style="color: red;">$${todayTolls}</strong> in tolls today.</h3>
+                <h3>You paid a total of <strong style="color:  #f87171;">$${todayTolls}</strong> in tolls today.</h3>
                 <h3>Press spacebar to continue.</h3>
             </div>
         `;
@@ -1333,7 +1346,7 @@ const newCityMessage = {
         <div class="new-day-text">
             <div style="margin-bottom: 20px;">
                 <h2>End of Day</h2>
-                <p>You paid a total of <strong style="color: red;">$${totalCost}</strong> in tolls today.</p>
+                <p>You paid a total of <strong style="color:  #f87171;">$${totalCost}</strong> in tolls today.</p>
             </div>
             <div>
                 <h2>New City!</h2>
@@ -1578,7 +1591,7 @@ const instructions2 = {
                 <h1>Toll Intersections:</h1>
                 <p style="font-size: ${fontSize};">Traffic in some parts of the city is busier than in others, meaning that tolls apply at certain intersections. Visiting an intersection reveals whether or not you have to pay a toll there.</p>
                 <p style="font-size: ${fontSize};">- <strong><span style="color: rgb(114, 114, 150);">Dark grey intersections</span></strong> have not been visited yet</p>
-                <p style="font-size: ${fontSize};">- <strong><span class="red-text">Red intersections</span></strong> cost a $1 toll to pass through</p>
+                <p style="font-size: ${fontSize};">- <strong><span style="color: #f87171;">Red intersections</span></strong> cost a $1 toll to pass through</p>
                 <p style="font-size: ${fontSize};">- <strong><span style="color:rgb(194, 194, 229);">Light grey intersections</span></strong> are free with no tolls</p>
                 <p style="font-size: ${fontSize};">Your goal is to complete all taxi jobs while minimizing total toll costs for your company.</p>
             </div>
@@ -1783,7 +1796,6 @@ const practice2PreSelectionTrial = {
     choices: "NO_KEYS",
     trial_duration: 2000, // Ends after 2 seconds
     on_finish: function() {
-        console.log("Pre-selection trial completed.");
     }
 };
 
@@ -1819,6 +1831,7 @@ const practice2SelectionTrial = {
         `;
     },
     choices: ['f', 'j'], 
+    trial_duration: 5000, // Automatically ends after 5 seconds
     on_finish: function(data) {
         // Get the key assignment for this trial
         const keyAssignment = {
@@ -1833,8 +1846,7 @@ const practice2SelectionTrial = {
         } else if (data.response === 'j') {
             choice = keyAssignment.blue === 'J' ? 'blue' : 'green';
         } else {
-            console.error("Invalid keypress:", data.response);
-            return;
+            choice = 'nan'; // Log as 'nan' if no response is made
         }
         
         
@@ -1855,8 +1867,6 @@ const practice2SelectionTrial = {
         
         // // Store all the relevant data from the current trial
         const currentTrial = practice2Grid.getTrialInfo(practice2TrialIndex);
-        console.log('practice2TrialIndex:', practice2TrialIndex);
-        console.log('currentTrialIndex:', currentTrialIndex);
         data.choice = choice;
         data.trial = currentTrial.trial;
         data.city = currentTrial.city;
@@ -1924,10 +1934,14 @@ const practice2AnimationTrial = {
             return jsPsych.finishTrial();
         }
 
-        const chosenPath = lastTrialData.choice === 'blue' ? currentTrial.path_A : currentTrial.path_B;
+        const chosenPath = lastTrialData.choice === 'blue' ? currentTrial.path_A : 
+                   lastTrialData.choice === 'green' ? currentTrial.path_B : 
+                   null;
         const binaryCosts = practice2Grid.getBinaryCosts(`city_${currentTrial.city}_grid_${currentTrial.grid}`);
 
-        practice2Grid.recordObservedCosts(chosenPath, binaryCosts);
+        if (chosenPath !== null) {
+            practice2Grid.recordObservedCosts(chosenPath, binaryCosts);
+        }
         
 
         setTimeout(() => {
@@ -1949,12 +1963,10 @@ const instructions4 = {
             <h1>New Day</h1>
             <p>At the start of a new day, the traffic in the city resets, meaning that the intersections where you do (or do not) have to pay a toll have reset.</p>
             <p>Watch the grid reset for the next day.</p>
+            <p id="continue-text" style="display: none;">Press spacebar to continue dispatching.</p>
         </div>
         <div class="jobs-layout" style="z-index: 2001; position: relative;">
             <div id="grid-container" class="current-job-section"></div>
-        </div>
-        <div class="instruction-section" style="z-index: 2001; position: relative;">
-            <h2 id="continue-text" style="display: none;">Press spacebar to practise your next shift.</h2>
         </div>
     `,
     choices: "NO_KEYS", // Initially disable keypresses
@@ -2003,7 +2015,6 @@ const instructions4 = {
         }, 2000);
     },
     on_finish: function() {
-        console.log("Grid reset animation completed.");
         practice2Grid.resetGrid(); // Reset the grid for the new set of trials
     }
 };
@@ -2252,8 +2263,8 @@ const instructions9 = {
         return `
             <div class="instruction-section">
                 <h1>Bonus Payment</h1>
-                <p>Remember: your aim is to minimise the cost paid each day by predicting which intersections will incur a toll, and hence selecting jobs that you think will be least costly.</p>
-                <p>At the end of the experiment, we will assess your performance by assessing how well you chose jobs that were least costly on a randomly selected set of days and cities. This will determine how much bonus payment you receive.</p>
+                <p>Remember: your aim is to minimise the cost paid each day by predicting which intersections will incur a toll, and hence by selecting jobs that you think will be least costly.</p>
+                <p>At the end of the experiment, we will assess your performance by assessing how well you chose jobs that were the least costly on a randomly selected set of days and cities. This will determine how much bonus payment you receive.</p>
                 <p>So, you should pay attention throughout the experiment - i.e. on every day, and in every city.</p>
                 <p>When you are ready to begin the experiment, press the spacebar.</p>
             </div>

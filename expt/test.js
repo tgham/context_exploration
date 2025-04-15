@@ -188,7 +188,7 @@ export function createQuizTrials(jsPsych) {
     stimulus: `
       <div class="instruction-section">
         <h2>Knowledge Check Quiz</h2>
-        <p>You will be presented with 10 questions about the taxi coordination task.</p>
+        <p>You will be presented with 9 questions about the taxi coordination task.</p>
         <p>For each question:</p>
         <p>
           <p>- Click on the answer you believe is correct.</p>
