@@ -73,9 +73,9 @@ export const quizQuestions = [
     correct: 1
   },
   {
-    question: "At the end of each day within a city, what pattern will the new set of tolls have?",
+    question: "At the start of a new day within the same city, what pattern will the new set of tolls have?",
     options: [
-      "The same pattern as previous days (clustered in columns or rows).",
+      "The same pattern as previous days in that city (clustered in columns or rows).",
       "A completely random pattern with no relation to previous days.",
       "A pattern that depends on the jobs you selected.",
     ],

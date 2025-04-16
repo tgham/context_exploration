@@ -156,7 +156,7 @@ class Grid {
             <div class="cost-display-container">
                 <h2 class="day-display">Day ${trial.grid}/${this.nGrids}</h2>
                 <h2 class="cost-total">Total Tolls Paid Today:</h2>
-                <p id="total-cost" class="cost-total.">$${totalCost}</p>
+                <p id="total-cost" class="cost-total.">-$${totalCost}</p>
                 <p id="trial-cost" class="cost-trial hidden">-$0</p> 
             </div>
             `;
@@ -165,7 +165,7 @@ class Grid {
             <div class="cost-display-container">
                 <h2 class="day-display">Practice Day ${trial.grid}/${this.nGrids}</h2>
                 <h2 class="cost-total">Total Tolls Paid:</h2>
-                <p id="total-cost" class="cost-total">$${totalCost}</p>
+                <p id="total-cost" class="cost-total">-$${totalCost}</p>
                 <p id="trial-cost" class="cost-trial hidden">-$0</p> 
             </div>
             `;
@@ -497,7 +497,7 @@ class Grid {
 
 
     // Add createUpcomingJobsHTML as a method of the Grid class
-    createAllJobsHTML(currentTrialIndex, selectedPath=null, keyAssignment=null, feedback=false) {
+    createAllJobsHTML(currentTrialIndex, selectedPath=null, keyAssignment=null, feedback=false, firstDay=false) {
         const trial = this.getTrialInfo(currentTrialIndex);
         const currentGridNumber = Math.floor(currentTrialIndex / this.nTrials);
         const currentGridStartIndex = currentGridNumber * this.nTrials;
@@ -510,21 +510,44 @@ class Grid {
             <div class="jobs-section">
         `;
 
-        if (!feedback) {
+        if (!firstDay) {
+            if (!feedback) {
+                upcomingHTML += `
+                <div id="cost-message" class="cost-display-container">
+                <h2 class="day-display">Day ${trial.grid}/${this.nGrids}</h2>
+                <h2 class="cost-total">Total Tolls Paid Today:</h2>
+                <p id="total-cost" class="cost-total">-$${totalCost}</p>
+                <p id="trial-cost" class="cost-trial hidden">-$0</p> 
+                </div>
+                `;
+            } else {
+                if (trial.grid === this.nGrids) {
+                    upcomingHTML += `
+                    <div id="cost-message" class="cost-display-container">
+                    <h2 class="day-display">Day ${trial.grid}/${this.nGrids} Complete</h2>
+                    <h2 class="cost-total">You paid a total of <strong style="color:  #f87171;">$${totalCost}</strong> today.</h2>
+                    <p id="total-cost" class="cost-total">Tolls will now reset for the next day. Press spacebar to continue.</p>
+                    <p id="trial-cost" class="cost-trial hidden">-$0</p> 
+                    </div>
+                    `;
+                } else {
+                    upcomingHTML += `
+                    <div id="cost-message" class="cost-display-container">
+                    <h2 class="day-display">Day ${trial.grid}/${this.nGrids} Complete</h2>
+                    <h2 class="cost-total">You paid a total of <strong style="color:  #f87171;">$${totalCost}</strong> today.</h2>
+                    <p id="total-cost" class="cost-total">Press spacebar to continue.</p>
+                    <p id="trial-cost" class="cost-trial hidden">-$0</p> 
+                    </div>
+                    `;
+
+                }
+            }
+        } else if (firstDay) {
             upcomingHTML += `
             <div id="cost-message" class="cost-display-container">
             <h2 class="day-display">Day ${trial.grid}/${this.nGrids}</h2>
-            <h2 class="cost-total">Total Tolls Paid Today:</h2>
-            <p id="total-cost" class="cost-total">$${totalCost}</p>
-            <p id="trial-cost" class="cost-trial hidden">-$0</p> 
-            </div>
-            `;
-        } else {
-            upcomingHTML += `
-            <div id="cost-message" class="cost-display-container">
-            <h2 class="day-display">Day ${trial.grid}/${this.nGrids} Complete</h2>
-            <h2 class="cost-total">You paid a total of <strong style="color:  #f87171;">$${totalCost}</strong> today.</h2>
-            <p id="total-cost" class="cost-total">Tolls will now reset for the next day. Press spacebar to continue.</p>
+            <h2 class="cost-total">Here are your dispatches for the day.</h2>
+            <p id="total-cost" class="cost-total">Get ready to select your jobs!</p>
             <p id="trial-cost" class="cost-trial hidden">-$0</p> 
             </div>
             `;
@@ -541,40 +564,50 @@ class Grid {
             const trial = this.getTrialInfo(previewIndex);
             const clockCharacter = clockCharacters[i]; // Cycle through the characters based on the trial index
             
-            if (!feedback) {
-                if (previewIndex < currentTrialIndex) {
+            if (!firstDay) {
+                if (!feedback) {
+                    if (previewIndex < currentTrialIndex) {
+                        upcomingHTML += `
+                            <div class="upcoming-job">
+                                <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; color: transparent;">
+                                    ${clockCharacter}
+                                </div>
+                                <div class="upcoming-grid-done" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
+                        `;
+                    } else if (previewIndex === currentTrialIndex) {
+                        upcomingHTML += `
+                            <div class="upcoming-job">
+                                <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; color: #ece75d;">
+                                    ${clockCharacter}
+                                </div>
+                                <div class="upcoming-grid" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px; background-color: ${keyAssignment ? '#ece75d' : ''};">
+                        `;
+                    } else {
+                        upcomingHTML += `
+                            <div class="upcoming-job">  
+                                <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; color: ${previewIndex === currentTrialIndex ? '#ece75d' : 'inherit'};">
+                                    ${clockCharacter}
+                                </div>
+                                <div class="upcoming-grid" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
+                        `;
+                    }
+                } else if (feedback) {
                     upcomingHTML += `
-                        <div class="upcoming-job">
-                            <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; color: transparent;">
-                                ${clockCharacter}
-                            </div>
-                            <div class="upcoming-grid-done" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
-                    `;
-                } else if (previewIndex === currentTrialIndex) {
-                    upcomingHTML += `
-                        <div class="upcoming-job">
-                            <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; color: #ece75d;">
-                                ${clockCharacter}
-                            </div>
-                            <div class="upcoming-grid" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px; background-color: #ece75d;">
-                    `;
-                } else {
-                    upcomingHTML += `
-                        <div class="upcoming-job">  
-                            <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; color: ${previewIndex === currentTrialIndex ? '#ece75d' : 'inherit'};">
-                                ${clockCharacter}
-                            </div>
-                            <div class="upcoming-grid" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
+                            <div class="upcoming-job">
+                                <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; color: transparent;">
+                                    ${clockCharacter}
+                                </div>
+                                <div class="upcoming-grid-done" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
                     `;
                 }
-            } else if (feedback) {
+            } else if (firstDay) {
                 upcomingHTML += `
-                        <div class="upcoming-job">
-                            <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; color: transparent;">
-                                ${clockCharacter}
-                            </div>
-                            <div class="upcoming-grid-done" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
-                `;
+                            <div class="upcoming-job">  
+                                <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px;">
+                                    ${clockCharacter}
+                                </div>
+                                <div class="upcoming-grid" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
+                        `;
             }
 
             for (let row = 0; row < this.gridSize; row++) {
@@ -938,7 +971,7 @@ function mergeCosts(trialCost, callback) {
                             
                             if (frame === totalFrames) {
                                 clearInterval(counter);
-                                totalCostElement.textContent = `$${totalCost}`;
+                                totalCostElement.textContent = `-$${totalCost}`;
 
                                 // Reset trial cost display with animation
                                 trialCostElement.textContent = `-$0`;
@@ -1038,19 +1071,36 @@ function mergeCosts(trialCost, callback) {
 }
 
 
-const pathPreSelectionTrial = {
+const firstDayTrial = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         return `
             <div class="jobs-layout">
             <div class="upcoming-jobs-container grid ${currentTrialIndex % grid.nTrials === 0 ? 'grid-fade-in' : ''}">
+                ${grid.createAllJobsHTML(currentTrialIndex, null, null, false, true)} 
+            </div>
+            </div>
+        `;
+    },
+    choices: "NO_KEYS",
+    trial_duration: 3000, // 
+    on_finish: function() {
+    }
+};
+
+const pathPreSelectionTrial = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        return `
+            <div class="jobs-layout">
+            <div class="upcoming-jobs-container grid">
                 ${grid.createAllJobsHTML(currentTrialIndex, null, null)} 
             </div>
             </div>
         `;
     },
     choices: "NO_KEYS",
-    trial_duration: 2000, // Ends after 2 seconds
+    trial_duration: 3000, 
     on_finish: function() {
     }
 };
@@ -1079,7 +1129,7 @@ const pathSelectionTrial = {
         `;
     },
     choices: ['f', 'j'], 
-    trial_duration: 5000, // Automatically ends after 5 seconds
+    trial_duration: 7000, // Automatically ends after 5 seconds
     on_finish: function(data) {
         // Get the key assignment for this trial
         const keyAssignment = {
@@ -1321,7 +1371,7 @@ const practiceGridFeedback = {
         const todayTolls = totalCost; // Assuming totalCost tracks the tolls paid so far
         return `
             <div class="new-day-text">
-                <h3>You paid a total of <strong style="color:  #f87171;">$${todayTolls}</strong> in tolls today.</h3>
+                <h3>You would have paid a total of <strong style="color:  #f87171;">$${todayTolls}</strong> in tolls today.</h3>
                 <h3>Press spacebar to continue.</h3>
             </div>
         `;
@@ -1344,10 +1394,6 @@ const newCityMessage = {
         
         message = `
         <div class="new-day-text">
-            <div style="margin-bottom: 20px;">
-                <h2>End of Day</h2>
-                <p>You paid a total of <strong style="color:  #f87171;">$${totalCost}</strong> in tolls today.</p>
-            </div>
             <div>
                 <h2>New City!</h2>
                 <p>Your taxi company is now operating in a new city.</p>
@@ -1693,7 +1739,7 @@ const practice1SelectionTrial = {
                 <div class="current-job-container">
                     <div class="cost-display-container">
                         <h2 class="cost-total">Total Tolls Paid:</h2>
-                        <p id="total-cost" class="cost-total">$0</p>
+                        <p id="total-cost" class="cost-total">-$0</p>
                         <p id="trial-cost" class="cost-trial hidden">-$0</p> 
                     </div>
                     ${practice1Grid.createGridHTML(practice1TrialIndex, choice, keyAssignment,true,true)}
@@ -1762,8 +1808,8 @@ const instructions3 = {
             <p style="font-size: ${fontSize};">Each day, you will manage ${n} dispatches, meaning you have ${n} jobs to select.</p>
             <p style="font-size: ${fontSize};">All ${n} pairs of jobs will be presented on screen at once, side-by-side. Each dispatch takes place at a different time of the day and is marked with one of the following clock icons, displayed above the dispatch:</p>
             <p style="font-family: golemClocks; text-align: center; font-size: ${fontSize};">&#x00E6; &#x00DD; &#x0026; &#x263A;</p>
-            <p style="font-size: ${fontSize};">You will move through these dispatches from left to right. Your current dispatch is highlighted in <span style="color: #ece75d;">yellow</span>, while your past dispatches are <span style="color: rgb(138, 138, 184);">greyed out</span>.</p>
-            <p style="font-size: ${fontSize};">You will first have a couple of seconds to think about which job you would like to select. Then, once the keys have been assigned to the paths - i.e. once 'F' or 'J' has been assigned to the green or blue job in your current dispatch -, you can actually select your desired job.</p>
+            <p style="font-size: ${fontSize};">You will move through these dispatches from left- to right-hand side of the screen. Your current dispatch is highlighted in <span style="color: #ece75d;">yellow</span>, while your past dispatches are <span style="color: rgb(138, 138, 184);">greyed out</span>.</p>
+            <p style="font-size: ${fontSize};">You will first have a couple of seconds to think about which job you would like to select. Then, once the dispatch grid turns yellow and the keys have been assigned to the paths - i.e. once 'F' or 'J' has been assigned to the green or blue job in your current dispatch -, you can actually select your desired job.</p>
         </div>
         <div class="instruction-section">
             <h1>Toll Locations:</h1>
@@ -1778,6 +1824,23 @@ const instructions3 = {
     choices: [' '], // Spacebar to continue
 };
 
+const practiceFirstDayTrial = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        return `
+            <div class="jobs-layout">
+            <div class="upcoming-jobs-container grid ${practice2TrialIndex % practice2Grid.nTrials === 0 ? 'grid-fade-in' : ''}">
+                ${practice2Grid.createAllJobsHTML(practice2TrialIndex, null, null, false, true)} 
+            </div>
+            </div>
+        `;
+    },
+    choices: "NO_KEYS",
+    trial_duration: 3000, // 
+    on_finish: function() {
+    }
+};
+
 const practice2PreSelectionTrial = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
@@ -1787,14 +1850,14 @@ const practice2PreSelectionTrial = {
         }
         return `
             <div class="jobs-layout">
-            <div class="upcoming-jobs-container grid ${practice2TrialIndex % practice2Grid.nTrials === 0 ? 'grid-fade-in' : ''}">
+            <div class="upcoming-jobs-container grid">
                 ${practice2Grid.createAllJobsHTML(practice2TrialIndex, null, null)} 
             </div>
             </div>
         `;
     },
     choices: "NO_KEYS",
-    trial_duration: 2000, // Ends after 2 seconds
+    trial_duration: 3000, // Ends after 2 seconds
     on_finish: function() {
     }
 };
@@ -1831,7 +1894,7 @@ const practice2SelectionTrial = {
         `;
     },
     choices: ['f', 'j'], 
-    trial_duration: 5000, // Automatically ends after 5 seconds
+    trial_duration: 7000, // Automatically ends after 5 seconds
     on_finish: function(data) {
         // Get the key assignment for this trial
         const keyAssignment = {
@@ -2295,6 +2358,7 @@ function createTimeline() {
 
     // Practice a full day
     timeline.push(instructions3);
+    timeline.push(practiceFirstDayTrial);
     for (let i = 0; i < grid.nTrials; i++) {
         timeline.push(practice2PreSelectionTrial);
         timeline.push(practice2SelectionTrial);
@@ -2304,6 +2368,7 @@ function createTimeline() {
 
     // Animation to show grid resetting, and then another day
     timeline.push(instructions4);
+    timeline.push(practiceFirstDayTrial);
     for (let i = 0; i < grid.nTrials; i++) {
         timeline.push(practice2PreSelectionTrial);
         timeline.push(practice2SelectionTrial);
@@ -2337,20 +2402,20 @@ function createTimeline() {
 
     // Loop through all trials and add them to the timeline
     for (let i = 0; i < grid.trialInfo.length; i++) {
-        if (i % grid.nTrials === 0 && i !== 0) {
-            // add new grid message if the city changes, i.e. if i is a multiple of nTrials*nGrids
-            if (i % (grid.nTrials * grid.nGrids) === 0) {
-                timeline.push(newCityMessage);
-            } else {
-                timeline.push(newDayMessage);
+        if (i % grid.nTrials === 0) {
+             if (i !== 0) {
+                 timeline.push(newDayMessage);
+                // add new grid message if the city changes, i.e. if i is a multiple of nTrials*nGrids
+                if (i % (grid.nTrials * grid.nGrids) === 0) {
+                    timeline.push(newCityMessage);
+                }
             }
-
+            timeline.push(firstDayTrial)
         }
         timeline.push(pathPreSelectionTrial);
         timeline.push(pathSelectionTrial);
         timeline.push(pathAnimationTrial);
     }
-
     // Add the end and bonus message
     timeline.push(end);
     timeline.push(bonus);
