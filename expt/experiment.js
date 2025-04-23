@@ -185,7 +185,7 @@ class Grid {
         }
 
         gridHTML += `
-                <div class="grid-container" style="grid-template-columns: repeat(${gridSize}, 40px);">
+                <div class="grid-container" style="grid-template-columns: repeat(${gridSize}, 40px); background-color: #ece75d;">
         `;
     
         for (let row = 0; row < gridSize; row++) {
@@ -465,11 +465,11 @@ class Grid {
 
                     if (isStartA) {
                         upcomingHTML += `<div class="upcoming-cell ${observedClass} blue-path" data-row="${row}" data-col="${col}">
-                                            <img src="assets/people/blue_person.png" alt="Blue Start" width="20" height="20">
+                                            <img src="assets/people/blue_person.png" alt="Blue Start" width="23" height="23">
                                          </div>`;
                     } else if (isStartB) {
                         upcomingHTML += `<div class="upcoming-cell ${observedClass} green-path" data-row="${row}" data-col="${col}">
-                                            <img src="assets/people/green_person.png" alt="Green Start" width="20" height="20">
+                                            <img src="assets/people/green_person.png" alt="Green Start" width="23" height="23">
                                          </div>`;
                     } else if (isGoalA || isGoalB || isPathA || isPathB || isOverlap) {
                         upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" data-row="${row}" data-col="${col}" style="font-size: 1.5rem;">
@@ -526,7 +526,7 @@ class Grid {
                     <div id="cost-message" class="cost-display-container">
                     <h2 class="day-display">Day ${trial.grid}/${this.nGrids} Complete</h2>
                     <h2 class="cost-total">You paid a total of <strong style="color:  #f87171;">$${totalCost}</strong> today.</h2>
-                    <p id="total-cost" class="cost-total">Tolls will now reset for the next day. Press spacebar to continue.</p>
+                    <p id="total-cost" class="cost-total">Press spacebar to continue.</p>
                     <p id="trial-cost" class="cost-trial hidden">-$0</p> 
                     </div>
                     `;
@@ -535,11 +535,10 @@ class Grid {
                     <div id="cost-message" class="cost-display-container">
                     <h2 class="day-display">Day ${trial.grid}/${this.nGrids} Complete</h2>
                     <h2 class="cost-total">You paid a total of <strong style="color:  #f87171;">$${totalCost}</strong> today.</h2>
-                    <p id="total-cost" class="cost-total">Press spacebar to continue.</p>
+                    <p id="total-cost" class="cost-total">Tolls will now reset for the next day in this city. Press spacebar to continue.</p>
                     <p id="trial-cost" class="cost-trial hidden">-$0</p> 
                     </div>
                     `;
-
                 }
             }
         } else if (firstDay) {
@@ -693,14 +692,14 @@ class Grid {
                     if (previewIndex < currentTrialIndex || feedback) {
                         if (isStartA) {
                             upcomingHTML += `<div class="upcoming-cell-done ${observedClass} blue-path" id="${cellId}" data-row="${row}" data-col="${col}">
-                                                <img src="assets/people/blue_person.png" alt="Blue Start" width="20" height="20">
+                                                <img src="assets/people/blue_person.png" alt="Blue Start" width="23" height="23">
                                              </div>`;
                         } else if (isStartB) {
                             upcomingHTML += `<div class="upcoming-cell-done ${observedClass} green-path" id="${cellId}" data-row="${row}" data-col="${col}">
-                                                <img src="assets/people/green_person.png" alt="Green Start" width="20" height="20">
+                                                <img src="assets/people/green_person.png" alt="Green Start" width="23" height="23">
                                              </div>`;
                         } else if (isGoalA || isGoalB || isPathA || isPathB || isOverlap) {
-                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.5rem;">
+                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.6rem;">
                                                 ${isGoalA || isGoalB ? '🏠' : content}
                                              </div>`;
                         } else {
@@ -709,14 +708,14 @@ class Grid {
                     } else {
                         if (isStartA) {
                             upcomingHTML += `<div class="upcoming-cell ${observedClass} blue-path" id="${cellId}" data-row="${row}" data-col="${col}">
-                                                <img src="assets/people/blue_person.png" alt="Blue Start" width="20" height="20">
+                                                <img src="assets/people/blue_person.png" alt="Blue Start" width="23" height="23">
                                              </div>`;
                         } else if (isStartB) {
                             upcomingHTML += `<div class="upcoming-cell ${observedClass} green-path" id="${cellId}" data-row="${row}" data-col="${col}">
-                                                <img src="assets/people/green_person.png" alt="Green Start" width="20" height="20">
+                                                <img src="assets/people/green_person.png" alt="Green Start" width="23" height="23">
                                              </div>`;
                         } else if (isGoalA || isGoalB || isPathA || isPathB || isOverlap) {
-                            upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.5rem;">
+                            upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.6rem;">
                                                 ${isGoalA || isGoalB ? '🏠' : content}
                                              </div>`;
                         } else {
@@ -1385,6 +1384,7 @@ const newCityMessage = {
     stimulus: function() {
         const nextTrialIndex = currentTrialIndex; // Next trial will be this index
         const nextTrial = grid.getTrialInfo(nextTrialIndex);
+        const nCities = grid.nCities
         const nextCityId = nextTrial.city;
         const currentCityId = grid.getCurrentCity();
         
@@ -1395,9 +1395,10 @@ const newCityMessage = {
         message = `
         <div class="new-day-text">
             <div>
+                <h2>City ${currentCityId-1}/${nCities} complete.</h2>
                 <h2>New City!</h2>
                 <p>Your taxi company is now operating in a new city.</p>
-                <p>Note: this may be a different type of city - i.e. the traffic may run from north-south, or east-west.</p>
+                <p>Note: this may (or may not) be a different type of city - i.e. the traffic either tends to run from north-south, or east-west.</p>
                 <p>Prepare for your first day in this new city.</p>
                 <p id="continue-text" style="display: none;">Press spacebar to continue dispatching.</p>
             </div>
@@ -1627,15 +1628,15 @@ const instructions2 = {
         return `
             <div class="instruction-section" style="font-size: 20px;">
                 <h1>Dispatch Instructions</h1>
-                <p style="font-size: ${fontSize};">For each dispatch, you'll see two possible jobs marked in <span class="blue-text">blue</span> and <span class="green-text">green</span>. Each job has a passenger <img src="assets/people/blue_person.png" alt="Blue Passenger" width="20" height="20"> or <img src="assets/people/green_person.png" alt="Green Passenger" width="20" height="20"> at a pickup point, and a drop-off destination 🏠. The route of each job is marked with one of two letters:</p>
+                <p style="font-size: ${fontSize};">For each dispatch, you'll see two possible jobs marked in <span class="blue-text">blue</span> and <span class="green-text">green</span>. Each job has a passenger <img src="assets/people/blue_person.png" alt="Blue Passenger" width="23" height="23"> or <img src="assets/people/green_person.png" alt="Green Passenger" width="23" height="23"> at a pickup point, and a drop-off destination 🏠. The route of each job is marked with one of two letters:</p>
                 <p style="font-size: ${fontSize};">- The letter <strong>F</strong> marks one job</p>
                 <p style="font-size: ${fontSize};">- The letter <strong>J</strong> marks the other job</p>
-                <p style="font-size: ${fontSize};">To send out a taxi to one of these jobs, you need to press the corresponding key on your keyboard.</p>
-                <p style="font-size: ${fontSize};">For any given choice, the lengths of the two possible jobs are the same, meaning the fare from your customer is the same. However, some jobs are more costly than others, because of tolls in the city...</p>
+                <p style="font-size: ${fontSize};">On each dispatch, these letters are randomly assigned to each job. To send out a taxi to one of these jobs, you need to press the corresponding key on your keyboard.</p>
+                <p style="font-size: ${fontSize};">For any given choice, the lengths of the two possible jobs are the same, and you are paid the same wage by the company each day. However, some jobs are more costly than others, which you must pay yourself. This is because of tolls in the city...</p>
             </div>
             <div class="instruction-section" style="font-size: 20px;">
                 <h1>Toll Intersections:</h1>
-                <p style="font-size: ${fontSize};">Traffic in some parts of the city is busier than in others, meaning that tolls apply at certain intersections. Visiting an intersection reveals whether or not you have to pay a toll there.</p>
+                <p style="font-size: ${fontSize};">Traffic in some parts of the city is busier than in other. This means that tolls apply at busy intersections. Visiting an intersection reveals whether or not you have to pay a toll there.</p>
                 <p style="font-size: ${fontSize};">- <strong><span style="color: rgb(114, 114, 150);">Dark grey intersections</span></strong> have not been visited yet</p>
                 <p style="font-size: ${fontSize};">- <strong><span style="color: #f87171;">Red intersections</span></strong> cost a $1 toll to pass through</p>
                 <p style="font-size: ${fontSize};">- <strong><span style="color:rgb(194, 194, 229);">Light grey intersections</span></strong> are free with no tolls</p>
@@ -1809,7 +1810,8 @@ const instructions3 = {
             <p style="font-size: ${fontSize};">All ${n} pairs of jobs will be presented on screen at once, side-by-side. Each dispatch takes place at a different time of the day and is marked with one of the following clock icons, displayed above the dispatch:</p>
             <p style="font-family: golemClocks; text-align: center; font-size: ${fontSize};">&#x00E6; &#x00DD; &#x0026; &#x263A;</p>
             <p style="font-size: ${fontSize};">You will move through these dispatches from left- to right-hand side of the screen. Your current dispatch is highlighted in <span style="color: #ece75d;">yellow</span>, while your past dispatches are <span style="color: rgb(138, 138, 184);">greyed out</span>.</p>
-            <p style="font-size: ${fontSize};">You will first have a couple of seconds to think about which job you would like to select. Then, once the dispatch grid turns yellow and the keys have been assigned to the paths - i.e. once 'F' or 'J' has been assigned to the green or blue job in your current dispatch -, you can actually select your desired job.</p>
+            <p style="font-size: ${fontSize};">You will first have 3 seconds to think about which job you would like to select. You can select your desired job once the dispatch grid turns yellow and the keys have been assigned to the paths - i.e. once 'F' or 'J' has been assigned to the green or blue job in your current dispatch.</p>
+            <p style="font-size: ${fontSize};">You will have 7 seconds to select a job once the dispatch grid has turned yellow. If you fail to make a choice within this time limit, you will pay a fine of <span style="color: #f87171;">$10</span>.</p>
         </div>
         <div class="instruction-section">
             <h1>Toll Locations:</h1>
@@ -2285,6 +2287,7 @@ const fullscreenTrial = {
         <div class="instruction-section">
             <h1>Enter Full Screen</h1>
             <p>The experiment will switch to full screen mode when you press the Enter key.</p>
+            <p>Please also ensure the sound on your browser is turned on.</p>
             <p>This ensures the best experience during the experiment.</p>
         </div>
     `,
@@ -2329,6 +2332,7 @@ const instructions9 = {
                 <p>Remember: your aim is to minimise the cost paid each day by predicting which intersections will incur a toll, and hence by selecting jobs that you think will be least costly.</p>
                 <p>At the end of the experiment, we will assess your performance by assessing how well you chose jobs that were the least costly on a randomly selected set of days and cities. This will determine how much bonus payment you receive.</p>
                 <p>So, you should pay attention throughout the experiment - i.e. on every day, and in every city.</p>
+                <p>Remember also: you will have 7 seconds to select a job once the current dispatch turns yellow, otherwise the trial will timeout and you will pay a fine of <span style="color: #f87171;">$10</span>. If you timeout too many times, the experiment will end and you will return to Prolific.</p>
                 <p>When you are ready to begin the experiment, press the spacebar.</p>
             </div>
         `;
