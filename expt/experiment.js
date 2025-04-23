@@ -1383,7 +1383,7 @@ const timeoutCheck = {
     stimulus: function() {
         // Get the current city ID and the previous city ID
         const currentCityId = grid.getCurrentCity();
-        const previousCityId = currentCityId - 1;
+        const previousCityId = currentCityId-1;
 
         // Retrieve all trials from the previous city
         const previousCityTrials = jsPsych.data.get().filterCustom(function(trial) {
@@ -1398,7 +1398,7 @@ const timeoutCheck = {
         const nTrials = grid.nTrials;
         const nGrids = grid.nGrids;
         const nTrialsPerCity = nTrials * nGrids;
-        const threshold = Math.floor(0.3 * nTrialsPerCity);
+        const threshold = Math.floor(0.1 * nTrialsPerCity);
         console.log(`Threshold for timeouts: ${threshold}`);
 
         if (timeouts > threshold) {
@@ -1406,9 +1406,9 @@ const timeoutCheck = {
             setTimeout(() => {
                 // window.location.href = "YOUR_REDIRECT_URL_HERE"; // Replace with your URL
                 window.location.replace("error.html");
-            }, 5000); // Redirect after 5 seconds
+            }, 3000); // Redirect after a few secs
             return `
-                <div class="error-message">
+                <div class="instruction-section">
                     <h2>Experiment Failed</h2>
                     <p>You have timed out too many times in the previous city. Unfortunately, you cannot continue with the experiment.</p>
                     <p>You will now be redirected to Prolific.</p>
@@ -2398,52 +2398,52 @@ function createTimeline() {
     timeline.push(instructions1);
 
     // // Practice selection
-    timeline.push(instructions2);
-    timeline.push(practice1SelectionTrial);
-    timeline.push(practice1AnimationTrial);
-    timeline.push(practice1SelectionTrial);
-    timeline.push(practice1AnimationTrial);
+    // timeline.push(instructions2);
+    // timeline.push(practice1SelectionTrial);
+    // timeline.push(practice1AnimationTrial);
+    // timeline.push(practice1SelectionTrial);
+    // timeline.push(practice1AnimationTrial);
 
-    // Practice a full day
-    timeline.push(instructions3);
-    timeline.push(practiceFirstDayTrial);
-    for (let i = 0; i < grid.nTrials; i++) {
-        timeline.push(practice2PreSelectionTrial);
-        timeline.push(practice2SelectionTrial);
-        timeline.push(practice2AnimationTrial);
-    }
-    timeline.push(practiceGridFeedback);
+    // // Practice a full day
+    // timeline.push(instructions3);
+    // timeline.push(practiceFirstDayTrial);
+    // for (let i = 0; i < grid.nTrials; i++) {
+    //     timeline.push(practice2PreSelectionTrial);
+    //     timeline.push(practice2SelectionTrial);
+    //     timeline.push(practice2AnimationTrial);
+    // }
+    // timeline.push(practiceGridFeedback);
 
-    // Animation to show grid resetting, and then another day
-    timeline.push(instructions4);
-    timeline.push(practiceFirstDayTrial);
-    for (let i = 0; i < grid.nTrials; i++) {
-        timeline.push(practice2PreSelectionTrial);
-        timeline.push(practice2SelectionTrial);
-        timeline.push(practice2AnimationTrial);
-    }
-    timeline.push(practiceGridFeedback);
+    // // Animation to show grid resetting, and then another day
+    // timeline.push(instructions4);
+    // timeline.push(practiceFirstDayTrial);
+    // for (let i = 0; i < grid.nTrials; i++) {
+    //     timeline.push(practice2PreSelectionTrial);
+    //     timeline.push(practice2SelectionTrial);
+    //     timeline.push(practice2AnimationTrial);
+    // }
+    // timeline.push(practiceGridFeedback);
 
-    // New city animation
-    timeline.push(instructions5);
+    // // New city animation
+    // timeline.push(instructions5);
 
-    for (let i = 1; i <= grid.nGrids; i++) {
-        timeline.push(instructions6);
-    }
-    timeline.push(instructions7);
-    for (let i = 1; i <= grid.nGrids; i++) {
-        timeline.push(instructions8);
-    }
+    // for (let i = 1; i <= grid.nGrids; i++) {
+    //     timeline.push(instructions6);
+    // }
+    // timeline.push(instructions7);
+    // for (let i = 1; i <= grid.nGrids; i++) {
+    //     timeline.push(instructions8);
+    // }
 
-    // Add the option to review the instructions
-    timeline.push(instructionsReview);
+    // // Add the option to review the instructions
+    // timeline.push(instructionsReview);
     
-    // Understanding checks
-    const quizTrials = createQuizTrials(jsPsych);
-    timeline.push(...quizTrials);
+    // // Understanding checks
+    // const quizTrials = createQuizTrials(jsPsych);
+    // timeline.push(...quizTrials);
 
-    // bonus message
-    timeline.push(instructions9)
+    // // bonus message
+    // timeline.push(instructions9)
 
     // Add the first grid message
     timeline.push(firstGridMessage);
