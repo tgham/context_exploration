@@ -113,12 +113,118 @@ function applyScreenScaling() {
   
 }
 
-// Apply scaling when the page loads
-// document.addEventListener('DOMContentLoaded', applyScreenScaling);
 
-// Reapply scaling if the window is resized
-// window.addEventListener('resize', applyScreenScaling);
 
+// consent etc
+const informedConsentForm = `
+    <div style="max-width: 800px; margin: auto; padding: 20px; font-family: Arial, sans-serif; line-height: 1.6; text-align: left;">
+        <h2 style="text-align: center; color:rgb(255, 255, 255);">Informed Consent Form for Online Experiments on Cognitive Control</h2>
+        <p>This is a psychology experiment being conducted by Dr. Peter Dayan, director of the Max Planck Institute for Biological Cybernetics, and the members of his lab. In order to consent to participate, you MUST meet the following criteria:</p>
+        <ul style="margin: 20px 0; padding-left: 20px;">
+            <li>18 years of age or older.</li>
+            <li>Fluent speaker of English.</li>
+            <li>Have not previously participated in this experiment.</li>
+        </ul>
+        <p>This study is designed to look at how people learn to make decisions to accomplish their goals. In this task, you will be asked to make choices, play games, and answer questions related to those games. The study will take about 40 minutes and will pay £5.4 plus a performance-dependent bonus of up to a maximum of £2. The performance bonus is explained in more detail in the instructions that follow.</p>
+        <p>Your participation in this research is voluntary. You may refrain from answering any questions that make you uncomfortable and may withdraw your participation at any time without penalty by exiting this task and alerting the experimenter. You may choose not to complete certain parts of the task or answer certain questions. You may contact us at the address provided below if you have additional questions or concerns.</p>
+        <p>Other than monetary compensation, participating in this study will provide no direct benefits to you. But we hope that this research will benefit society at large by contributing towards establishing a scientific foundation for improving people’s learning and cognitive control abilities.</p>
+        <p>Your online username may be connected to your individual responses, but we will not be asking for any additional personally identifying information, and we will handle responses as confidentially as possible. We cannot however guarantee the confidentiality of information transmitted over the Internet. We will be keeping de-identified data collected as part of this experiment indefinitely. Data used in scientific publications will remain completely anonymous.</p>
+        <p>If you have any questions about the study, feel free to contact our lab. Dr. Dayan and his lab members can be reached at <a href="mailto:kyblab.tuebingen@gmail.com">kyblab.tuebingen@gmail.com</a>.</p>
+        <p>By selecting the “consent” option below, I acknowledge that I am 18 or older, that I am a fluent speaker of English, that I have read this consent form, and that I agree to take part in the research.</p>
+        <div style="text-align: center; margin-top: 20px;">
+            <button id="consent-given" style="background-color: #2C3E50; color: white; padding: 10px 20px; border: none; cursor: pointer; margin-right: 10px;">I consent to participate</button>
+            <button id="consent-rescinded" style="background-color: #E74C3C; color: white; padding: 10px 20px; border: none; cursor: pointer;">I do not consent to participate</button>
+        </div>
+    </div>
+`;
+
+const dataProtectionForm = `
+<div style="max-width: 800px; margin: auto; padding: 20px; font-family: Arial, sans-serif; line-height: 1.6; text-align: left;">
+    <h2 style="text-align: center; color:rgb(255, 255, 255);">Data Protection Form for Online Experiments on Cognitive Control</h2>
+    <p>Please click <a href="./data-protection-form.pdf" style="color: #2980B9;">here</a> to view our Data Protection Information Sheet. It is yours to keep.</p>
+    <p>I have received and taken note of the Data Protection Information Sheet for this study. In doing so, I had sufficient time and opportunity to ask questions about data protection and reconsider my participation in the study. I am aware that:</p>
+    <ul style="margin: 20px 0; padding-left: 20px;">
+        <li>The processing and use of the collected data occurs in a pseudoanonymised form within the scope of the legally prescribed provisions. As a general rule, the storage occurs in the form of answered questionnaires, as well as electronic data, for a duration of 10 years or longer, if this is required by the purpose of the study.</li>
+        <li>By providing further personal data in pseudoanonymised form, collected personal data may be used for the preparation of anonymised scientific research work and may also be published and used in an anonymised form in medical journals and scientific publications, so that a direct assignment to my person cannot be established.</li>
+        <li>The information obtained during the course of this study may also be sent in an anonymised form to cooperation partners within the scope of the European General Data Protection Regulation for scientific purposes and to cooperation partners outside of the European Union, i.e. to countries with a lower data protection level (this also applies to the USA).</li>
+        <li>The data collected within the scope of the study can also be used and processed in the future inside of the Max Planck Institute.</li>
+    </ul>
+    <p>I was informed about my rights. In particular, that at any time:</p>
+    <ul style="margin: 20px 0; padding-left: 20px;">
+        <li>I can withdraw this declaration of consent.</li>
+        <li>I can request information about my stored data and request the correction or blocking of data.</li>
+        <li>If I choose to stop participating in this study, I can request that any of my personal data associated with this study are immediately deleted or anonymised.</li>
+        <li>I can request that my personal data are handed out to me or to third parties (if technically feasible).</li>
+    </ul>
+    <p>I hereby declare that:</p>
+    <ul style="margin: 20px 0; padding-left: 20px;">
+        <li>I have been adequately informed about the collection and processing of my personal data and rights.</li>
+        <li>I consent to the collection and processing of personal data within the scope of the study and its pseudoanonymised disclosure, so that only persons conducting the study can establish a link between the data and my person.</li>
+    </ul>
+    <p>Your online username may be connected to your individual responses, but we will not be asking for any additional personally identifying information, and we will handle responses as confidentially as possible.</p>
+    <p>We cannot however guarantee the confidentiality of information transmitted over the internet. We will keep de-identified data collected as part of this experiment indefinitely. Data used in scientific publications will remain completely anonymous.</p>
+    <div class="consent-checkboxes" style="margin-top: 20px;">
+        <input type="checkbox" id="checkbox-y" style="margin-right: 10px;">
+        <label for="checkbox-y" style="font-weight: normal;">I agree to participate in this experiment.</label>
+    </div>
+    <div class="consent-checkboxes" style="margin-top: 10px;">
+        <input type="checkbox" id="checkbox-z" style="margin-right: 10px;">
+        <label for="checkbox-z" style="font-weight: normal;">I consent to the use of my data as described in the Data Protection Information Sheet and confirm having received a copy of the Data Protection Sheet.</label>
+    </div>
+    <div class="consent-checkboxes" style="margin-top: 10px;">
+        <input type="checkbox" id="checkbox-x" style="margin-right: 10px;">
+        <label for="checkbox-x" style="font-weight: normal;">I consent to data transfer from the MPI for Biological Cybernetics encrypted database to the project-related collaborators: inside of the Max Planck Society and affiliated research institutes, or at partnering institutions like the University of Tuebingen and New York University.</label>
+    </div>
+    <div style="text-align: center; margin-top: 20px;">
+        <button id="submit-button" class="button small-button disabled" style="background-color: #2C3E50; color: white; padding: 10px 20px; border: none; cursor: pointer;" disabled>Submit</button>
+        <button id="data-consent-rescinded" style="background-color: #E74C3C; color: white; padding: 10px 20px; border: none; cursor: pointer; margin-left: 10px;">I do not consent to all of the above</button>
+    </div>
+</div>
+`;
+
+const informedConsentTrial = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: informedConsentForm,
+    response_ends_trial: false,
+    on_load: function() {
+        document.body.style.overflowY = "auto";
+        document.documentElement.style.overflowY = "auto";
+        document.getElementById('consent-given').addEventListener('click', function() {
+            jsPsych.finishTrial();
+        });
+        document.getElementById('consent-rescinded').addEventListener('click', function() {
+            jsPsych.abortExperiment('You chose not to consent to participate. Please return your submission on Prolific.');
+        });
+    }
+};
+
+const dataProtectionTrial = {
+    type: jsPsychHtmlKeyboardResponse, // This is correct for both v6 and v7
+    stimulus: dataProtectionForm,
+    response_ends_trial: false, // Prevents trial from ending with a key press
+    on_load: () => {
+        const submitButton = document.getElementById('submit-button');
+        const checkboxes = Array.from(document.querySelectorAll('.consent-checkboxes input'));
+
+        checkboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', () => {
+                const allChecked = checkboxes.every(cb => cb.checked);
+                submitButton.disabled = !allChecked;
+                submitButton.classList.toggle('disabled', !allChecked);
+            });
+        });
+
+        submitButton.addEventListener('click', () => {
+            if (!submitButton.disabled) {
+                jsPsych.finishTrial(); // Ends the trial and proceeds
+            }
+        });
+
+        document.getElementById('data-consent-rescinded').addEventListener('click', () => {
+            jsPsych.abortExperiment('You chose not to consent to data protection terms. Please return your submission on Prolific.');
+        });
+    },
+};
 
 
 // Define the Grid class
@@ -1682,8 +1788,6 @@ function calculateBonus() {
 }
 
 
-// ...existing code...
-
 // First instruction page
 const instructions1 = {
     type: jsPsychHtmlKeyboardResponse,
@@ -1703,7 +1807,10 @@ const instructions1 = {
     on_load: function() {
 
         // appropriate zooming
+        // document.body.style.overflow = "hidden";
+        // document.documentElement.style.overflow = "hidden";
         applyScreenScaling();
+
 
         // Set initial city background to 'practice1.png'
         setCityBackground('practice1');
@@ -2637,10 +2744,15 @@ function createTimeline() {
     
     const timeline = [];
 
+    
     // city assignments
     const numCities = data.env_costs.n_cities; // Assuming this is the number of cities
     createCityMapping(numCities);
-
+    
+    // consent
+    timeline.push(informedConsentTrial);
+    timeline.push(dataProtectionTrial);
+    
     // Welcome message
     timeline.push(fullscreenTrial);
     timeline.push(instructions1);
