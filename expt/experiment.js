@@ -1146,7 +1146,7 @@ const pathPreSelectionTrial = {
         `;
     },
     choices: "NO_KEYS",
-    trial_duration: 3000, 
+    trial_duration: 2000, 
     on_finish: function() {
     }
 };
@@ -1175,7 +1175,7 @@ const pathSelectionTrial = {
         `;
     },
     choices: ['f', 'j'], 
-    trial_duration: 7000, // Automatically ends after 5 seconds
+    trial_duration: 8000, // Automatically ends after 5 seconds
     on_finish: function(data) {
         // Get the key assignment for this trial
         const keyAssignment = {
@@ -1926,8 +1926,8 @@ const instructions3 = {
             <p style="font-size: ${fontSize};">All ${n} pairs of jobs will be presented on screen at once, side-by-side. Each dispatch takes place at a different time of the day and is marked with one of the following clock icons, displayed above the dispatch:</p>
             <p style="font-family: golemClocks; text-align: center; font-size: ${fontSize};">&#x00E6; &#x00DD; &#x0026; &#x263A;</p>
             <p style="font-size: ${fontSize};">You will move through these dispatches from left- to right-hand side of the screen. Your current dispatch is highlighted in <span style="color: #ece75d;">yellow</span>, while your past dispatches are <span style="color: rgb(138, 138, 184);">greyed out</span>.</p>
-            <p style="font-size: ${fontSize};">You will first have 3 seconds to think about which job you would like to select. You can select your desired job once the dispatch grid turns yellow and the keys have been assigned to the paths - i.e. once 'F' or 'J' has been assigned to the green or blue job in your current dispatch.</p>
-            <p style="font-size: ${fontSize};">You will have 7 seconds to select a job once the dispatch grid has turned yellow. If you fail to make a choice within this time limit, you will pay a fine of <span style="color: #f87171;">$10</span>.</p>
+            <p style="font-size: ${fontSize};">You will first have a couple of seconds to think about which job you would like to select. You can select your desired job once the dispatch grid turns yellow and the keys have been assigned to the paths - i.e. once 'F' or 'J' has been assigned to the green or blue job in your current dispatch.</p>
+            <p style="font-size: ${fontSize};">You will have 8 seconds to select a job once the dispatch grid has turned yellow. If you fail to make a choice within this time limit, you will pay a fine of <span style="color: #f87171;">$10</span>.</p>
         </div>
         <div class="instruction-section">
             <h1>Toll Locations:</h1>
@@ -1981,7 +1981,7 @@ const practice2PreSelectionTrial = {
         `;
     },
     choices: "NO_KEYS",
-    trial_duration: 3000, // Ends after 2 seconds
+    trial_duration: 2000, // Ends after 2 seconds
     on_finish: function() {
     }
 };
@@ -2018,7 +2018,7 @@ const practice2SelectionTrial = {
         `;
     },
     choices: ['f', 'j'], 
-    trial_duration: 7000, // Automatically ends after 5 seconds
+    trial_duration: 8000, // Automatically ends after 5 seconds
     on_finish: function(data) {
         // Get the key assignment for this trial
         const keyAssignment = {
@@ -2480,7 +2480,7 @@ const instructions9 = {
                 <p>Remember: your aim is to minimise the total cost paid each day by predicting which intersections will incur a toll, and hence by selecting jobs that you think will be least costly.</p>
                 <p>At the end of the experiment, we will assess your performance by assessing how well you chose jobs that were the least costly on a randomly selected set of days and cities. This will determine how much bonus payment you receive.</p>
                 <p>So, you should pay attention throughout the experiment - i.e. on every day, and in every city.</p>
-                <p>Remember also: you will have 7 seconds to select a job once the current dispatch turns yellow, otherwise the trial will timeout and you will pay a toll of <span style="color: #f87171;">$10</span>. If you timeout too many times, the experiment will end and you will return to Prolific.</p>
+                <p>Remember also: you will have 8 seconds to select a job once the current dispatch turns yellow, otherwise the trial will timeout and you will pay a toll of <span style="color: #f87171;">$10</span>. If you timeout too many times, the experiment will end and you will return to Prolific.</p>
             </div>
 
             <div class="instruction-section">

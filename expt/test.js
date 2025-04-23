@@ -195,7 +195,9 @@ export function createQuizTrials(jsPsych) {
           <p>- Correct answers will turn green, and incorrect answers will turn red.</p>
           <p>- After selecting an answer, press the spacebar to proceed to the next question.</p>
         </p>
-        <p>Press the spacebar to begin the quiz.</p>
+      </div>
+      <div class="instruction-section">
+        <h2>Press the spacebar to begin the quiz.</h2>
       </div>
     `,
     choices: [' ']
