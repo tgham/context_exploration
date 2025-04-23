@@ -3,6 +3,8 @@ const jsPsych = initJsPsych({
     on_finish: function() {
         var ppt_data = jsPsych.data.get().json();
         send_complete(subject_id, ppt_data);
+        console.log('experiment complete');
+        window.location.replace("error.html"); // REPLACE WITH PROLIFIC URL
     }
 });
 
@@ -1550,51 +1552,25 @@ choices: [' '], // spacebar to continue
 };
 
 // calculate bonus
+let bonusAchieved;
 const bonus = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
-        // return `
-        //     <div class="new-day-text">
-        //         <h1>Shift Complete!</h1>
-        //         <p>You've successfully completed all taxi assignments.</p>
-        //         <div class="button-container">
-        //             <button id="download-data" class="download-button">Download Data</button>
-        //             <p>Press spacebar to finish the experiment.</p>
-        //         </div>
-        //     </div>
-        // `;
-        return `
-        `;
-    },
-choices: [' '], // spacebar to continue
-    on_load: function() {
-
-        // Determine whether the participant receives a bonus
-            
-        // Add event listener for the download button
-        // document.getElementById('download-data').addEventListener('click', downloadTrialData);
-    
-        // Calculate bonus
-        const bonusAchieved = calculateBonus();
-    
-        // Create a new container for the bonus result
-        const bonusContainer = document.createElement('div');
-        bonusContainer.classList.add('new-day-text');
-        
-        // Display bonus result
+        bonusAchieved = calculateBonus();
+        console.log("Bonus Achieved:", bonusAchieved);
         const bonusMessage = bonusAchieved
             ? "Congratulations! You earned a bonus!"
             : "Unfortunately, you did not earn a bonus this time.";
-        bonusContainer.innerHTML = `<p>${bonusMessage}</p>`;
-        
-        // Append the new container to the document
-        document.body.appendChild(bonusContainer);
-    
-        // Also create a CSV version of the data with jsPsych's built-in function
-        // const csvData = jsPsych.data.get().filter({choice: ['blue', 'green']}).csv();
-        // jsPsych.data.addProperties({
-        //     exported_data: csvData
-        // });
+        return `
+            <div class="new-day-text">
+                <h2>${bonusMessage}</h2>
+                <p>Press spacebar to return to Prolific.</p>
+            </div>
+        `;
+    },
+choices: [' '], // spacebar to continue
+    on_finish: function() {
+        data.bonusAchieved = bonusAchieved;
     }
 };
 
@@ -2468,7 +2444,6 @@ function createTimeline() {
     // Add the end and bonus message
     timeline.push(end);
     timeline.push(bonus);
-
     return timeline;
 }
 
