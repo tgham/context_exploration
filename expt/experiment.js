@@ -4,12 +4,11 @@ const jsPsych = initJsPsych({
         var ppt_data = jsPsych.data.get().json();
         send_complete(subject_id, ppt_data);
         console.log('experiment complete');
-        window.location.replace("error.html"); // REPLACE WITH PROLIFIC URL
+        // window.location.replace("error.html"); // REPLACE WITH PROLIFIC URL
     }
 });
 
 import { createQuizTrials } from './test.js';
-document.body.style.zoom = "100%";
 
 // decide whether we're doing this properly or not...
 let test = false;
@@ -89,6 +88,38 @@ function playCostSound() {
         source.start(0); // Play the sound
     }
 }
+
+// Function to calculate and apply the scaling factor
+let zoomFactor;
+function applyScreenScaling() {
+    
+    // Define the reference dimensions (MacBook Pro 16" M2)
+    const baseWidth = 3456/2;
+    const baseHeight = 2234/2;
+
+    const screenWidth = window.screen.width;
+    const screenHeight = window.screen.height;
+
+    const widthRatio = screenWidth / baseWidth;
+    const heightRatio = screenHeight / baseHeight;
+
+    zoomFactor = Math.min(widthRatio, heightRatio);
+
+    document.body.style.zoom = zoomFactor;
+    
+    console.log(`User screen: ${screenWidth}x${screenHeight}`);
+    console.log(`Reference screen: ${baseWidth}x${baseHeight}`);
+    console.log(`Applied scaling factor: ${zoomFactor.toFixed(3)}`);
+  
+}
+
+// Apply scaling when the page loads
+// document.addEventListener('DOMContentLoaded', applyScreenScaling);
+
+// Reapply scaling if the window is resized
+// window.addEventListener('resize', applyScreenScaling);
+
+
 
 // Define the Grid class
 class Grid {
@@ -270,10 +301,13 @@ class Grid {
     };
 
     // method for plotting a grid, either blank or with all costs revealed
-    createBlankGridHTML(trialIndex = null, revealCosts = false, feedback=false) {
+    createBlankGridHTML(trialIndex = null, revealCosts = false, feedback=false, revealedCosts = 'all') {
 
+        // let gridHTML = `
+        //     <div class="current-job-container">
+        // `;
         let gridHTML = `
-            <div class="current-job-container">
+            <div class="upcoming-jobs-actual-container">
         `;
         
         if (feedback){
@@ -288,7 +322,8 @@ class Grid {
         } 
 
         gridHTML += `
-            <div class="grid-container" style="grid-template-columns: repeat(${this.gridSize}, 40px);">
+            <div class="upcoming-job">  
+                <div class="upcoming-grid" style="grid-template-columns: repeat(${this.gridSize}, 40px);">
         `;
     
         let binaryCosts = null; // Initialize binaryCosts
@@ -311,9 +346,17 @@ class Grid {
                 const cellId = `cell-${row}-${col}`;
     
                 if (revealCosts) {
-                    const cost = binaryCosts ? binaryCosts[row][col] : 0; // Safely access binaryCosts
-                    const costClass = cost === -1 ? 'observed-cost' : 'observed-no-cost';
-                    gridHTML += `<div class="grid-cell ${costClass}" id="${cellId}"></div>`;
+                    if (revealedCosts === 'all') {
+                        const cost = binaryCosts ? binaryCosts[row][col] : 0; // Safely access binaryCosts
+                        const costClass = cost === -1 ? 'observed-cost' : 'observed-no-cost';
+                        gridHTML += `<div class="grid-cell ${costClass}" id="${cellId}"></div>`;
+                    } else if (revealedCosts === 'observed') {
+                        console.log('hello')
+                        const cost = this.observedCosts[`${row}-${col}`];
+                        const costClass = cost !== undefined ? 
+                            (cost === -1 ? 'observed-cost' : 'observed-no-cost') : '';
+                        gridHTML += `<div class="grid-cell ${costClass}" id="${cellId}"></div>`;
+                    }
                 } else {
                     gridHTML += `<div class="grid-cell" id="${cellId}"></div>`;
                 }
@@ -968,7 +1011,7 @@ function mergeCosts(trialCost, callback) {
                             frame++;
                             const progress = frame / totalFrames;
                             const currentCount = Math.floor(startCost + progress * trialCost);
-                            totalCostElement.textContent = `$${currentCount}`;
+                            totalCostElement.textContent = `-$${currentCount}`;
                             
                             if (frame === totalFrames) {
                                 clearInterval(counter);
@@ -1012,11 +1055,11 @@ function mergeCosts(trialCost, callback) {
                     frame++;
                     const progress = frame / totalFrames;
                     const currentCount = Math.floor(startCost + progress * trialCost);
-                    totalCostElement.textContent = `$${currentCount}`;
+                    totalCostElement.textContent = `-$${currentCount}`;
                     
                     if (frame === totalFrames) {
                         clearInterval(counter);
-                        totalCostElement.textContent = `$${totalCost}`;
+                        totalCostElement.textContent = `-$${totalCost}`;
 
                         // Reset trial cost display with animation
                         trialCostElement.textContent = `-$0`;
@@ -1085,6 +1128,8 @@ const firstDayTrial = {
     },
     choices: "NO_KEYS",
     trial_duration: 3000, // 
+    on_load: function() {
+    },
     on_finish: function() {
     }
 };
@@ -1378,14 +1423,17 @@ const practiceGridFeedback = {
         `;
     },
 choices: [' '], // spacebar to continue
+on_load: function() {
+},
+on_finish: function() {
+}
 };
 
 const timeoutCheck = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         // Get the current city ID and the previous city ID
-        const currentCityId = grid.getCurrentCity();
-        const previousCityId = currentCityId-1;
+        const previousCityId = grid.getCurrentCity();
 
         // Retrieve all trials from the previous city
         const previousCityTrials = jsPsych.data.get().filterCustom(function(trial) {
@@ -1406,7 +1454,6 @@ const timeoutCheck = {
         if (timeouts > threshold) {
             console.log(`Participant failed due to high number of timeouts in city ${previousCityId}`);
             setTimeout(() => {
-                // window.location.href = "YOUR_REDIRECT_URL_HERE"; // Replace with your URL
                 window.location.replace("error.html");
             }, 3000); // Redirect after a few secs
             return `
@@ -1523,12 +1570,13 @@ const firstGridMessage = {
             </div>
         `;
     },
-choices: [' '], // spacebar to continue
+    choices: [' '], // spacebar to continue
+    on_load: function() {
+    },
     on_finish: function() {
         console.log("Experiment has begun in City:", grid.getCurrentCity()), ', Trial:', currentTrialIndex,', Grid:', grid.getTrialInfo(currentTrialIndex).grid;
         var ppt_data = jsPsych.data.get().json();
         send_incomplete(subject_id, ppt_data);
-        // send_incomplete(subject_id, jsPsych.data);
     }
 };
 
@@ -1564,12 +1612,30 @@ const bonus = {
         return `
             <div class="new-day-text">
                 <h2>${bonusMessage}</h2>
-                <p>Press spacebar to return to Prolific.</p>
+                <p>Press spacebar to continue.</p>
             </div>
         `;
     },
 choices: [' '], // spacebar to continue
-    on_finish: function() {
+    on_finish: function(data) {
+        data.bonusAchieved = bonusAchieved;
+    }
+};
+
+const preQuestionnaire = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        return `
+            <div class="new-day-text">
+                <h2>Final survey</h2>
+                <p>We would now like to ask you a few survey questions. Press respond to every question you feel comfortable answering.</p>
+                <p>Once you are done, you will be returned to Prolific.</p>
+                <p>Press spacebar to continue.</p>
+            </div>
+        `;
+    },
+choices: [' '], // spacebar to continue
+    on_finish: function(data) {
         data.bonusAchieved = bonusAchieved;
     }
 };
@@ -1635,6 +1701,10 @@ const instructions1 = {
     `,
     choices: [' '], // spacebar to continue
     on_load: function() {
+
+        // appropriate zooming
+        applyScreenScaling();
+
         // Set initial city background to 'practice1.png'
         setCityBackground('practice1');
         grid.currentCity = 'practice1'; // Initialize the current city
@@ -1655,6 +1725,24 @@ const instructions2 = {
                 <p style="font-size: ${fontSize};">For any given choice, the lengths of the two possible jobs are the same, and you are paid the same wage by the company each day. However, some jobs are more costly than others, which you must pay yourself. This is because of tolls in the city...</p>
             </div>
             <div class="instruction-section" style="font-size: 20px;">
+                <h2>Press spacebar to continue.</h2>
+            </div>
+        `;
+    },
+    choices: [' '], // Spacebar to continue
+    on_load: function() {
+    },
+    on_finish: function(data) {
+    }
+    
+};
+
+const instructions2_5 = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        const fontSize = "20px"; // Define font size as a variable
+        return `
+            <div class="instruction-section" style="font-size: 20px;">
                 <h1>Toll Intersections:</h1>
                 <p style="font-size: ${fontSize};">Traffic in some parts of the city is busier than in other. This means that tolls apply at busy intersections. Visiting an intersection reveals whether or not you have to pay a toll there.</p>
                 <p style="font-size: ${fontSize};">- <strong><span style="color: rgb(114, 114, 150);">Dark grey intersections</span></strong> have not been visited yet</p>
@@ -1669,6 +1757,11 @@ const instructions2 = {
         `;
     },
     choices: [' '], // Spacebar to continue
+    on_load: function() {
+    },
+    on_finish: function(data) {
+    }
+    
 };
 
 const practice1SelectionTrial = {
@@ -1721,7 +1814,10 @@ const practice1SelectionTrial = {
     choices: function() {
         return practice1TrialIndex === 0 ? ['f'] : ['j'];
     },
+    on_load: function() {
+    },
     on_finish: function(data) {
+        
         // Get the key assignment for this trial
         const keyAssignment = {
             blue: jsPsych.data.get().last(1).values()[0].blue_key,
@@ -1844,6 +1940,10 @@ const instructions3 = {
         `;
     },
     choices: [' '], // Spacebar to continue
+    on_load: function() {
+    },
+    on_finish: function() {
+    }
 };
 
 const practiceFirstDayTrial = {
@@ -1859,6 +1959,8 @@ const practiceFirstDayTrial = {
     },
     choices: "NO_KEYS",
     trial_duration: 3000, // 
+    on_load: function() {
+    },
     on_finish: function() {
     }
 };
@@ -2056,9 +2158,12 @@ const instructions4 = {
     `,
     choices: "NO_KEYS", // Initially disable keypresses
     on_load: function() {
+
         // Show the current state of the grid for 1 second
         const gridContainer = document.getElementById('grid-container');
-        gridContainer.innerHTML = practice2Grid.createGridHTML(practice2TrialIndex, 'none', null, false); // Render the current state of the grid without cost display, nor any current paths
+        // gridContainer.innerHTML = practice2Grid.createGridHTML(practice2TrialIndex, 'none', null, false); // Render the current state of the grid without cost display, nor any current paths
+        const revealCosts = true; // Set to true to show costs
+        gridContainer.innerHTML = practice2Grid.createBlankGridHTML(practice2TrialIndex, revealCosts, false, 'observed'); // Render a blank grid
 
         const blackCover = document.createElement('div');
         blackCover.style.position = 'fixed';
@@ -2122,6 +2227,7 @@ const instructions5 = {
     },
     choices: "NO_KEYS", // Initially disable keypresses
     on_load: function() {
+
         // Create a container for the animation
         let transitionContainer = document.createElement('div');
         transitionContainer.style.position = 'fixed';
@@ -2175,6 +2281,8 @@ const instructions5 = {
                 allow_held_key: false
             });
         }, 1600);
+    },
+    on_finish: function() {
     }
 };
     
@@ -2184,11 +2292,13 @@ const instructions5 = {
 const instructions6 = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
-        const fontSize = "22px"; // Define font size as a variable
-        document.body.style.zoom = "75%";
+        const fontSize = "25px"; // Define font size as a variable
+        const zoomTmp = zoomFactor * 0.80
+        document.body.style.zoom = zoomTmp;
+        // document.body.style.zoom = "75%";
         return `
             <div class="instruction-section" style="margin: 10px;">
-            <h1>How do you figure out where intersections with tolls (or no tolls) are?</h1>
+            <h1>How can you predict which intersections have tolls (or no tolls)?</h1>
             <p style="font-size: ${fontSize};">Each city has particular traffic properties, such that the busy streets tend to be related to one another in one of two ways.</p>
             </div>
             <div class="instruction-section" style="margin: 10px;">
@@ -2206,24 +2316,31 @@ const instructions6 = {
     },
     choices: [' '], // Wait for spacebar to continue
     on_load: function() {
+
         const gridContainer = document.getElementById('grid-container');
         const revealCosts = true; // Set to true to show costs
         console.log("Rendering grid for practice3TrialIndex:", practice3TrialIndex);
         gridContainer.innerHTML = practice3Grid.createBlankGridHTML(practice3TrialIndex, revealCosts); // Render a blank grid
         practice3TrialIndex++;
     },
+    on_finish: function() {
+    }
 };
 
 // illustrate city change
 const instructions7 = {
     type: jsPsychHtmlKeyboardResponse,
-    stimulus: `
-        <div class="instruction-section" style="z-index: 2000; position: relative;">
-            <h1>How do you figure out where the intersections with tolls are?</h1>
-            <p>Each city has particular traffic properties, such that the busy streets tend to be related to one another in one of two ways.</p>
-    `,
+    stimulus: function() {
+        const fontSize = "25px"; // Define font size as a variable
+        return `
+            <div class="instruction-section" style="z-index: 2000; position: relative;">
+            <h1>How can you predict which intersections have tolls (or no tolls)?</h1>
+            <p style="font-size: ${fontSize};">Each city has particular traffic properties, such that the busy streets tend to be related to one another in one of two ways.</p>
+        `;
+    },
     choices: "NO_KEYS", // No keypress required
     on_load: function() {
+
         // Create a container for the animation
         let transitionContainer = document.createElement('div');
         transitionContainer.style.position = 'fixed';
@@ -2267,21 +2384,24 @@ const instructions7 = {
             jsPsych.finishTrial(); // Automatically move to the next trial
         }, 1600);
     },
+    on_finish: function() {
+    }
 };
 
 const instructions8 = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
+        const fontSize = "25px"; // Define font size as a variable
         return `
             <div class="instruction-section" style="z-index: 2000; position: relative;">
-                <h1>How do you figure out where the intersections with tolls are?</h1>
-                <p>Each city has particular traffic properties, such that the busy streets tend to be related to one another in one of two ways.</p>
+                <h1>How can you predict which intersections have tolls (or no tolls)?</h1>
+                <p style="font-size: ${fontSize};">Each city has particular traffic properties, such that the busy streets tend to be related to one another in one of two ways.</p>
             </div>
             <div class="instruction-section"> 
                 <h1>'Row cities'</h1>
-                <p>In row cities, the opposite is true: traffic tends to run from east to west every day, meaning that tolls tend to be clustered in rows.</p>
-                <p>That is, a row may have a lot of tolls, or not many tolls.</p>
-                <p>The locations of these busy rows may change each day, but the city will always have this row-dependent feature.</p>
+                <p style="font-size: ${fontSize};">In row cities, the opposite is true: traffic tends to run from east to west every day, meaning that tolls tend to be clustered in rows.</p>
+                <p style="font-size: ${fontSize};">That is, a row may have a lot of tolls, or not many tolls.</p>
+                <p style="font-size: ${fontSize};">The locations of these busy rows may change each day, but the city will always have this row-dependent feature.</p>
             </div>
             <div class="jobs-layout">
                 <div class="instruction-section" style="text-align: center;  font-size: 20px; color: #3a3a3a;">
@@ -2298,6 +2418,8 @@ const instructions8 = {
         gridContainer.innerHTML = practice4Grid.createBlankGridHTML(practice4TrialIndex, revealCosts); // Render a blank grid
         practice4TrialIndex++;
     },
+    on_finish: function() {
+    }
 };
 
 
@@ -2321,18 +2443,24 @@ const fullscreenTrial = {
 const instructionsReview = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
-        document.body.style.zoom = "100%";
+        // document.body.style.zoom = "100%";
+        document.body.style.zoom = zoomFactor;
         return `
             <div class="instruction-section">
                 <h1>Review Instructions</h1>
-                <p>We will now ask you a few questions to check your understanding of the task. Before doing so, you have the opportunity to review the instructions.</p>
-                <p>Would you like to see the instructions again?</p>
+                <p>We will now ask you a few questions to check your understanding of the task. Before doing so, you have the opportunity to review the instructions...</p>
+            </div>
+
+            <div class="instruction-section">
+                <h1>Would you like to see the instructions again?</h1>
                 <p>To review all the instructions from the beginning, press the backspace key.</p>
-                <p>If you feel ready to continue, please press the spacebar.</p>
+                <p>Otherwise, if you feel ready to continue, please press the spacebar.</p>
             </div>
         `;
     },
     choices: [' ', 'backspace'],
+    on_load: function() {
+    },
     on_finish: function(data) {
         if (data.response === 'backspace') {
             // Restart the experiment by reloading the page
@@ -2349,16 +2477,160 @@ const instructions9 = {
         return `
             <div class="instruction-section">
                 <h1>Bonus Payment</h1>
-                <p>Remember: your aim is to minimise the cost paid each day by predicting which intersections will incur a toll, and hence by selecting jobs that you think will be least costly.</p>
+                <p>Remember: your aim is to minimise the total cost paid each day by predicting which intersections will incur a toll, and hence by selecting jobs that you think will be least costly.</p>
                 <p>At the end of the experiment, we will assess your performance by assessing how well you chose jobs that were the least costly on a randomly selected set of days and cities. This will determine how much bonus payment you receive.</p>
                 <p>So, you should pay attention throughout the experiment - i.e. on every day, and in every city.</p>
-                <p>Remember also: you will have 7 seconds to select a job once the current dispatch turns yellow, otherwise the trial will timeout and you will pay a fine of <span style="color: #f87171;">$10</span>. If you timeout too many times, the experiment will end and you will return to Prolific.</p>
-                <p>When you are ready to begin the experiment, press the spacebar.</p>
+                <p>Remember also: you will have 7 seconds to select a job once the current dispatch turns yellow, otherwise the trial will timeout and you will pay a toll of <span style="color: #f87171;">$10</span>. If you timeout too many times, the experiment will end and you will return to Prolific.</p>
+            </div>
+
+            <div class="instruction-section">
+                <h2>When you are ready to begin the experiment, press the spacebar.</h2>
             </div>
         `;
     },
     choices: [' '], // Spacebar to continue
+    on_load: function() {
+    },
+    on_finish: function(data) {
+    }
 };
+
+function create_need_for_cognition(){
+
+    const space_bar_message = "<p>[Press the space bar to continue.]</p>";
+  
+    const NFC_instructs = `
+        <div class="jspsych-survey-multi-choice-question">
+        <h2 style="font-size: 30;"> <span style="color: #ece75d;">For each of the statements below, please indicate whether or not the statement is characteristic of you or of what you believe.</span></h2>
+        <h2 style="font-size: 30;"> <span style="color: #ece75d;">Note: you may need to scroll to see all of the questions.</span></h2>
+        </div>`;
+
+  
+    var options = ["extremely uncharacteristic of me", "somewhat uncharacteristic of me", "uncertain", "somewhat characteristic of me", "extremely characteristic of me"];
+  
+    //var standards = {options: options, required:false, horizontal:true};
+    var question_list = ["1. I prefer complex to simple problems.",
+      "2. I like to have the responsibility of handling a situation that requires a lot of thinking.",
+      "3. Thinking is not my idea of fun.",
+      "4. I would rather do something that requires little thought than something that is sure to challenge my thinking abilities.",
+      "5. I try to anticipate and avoid situations where there is a likely chance I will have to think in depth about something.",
+      "6. I find satisfaction in deliberating hard and for long hours.",
+      "7. I only think as hard as I have to.",
+      "8. I prefer to think about small daily projects to long term ones.",
+      "9. I like tasks that require little thought once I've learned them.",
+      "10. The idea of relying on thought to make my way to the top appeals to me.",
+      "11. I really enjoy a task that involves coming up with new solutions to problems.",
+      "12. Learning new ways to think doesn't excite me very much.",
+      "13. I prefer my life to be filled with puzzles I must solve.",
+      "14. The notion of thinking abstractly is appealing to me.",
+      "15. I would prefer a task that is intellectual, difficult, and important to one that is somewhat important but does not require much thought.",
+      "16. I feel relief rather than satisfaction after completing a task that requires a lot of mental effort.",
+      "17. It's enough for me that something gets the job done; I don't care how or why it works.",
+      "18. I usually end up deliberating about issues even when they do not affect me personally."]
+  
+      // make a list of dictionaries [{},{},{}] with standard settings
+  
+    const npages = 3;  
+    const ends = [question_list.length/npages, 2*(question_list.length/npages), question_list.length];
+    const formattedqs1 = [];
+    for(var q=0; q<ends[0]; q++){
+      formattedqs1.push({prompt: "<strong>" + question_list[q] + "</strong>", options: options, required:false, horizontal:true, name:"NFC"+question_list[q][0]+question_list[q][1]});
+    }
+    //add a Screener question
+    formattedqs1.push({prompt: "<strong>7. Please select 'extremely characteristic of me' if you've read this question.</strong>", options: options, required:false, horizontal:true,name:'screener'})
+    const formattedqs2 = [];
+    for(var q=ends[0]; q<ends[1]; q++){
+      formattedqs2.push({prompt: "<strong>" + question_list[q] + "</strong>", options: options, required:false, horizontal:true, name:"NFC"+question_list[q][0]+question_list[q][1]});
+    }
+    const formattedqs3 = [];
+    for(var q=ends[1]; q<ends[2]; q++){
+      formattedqs3.push({prompt: "<strong>" + question_list[q] + "</strong>", options: options, required:false, horizontal:true, name:"NFC"+question_list[q][0]+question_list[q][1]});
+    }
+      // standards['prompt'] = "This is a question?"
+  
+    // Define the NFC questionnaires with background color change
+    var NFC1 = {
+        timeline: [{
+            type: jsPsychSurveyMultiChoice,
+            questions: formattedqs1,
+            preamble: NFC_instructs,
+            data: { task: 'NFC' },
+            on_load: function() {
+                // Clear any existing background styles before applying a new one
+                document.body.style.backgroundImage = '';
+                document.body.style.backgroundSize = '';
+                document.body.style.backgroundPosition = '';
+                document.body.style.backgroundRepeat = '';
+                document.body.style.backgroundColor = "black"; // Change background to black
+
+                // Allow scrolling now
+                document.body.style.overflowY = "auto";
+                document.documentElement.style.overflowY = "auto";
+            },
+            on_finish: function(data) {
+                Object.assign(data, data.response);  // Adds each response directly to the trial data
+                delete data.response;
+                document.body.style.backgroundColor = "";
+            }            
+        }]
+    };
+
+    var NFC2 = {
+        timeline: [{
+            type: jsPsychSurveyMultiChoice,
+            questions: formattedqs2,
+            preamble: NFC_instructs,
+            data: { task: 'NFC' },
+            on_load: function() {
+                // Clear any existing background styles before applying a new one
+                document.body.style.backgroundImage = '';
+                document.body.style.backgroundSize = '';
+                document.body.style.backgroundPosition = '';
+                document.body.style.backgroundRepeat = '';
+                document.body.style.backgroundColor = "black"; // Change background to black
+
+                // Allow scrolling now
+                document.body.style.overflowY = "auto";
+                document.documentElement.style.overflowY = "auto";
+            },
+            on_finish: function(data) {
+                Object.assign(data, data.response);  // Adds each response directly to the trial data
+                delete data.response;
+                document.body.style.backgroundColor = "";
+            }            
+        }]
+    };
+
+    var NFC3 = {
+        timeline: [{
+            type: jsPsychSurveyMultiChoice,
+            questions: formattedqs3,
+            preamble: NFC_instructs,
+            data: { task: 'NFC' },
+            on_load: function() {
+                // Clear any existing background styles before applying a new one
+                document.body.style.backgroundImage = '';
+                document.body.style.backgroundSize = '';
+                document.body.style.backgroundPosition = '';
+                document.body.style.backgroundRepeat = '';
+                document.body.style.backgroundColor = "black"; // Change background to black
+
+                // Allow scrolling now
+                document.body.style.overflowY = "auto";
+                document.documentElement.style.overflowY = "auto";
+            },
+            on_finish: function(data) {
+                Object.assign(data, data.response);  // Adds each response directly to the trial data
+                delete data.response;
+                document.body.style.backgroundColor = "";
+            }            
+        }]
+    };
+
+    let questionnaireTimeline;
+    return questionnaireTimeline = [NFC1, NFC2, NFC3];
+  
+  };
 
 // Create timeline
 function createTimeline() {
@@ -2374,52 +2646,53 @@ function createTimeline() {
     timeline.push(instructions1);
 
     // // Practice selection
-    // timeline.push(instructions2);
-    // timeline.push(practice1SelectionTrial);
-    // timeline.push(practice1AnimationTrial);
-    // timeline.push(practice1SelectionTrial);
-    // timeline.push(practice1AnimationTrial);
+    timeline.push(instructions2);
+    timeline.push(instructions2_5);
+    timeline.push(practice1SelectionTrial);
+    timeline.push(practice1AnimationTrial);
+    timeline.push(practice1SelectionTrial);
+    timeline.push(practice1AnimationTrial);
 
-    // // Practice a full day
-    // timeline.push(instructions3);
-    // timeline.push(practiceFirstDayTrial);
-    // for (let i = 0; i < grid.nTrials; i++) {
-    //     timeline.push(practice2PreSelectionTrial);
-    //     timeline.push(practice2SelectionTrial);
-    //     timeline.push(practice2AnimationTrial);
-    // }
-    // timeline.push(practiceGridFeedback);
+    // Practice a full day
+    timeline.push(instructions3);
+    timeline.push(practiceFirstDayTrial);
+    for (let i = 0; i < grid.nTrials; i++) {
+        timeline.push(practice2PreSelectionTrial);
+        timeline.push(practice2SelectionTrial);
+        timeline.push(practice2AnimationTrial);
+    }
+    timeline.push(practiceGridFeedback);
 
-    // // Animation to show grid resetting, and then another day
-    // timeline.push(instructions4);
-    // timeline.push(practiceFirstDayTrial);
-    // for (let i = 0; i < grid.nTrials; i++) {
-    //     timeline.push(practice2PreSelectionTrial);
-    //     timeline.push(practice2SelectionTrial);
-    //     timeline.push(practice2AnimationTrial);
-    // }
-    // timeline.push(practiceGridFeedback);
+    // Animation to show grid resetting, and then another day
+    timeline.push(instructions4);
+    timeline.push(practiceFirstDayTrial);
+    for (let i = 0; i < grid.nTrials; i++) {
+        timeline.push(practice2PreSelectionTrial);
+        timeline.push(practice2SelectionTrial);
+        timeline.push(practice2AnimationTrial);
+    }
+    timeline.push(practiceGridFeedback);
 
-    // // New city animation
-    // timeline.push(instructions5);
+    // New city animation
+    timeline.push(instructions5);
 
-    // for (let i = 1; i <= grid.nGrids; i++) {
-    //     timeline.push(instructions6);
-    // }
-    // timeline.push(instructions7);
-    // for (let i = 1; i <= grid.nGrids; i++) {
-    //     timeline.push(instructions8);
-    // }
+    for (let i = 1; i <= grid.nGrids; i++) {
+        timeline.push(instructions6);
+    }
+    timeline.push(instructions7);
+    for (let i = 1; i <= grid.nGrids; i++) {
+        timeline.push(instructions8);
+    }
 
-    // // Add the option to review the instructions
-    // timeline.push(instructionsReview);
+    // Add the option to review the instructions
+    timeline.push(instructionsReview);
     
-    // // Understanding checks
-    // const quizTrials = createQuizTrials(jsPsych);
-    // timeline.push(...quizTrials);
+    // Understanding checks
+    const quizTrials = createQuizTrials(jsPsych);
+    timeline.push(...quizTrials);
 
-    // // bonus message
-    // timeline.push(instructions9)
+    // bonus message
+    timeline.push(instructions9)
 
     // Add the first grid message
     timeline.push(firstGridMessage);
@@ -2441,46 +2714,19 @@ function createTimeline() {
         timeline.push(pathSelectionTrial);
         timeline.push(pathAnimationTrial);
     }
+
     // Add the end and bonus message
     timeline.push(end);
     timeline.push(bonus);
+    
+    // questionnaire
+    timeline.push(preQuestionnaire);
+    var NFC_timeline = {
+        timeline: create_need_for_cognition(),  
+      } 
+    timeline.push(NFC_timeline);
+
     return timeline;
-}
-
-function downloadTrialData() {
-    // Get all path selection trial data
-    const pathData = jsPsych.data.get().filter({trial_type: 'html-keyboard-response'}).values();
-    
-    // Format the data for CSV
-    const trialData = pathData.map(trial => {
-        // Only include trials where a choice was made
-        if (trial.choice) {
-            if (trial.choice) {
-                return trial; // Return the entire trial object
-            }
-        }
-        return null;
-    }).filter(item => item !== null);
-
-    // Convert the data to CSV format
-    const csvHeaders = "trial,city,grid_id,path_chosen,button_pressed,reaction_time_ms,context,grid,cityID,path_A_expected_cost,path_B_expected_cost,path_A_actual_cost,path_B_actual_cost,path_A_future_overlap,path_B_future_overlap,abstract_sequence_A,abstract_sequence_B,dominant_axis_A,dominant_axis_B,better_path,chose_better_path\n";
-    const csvRows = trialData.map(trial => 
-        `${trial.trial},${trial.city},${trial.grid_id},${trial.path_chosen},${trial.button_pressed},${trial.reaction_time_ms},${trial.context},${trial.grid},${trial.cityID},${trial.path_A_expected_cost},${trial.path_B_expected_cost},${trial.path_A_actual_cost},${trial.path_B_actual_cost},${trial.path_A_future_overlap},${trial.path_B_future_overlap},"${trial.abstract_sequence_A}","${trial.abstract_sequence_B}",${trial.dominant_axis_A}",${trial.dominant_axis_B}",${trial.better_path},${trial.chose_better_path}`
-    ).join("\n");
-    const csvContent = csvHeaders + csvRows;
-
-    // Create a Blob with the CSV data
-    const dataBlob = new Blob([csvContent], {type: 'text/csv'});
-    
-    // Create a download link and trigger it
-    const url = URL.createObjectURL(dataBlob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'path_selection_data.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
 }
 
 // Start experiment when the page loads
