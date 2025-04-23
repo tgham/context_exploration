@@ -1378,6 +1378,50 @@ const practiceGridFeedback = {
 choices: [' '], // spacebar to continue
 };
 
+const timeoutCheck = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        // Get the current city ID and the previous city ID
+        const currentCityId = grid.getCurrentCity();
+        const previousCityId = currentCityId - 1;
+
+        // Retrieve all trials from the previous city
+        const previousCityTrials = jsPsych.data.get().filterCustom(function(trial) {
+            return trial.city === previousCityId;
+        });
+
+        // Count the number of timeouts (where choice is 'nan')
+        const timeouts = previousCityTrials.filter(trial => trial.choice === 'nan').count();
+        console.log(`Number of timeouts in city ${previousCityId}:`, timeouts);
+
+        // Check if the number of timeouts exceeds the threshold
+        const nTrials = grid.nTrials;
+        const nGrids = grid.nGrids;
+        const nTrialsPerCity = nTrials * nGrids;
+        const threshold = Math.floor(0.3 * nTrialsPerCity);
+        console.log(`Threshold for timeouts: ${threshold}`);
+
+        if (timeouts > threshold) {
+            console.log(`Participant failed due to high number of timeouts in city ${previousCityId}`);
+            setTimeout(() => {
+                // window.location.href = "YOUR_REDIRECT_URL_HERE"; // Replace with your URL
+                window.location.replace("error.html");
+            }, 5000); // Redirect after 5 seconds
+            return `
+                <div class="error-message">
+                    <h2>Experiment Failed</h2>
+                    <p>You have timed out too many times in the previous city. Unfortunately, you cannot continue with the experiment.</p>
+                    <p>You will now be redirected to Prolific.</p>
+                </div>
+            `;
+        } else {
+            // If successful, just end the trial
+            jsPsych.finishTrial();
+            return null;
+        }
+    },
+    choices: "NO_KEYS", // Disable keypresses
+};
 
 const newCityMessage = {
     type: jsPsychHtmlKeyboardResponse,
@@ -2411,6 +2455,7 @@ function createTimeline() {
                  timeline.push(newDayMessage);
                 // add new grid message if the city changes, i.e. if i is a multiple of nTrials*nGrids
                 if (i % (grid.nTrials * grid.nGrids) === 0) {
+                    timeline.push(timeoutCheck);
                     timeline.push(newCityMessage);
                 }
             }
