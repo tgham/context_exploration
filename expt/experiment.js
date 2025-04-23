@@ -140,7 +140,7 @@ const informedConsentForm = `
 
 const dataProtectionForm = `
 <div style="max-width: 800px; margin: auto; padding: 20px; font-family: Arial, sans-serif; line-height: 1.6; text-align: left;">
-    <h2 style="text-align: center; color:rgb(255, 255, 255);">Data Protection Form for Online Experiments on Cognitive Control</h2>
+    <h2 style="text-align: center; color: #2C3E50;">Data Protection Form for Online Experiments on Cognitive Control</h2>
     <p>Please click <a href="./data-protection-form.pdf" style="color: #2980B9;">here</a> to view our Data Protection Information Sheet. It is yours to keep.</p>
     <p>I have received and taken note of the Data Protection Information Sheet for this study. In doing so, I had sufficient time and opportunity to ask questions about data protection and reconsider my participation in the study. I am aware that:</p>
     <ul style="margin: 20px 0; padding-left: 20px;">
@@ -223,7 +223,7 @@ const dataProtectionTrial = {
         document.getElementById('data-consent-rescinded').addEventListener('click', () => {
             jsPsych.abortExperiment('You chose not to consent to data protection terms. Please return your submission on Prolific.');
         });
-    },
+    }
 };
 
 
@@ -1788,6 +1788,8 @@ function calculateBonus() {
 }
 
 
+// ...existing code...
+
 // First instruction page
 const instructions1 = {
     type: jsPsychHtmlKeyboardResponse,
@@ -1807,10 +1809,9 @@ const instructions1 = {
     on_load: function() {
 
         // appropriate zooming
-        // document.body.style.overflow = "hidden";
-        // document.documentElement.style.overflow = "hidden";
+        document.body.style.overflowY = "hidden";
+        document.documentElement.style.overflowY = "hidden";
         applyScreenScaling();
-
 
         // Set initial city background to 'practice1.png'
         setCityBackground('practice1');
@@ -2542,6 +2543,7 @@ const fullscreenTrial = {
     `,
     choices: ["Enter"], // Listens for the Enter key
     on_finish: function() {
+        window.scrollTo(0, 0); // Scrolls to the top of the page
         document.documentElement.requestFullscreen(); // Forces full-screen mode
     }
 };
@@ -2744,15 +2746,13 @@ function createTimeline() {
     
     const timeline = [];
 
-    
+    timeline.push(informedConsentTrial);
+    timeline.push(dataProtectionTrial);
+
     // city assignments
     const numCities = data.env_costs.n_cities; // Assuming this is the number of cities
     createCityMapping(numCities);
-    
-    // consent
-    timeline.push(informedConsentTrial);
-    timeline.push(dataProtectionTrial);
-    
+
     // Welcome message
     timeline.push(fullscreenTrial);
     timeline.push(instructions1);
