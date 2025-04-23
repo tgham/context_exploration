@@ -893,16 +893,6 @@ class Grid {
     }
 }
 
-// rename sequence to data, and then use this to generate the grid
-// let grid;
-// let data;
-// data = sequence;
-// let currentTrialIndex = 0;
-// grid = new Grid(data); // Initialize the Grid class with the loaded data
-// const numCities = data.env_costs.n_cities; // Assuming this is the number of cities
-// createCityMapping(numCities);
-// console.log('Grid data loaded:', grid);
-// console.log('City mapping created:', cityMapping);
 
 // Function to load practice grid data
 function loadPracticeGrid(filePath, gridVariableName) {
@@ -916,20 +906,25 @@ function loadPracticeGrid(filePath, gridVariableName) {
     .catch(error => console.error(`Error loading ${gridVariableName} JSON:`, error));
 }
 
-// Load practice grids
-let practice1Grid, practice2Grid, practice3Grid, practice4Grid;
-let practice1TrialIndex = 0, practice2TrialIndex = 0, practice3TrialIndex = 0, practice4TrialIndex = 0;
+// (re-)initialize the practice grids
+function initPractice() {
+    let practice1Grid, practice2Grid, practice3Grid, practice4Grid;
+    let practice1TrialIndex = 0, practice2TrialIndex = 0, practice3TrialIndex = 0, practice4TrialIndex = 0;
 
-Promise.all([
-    loadPracticeGrid('assets/trial_sequences/practice_sequence1.json', 'practice1Grid').then(grid => practice1Grid = grid),
-    loadPracticeGrid('assets/trial_sequences/practice_sequence2.json', 'practice2Grid').then(grid => practice2Grid = grid),
-    loadPracticeGrid('assets/trial_sequences/practice_sequence3.json', 'practice3Grid').then(grid => practice3Grid = grid),
-    loadPracticeGrid('assets/trial_sequences/practice_sequence4.json', 'practice4Grid').then(grid => practice4Grid = grid)
-]).then(() => {
-    console.log('Both practice grids loaded successfully.');
-}).catch(error => {
-    console.error('Error loading practice grids:', error);
-});
+    return Promise.all([
+        loadPracticeGrid('assets/trial_sequences/practice_sequence1.json', 'practice1Grid').then(grid => practice1Grid = grid),
+        loadPracticeGrid('assets/trial_sequences/practice_sequence2.json', 'practice2Grid').then(grid => practice2Grid = grid),
+        loadPracticeGrid('assets/trial_sequences/practice_sequence3.json', 'practice3Grid').then(grid => practice3Grid = grid),
+        loadPracticeGrid('assets/trial_sequences/practice_sequence4.json', 'practice4Grid').then(grid => practice4Grid = grid)
+    ]).then(() => {
+        console.log('All practice grids loaded successfully.');
+        return { practice1Grid, practice2Grid, practice3Grid, practice4Grid, practice1TrialIndex, practice2TrialIndex, practice3TrialIndex, practice4TrialIndex };
+    }).catch(error => {
+        console.error('Error loading practice grids:', error);
+        throw error;
+    });
+}
+
 
 
 // Function to create a random mapping of city IDs
@@ -1815,7 +1810,9 @@ const instructions1 = {
         // Set initial city background to 'practice1.png'
         setCityBackground('practice1');
         grid.currentCity = 'practice1'; // Initialize the current city
-    }  
+    },
+    on_finish: function() {
+    }
 };
 
 const instructions2 = {
@@ -1838,6 +1835,7 @@ const instructions2 = {
     },
     choices: [' '], // Spacebar to continue
     on_load: function() {
+        initPractice(); // Initialize the grid for practice1
     },
     on_finish: function(data) {
     }
@@ -2739,11 +2737,21 @@ function create_need_for_cognition(){
   
   };
 
-// Create timeline
-function createTimeline() {
+// Create timelines
+
+function createEthicsTimeline() {
+    const timeline = [];
+    // Informed consent
+    timeline.push(informedConsentTrial);
+    timeline.push(dataProtectionTrial);
+    timeline.push(fullscreenTrial);
+
+    return timeline
+}
+
+function createInstructionsTimeline() {
     
     const timeline = [];
-
     
     // city assignments
     const numCities = data.env_costs.n_cities; // Assuming this is the number of cities
@@ -2806,6 +2814,12 @@ function createTimeline() {
     // bonus message
     timeline.push(instructions9)
 
+    return timeline
+}
+
+function createMainTimeline() {
+    const timeline = [];
+
     // Add the first grid message
     timeline.push(firstGridMessage);
 
@@ -2844,9 +2858,16 @@ function createTimeline() {
 // Start experiment when the page loads
 function initializeExperiment() {
 
+    // ethics
+    const ethicsTimeline = createEthicsTimeline();
+    jsPsych.run(ethicsTimeline);
 
-    // Run the instruction timeline first
-    const timeline = createTimeline();
+    // instructions
+    const instructionTimeline = createInstructionsTimeline();
+    jsPsych.run(instructionTimeline);
+
+
+    // run the main
+    const mainTimeline = createMainTimeline();
     jsPsych.run(timeline);
-
 }
