@@ -4,7 +4,12 @@ const jsPsych = initJsPsych({
         var ppt_data = jsPsych.data.get().json();
         send_complete(subject_id, ppt_data);
         console.log('experiment complete');
-        // window.location.replace("error.html"); // REPLACE WITH PROLIFIC URL
+        if (bonusAchieved){
+            window.location.replace("https://app.prolific.com/submissions/complete?cc=C19WDNCC");
+        } else{
+            window.location.replace("https://app.prolific.com/submissions/complete?cc=C1HB0QAK");
+        }
+        
     }
 });
 
@@ -16,7 +21,7 @@ let subject_id = null;
 let sequence = null;
 let data = null;
 let grid = null;
-let currentTrialIndex = 0;
+// let currentTrialIndex = 0;
 
 // just test with this...
 if (test) {
@@ -89,6 +94,51 @@ function playCostSound() {
     }
 }
 
+// Global object to store preloaded images
+const preloadedImages = {};
+
+// Function to preload images
+function preloadImages(imagePaths) {
+    return Promise.all(
+        imagePaths.map(path => {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.src = path;
+
+                // Set attributes for the image
+                if (path.includes('blue_person.png')) {
+                    img.alt = "Blue Start";
+                    img.width = 25;
+                    img.height = 25;
+                } else if (path.includes('green_person.png')) {
+                    img.alt = "Green Start";
+                    img.width = 25;
+                    img.height = 25;
+                }
+
+                img.onload = () => {
+                    preloadedImages[path] = img; // Store the loaded image
+                    resolve();
+                };
+                img.onerror = reject;
+            });
+        })
+    ).then(() => {
+        console.log('All images preloaded successfully.');
+    }).catch(error => {
+        console.error('Error preloading images:', error);
+        throw error;
+    });
+}
+
+// Preload the images at the start
+preloadImages([
+    'assets/people/blue_person.png',
+    'assets/people/green_person.png'
+]).then(() => {
+    console.log('Avatars are ready for use.');
+});
+
 // Function to calculate and apply the scaling factor
 let zoomFactor;
 function applyScreenScaling() {
@@ -125,7 +175,7 @@ const informedConsentForm = `
             <li>Fluent speaker of English.</li>
             <li>Have not previously participated in this experiment.</li>
         </ul>
-        <p>This study is designed to look at how people learn to make decisions to accomplish their goals. In this task, you will be asked to make choices, play games, and answer questions related to those games. The study will take about 40 minutes and will pay £5.4 plus a performance-dependent bonus of up to a maximum of £2. The performance bonus is explained in more detail in the instructions that follow.</p>
+        <p>This study is designed to look at how people learn to make decisions to accomplish their goals. In this task, you will be asked to make choices, play games, and answer questions related to those games. The study will take about 40 minutes and will pay £6 plus a performance-dependent bonus of £2. The performance bonus is explained in more detail in the instructions that follow.</p>
         <p>Your participation in this research is voluntary. You may refrain from answering any questions that make you uncomfortable and may withdraw your participation at any time without penalty by exiting this task and alerting the experimenter. You may choose not to complete certain parts of the task or answer certain questions. You may contact us at the address provided below if you have additional questions or concerns.</p>
         <p>Other than monetary compensation, participating in this study will provide no direct benefits to you. But we hope that this research will benefit society at large by contributing towards establishing a scientific foundation for improving people’s learning and cognitive control abilities.</p>
         <p>Your online username may be connected to your individual responses, but we will not be asking for any additional personally identifying information, and we will handle responses as confidentially as possible. We cannot however guarantee the confidentiality of information transmitted over the Internet. We will be keeping de-identified data collected as part of this experiment indefinitely. Data used in scientific publications will remain completely anonymous.</p>
@@ -141,7 +191,7 @@ const informedConsentForm = `
 const dataProtectionForm = `
 <div style="max-width: 800px; margin: auto; padding: 20px; font-family: Arial, sans-serif; line-height: 1.6; text-align: left;">
     <h2 style="text-align: center; color:rgb(255, 255, 255);">Data Protection Form for Online Experiments on Cognitive Control</h2>
-    <p>Please click <a href="./data-protection-form.pdf" style="color: #2980B9;">here</a> to view our Data Protection Information Sheet. It is yours to keep.</p>
+    <p>Please click <a href="data-protection-form.pdf" target="_blank" style="color: #2980B9;">here</a> to view our Data Protection Information Sheet. It is yours to keep.</p>
     <p>I have received and taken note of the Data Protection Information Sheet for this study. In doing so, I had sufficient time and opportunity to ask questions about data protection and reconsider my participation in the study. I am aware that:</p>
     <ul style="margin: 20px 0; padding-left: 20px;">
         <li>The processing and use of the collected data occurs in a pseudoanonymised form within the scope of the legally prescribed provisions. As a general rule, the storage occurs in the form of answered questionnaires, as well as electronic data, for a duration of 10 years or longer, if this is required by the purpose of the study.</li>
@@ -326,6 +376,11 @@ class Grid {
         gridHTML += `
                 <div class="grid-container" style="grid-template-columns: repeat(${gridSize}, 40px); background-color: #ece75d;">
         `;
+
+        // preload avatars
+        const bluePerson = preloadedImages['assets/people/blue_person.png'];
+        const greenPerson = preloadedImages['assets/people/green_person.png'];
+
     
         for (let row = 0; row < gridSize; row++) {
             for (let col = 0; col < gridSize; col++) {
@@ -383,13 +438,13 @@ class Grid {
                 }
     
                 if (isStartA) {
-                    gridHTML += `<div class="grid-cell start blue-path ${observedClass}" id="${cellId}">
-                                    <img src="assets/people/blue_person.png" alt="Blue Start" width="30" height="30">
-                                 </div>`;
+                    gridHTML += `<div class="grid-cell start blue-path ${observedClass}" id="${cellId}">`;
+                    gridHTML += bluePerson.outerHTML; // Use the HTML string representation of the preloaded blue person image
+                    gridHTML += `</div>`;
                 } else if (isStartB) {
-                    gridHTML += `<div class="grid-cell start green-path ${observedClass}" id="${cellId}">
-                                    <img src="assets/people/green_person.png" alt="Green Start" width="30" height="30">
-                                 </div>`;
+                    gridHTML += `<div class="grid-cell start green-path ${observedClass}" id="${cellId}">`;
+                    gridHTML += greenPerson.outerHTML; // Use the HTML string representation of the preloaded green person image
+                    gridHTML += `</div>`;
                 } else if (isGoalA) {
                     gridHTML += `<div class="grid-cell goal blue-path ${observedClass}" id="${cellId}">🏠</div>`;
                 } else if (isGoalB) {
@@ -577,6 +632,10 @@ class Grid {
                     <div class="upcoming-jobs-actual-container">
         `;
 
+        // preload avatars
+        const bluePerson = preloadedImages['assets/people/blue_person.png'];
+        const greenPerson = preloadedImages['assets/people/green_person.png'];
+
         for (let i = 1; i <= remainingTrialsInGrid; i++) {
             const previewIndex = currentTrialIndex + i;
             const trial = this.getTrialInfo(previewIndex);
@@ -615,13 +674,13 @@ class Grid {
                     }
 
                     if (isStartA) {
-                        upcomingHTML += `<div class="upcoming-cell ${observedClass} blue-path" data-row="${row}" data-col="${col}">
-                                            <img src="assets/people/blue_person.png" alt="Blue Start" width="23" height="23">
-                                         </div>`;
+                        upcomingHTML += `<div class="upcoming-cell ${observedClass} blue-path" data-row="${row}" data-col="${col}">`;
+                        upcomingHTML += bluePerson.outerHTML; // Use the preloaded blue person image
+                        upcomingHTML += `</div>`;
                     } else if (isStartB) {
-                        upcomingHTML += `<div class="upcoming-cell ${observedClass} green-path" data-row="${row}" data-col="${col}">
-                                            <img src="assets/people/green_person.png" alt="Green Start" width="23" height="23">
-                                         </div>`;
+                        upcomingHTML += `<div class="upcoming-cell ${observedClass} green-path" data-row="${row}" data-col="${col}">`;
+                        upcomingHTML += greenPerson.outerHTML; // Use the preloaded green person image
+                        upcomingHTML += `</div>`;
                     } else if (isGoalA || isGoalB || isPathA || isPathB || isOverlap) {
                         upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" data-row="${row}" data-col="${col}" style="font-size: 1.5rem;">
                                             ${isGoalA || isGoalB ? '🏠' : content}
@@ -760,6 +819,10 @@ class Grid {
                         `;
             }
 
+            // preload avatars
+            const bluePerson = preloadedImages['assets/people/blue_person.png'];
+            const greenPerson = preloadedImages['assets/people/green_person.png'];
+
             for (let row = 0; row < this.gridSize; row++) {
                 for (let col = 0; col < this.gridSize; col++) {
                     const cellId = `cell-${row}-${col}-trial-${trial.trial}`;
@@ -842,33 +905,33 @@ class Grid {
 
                     if (previewIndex < currentTrialIndex || feedback) {
                         if (isStartA) {
-                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass} blue-path" id="${cellId}" data-row="${row}" data-col="${col}">
-                                                <img src="assets/people/blue_person.png" alt="Blue Start" width="23" height="23">
-                                             </div>`;
+                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass} blue-path" id="${cellId}" data-row="${row}" data-col="${col}">`;
+                            upcomingHTML += bluePerson.outerHTML; // Use the preloaded blue person image
+                            upcomingHTML += `</div>`;
                         } else if (isStartB) {
-                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass} green-path" id="${cellId}" data-row="${row}" data-col="${col}">
-                                                <img src="assets/people/green_person.png" alt="Green Start" width="23" height="23">
-                                             </div>`;
+                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass} green-path" id="${cellId}" data-row="${row}" data-col="${col}">`;
+                            upcomingHTML += greenPerson.outerHTML; // Use the preloaded green person image
+                            upcomingHTML += `</div>`;
                         } else if (isGoalA || isGoalB || isPathA || isPathB || isOverlap) {
-                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.6rem;">
-                                                ${isGoalA || isGoalB ? '🏠' : content}
-                                             </div>`;
+                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.5rem;">`;
+                            upcomingHTML += isGoalA || isGoalB ? '🏠' : content;
+                            upcomingHTML += `</div>`;
                         } else {
                             upcomingHTML += `<div class="upcoming-cell-done ${observedClass}" id="${cellId}" data-row="${row}" data-col="${col}"></div>`;
                         }
                     } else {
                         if (isStartA) {
-                            upcomingHTML += `<div class="upcoming-cell ${observedClass} blue-path" id="${cellId}" data-row="${row}" data-col="${col}">
-                                                <img src="assets/people/blue_person.png" alt="Blue Start" width="23" height="23">
-                                             </div>`;
+                            upcomingHTML += `<div class="upcoming-cell ${observedClass} blue-path" id="${cellId}" data-row="${row}" data-col="${col}">`;
+                            upcomingHTML += bluePerson.outerHTML; // Use the preloaded blue person image
+                            upcomingHTML += `</div>`;
                         } else if (isStartB) {
-                            upcomingHTML += `<div class="upcoming-cell ${observedClass} green-path" id="${cellId}" data-row="${row}" data-col="${col}">
-                                                <img src="assets/people/green_person.png" alt="Green Start" width="23" height="23">
-                                             </div>`;
+                            upcomingHTML += `<div class="upcoming-cell ${observedClass} green-path" id="${cellId}" data-row="${row}" data-col="${col}">`;
+                            upcomingHTML += greenPerson.outerHTML; // Use the preloaded green person image
+                            upcomingHTML += `</div>`;
                         } else if (isGoalA || isGoalB || isPathA || isPathB || isOverlap) {
-                            upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.6rem;">
-                                                ${isGoalA || isGoalB ? '🏠' : content}
-                                             </div>`;
+                            upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.5rem;">`;
+                            upcomingHTML += isGoalA || isGoalB ? '🏠' : content;
+                            upcomingHTML += `</div>`;
                         } else {
                             upcomingHTML += `<div class="upcoming-cell ${observedClass}" id="${cellId}" data-row="${row}" data-col="${col}"></div>`;
                         }
@@ -906,38 +969,38 @@ function loadPracticeGrid(filePath, gridVariableName) {
     .catch(error => console.error(`Error loading ${gridVariableName} JSON:`, error));
 }
 
-// (re-)initialize the practice grids
-// function initPractice() {
-//     let practice1Grid, practice2Grid, practice3Grid, practice4Grid;
-//     let practice1TrialIndex = 0, practice2TrialIndex = 0, practice3TrialIndex = 0, practice4TrialIndex = 0;
-
-//     return Promise.all([
-//         loadPracticeGrid('assets/trial_sequences/practice_sequence1.json', 'practice1Grid').then(grid => practice1Grid = grid),
-//         loadPracticeGrid('assets/trial_sequences/practice_sequence2.json', 'practice2Grid').then(grid => practice2Grid = grid),
-//         loadPracticeGrid('assets/trial_sequences/practice_sequence3.json', 'practice3Grid').then(grid => practice3Grid = grid),
-//         loadPracticeGrid('assets/trial_sequences/practice_sequence4.json', 'practice4Grid').then(grid => practice4Grid = grid)
-//     ]).then(() => {
-//         console.log('All practice grids loaded successfully.');
-//         return { practice1Grid, practice2Grid, practice3Grid, practice4Grid, practice1TrialIndex, practice2TrialIndex, practice3TrialIndex, practice4TrialIndex };
-//     }).catch(error => {
-//         console.error('Error loading practice grids:', error);
-//         throw error;
-//     });
-// }
-// Load practice grids
+// Declare global variables for practice grids and trial indices
 let practice1Grid, practice2Grid, practice3Grid, practice4Grid;
-let practice1TrialIndex = 0, practice2TrialIndex = 0, practice3TrialIndex = 0, practice4TrialIndex = 0;
+let practice1TrialIndex = 0, practice2TrialIndex = 0, practice3TrialIndex = 0, practice4TrialIndex = 0; 
+let currentTrialIndex = 0;
+let totalCost = 0; // Keeps track of total cost across trials
 
-Promise.all([
-    loadPracticeGrid('assets/trial_sequences/practice_sequence1.json', 'practice1Grid').then(grid => practice1Grid = grid),
-    loadPracticeGrid('assets/trial_sequences/practice_sequence2.json', 'practice2Grid').then(grid => practice2Grid = grid),
-    loadPracticeGrid('assets/trial_sequences/practice_sequence3.json', 'practice3Grid').then(grid => practice3Grid = grid),
-    loadPracticeGrid('assets/trial_sequences/practice_sequence4.json', 'practice4Grid').then(grid => practice4Grid = grid)
-]).then(() => {
-    console.log('Both practice grids loaded successfully.');
-}).catch(error => {
-    console.error('Error loading practice grids:', error);
-});
+// Function to initialize or reinitialize the practice grids
+function initPractice() {
+    currentTrialIndex = 0;
+    totalCost = 0;
+    practice1TrialIndex = 0;
+    practice2TrialIndex = 0;
+    practice3TrialIndex = 0;
+    practice4TrialIndex = 0;
+
+    return Promise.all([
+        loadPracticeGrid('assets/trial_sequences/practice_sequence1.json', 'practice1Grid').then(grid => practice1Grid = grid),
+        loadPracticeGrid('assets/trial_sequences/practice_sequence2.json', 'practice2Grid').then(grid => practice2Grid = grid),
+        loadPracticeGrid('assets/trial_sequences/practice_sequence3.json', 'practice3Grid').then(grid => practice3Grid = grid),
+        loadPracticeGrid('assets/trial_sequences/practice_sequence4.json', 'practice4Grid').then(grid => practice4Grid = grid)
+    ]).then(() => {
+        console.log('All practice grids loaded successfully.');
+    }).catch(error => {
+        console.error('Error loading practice grids:', error);
+        throw error;
+    });
+}
+
+// Example usage: Call this function to initialize or reinitialize the grids
+// initPractice().then(() => {
+//     console.log('Practice grids are ready for use.');
+// });
 
 
 
@@ -964,9 +1027,6 @@ function shuffleArray(array) {
     }
     return array;
 }
-
-// Function to animate the agent along the chosen path
-let totalCost = 0; // Keeps track of total cost across trials
 
 // 1. Add taxi character with animation
 function createAvatar() {
@@ -1306,6 +1366,7 @@ const pathSelectionTrial = {
             choice = keyAssignment.blue === 'J' ? 'blue' : 'green';
         } else {
             choice = 'nan'; // Log as 'nan' if no response is made
+            nTimeouts++;
         }
         
         // Add "swipe" effect on selection
@@ -1549,28 +1610,21 @@ const timeoutCheck = {
     stimulus: function() {
         // Get the current city ID and the previous city ID
         const previousCityId = grid.getCurrentCity();
-
-        // Retrieve all trials from the previous city
-        const previousCityTrials = jsPsych.data.get().filterCustom(function(trial) {
-            return trial.city === previousCityId;
-        });
-
-        // Count the number of timeouts (where choice is 'nan')
-        const timeouts = previousCityTrials.filter(trial => trial.choice === 'nan').count();
-        console.log(`Number of timeouts in city ${previousCityId}:`, timeouts);
+        console.log(`Number of timeouts in city ${previousCityId}:`, nTimeouts);
 
         // Check if the number of timeouts exceeds the threshold
         const nTrials = grid.nTrials;
         const nGrids = grid.nGrids;
         const nTrialsPerCity = nTrials * nGrids;
-        const threshold = Math.floor(0.1 * nTrialsPerCity);
-        console.log(`Threshold for timeouts: ${threshold}`);
+        const threshold = Math.floor(1 * nTrialsPerCity);
 
-        if (timeouts > threshold) {
+        if (nTimeouts > threshold) {
             console.log(`Participant failed due to high number of timeouts in city ${previousCityId}`);
+            const ppt_data = jsPsych.data.get().json();
+            send_complete(id, ppt_data);
             setTimeout(() => {
-                window.location.replace("error.html");
-            }, 3000); // Redirect after a few secs
+                window.location.replace("https://app.prolific.com/submissions/complete?cc=C12CZWYW"); // prolific
+            }, 4000); // Redirect after a few secs
             return `
                 <div class="instruction-section">
                     <h2>Experiment Failed</h2>
@@ -1579,12 +1633,18 @@ const timeoutCheck = {
                 </div>
             `;
         } else {
-            // If successful, just end the trial
-            jsPsych.finishTrial();
+            // If successful, reset nTimeouts and proceed
+            nTimeouts = 0;
             return null;
         }
     },
     choices: "NO_KEYS", // Disable keypresses
+    on_load: function() {
+        // If the participant passed the check, immediately finish the trial
+        if (nTimeouts <= Math.floor(1 * grid.nTrials * grid.nGrids)) {
+            jsPsych.finishTrial();
+        }
+    }
 };
 
 const newCityMessage = {
@@ -1660,6 +1720,7 @@ const newDayMessage = {
     }
 };
 
+let nTimeouts = 0;
 const firstGridMessage = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
@@ -1850,9 +1911,8 @@ const instructions2 = {
     },
     choices: [' '], // Spacebar to continue
     on_load: function() {
-        // initPractice(); // Initialize the grid for practice1
-        // console.log('initialised practice grids!!')
-        // console.log('pratice1TrialIndex', practice1TrialIndex)
+        initPractice(); // Initialize the grid for practice1
+        console.log('pratice1TrialIndex', practice1TrialIndex)
     },
     on_finish: function(data) {
     }
@@ -2776,12 +2836,11 @@ function createInstructionsTimeline() {
     createCityMapping(numCities);
 
     // Welcome message
-    // timeline.push(fullscreenTrial);
     timeline.push(instructions1);
 
     // // Practice selection
-    // timeline.push(instructions2);
-    // timeline.push(instructions2_5);
+    timeline.push(instructions2);
+    timeline.push(instructions2_5);
     // timeline.push(practice1SelectionTrial);
     // timeline.push(practice1AnimationTrial);
     // timeline.push(practice1SelectionTrial);
@@ -2829,7 +2888,7 @@ function createInstructionsTimeline() {
 function createQuizTimeline() {
     const timeline = [];
     const quizTrials = createQuizTrials(jsPsych);
-    timeline.push(...quizTrials);
+    // timeline.push(...quizTrials);
     timeline.push(instructions9)
     return timeline
 }
