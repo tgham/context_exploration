@@ -140,7 +140,7 @@ const informedConsentForm = `
 
 const dataProtectionForm = `
 <div style="max-width: 800px; margin: auto; padding: 20px; font-family: Arial, sans-serif; line-height: 1.6; text-align: left;">
-    <h2 style="text-align: center; color: #2C3E50;">Data Protection Form for Online Experiments on Cognitive Control</h2>
+    <h2 style="text-align: center; color:rgb(255, 255, 255);">Data Protection Form for Online Experiments on Cognitive Control</h2>
     <p>Please click <a href="./data-protection-form.pdf" style="color: #2980B9;">here</a> to view our Data Protection Information Sheet. It is yours to keep.</p>
     <p>I have received and taken note of the Data Protection Information Sheet for this study. In doing so, I had sufficient time and opportunity to ask questions about data protection and reconsider my participation in the study. I am aware that:</p>
     <ul style="margin: 20px 0; padding-left: 20px;">
@@ -893,16 +893,6 @@ class Grid {
     }
 }
 
-// rename sequence to data, and then use this to generate the grid
-// let grid;
-// let data;
-// data = sequence;
-// let currentTrialIndex = 0;
-// grid = new Grid(data); // Initialize the Grid class with the loaded data
-// const numCities = data.env_costs.n_cities; // Assuming this is the number of cities
-// createCityMapping(numCities);
-// console.log('Grid data loaded:', grid);
-// console.log('City mapping created:', cityMapping);
 
 // Function to load practice grid data
 function loadPracticeGrid(filePath, gridVariableName) {
@@ -916,6 +906,24 @@ function loadPracticeGrid(filePath, gridVariableName) {
     .catch(error => console.error(`Error loading ${gridVariableName} JSON:`, error));
 }
 
+// (re-)initialize the practice grids
+// function initPractice() {
+//     let practice1Grid, practice2Grid, practice3Grid, practice4Grid;
+//     let practice1TrialIndex = 0, practice2TrialIndex = 0, practice3TrialIndex = 0, practice4TrialIndex = 0;
+
+//     return Promise.all([
+//         loadPracticeGrid('assets/trial_sequences/practice_sequence1.json', 'practice1Grid').then(grid => practice1Grid = grid),
+//         loadPracticeGrid('assets/trial_sequences/practice_sequence2.json', 'practice2Grid').then(grid => practice2Grid = grid),
+//         loadPracticeGrid('assets/trial_sequences/practice_sequence3.json', 'practice3Grid').then(grid => practice3Grid = grid),
+//         loadPracticeGrid('assets/trial_sequences/practice_sequence4.json', 'practice4Grid').then(grid => practice4Grid = grid)
+//     ]).then(() => {
+//         console.log('All practice grids loaded successfully.');
+//         return { practice1Grid, practice2Grid, practice3Grid, practice4Grid, practice1TrialIndex, practice2TrialIndex, practice3TrialIndex, practice4TrialIndex };
+//     }).catch(error => {
+//         console.error('Error loading practice grids:', error);
+//         throw error;
+//     });
+// }
 // Load practice grids
 let practice1Grid, practice2Grid, practice3Grid, practice4Grid;
 let practice1TrialIndex = 0, practice2TrialIndex = 0, practice3TrialIndex = 0, practice4TrialIndex = 0;
@@ -930,6 +938,7 @@ Promise.all([
 }).catch(error => {
     console.error('Error loading practice grids:', error);
 });
+
 
 
 // Function to create a random mapping of city IDs
@@ -1816,7 +1825,9 @@ const instructions1 = {
         // Set initial city background to 'practice1.png'
         setCityBackground('practice1');
         grid.currentCity = 'practice1'; // Initialize the current city
-    }  
+    },
+    on_finish: function() {
+    }
 };
 
 const instructions2 = {
@@ -1839,6 +1850,9 @@ const instructions2 = {
     },
     choices: [' '], // Spacebar to continue
     on_load: function() {
+        // initPractice(); // Initialize the grid for practice1
+        // console.log('initialised practice grids!!')
+        // console.log('pratice1TrialIndex', practice1TrialIndex)
     },
     on_finish: function(data) {
     }
@@ -2571,10 +2585,10 @@ const instructionsReview = {
     on_load: function() {
     },
     on_finish: function(data) {
-        if (data.response === 'backspace') {
+        // if (data.response === 'backspace') {
             // Restart the experiment by reloading the page
-            location.reload();
-        }
+            // location.reload();
+        // }
     }
 };
 
@@ -2589,7 +2603,7 @@ const instructions9 = {
                 <p>Remember: your aim is to minimise the total cost paid each day by predicting which intersections will incur a toll, and hence by selecting jobs that you think will be least costly.</p>
                 <p>At the end of the experiment, we will assess your performance by assessing how well you chose jobs that were the least costly on a randomly selected set of days and cities. This will determine how much bonus payment you receive.</p>
                 <p>So, you should pay attention throughout the experiment - i.e. on every day, and in every city.</p>
-                <p>Remember also: you will have 8 seconds to select a job once the current dispatch turns yellow, otherwise the trial will timeout and you will pay a toll of <span style="color: #f87171;">$10</span>. If you timeout too many times, the experiment will end and you will return to Prolific.</p>
+                <p>Remember also: you will have 8 seconds to select a job once the current dispatch turns yellow, otherwise the trial will timeout. If you timeout too many times, the experiment will end and you will return to Prolific.</p>
             </div>
 
             <div class="instruction-section">
@@ -2741,70 +2755,89 @@ function create_need_for_cognition(){
   
   };
 
-// Create timeline
-function createTimeline() {
-    
-    const timeline = [];
+// Create timelines
 
+function createEthicsTimeline() {
+    const timeline = [];
+    // Informed consent
     timeline.push(informedConsentTrial);
     timeline.push(dataProtectionTrial);
+    timeline.push(fullscreenTrial);
 
+    return timeline
+}
+
+function createInstructionsTimeline() {
+    
+    const timeline = [];
+    
     // city assignments
     const numCities = data.env_costs.n_cities; // Assuming this is the number of cities
     createCityMapping(numCities);
 
     // Welcome message
-    timeline.push(fullscreenTrial);
+    // timeline.push(fullscreenTrial);
     timeline.push(instructions1);
 
     // // Practice selection
-    timeline.push(instructions2);
-    timeline.push(instructions2_5);
-    timeline.push(practice1SelectionTrial);
-    timeline.push(practice1AnimationTrial);
-    timeline.push(practice1SelectionTrial);
-    timeline.push(practice1AnimationTrial);
+    // timeline.push(instructions2);
+    // timeline.push(instructions2_5);
+    // timeline.push(practice1SelectionTrial);
+    // timeline.push(practice1AnimationTrial);
+    // timeline.push(practice1SelectionTrial);
+    // timeline.push(practice1AnimationTrial);
 
-    // Practice a full day
-    timeline.push(instructions3);
-    timeline.push(practiceFirstDayTrial);
-    for (let i = 0; i < grid.nTrials; i++) {
-        timeline.push(practice2PreSelectionTrial);
-        timeline.push(practice2SelectionTrial);
-        timeline.push(practice2AnimationTrial);
-    }
-    timeline.push(practiceGridFeedback);
+    // // Practice a full day
+    // timeline.push(instructions3);
+    // timeline.push(practiceFirstDayTrial);
+    // for (let i = 0; i < grid.nTrials; i++) {
+    //     timeline.push(practice2PreSelectionTrial);
+    //     timeline.push(practice2SelectionTrial);
+    //     timeline.push(practice2AnimationTrial);
+    // }
+    // timeline.push(practiceGridFeedback);
 
-    // Animation to show grid resetting, and then another day
-    timeline.push(instructions4);
-    timeline.push(practiceFirstDayTrial);
-    for (let i = 0; i < grid.nTrials; i++) {
-        timeline.push(practice2PreSelectionTrial);
-        timeline.push(practice2SelectionTrial);
-        timeline.push(practice2AnimationTrial);
-    }
-    timeline.push(practiceGridFeedback);
+    // // Animation to show grid resetting, and then another day
+    // timeline.push(instructions4);
+    // timeline.push(practiceFirstDayTrial);
+    // for (let i = 0; i < grid.nTrials; i++) {
+    //     timeline.push(practice2PreSelectionTrial);
+    //     timeline.push(practice2SelectionTrial);
+    //     timeline.push(practice2AnimationTrial);
+    // }
+    // timeline.push(practiceGridFeedback);
 
-    // New city animation
-    timeline.push(instructions5);
+    // // New city animation
+    // timeline.push(instructions5);
 
-    for (let i = 1; i <= grid.nGrids; i++) {
-        timeline.push(instructions6);
-    }
-    timeline.push(instructions7);
-    for (let i = 1; i <= grid.nGrids; i++) {
-        timeline.push(instructions8);
-    }
+    // for (let i = 1; i <= grid.nGrids; i++) {
+    //     timeline.push(instructions6);
+    // }
+    // timeline.push(instructions7);
+    // for (let i = 1; i <= grid.nGrids; i++) {
+    //     timeline.push(instructions8);
+    // }
 
     // Add the option to review the instructions
     timeline.push(instructionsReview);
     
-    // Understanding checks
+    return timeline
+}
+
+
+// Understanding checks
+function createQuizTimeline() {
+    const timeline = [];
     const quizTrials = createQuizTrials(jsPsych);
     timeline.push(...quizTrials);
-
-    // bonus message
     timeline.push(instructions9)
+    return timeline
+}
+
+// bonus message
+
+function createMainTimeline() {
+    const timeline = [];
 
     // Add the first grid message
     timeline.push(firstGridMessage);
@@ -2843,10 +2876,40 @@ function createTimeline() {
 
 // Start experiment when the page loads
 function initializeExperiment() {
-
-
-    // Run the instruction timeline first
-    const timeline = createTimeline();
-    jsPsych.run(timeline);
-
-}
+    // ethics timeline
+    const ethicsTimeline = createEthicsTimeline();
+  
+    // instructions timeline
+    const instructionTimeline = createInstructionsTimeline();
+  
+    // wrap instructions in a loop node
+    const instructionsLoop = {
+      timeline: instructionTimeline,
+      loop_function: function() {
+        const lastChoice = jsPsych.data.get().last(1).values()[0].response;
+        if (lastChoice === 'backspace') {
+            console.log('repeating instructions');
+            return true;
+        } else {
+            return false;
+        }
+      }
+    };
+  
+    // quiz timeline
+    const quizTimeline = createQuizTimeline();
+    // main experiment timeline
+    const mainTimeline = createMainTimeline();
+  
+    // Combine everything into a single timeline
+    const fullTimeline = [
+      ...ethicsTimeline,
+      instructionsLoop,
+      ...quizTimeline,
+      ...mainTimeline
+    ];
+  
+    // Run it all at once
+    jsPsych.run(fullTimeline);
+  }
+  
