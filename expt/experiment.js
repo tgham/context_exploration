@@ -4,12 +4,13 @@ const jsPsych = initJsPsych({
         var ppt_data = jsPsych.data.get().json();
         send_complete(subject_id, ppt_data);
         console.log('experiment complete');
-        if (bonusAchieved){
-            window.location.replace("https://app.prolific.com/submissions/complete?cc=C19WDNCC");
-        } else{
-            window.location.replace("https://app.prolific.com/submissions/complete?cc=C1HB0QAK");
-        }
-        
+        setTimeout(() => {
+            if (bonusAchieved) {
+                window.location.replace("https://app.prolific.com/submissions/complete?cc=C19WDNCC");
+            } else {
+                window.location.replace("https://app.prolific.com/submissions/complete?cc=C1HB0QAK");
+                }
+            }, 2000);
     }
 });
 
@@ -21,7 +22,6 @@ let subject_id = null;
 let sequence = null;
 let data = null;
 let grid = null;
-// let currentTrialIndex = 0;
 
 // just test with this...
 if (test) {
@@ -59,7 +59,7 @@ if (test) {
     create_participant(pid).then((value) => {
         if (value['id'] == null) {
             console.error(`${pid} is not unique or an error occurred.`);
-            // window.location.replace("error.html");
+            window.location.replace("error.html");
             return;
         }
         subject_id = value['id'];
@@ -70,7 +70,7 @@ if (test) {
         initializeExperiment(); // Call a function to start the experiment
     }).catch((error) => {
         console.error('Failed to fetch participant ID:', error);
-        // window.location.replace("error.html");
+        window.location.replace("error.html");
     });
     console.log('loaded PID etc.')
 }
@@ -243,7 +243,7 @@ const informedConsentTrial = {
             jsPsych.finishTrial();
         });
         document.getElementById('consent-rescinded').addEventListener('click', function() {
-            jsPsych.abortExperiment('You chose not to consent to participate. Please return your submission on Prolific.');
+            alert('You chose not to consent to participate. Please return your submission on Prolific.');
         });
     }
 };
@@ -271,7 +271,7 @@ const dataProtectionTrial = {
         });
 
         document.getElementById('data-consent-rescinded').addEventListener('click', () => {
-            jsPsych.abortExperiment('You chose not to consent to data protection terms. Please return your submission on Prolific.');
+            alert('You chose not to consent to participate. Please return your submission on Prolific.');
         });
     }
 };
@@ -512,7 +512,6 @@ class Grid {
                         const costClass = cost === -1 ? 'observed-cost' : 'observed-no-cost';
                         gridHTML += `<div class="grid-cell ${costClass}" id="${cellId}"></div>`;
                     } else if (revealedCosts === 'observed') {
-                        console.log('hello')
                         const cost = this.observedCosts[`${row}-${col}`];
                         const costClass = cost !== undefined ? 
                             (cost === -1 ? 'observed-cost' : 'observed-no-cost') : '';
@@ -1616,15 +1615,15 @@ const timeoutCheck = {
         const nTrials = grid.nTrials;
         const nGrids = grid.nGrids;
         const nTrialsPerCity = nTrials * nGrids;
-        const threshold = Math.floor(1 * nTrialsPerCity);
+        const threshold = Math.floor(0.3 * nTrialsPerCity);
 
         if (nTimeouts > threshold) {
             console.log(`Participant failed due to high number of timeouts in city ${previousCityId}`);
             const ppt_data = jsPsych.data.get().json();
-            send_complete(id, ppt_data);
+            send_complete(subject_id, ppt_data);
             setTimeout(() => {
                 window.location.replace("https://app.prolific.com/submissions/complete?cc=C12CZWYW"); // prolific
-            }, 4000); // Redirect after a few secs
+            }, 5500); // Redirect after a few secs
             return `
                 <div class="instruction-section">
                     <h2>Experiment Failed</h2>
@@ -1641,7 +1640,7 @@ const timeoutCheck = {
     choices: "NO_KEYS", // Disable keypresses
     on_load: function() {
         // If the participant passed the check, immediately finish the trial
-        if (nTimeouts <= Math.floor(1 * grid.nTrials * grid.nGrids)) {
+        if (nTimeouts <= Math.floor(0.3 * grid.nTrials * grid.nGrids)) {
             jsPsych.finishTrial();
         }
     }
@@ -1663,7 +1662,7 @@ const newCityMessage = {
         message = `
         <div class="new-day-text">
             <div>
-                <h2>City ${currentCityId-1}/${nCities} complete.</h2>
+                <h2>City ${currentCityId}/${nCities} complete.</h2>
                 <h2>New City!</h2>
                 <p>Your taxi company is now operating in a new city.</p>
                 <p>Note: this may (or may not) be a different type of city - i.e. the traffic either tends to run from north-south, or east-west.</p>
@@ -1795,6 +1794,8 @@ const bonus = {
 choices: [' '], // spacebar to continue
     on_finish: function(data) {
         data.bonusAchieved = bonusAchieved;
+        var ppt_data = jsPsych.data.get().json();
+        send_incomplete(subject_id, ppt_data);
     }
 };
 
@@ -1926,11 +1927,11 @@ const instructions2_5 = {
         return `
             <div class="instruction-section" style="font-size: 20px;">
                 <h1>Toll Intersections:</h1>
-                <p style="font-size: ${fontSize};">Traffic in some parts of the city is busier than in other. This means that tolls apply at busy intersections. Visiting an intersection reveals whether or not you have to pay a toll there.</p>
+                <p style="font-size: ${fontSize};">Traffic in some parts of the city is busier than in others. This means that tolls apply at busy intersections. Visiting an intersection reveals whether or not you have to pay a toll there.</p>
                 <p style="font-size: ${fontSize};">- <strong><span style="color: rgb(114, 114, 150);">Dark grey intersections</span></strong> have not been visited yet</p>
                 <p style="font-size: ${fontSize};">- <strong><span style="color: #f87171;">Red intersections</span></strong> cost a $1 toll to pass through</p>
                 <p style="font-size: ${fontSize};">- <strong><span style="color:rgb(194, 194, 229);">Light grey intersections</span></strong> are free with no tolls</p>
-                <p style="font-size: ${fontSize};">Your goal is to complete all taxi jobs while minimizing total toll costs for your company.</p>
+                <p style="font-size: ${fontSize};">Your goal is to complete all taxi jobs while minimizing the total tolls paid out.</p>
             </div>
 
             <div class="instruction-section" style="font-size: 20px;">
@@ -2114,7 +2115,7 @@ const instructions3 = {
         <div class="instruction-section">
             <h1>Toll Locations:</h1>
             <p style="font-size: ${fontSize};">The locations of tolls remain fixed throughout the day. Once you visit an intersection, you find out how busy it is, and hence whether or not you have to pay a toll whenever you reach that intersection again on the same day. This information is reflected in your upcoming dispatches, too.</p>
-            <p style="font-size: ${fontSize};">This information may help you the rest of the day by allowing you to select jobs where you don’t have to pay any tolls.</p>
+            <p style="font-size: ${fontSize};">This information may help you for the rest of the day by allowing you to select jobs where you don’t have to pay any tolls.</p>
         </div>
         <div class="instruction-section">
             <h2 style="font-size: ${fontSize};">Press spacebar to practise your first full day.</h2>
@@ -2475,7 +2476,7 @@ const instructions6 = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         const fontSize = "25px"; // Define font size as a variable
-        const zoomTmp = zoomFactor * 0.80
+        const zoomTmp = zoomFactor * 0.75
         document.body.style.zoom = zoomTmp;
         // document.body.style.zoom = "75%";
         return `
@@ -2488,6 +2489,7 @@ const instructions6 = {
             <p style="font-size: ${fontSize};">In column cities, traffic tends to run from north to south every day, meaning that tolls tend to be clustered in columns.</p>
             <p style="font-size: ${fontSize};">That is, a column may have a lot of tolls, or not many tolls.</p>
             <p style="font-size: ${fontSize};">The locations of these busy columns may change each day, but the city will always have this column-dependent feature.</p>
+            <p style="font-size: ${fontSize};">Press spacebar to continue.</p>
             </div>
             <div class="jobs-layout" >
             <div class="instruction-section" style="text-align: center; font-size: 20px; color: #3a3a3a; margin: 10px;">
@@ -2584,6 +2586,7 @@ const instructions8 = {
                 <p style="font-size: ${fontSize};">In row cities, the opposite is true: traffic tends to run from east to west every day, meaning that tolls tend to be clustered in rows.</p>
                 <p style="font-size: ${fontSize};">That is, a row may have a lot of tolls, or not many tolls.</p>
                 <p style="font-size: ${fontSize};">The locations of these busy rows may change each day, but the city will always have this row-dependent feature.</p>
+                <p style="font-size: ${fontSize};">Press spacebar to continue.</p>
             </div>
             <div class="jobs-layout">
                 <div class="instruction-section" style="text-align: center;  font-size: 20px; color: #3a3a3a;">
@@ -2661,7 +2664,7 @@ const instructions9 = {
             <div class="instruction-section">
                 <h1>Bonus Payment</h1>
                 <p>Remember: your aim is to minimise the total cost paid each day by predicting which intersections will incur a toll, and hence by selecting jobs that you think will be least costly.</p>
-                <p>At the end of the experiment, we will assess your performance by assessing how well you chose jobs that were the least costly on a randomly selected set of days and cities. This will determine how much bonus payment you receive.</p>
+                <p>At the end of the experiment, we will assess your performance by assessing how well you chose jobs that were the least costly on a randomly selected set of days and cities. This will determine whether you receive a bonus payment.</p>
                 <p>So, you should pay attention throughout the experiment - i.e. on every day, and in every city.</p>
                 <p>Remember also: you will have 8 seconds to select a job once the current dispatch turns yellow, otherwise the trial will timeout. If you timeout too many times, the experiment will end and you will return to Prolific.</p>
             </div>
@@ -2751,8 +2754,8 @@ function create_need_for_cognition(){
                 document.documentElement.style.overflowY = "auto";
             },
             on_finish: function(data) {
-                Object.assign(data, data.response);  // Adds each response directly to the trial data
-                delete data.response;
+                // Object.assign(data, data.response);  // Adds each response directly to the trial data
+                // delete data.response;
                 document.body.style.backgroundColor = "";
             }            
         }]
@@ -2777,8 +2780,8 @@ function create_need_for_cognition(){
                 document.documentElement.style.overflowY = "auto";
             },
             on_finish: function(data) {
-                Object.assign(data, data.response);  // Adds each response directly to the trial data
-                delete data.response;
+                // Object.assign(data, data.response);  // Adds each response directly to the trial data
+                // delete data.response;
                 document.body.style.backgroundColor = "";
             }            
         }]
@@ -2803,9 +2806,11 @@ function create_need_for_cognition(){
                 document.documentElement.style.overflowY = "auto";
             },
             on_finish: function(data) {
-                Object.assign(data, data.response);  // Adds each response directly to the trial data
-                delete data.response;
+                // Object.assign(data, data.response);  // Adds each response directly to the trial data
+                // delete data.response;
                 document.body.style.backgroundColor = "";
+                var ppt_data = jsPsych.data.get().json();
+                send_incomplete(subject_id, ppt_data);
             }            
         }]
     };
@@ -2957,6 +2962,7 @@ function initializeExperiment() {
   
     // quiz timeline
     const quizTimeline = createQuizTimeline();
+
     // main experiment timeline
     const mainTimeline = createMainTimeline();
   
