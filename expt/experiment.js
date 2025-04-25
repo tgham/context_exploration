@@ -1,16 +1,43 @@
 // Initialize jsPsych
 const jsPsych = initJsPsych({
     on_finish: function() {
+        // Show a waiting message
+        document.body.innerHTML = `
+            <div class="instruction-section">
+                <h2>Please wait while you are redirected to Prolific.</h2>
+                <h2 style="font-weight: bold; ">DO NOT CLOSE YOUR BROWSER until you have returned to Prolific. This may take a few seconds...</h2>
+            </div>
+        `;
+
+        // Get participant data and send it
         var ppt_data = jsPsych.data.get().json();
-        send_complete(subject_id, ppt_data);
         console.log('experiment complete');
-        setTimeout(() => {
-            if (bonusAchieved) {
-                window.location.replace("https://app.prolific.com/submissions/complete?cc=C19WDNCC");
-            } else {
-                window.location.replace("https://app.prolific.com/submissions/complete?cc=C1HB0QAK");
+        
+        send_complete(subject_id, ppt_data)
+            .then(() => {
+                console.log('Data successfully sent to completion endpoint');
+                if (bonusAchieved) {
+                    window.location.replace("https://app.prolific.com/submissions/complete?cc=C19WDNCC");
+                } else {
+                    window.location.replace("https://app.prolific.com/submissions/complete?cc=C1HB0QAK");
                 }
-            }, 2000);
+            })
+            .catch(error => {
+                console.error('Failed to send completion data:', error);
+                // Still redirect after a delay in case of error
+                document.body.innerHTML += `
+                    <div class="instruction-section">
+                        <h2>Note: There might have been an issue saving your data, but you will still be redirected shortly.</h2>
+                    </div>
+                `;
+                setTimeout(() => {
+                    if (bonusAchieved) {
+                        window.location.replace("https://app.prolific.com/submissions/complete?cc=C19WDNCC");
+                    } else {
+                        window.location.replace("https://app.prolific.com/submissions/complete?cc=C1HB0QAK");
+                    }
+                }, 5000);
+            });
     }
 });
 
@@ -1619,16 +1646,12 @@ const timeoutCheck = {
 
         if (nTimeouts > threshold) {
             console.log(`Participant failed due to high number of timeouts in city ${previousCityId}`);
-            const ppt_data = jsPsych.data.get().json();
-            send_complete(subject_id, ppt_data);
-            setTimeout(() => {
-                window.location.replace("https://app.prolific.com/submissions/complete?cc=C12CZWYW"); // prolific
-            }, 5500); // Redirect after a few secs
             return `
                 <div class="instruction-section">
                     <h2>Experiment Failed</h2>
                     <p>You have timed out too many times in the previous city. Unfortunately, you cannot continue with the experiment.</p>
-                    <p>You will now be redirected to Prolific.</p>
+                    <p>Please wait while you are redirected to Prolific. You will be paid for your time.</p>
+                    <p style="font-weight: bold; ">DO NOT CLOSE YOUR BROWSER until you have returned to Prolific. This may take a few seconds...</p>
                 </div>
             `;
         } else {
@@ -1642,6 +1665,27 @@ const timeoutCheck = {
         // If the participant passed the check, immediately finish the trial
         if (nTimeouts <= Math.floor(0.3 * grid.nTrials * grid.nGrids)) {
             jsPsych.finishTrial();
+        } else {
+            // If the participant failed, send the data and redirect
+            const ppt_data = jsPsych.data.get().json();
+            
+            send_complete(subject_id, ppt_data)
+                .then(() => {
+                    console.log('Data successfully sent to completion endpoint');
+                    setTimeout(() => {
+                        window.location.replace("https://app.prolific.com/submissions/complete?cc=C12CZWYW");
+                    }, 2000); // Redirect after 3.5 seconds
+                })
+                .catch(error => {
+                    console.error('Failed to send completion data:', error);
+                    // Add a note about the error but still redirect after a delay
+                    document.querySelector('.instruction-section').innerHTML += `
+                        <p>Note: There might have been an issue saving your data, but you will still be redirected shortly.</p>
+                    `;
+                    setTimeout(() => {
+                        window.location.replace("https://app.prolific.com/submissions/complete?cc=C12CZWYW");
+                    }, 2000);
+                });
         }
     }
 };
@@ -2843,7 +2887,7 @@ function createInstructionsTimeline() {
     // Welcome message
     timeline.push(instructions1);
 
-    // // Practice selection
+    // Practice selection
     timeline.push(instructions2);
     timeline.push(instructions2_5);
     timeline.push(practice1SelectionTrial);
