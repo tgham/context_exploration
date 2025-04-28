@@ -306,13 +306,26 @@ export function createQuizTrials(jsPsych) {
       const correctCount = jsPsych.data.get().last(1).values()[0]?.correctCount || 0;
       const percentage = Math.round((correctCount / quizQuestions.length) * 100);
       const passed = percentage >= 70;
-
+    
       if (!passed) {
         const ppt_data = jsPsych.data.get().json();
-        send_complete(id, ppt_data);
-        setTimeout(function () {
-            window.location.replace("https://app.prolific.com/submissions/complete?cc=C37PLZK3");
-        }, 1500);
+        send_complete(id, ppt_data)
+          .then(() => {
+            console.log('Data successfully sent to completion endpoint');
+            setTimeout(() => {
+              window.location.replace("https://app.prolific.com/submissions/complete?cc=C37PLZK3");
+            }, 2000); // Redirect after 2 seconds
+          })
+          .catch(error => {
+            console.error('Failed to send completion data:', error);
+            // Add a note about the error but still redirect after a delay
+            document.querySelector('.instruction-section').innerHTML += `
+              <p>Note: There might have been an issue saving your data, but you will still be redirected shortly.</p>
+            `;
+            setTimeout(() => {
+              window.location.replace("https://app.prolific.com/submissions/complete?cc=C37PLZK3");
+            }, 2000);
+          });
       }
     }
   };
