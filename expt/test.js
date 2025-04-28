@@ -286,7 +286,7 @@ export function createQuizTrials(jsPsych) {
       const passed = percentage >= 70;
       
       return `
-        <div class="quiz-section">
+        <div class="instruction-section">
           <h2>Quiz Complete!</h2>
           <p>You answered ${correctCount} out of ${quizQuestions.length} questions correctly (${percentage}%).</p>
           ${passed 
@@ -307,14 +307,13 @@ export function createQuizTrials(jsPsych) {
       const percentage = Math.round((correctCount / quizQuestions.length) * 100);
       const passed = percentage >= 70;
 
-      // if (!passed) {
-      //   const ppt_data = jsPsych.data.get().json();
-      //   send_complete(id, ppt_data);
-      //   setTimeout(function () {
-      //     // Redirect to another website
-      //     window.location.replace(SOME_OTHER_WEBSITE);
-      //   }, 1500);
-      // }
+      if (!passed) {
+        const ppt_data = jsPsych.data.get().json();
+        send_complete(id, ppt_data);
+        setTimeout(function () {
+            window.location.replace("https://app.prolific.com/submissions/complete?cc=C37PLZK3");
+        }, 1500);
+      }
     }
   };
 

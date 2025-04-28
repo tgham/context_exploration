@@ -1,10 +1,43 @@
 // Initialize jsPsych
 const jsPsych = initJsPsych({
     on_finish: function() {
+        // Show a waiting message
+        document.body.innerHTML = `
+            <div class="instruction-section">
+                <h2>Please wait while you are redirected to Prolific.</h2>
+                <h2 style="font-weight: bold; ">DO NOT CLOSE YOUR BROWSER until you have returned to Prolific. This may take a few seconds...</h2>
+            </div>
+        `;
+
+        // Get participant data and send it
         var ppt_data = jsPsych.data.get().json();
-        send_complete(subject_id, ppt_data);
         console.log('experiment complete');
-        // window.location.replace("error.html"); // REPLACE WITH PROLIFIC URL
+        
+        send_complete(subject_id, ppt_data)
+            .then(() => {
+                console.log('Data successfully sent to completion endpoint');
+                if (bonusAchieved) {
+                    window.location.replace("https://app.prolific.com/submissions/complete?cc=C19WDNCC");
+                } else {
+                    window.location.replace("https://app.prolific.com/submissions/complete?cc=C1HB0QAK");
+                }
+            })
+            .catch(error => {
+                console.error('Failed to send completion data:', error);
+                // Still redirect after a delay in case of error
+                document.body.innerHTML += `
+                    <div class="instruction-section">
+                        <h2>Note: There might have been an issue saving your data, but you will still be redirected shortly.</h2>
+                    </div>
+                `;
+                setTimeout(() => {
+                    if (bonusAchieved) {
+                        window.location.replace("https://app.prolific.com/submissions/complete?cc=C19WDNCC");
+                    } else {
+                        window.location.replace("https://app.prolific.com/submissions/complete?cc=C1HB0QAK");
+                    }
+                }, 5000);
+            });
     }
 });
 
@@ -16,7 +49,6 @@ let subject_id = null;
 let sequence = null;
 let data = null;
 let grid = null;
-let currentTrialIndex = 0;
 
 // just test with this...
 if (test) {
@@ -54,7 +86,7 @@ if (test) {
     create_participant(pid).then((value) => {
         if (value['id'] == null) {
             console.error(`${pid} is not unique or an error occurred.`);
-            // window.location.replace("error.html");
+            window.location.replace("error.html");
             return;
         }
         subject_id = value['id'];
@@ -65,7 +97,7 @@ if (test) {
         initializeExperiment(); // Call a function to start the experiment
     }).catch((error) => {
         console.error('Failed to fetch participant ID:', error);
-        // window.location.replace("error.html");
+        window.location.replace("error.html");
     });
     console.log('loaded PID etc.')
 }
@@ -88,6 +120,51 @@ function playCostSound() {
         source.start(0); // Play the sound
     }
 }
+
+// Global object to store preloaded images
+const preloadedImages = {};
+
+// Function to preload images
+function preloadImages(imagePaths) {
+    return Promise.all(
+        imagePaths.map(path => {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.src = path;
+
+                // Set attributes for the image
+                if (path.includes('blue_person.png')) {
+                    img.alt = "Blue Start";
+                    img.width = 25;
+                    img.height = 25;
+                } else if (path.includes('green_person.png')) {
+                    img.alt = "Green Start";
+                    img.width = 25;
+                    img.height = 25;
+                }
+
+                img.onload = () => {
+                    preloadedImages[path] = img; // Store the loaded image
+                    resolve();
+                };
+                img.onerror = reject;
+            });
+        })
+    ).then(() => {
+        console.log('All images preloaded successfully.');
+    }).catch(error => {
+        console.error('Error preloading images:', error);
+        throw error;
+    });
+}
+
+// Preload the images at the start
+preloadImages([
+    'assets/people/blue_person.png',
+    'assets/people/green_person.png'
+]).then(() => {
+    console.log('Avatars are ready for use.');
+});
 
 // Function to calculate and apply the scaling factor
 let zoomFactor;
@@ -125,7 +202,7 @@ const informedConsentForm = `
             <li>Fluent speaker of English.</li>
             <li>Have not previously participated in this experiment.</li>
         </ul>
-        <p>This study is designed to look at how people learn to make decisions to accomplish their goals. In this task, you will be asked to make choices, play games, and answer questions related to those games. The study will take about 40 minutes and will pay £5.4 plus a performance-dependent bonus of up to a maximum of £2. The performance bonus is explained in more detail in the instructions that follow.</p>
+        <p>This study is designed to look at how people learn to make decisions to accomplish their goals. In this task, you will be asked to make choices, play games, and answer questions related to those games. The study will take about 40 minutes and will pay £6 plus a performance-dependent bonus of £2. The performance bonus is explained in more detail in the instructions that follow.</p>
         <p>Your participation in this research is voluntary. You may refrain from answering any questions that make you uncomfortable and may withdraw your participation at any time without penalty by exiting this task and alerting the experimenter. You may choose not to complete certain parts of the task or answer certain questions. You may contact us at the address provided below if you have additional questions or concerns.</p>
         <p>Other than monetary compensation, participating in this study will provide no direct benefits to you. But we hope that this research will benefit society at large by contributing towards establishing a scientific foundation for improving people’s learning and cognitive control abilities.</p>
         <p>Your online username may be connected to your individual responses, but we will not be asking for any additional personally identifying information, and we will handle responses as confidentially as possible. We cannot however guarantee the confidentiality of information transmitted over the Internet. We will be keeping de-identified data collected as part of this experiment indefinitely. Data used in scientific publications will remain completely anonymous.</p>
@@ -141,7 +218,7 @@ const informedConsentForm = `
 const dataProtectionForm = `
 <div style="max-width: 800px; margin: auto; padding: 20px; font-family: Arial, sans-serif; line-height: 1.6; text-align: left;">
     <h2 style="text-align: center; color:rgb(255, 255, 255);">Data Protection Form for Online Experiments on Cognitive Control</h2>
-    <p>Please click <a href="./data-protection-form.pdf" style="color: #2980B9;">here</a> to view our Data Protection Information Sheet. It is yours to keep.</p>
+    <p>Please click <a href="data-protection-form.pdf" target="_blank" style="color: #2980B9;">here</a> to view our Data Protection Information Sheet. It is yours to keep.</p>
     <p>I have received and taken note of the Data Protection Information Sheet for this study. In doing so, I had sufficient time and opportunity to ask questions about data protection and reconsider my participation in the study. I am aware that:</p>
     <ul style="margin: 20px 0; padding-left: 20px;">
         <li>The processing and use of the collected data occurs in a pseudoanonymised form within the scope of the legally prescribed provisions. As a general rule, the storage occurs in the form of answered questionnaires, as well as electronic data, for a duration of 10 years or longer, if this is required by the purpose of the study.</li>
@@ -193,7 +270,7 @@ const informedConsentTrial = {
             jsPsych.finishTrial();
         });
         document.getElementById('consent-rescinded').addEventListener('click', function() {
-            jsPsych.abortExperiment('You chose not to consent to participate. Please return your submission on Prolific.');
+            alert('You chose not to consent to participate. Please return your submission on Prolific.');
         });
     }
 };
@@ -221,9 +298,9 @@ const dataProtectionTrial = {
         });
 
         document.getElementById('data-consent-rescinded').addEventListener('click', () => {
-            jsPsych.abortExperiment('You chose not to consent to data protection terms. Please return your submission on Prolific.');
+            alert('You chose not to consent to participate. Please return your submission on Prolific.');
         });
-    },
+    }
 };
 
 
@@ -326,6 +403,11 @@ class Grid {
         gridHTML += `
                 <div class="grid-container" style="grid-template-columns: repeat(${gridSize}, 40px); background-color: #ece75d;">
         `;
+
+        // preload avatars
+        const bluePerson = preloadedImages['assets/people/blue_person.png'];
+        const greenPerson = preloadedImages['assets/people/green_person.png'];
+
     
         for (let row = 0; row < gridSize; row++) {
             for (let col = 0; col < gridSize; col++) {
@@ -383,13 +465,13 @@ class Grid {
                 }
     
                 if (isStartA) {
-                    gridHTML += `<div class="grid-cell start blue-path ${observedClass}" id="${cellId}">
-                                    <img src="assets/people/blue_person.png" alt="Blue Start" width="30" height="30">
-                                 </div>`;
+                    gridHTML += `<div class="grid-cell start blue-path ${observedClass}" id="${cellId}">`;
+                    gridHTML += bluePerson.outerHTML; // Use the HTML string representation of the preloaded blue person image
+                    gridHTML += `</div>`;
                 } else if (isStartB) {
-                    gridHTML += `<div class="grid-cell start green-path ${observedClass}" id="${cellId}">
-                                    <img src="assets/people/green_person.png" alt="Green Start" width="30" height="30">
-                                 </div>`;
+                    gridHTML += `<div class="grid-cell start green-path ${observedClass}" id="${cellId}">`;
+                    gridHTML += greenPerson.outerHTML; // Use the HTML string representation of the preloaded green person image
+                    gridHTML += `</div>`;
                 } else if (isGoalA) {
                     gridHTML += `<div class="grid-cell goal blue-path ${observedClass}" id="${cellId}">🏠</div>`;
                 } else if (isGoalB) {
@@ -457,7 +539,6 @@ class Grid {
                         const costClass = cost === -1 ? 'observed-cost' : 'observed-no-cost';
                         gridHTML += `<div class="grid-cell ${costClass}" id="${cellId}"></div>`;
                     } else if (revealedCosts === 'observed') {
-                        console.log('hello')
                         const cost = this.observedCosts[`${row}-${col}`];
                         const costClass = cost !== undefined ? 
                             (cost === -1 ? 'observed-cost' : 'observed-no-cost') : '';
@@ -577,6 +658,10 @@ class Grid {
                     <div class="upcoming-jobs-actual-container">
         `;
 
+        // preload avatars
+        const bluePerson = preloadedImages['assets/people/blue_person.png'];
+        const greenPerson = preloadedImages['assets/people/green_person.png'];
+
         for (let i = 1; i <= remainingTrialsInGrid; i++) {
             const previewIndex = currentTrialIndex + i;
             const trial = this.getTrialInfo(previewIndex);
@@ -615,13 +700,13 @@ class Grid {
                     }
 
                     if (isStartA) {
-                        upcomingHTML += `<div class="upcoming-cell ${observedClass} blue-path" data-row="${row}" data-col="${col}">
-                                            <img src="assets/people/blue_person.png" alt="Blue Start" width="23" height="23">
-                                         </div>`;
+                        upcomingHTML += `<div class="upcoming-cell ${observedClass} blue-path" data-row="${row}" data-col="${col}">`;
+                        upcomingHTML += bluePerson.outerHTML; // Use the preloaded blue person image
+                        upcomingHTML += `</div>`;
                     } else if (isStartB) {
-                        upcomingHTML += `<div class="upcoming-cell ${observedClass} green-path" data-row="${row}" data-col="${col}">
-                                            <img src="assets/people/green_person.png" alt="Green Start" width="23" height="23">
-                                         </div>`;
+                        upcomingHTML += `<div class="upcoming-cell ${observedClass} green-path" data-row="${row}" data-col="${col}">`;
+                        upcomingHTML += greenPerson.outerHTML; // Use the preloaded green person image
+                        upcomingHTML += `</div>`;
                     } else if (isGoalA || isGoalB || isPathA || isPathB || isOverlap) {
                         upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" data-row="${row}" data-col="${col}" style="font-size: 1.5rem;">
                                             ${isGoalA || isGoalB ? '🏠' : content}
@@ -760,6 +845,10 @@ class Grid {
                         `;
             }
 
+            // preload avatars
+            const bluePerson = preloadedImages['assets/people/blue_person.png'];
+            const greenPerson = preloadedImages['assets/people/green_person.png'];
+
             for (let row = 0; row < this.gridSize; row++) {
                 for (let col = 0; col < this.gridSize; col++) {
                     const cellId = `cell-${row}-${col}-trial-${trial.trial}`;
@@ -842,33 +931,33 @@ class Grid {
 
                     if (previewIndex < currentTrialIndex || feedback) {
                         if (isStartA) {
-                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass} blue-path" id="${cellId}" data-row="${row}" data-col="${col}">
-                                                <img src="assets/people/blue_person.png" alt="Blue Start" width="23" height="23">
-                                             </div>`;
+                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass} blue-path" id="${cellId}" data-row="${row}" data-col="${col}">`;
+                            upcomingHTML += bluePerson.outerHTML; // Use the preloaded blue person image
+                            upcomingHTML += `</div>`;
                         } else if (isStartB) {
-                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass} green-path" id="${cellId}" data-row="${row}" data-col="${col}">
-                                                <img src="assets/people/green_person.png" alt="Green Start" width="23" height="23">
-                                             </div>`;
+                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass} green-path" id="${cellId}" data-row="${row}" data-col="${col}">`;
+                            upcomingHTML += greenPerson.outerHTML; // Use the preloaded green person image
+                            upcomingHTML += `</div>`;
                         } else if (isGoalA || isGoalB || isPathA || isPathB || isOverlap) {
-                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.6rem;">
-                                                ${isGoalA || isGoalB ? '🏠' : content}
-                                             </div>`;
+                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.5rem;">`;
+                            upcomingHTML += isGoalA || isGoalB ? '🏠' : content;
+                            upcomingHTML += `</div>`;
                         } else {
                             upcomingHTML += `<div class="upcoming-cell-done ${observedClass}" id="${cellId}" data-row="${row}" data-col="${col}"></div>`;
                         }
                     } else {
                         if (isStartA) {
-                            upcomingHTML += `<div class="upcoming-cell ${observedClass} blue-path" id="${cellId}" data-row="${row}" data-col="${col}">
-                                                <img src="assets/people/blue_person.png" alt="Blue Start" width="23" height="23">
-                                             </div>`;
+                            upcomingHTML += `<div class="upcoming-cell ${observedClass} blue-path" id="${cellId}" data-row="${row}" data-col="${col}">`;
+                            upcomingHTML += bluePerson.outerHTML; // Use the preloaded blue person image
+                            upcomingHTML += `</div>`;
                         } else if (isStartB) {
-                            upcomingHTML += `<div class="upcoming-cell ${observedClass} green-path" id="${cellId}" data-row="${row}" data-col="${col}">
-                                                <img src="assets/people/green_person.png" alt="Green Start" width="23" height="23">
-                                             </div>`;
+                            upcomingHTML += `<div class="upcoming-cell ${observedClass} green-path" id="${cellId}" data-row="${row}" data-col="${col}">`;
+                            upcomingHTML += greenPerson.outerHTML; // Use the preloaded green person image
+                            upcomingHTML += `</div>`;
                         } else if (isGoalA || isGoalB || isPathA || isPathB || isOverlap) {
-                            upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.6rem;">
-                                                ${isGoalA || isGoalB ? '🏠' : content}
-                                             </div>`;
+                            upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.5rem;">`;
+                            upcomingHTML += isGoalA || isGoalB ? '🏠' : content;
+                            upcomingHTML += `</div>`;
                         } else {
                             upcomingHTML += `<div class="upcoming-cell ${observedClass}" id="${cellId}" data-row="${row}" data-col="${col}"></div>`;
                         }
@@ -906,10 +995,20 @@ function loadPracticeGrid(filePath, gridVariableName) {
     .catch(error => console.error(`Error loading ${gridVariableName} JSON:`, error));
 }
 
-// (re-)initialize the practice grids
+// Declare global variables for practice grids and trial indices
+let practice1Grid, practice2Grid, practice3Grid, practice4Grid;
+let practice1TrialIndex = 0, practice2TrialIndex = 0, practice3TrialIndex = 0, practice4TrialIndex = 0; 
+let currentTrialIndex = 0;
+let totalCost = 0; // Keeps track of total cost across trials
+
+// Function to initialize or reinitialize the practice grids
 function initPractice() {
-    let practice1Grid, practice2Grid, practice3Grid, practice4Grid;
-    let practice1TrialIndex = 0, practice2TrialIndex = 0, practice3TrialIndex = 0, practice4TrialIndex = 0;
+    currentTrialIndex = 0;
+    totalCost = 0;
+    practice1TrialIndex = 0;
+    practice2TrialIndex = 0;
+    practice3TrialIndex = 0;
+    practice4TrialIndex = 0;
 
     return Promise.all([
         loadPracticeGrid('assets/trial_sequences/practice_sequence1.json', 'practice1Grid').then(grid => practice1Grid = grid),
@@ -918,12 +1017,16 @@ function initPractice() {
         loadPracticeGrid('assets/trial_sequences/practice_sequence4.json', 'practice4Grid').then(grid => practice4Grid = grid)
     ]).then(() => {
         console.log('All practice grids loaded successfully.');
-        return { practice1Grid, practice2Grid, practice3Grid, practice4Grid, practice1TrialIndex, practice2TrialIndex, practice3TrialIndex, practice4TrialIndex };
     }).catch(error => {
         console.error('Error loading practice grids:', error);
         throw error;
     });
 }
+
+// Example usage: Call this function to initialize or reinitialize the grids
+// initPractice().then(() => {
+//     console.log('Practice grids are ready for use.');
+// });
 
 
 
@@ -950,9 +1053,6 @@ function shuffleArray(array) {
     }
     return array;
 }
-
-// Function to animate the agent along the chosen path
-let totalCost = 0; // Keeps track of total cost across trials
 
 // 1. Add taxi character with animation
 function createAvatar() {
@@ -1292,6 +1392,7 @@ const pathSelectionTrial = {
             choice = keyAssignment.blue === 'J' ? 'blue' : 'green';
         } else {
             choice = 'nan'; // Log as 'nan' if no response is made
+            nTimeouts++;
         }
         
         // Add "swipe" effect on selection
@@ -1535,42 +1636,58 @@ const timeoutCheck = {
     stimulus: function() {
         // Get the current city ID and the previous city ID
         const previousCityId = grid.getCurrentCity();
-
-        // Retrieve all trials from the previous city
-        const previousCityTrials = jsPsych.data.get().filterCustom(function(trial) {
-            return trial.city === previousCityId;
-        });
-
-        // Count the number of timeouts (where choice is 'nan')
-        const timeouts = previousCityTrials.filter(trial => trial.choice === 'nan').count();
-        console.log(`Number of timeouts in city ${previousCityId}:`, timeouts);
+        console.log(`Number of timeouts in city ${previousCityId}:`, nTimeouts);
 
         // Check if the number of timeouts exceeds the threshold
         const nTrials = grid.nTrials;
         const nGrids = grid.nGrids;
         const nTrialsPerCity = nTrials * nGrids;
-        const threshold = Math.floor(0.1 * nTrialsPerCity);
-        console.log(`Threshold for timeouts: ${threshold}`);
+        const threshold = Math.floor(0.3 * nTrialsPerCity);
 
-        if (timeouts > threshold) {
+        if (nTimeouts > threshold) {
             console.log(`Participant failed due to high number of timeouts in city ${previousCityId}`);
-            setTimeout(() => {
-                window.location.replace("error.html");
-            }, 3000); // Redirect after a few secs
             return `
                 <div class="instruction-section">
                     <h2>Experiment Failed</h2>
                     <p>You have timed out too many times in the previous city. Unfortunately, you cannot continue with the experiment.</p>
-                    <p>You will now be redirected to Prolific.</p>
+                    <p>Please wait while you are redirected to Prolific. You will be paid for your time.</p>
+                    <p style="font-weight: bold; ">DO NOT CLOSE YOUR BROWSER until you have returned to Prolific. This may take a few seconds...</p>
                 </div>
             `;
         } else {
-            // If successful, just end the trial
-            jsPsych.finishTrial();
+            // If successful, reset nTimeouts and proceed
+            nTimeouts = 0;
             return null;
         }
     },
     choices: "NO_KEYS", // Disable keypresses
+    on_load: function() {
+        // If the participant passed the check, immediately finish the trial
+        if (nTimeouts <= Math.floor(0.3 * grid.nTrials * grid.nGrids)) {
+            jsPsych.finishTrial();
+        } else {
+            // If the participant failed, send the data and redirect
+            const ppt_data = jsPsych.data.get().json();
+            
+            send_complete(subject_id, ppt_data)
+                .then(() => {
+                    console.log('Data successfully sent to completion endpoint');
+                    setTimeout(() => {
+                        window.location.replace("https://app.prolific.com/submissions/complete?cc=C12CZWYW");
+                    }, 2000); // Redirect after 3.5 seconds
+                })
+                .catch(error => {
+                    console.error('Failed to send completion data:', error);
+                    // Add a note about the error but still redirect after a delay
+                    document.querySelector('.instruction-section').innerHTML += `
+                        <p>Note: There might have been an issue saving your data, but you will still be redirected shortly.</p>
+                    `;
+                    setTimeout(() => {
+                        window.location.replace("https://app.prolific.com/submissions/complete?cc=C12CZWYW");
+                    }, 2000);
+                });
+        }
+    }
 };
 
 const newCityMessage = {
@@ -1589,7 +1706,7 @@ const newCityMessage = {
         message = `
         <div class="new-day-text">
             <div>
-                <h2>City ${currentCityId-1}/${nCities} complete.</h2>
+                <h2>City ${currentCityId}/${nCities} complete.</h2>
                 <h2>New City!</h2>
                 <p>Your taxi company is now operating in a new city.</p>
                 <p>Note: this may (or may not) be a different type of city - i.e. the traffic either tends to run from north-south, or east-west.</p>
@@ -1646,6 +1763,7 @@ const newDayMessage = {
     }
 };
 
+let nTimeouts = 0;
 const firstGridMessage = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
@@ -1720,6 +1838,8 @@ const bonus = {
 choices: [' '], // spacebar to continue
     on_finish: function(data) {
         data.bonusAchieved = bonusAchieved;
+        var ppt_data = jsPsych.data.get().json();
+        send_incomplete(subject_id, ppt_data);
     }
 };
 
@@ -1783,6 +1903,8 @@ function calculateBonus() {
 }
 
 
+// ...existing code...
+
 // First instruction page
 const instructions1 = {
     type: jsPsychHtmlKeyboardResponse,
@@ -1802,10 +1924,9 @@ const instructions1 = {
     on_load: function() {
 
         // appropriate zooming
-        // document.body.style.overflow = "hidden";
-        // document.documentElement.style.overflow = "hidden";
+        document.body.style.overflowY = "hidden";
+        document.documentElement.style.overflowY = "hidden";
         applyScreenScaling();
-
 
         // Set initial city background to 'practice1.png'
         setCityBackground('practice1');
@@ -1836,6 +1957,7 @@ const instructions2 = {
     choices: [' '], // Spacebar to continue
     on_load: function() {
         initPractice(); // Initialize the grid for practice1
+        console.log('pratice1TrialIndex', practice1TrialIndex)
     },
     on_finish: function(data) {
     }
@@ -1849,11 +1971,11 @@ const instructions2_5 = {
         return `
             <div class="instruction-section" style="font-size: 20px;">
                 <h1>Toll Intersections:</h1>
-                <p style="font-size: ${fontSize};">Traffic in some parts of the city is busier than in other. This means that tolls apply at busy intersections. Visiting an intersection reveals whether or not you have to pay a toll there.</p>
+                <p style="font-size: ${fontSize};">Traffic in some parts of the city is busier than in others. This means that tolls apply at busy intersections. Visiting an intersection reveals whether or not you have to pay a toll there.</p>
                 <p style="font-size: ${fontSize};">- <strong><span style="color: rgb(114, 114, 150);">Dark grey intersections</span></strong> have not been visited yet</p>
                 <p style="font-size: ${fontSize};">- <strong><span style="color: #f87171;">Red intersections</span></strong> cost a $1 toll to pass through</p>
                 <p style="font-size: ${fontSize};">- <strong><span style="color:rgb(194, 194, 229);">Light grey intersections</span></strong> are free with no tolls</p>
-                <p style="font-size: ${fontSize};">Your goal is to complete all taxi jobs while minimizing total toll costs for your company.</p>
+                <p style="font-size: ${fontSize};">Your goal is to complete all taxi jobs while minimizing the total tolls paid out.</p>
             </div>
 
             <div class="instruction-section" style="font-size: 20px;">
@@ -2037,7 +2159,7 @@ const instructions3 = {
         <div class="instruction-section">
             <h1>Toll Locations:</h1>
             <p style="font-size: ${fontSize};">The locations of tolls remain fixed throughout the day. Once you visit an intersection, you find out how busy it is, and hence whether or not you have to pay a toll whenever you reach that intersection again on the same day. This information is reflected in your upcoming dispatches, too.</p>
-            <p style="font-size: ${fontSize};">This information may help you the rest of the day by allowing you to select jobs where you don’t have to pay any tolls.</p>
+            <p style="font-size: ${fontSize};">This information may help you for the rest of the day by allowing you to select jobs where you don’t have to pay any tolls.</p>
         </div>
         <div class="instruction-section">
             <h2 style="font-size: ${fontSize};">Press spacebar to practise your first full day.</h2>
@@ -2398,7 +2520,7 @@ const instructions6 = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         const fontSize = "25px"; // Define font size as a variable
-        const zoomTmp = zoomFactor * 0.80
+        const zoomTmp = zoomFactor * 0.75
         document.body.style.zoom = zoomTmp;
         // document.body.style.zoom = "75%";
         return `
@@ -2411,6 +2533,7 @@ const instructions6 = {
             <p style="font-size: ${fontSize};">In column cities, traffic tends to run from north to south every day, meaning that tolls tend to be clustered in columns.</p>
             <p style="font-size: ${fontSize};">That is, a column may have a lot of tolls, or not many tolls.</p>
             <p style="font-size: ${fontSize};">The locations of these busy columns may change each day, but the city will always have this column-dependent feature.</p>
+            <p style="font-size: ${fontSize};">Press spacebar to continue.</p>
             </div>
             <div class="jobs-layout" >
             <div class="instruction-section" style="text-align: center; font-size: 20px; color: #3a3a3a; margin: 10px;">
@@ -2507,6 +2630,7 @@ const instructions8 = {
                 <p style="font-size: ${fontSize};">In row cities, the opposite is true: traffic tends to run from east to west every day, meaning that tolls tend to be clustered in rows.</p>
                 <p style="font-size: ${fontSize};">That is, a row may have a lot of tolls, or not many tolls.</p>
                 <p style="font-size: ${fontSize};">The locations of these busy rows may change each day, but the city will always have this row-dependent feature.</p>
+                <p style="font-size: ${fontSize};">Press spacebar to continue.</p>
             </div>
             <div class="jobs-layout">
                 <div class="instruction-section" style="text-align: center;  font-size: 20px; color: #3a3a3a;">
@@ -2540,6 +2664,7 @@ const fullscreenTrial = {
     `,
     choices: ["Enter"], // Listens for the Enter key
     on_finish: function() {
+        window.scrollTo(0, 0); // Scrolls to the top of the page
         document.documentElement.requestFullscreen(); // Forces full-screen mode
     }
 };
@@ -2567,10 +2692,10 @@ const instructionsReview = {
     on_load: function() {
     },
     on_finish: function(data) {
-        if (data.response === 'backspace') {
+        // if (data.response === 'backspace') {
             // Restart the experiment by reloading the page
-            location.reload();
-        }
+            // location.reload();
+        // }
     }
 };
 
@@ -2583,9 +2708,9 @@ const instructions9 = {
             <div class="instruction-section">
                 <h1>Bonus Payment</h1>
                 <p>Remember: your aim is to minimise the total cost paid each day by predicting which intersections will incur a toll, and hence by selecting jobs that you think will be least costly.</p>
-                <p>At the end of the experiment, we will assess your performance by assessing how well you chose jobs that were the least costly on a randomly selected set of days and cities. This will determine how much bonus payment you receive.</p>
+                <p>At the end of the experiment, we will assess your performance by assessing how well you chose jobs that were the least costly on a randomly selected set of days and cities. This will determine whether you receive a bonus payment.</p>
                 <p>So, you should pay attention throughout the experiment - i.e. on every day, and in every city.</p>
-                <p>Remember also: you will have 8 seconds to select a job once the current dispatch turns yellow, otherwise the trial will timeout and you will pay a toll of <span style="color: #f87171;">$10</span>. If you timeout too many times, the experiment will end and you will return to Prolific.</p>
+                <p>Remember also: you will have 8 seconds to select a job once the current dispatch turns yellow, otherwise the trial will timeout. If you timeout too many times, the experiment will end and you will return to Prolific.</p>
             </div>
 
             <div class="instruction-section">
@@ -2673,8 +2798,8 @@ function create_need_for_cognition(){
                 document.documentElement.style.overflowY = "auto";
             },
             on_finish: function(data) {
-                Object.assign(data, data.response);  // Adds each response directly to the trial data
-                delete data.response;
+                // Object.assign(data, data.response);  // Adds each response directly to the trial data
+                // delete data.response;
                 document.body.style.backgroundColor = "";
             }            
         }]
@@ -2699,8 +2824,8 @@ function create_need_for_cognition(){
                 document.documentElement.style.overflowY = "auto";
             },
             on_finish: function(data) {
-                Object.assign(data, data.response);  // Adds each response directly to the trial data
-                delete data.response;
+                // Object.assign(data, data.response);  // Adds each response directly to the trial data
+                // delete data.response;
                 document.body.style.backgroundColor = "";
             }            
         }]
@@ -2725,9 +2850,11 @@ function create_need_for_cognition(){
                 document.documentElement.style.overflowY = "auto";
             },
             on_finish: function(data) {
-                Object.assign(data, data.response);  // Adds each response directly to the trial data
-                delete data.response;
+                // Object.assign(data, data.response);  // Adds each response directly to the trial data
+                // delete data.response;
                 document.body.style.backgroundColor = "";
+                var ppt_data = jsPsych.data.get().json();
+                send_incomplete(subject_id, ppt_data);
             }            
         }]
     };
@@ -2756,16 +2883,11 @@ function createInstructionsTimeline() {
     // city assignments
     const numCities = data.env_costs.n_cities; // Assuming this is the number of cities
     createCityMapping(numCities);
-    
-    // consent
-    timeline.push(informedConsentTrial);
-    timeline.push(dataProtectionTrial);
-    
+
     // Welcome message
-    timeline.push(fullscreenTrial);
     timeline.push(instructions1);
 
-    // // Practice selection
+    // Practice selection
     timeline.push(instructions2);
     timeline.push(instructions2_5);
     timeline.push(practice1SelectionTrial);
@@ -2807,15 +2929,20 @@ function createInstructionsTimeline() {
     // Add the option to review the instructions
     timeline.push(instructionsReview);
     
-    // Understanding checks
-    const quizTrials = createQuizTrials(jsPsych);
-    timeline.push(...quizTrials);
-
-    // bonus message
-    timeline.push(instructions9)
-
     return timeline
 }
+
+
+// Understanding checks
+function createQuizTimeline() {
+    const timeline = [];
+    const quizTrials = createQuizTrials(jsPsych);
+    timeline.push(...quizTrials);
+    timeline.push(instructions9)
+    return timeline
+}
+
+// bonus message
 
 function createMainTimeline() {
     const timeline = [];
@@ -2857,17 +2984,41 @@ function createMainTimeline() {
 
 // Start experiment when the page loads
 function initializeExperiment() {
-
-    // ethics
+    // ethics timeline
     const ethicsTimeline = createEthicsTimeline();
-    jsPsych.run(ethicsTimeline);
-
-    // instructions
+  
+    // instructions timeline
     const instructionTimeline = createInstructionsTimeline();
-    jsPsych.run(instructionTimeline);
+  
+    // wrap instructions in a loop node
+    const instructionsLoop = {
+      timeline: instructionTimeline,
+      loop_function: function() {
+        const lastChoice = jsPsych.data.get().last(1).values()[0].response;
+        if (lastChoice === 'backspace') {
+            console.log('repeating instructions');
+            return true;
+        } else {
+            return false;
+        }
+      }
+    };
+  
+    // quiz timeline
+    const quizTimeline = createQuizTimeline();
 
-
-    // run the main
+    // main experiment timeline
     const mainTimeline = createMainTimeline();
-    jsPsych.run(timeline);
-}
+  
+    // Combine everything into a single timeline
+    const fullTimeline = [
+      ...ethicsTimeline,
+      instructionsLoop,
+      ...quizTimeline,
+      ...mainTimeline
+    ];
+  
+    // Run it all at once
+    jsPsych.run(fullTimeline);
+  }
+  
