@@ -96,12 +96,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 3,
       "abstract_sequence_A": [
-        7,
-        0
-      ],
-      "abstract_sequence_B": [
         0,
         7
+      ],
+      "abstract_sequence_B": [
+        7,
+        0
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -204,12 +204,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        5,
-        2
+        2,
+        5
       ],
       "abstract_sequence_B": [
-        0,
-        7
+        7,
+        0
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -296,12 +296,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        3,
-        2
+        2,
+        3
       ],
       "abstract_sequence_B": [
-        1,
-        4
+        4,
+        1
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -396,12 +396,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        5,
-        1
+        1,
+        5
       ],
       "abstract_sequence_B": [
-        2,
-        4
+        4,
+        2
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -488,12 +488,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        5,
-        0
-      ],
-      "abstract_sequence_B": [
         0,
         5
+      ],
+      "abstract_sequence_B": [
+        5,
+        0
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -580,12 +580,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        5,
-        0
+        0,
+        5
       ],
       "abstract_sequence_B": [
-        2,
-        3
+        3,
+        2
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -688,12 +688,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        7,
-        0
+        0,
+        7
       ],
       "abstract_sequence_B": [
-        2,
-        5
+        5,
+        2
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -780,12 +780,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        3,
-        2
+        2,
+        3
       ],
       "abstract_sequence_B": [
-        0,
-        5
+        5,
+        0
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -888,12 +888,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 3,
       "abstract_sequence_A": [
-        7,
-        0
-      ],
-      "abstract_sequence_B": [
         0,
         7
+      ],
+      "abstract_sequence_B": [
+        7,
+        0
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -988,12 +988,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 3,
       "abstract_sequence_A": [
-        6,
-        0
-      ],
-      "abstract_sequence_B": [
         0,
         6
+      ],
+      "abstract_sequence_B": [
+        6,
+        0
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -1096,12 +1096,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        3,
-        4
+        4,
+        3
       ],
       "abstract_sequence_B": [
-        6,
-        1
+        1,
+        6
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -1204,12 +1204,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        1,
-        6
+        6,
+        1
       ],
       "abstract_sequence_B": [
-        5,
-        2
+        2,
+        5
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -1304,12 +1304,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        6,
-        0
-      ],
-      "abstract_sequence_B": [
         0,
         6
+      ],
+      "abstract_sequence_B": [
+        6,
+        0
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -1404,12 +1404,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        0,
-        6
+        6,
+        0
       ],
       "abstract_sequence_B": [
-        4,
-        2
+        2,
+        4
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -1512,12 +1512,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        1,
-        6
+        6,
+        1
       ],
       "abstract_sequence_B": [
-        7,
-        0
+        0,
+        7
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -1604,12 +1604,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        3,
-        2
+        2,
+        3
       ],
       "abstract_sequence_B": [
-        1,
-        4
+        4,
+        1
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -1712,12 +1712,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 3,
       "abstract_sequence_A": [
-        7,
-        0
-      ],
-      "abstract_sequence_B": [
         0,
         7
+      ],
+      "abstract_sequence_B": [
+        7,
+        0
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -1804,12 +1804,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        0,
-        5
-      ],
-      "abstract_sequence_B": [
         5,
         0
+      ],
+      "abstract_sequence_B": [
+        0,
+        5
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -1904,12 +1904,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        0,
-        6
+        6,
+        0
       ],
       "abstract_sequence_B": [
-        5,
-        1
+        1,
+        5
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -2004,12 +2004,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        5,
-        1
+        1,
+        5
       ],
       "abstract_sequence_B": [
-        0,
-        6
+        6,
+        0
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -2112,12 +2112,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 3,
       "abstract_sequence_A": [
-        7,
-        0
-      ],
-      "abstract_sequence_B": [
         0,
         7
+      ],
+      "abstract_sequence_B": [
+        7,
+        0
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -2212,12 +2212,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        2,
-        4
+        4,
+        2
       ],
       "abstract_sequence_B": [
-        6,
-        0
+        0,
+        6
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -2320,12 +2320,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        3,
-        4
-      ],
-      "abstract_sequence_B": [
         4,
         3
+      ],
+      "abstract_sequence_B": [
+        3,
+        4
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -2412,12 +2412,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        4,
-        1
-      ],
-      "abstract_sequence_B": [
         1,
         4
+      ],
+      "abstract_sequence_B": [
+        4,
+        1
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -2504,12 +2504,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        5,
-        0
-      ],
-      "abstract_sequence_B": [
         0,
         5
+      ],
+      "abstract_sequence_B": [
+        5,
+        0
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -2612,12 +2612,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        6,
-        1
+        1,
+        6
       ],
       "abstract_sequence_B": [
-        0,
-        7
+        7,
+        0
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -2704,12 +2704,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        3,
-        2
-      ],
-      "abstract_sequence_B": [
         2,
         3
+      ],
+      "abstract_sequence_B": [
+        3,
+        2
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -2812,12 +2812,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        3,
-        4
+        4,
+        3
       ],
       "abstract_sequence_B": [
-        6,
-        1
+        1,
+        6
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -2912,12 +2912,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 3,
       "abstract_sequence_A": [
-        6,
-        0
-      ],
-      "abstract_sequence_B": [
         0,
         6
+      ],
+      "abstract_sequence_B": [
+        6,
+        0
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -3012,12 +3012,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        2,
-        4
-      ],
-      "abstract_sequence_B": [
         4,
         2
+      ],
+      "abstract_sequence_B": [
+        2,
+        4
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -3112,12 +3112,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        0,
-        6
-      ],
-      "abstract_sequence_B": [
         6,
         0
+      ],
+      "abstract_sequence_B": [
+        0,
+        6
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -3220,12 +3220,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        4,
-        3
+        3,
+        4
       ],
       "abstract_sequence_B": [
-        0,
-        7
+        7,
+        0
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -3312,12 +3312,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 3,
       "abstract_sequence_A": [
-        5,
-        0
-      ],
-      "abstract_sequence_B": [
         0,
         5
+      ],
+      "abstract_sequence_B": [
+        5,
+        0
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -3404,12 +3404,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        3,
-        2
-      ],
-      "abstract_sequence_B": [
         2,
         3
+      ],
+      "abstract_sequence_B": [
+        3,
+        2
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -3512,12 +3512,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        7,
-        0
+        0,
+        7
       ],
       "abstract_sequence_B": [
-        1,
-        6
+        6,
+        1
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -3612,12 +3612,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        0,
-        6
-      ],
-      "abstract_sequence_B": [
         6,
         0
+      ],
+      "abstract_sequence_B": [
+        0,
+        6
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -3704,12 +3704,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 3,
       "abstract_sequence_A": [
-        5,
-        0
-      ],
-      "abstract_sequence_B": [
         0,
         5
+      ],
+      "abstract_sequence_B": [
+        5,
+        0
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -3796,12 +3796,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        3,
-        2
-      ],
-      "abstract_sequence_B": [
         2,
         3
+      ],
+      "abstract_sequence_B": [
+        3,
+        2
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -3904,12 +3904,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        6,
-        1
+        1,
+        6
       ],
       "abstract_sequence_B": [
-        2,
-        5
+        5,
+        2
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -4004,12 +4004,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        0,
-        6
-      ],
-      "abstract_sequence_B": [
         6,
         0
+      ],
+      "abstract_sequence_B": [
+        0,
+        6
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -4104,12 +4104,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        0,
-        6
-      ],
-      "abstract_sequence_B": [
         6,
         0
+      ],
+      "abstract_sequence_B": [
+        0,
+        6
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -4204,12 +4204,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        2,
-        4
-      ],
-      "abstract_sequence_B": [
         4,
         2
+      ],
+      "abstract_sequence_B": [
+        2,
+        4
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -4296,12 +4296,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        0,
-        5
+        5,
+        0
       ],
       "abstract_sequence_B": [
-        3,
-        2
+        2,
+        3
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -4388,12 +4388,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        2,
-        3
-      ],
-      "abstract_sequence_B": [
         3,
         2
+      ],
+      "abstract_sequence_B": [
+        2,
+        3
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -4480,12 +4480,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        0,
-        5
-      ],
-      "abstract_sequence_B": [
         5,
         0
+      ],
+      "abstract_sequence_B": [
+        0,
+        5
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -4572,12 +4572,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        1,
-        4
+        4,
+        1
       ],
       "abstract_sequence_B": [
-        3,
-        2
+        2,
+        3
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -4664,12 +4664,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        4,
-        1
+        1,
+        4
       ],
       "abstract_sequence_B": [
-        2,
-        3
+        3,
+        2
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -4764,12 +4764,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        1,
-        5
+        5,
+        1
       ],
       "abstract_sequence_B": [
-        4,
-        2
+        2,
+        4
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -4872,12 +4872,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        0,
-        7
-      ],
-      "abstract_sequence_B": [
         7,
         0
+      ],
+      "abstract_sequence_B": [
+        0,
+        7
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -4964,12 +4964,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        5,
-        0
+        0,
+        5
       ],
       "abstract_sequence_B": [
-        2,
-        3
+        3,
+        2
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -5056,12 +5056,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        2,
-        3
+        3,
+        2
       ],
       "abstract_sequence_B": [
-        4,
-        1
+        1,
+        4
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -5156,12 +5156,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        5,
-        1
+        1,
+        5
       ],
       "abstract_sequence_B": [
-        0,
-        6
+        6,
+        0
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -5264,12 +5264,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 3,
       "abstract_sequence_A": [
-        0,
-        7
-      ],
-      "abstract_sequence_B": [
         7,
         0
+      ],
+      "abstract_sequence_B": [
+        0,
+        7
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -5356,12 +5356,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 3,
       "abstract_sequence_A": [
-        3,
-        2
+        2,
+        3
       ],
       "abstract_sequence_B": [
-        0,
-        5
+        5,
+        0
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -5448,12 +5448,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        3,
-        2
+        2,
+        3
       ],
       "abstract_sequence_B": [
-        1,
-        4
+        4,
+        1
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -5540,12 +5540,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        4,
-        1
+        1,
+        4
       ],
       "abstract_sequence_B": [
-        2,
-        3
+        3,
+        2
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -5648,12 +5648,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 3,
       "abstract_sequence_A": [
-        0,
-        7
-      ],
-      "abstract_sequence_B": [
         7,
         0
+      ],
+      "abstract_sequence_B": [
+        0,
+        7
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -5756,12 +5756,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        6,
-        1
-      ],
-      "abstract_sequence_B": [
         1,
         6
+      ],
+      "abstract_sequence_B": [
+        6,
+        1
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -5864,12 +5864,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        6,
-        1
+        1,
+        6
       ],
       "abstract_sequence_B": [
-        2,
-        5
+        5,
+        2
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -5956,12 +5956,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        1,
-        4
+        4,
+        1
       ],
       "abstract_sequence_B": [
-        5,
-        0
+        0,
+        5
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -6056,12 +6056,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 3,
       "abstract_sequence_A": [
-        0,
-        6
-      ],
-      "abstract_sequence_B": [
         6,
         0
+      ],
+      "abstract_sequence_B": [
+        0,
+        6
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -6164,12 +6164,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        7,
-        0
+        0,
+        7
       ],
       "abstract_sequence_B": [
-        1,
-        6
+        6,
+        1
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -6264,12 +6264,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        0,
-        6
+        6,
+        0
       ],
       "abstract_sequence_B": [
-        5,
-        1
+        1,
+        5
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -6364,12 +6364,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        0,
-        6
+        6,
+        0
       ],
       "abstract_sequence_B": [
-        5,
-        1
+        1,
+        5
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -6464,12 +6464,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        0,
-        6
-      ],
-      "abstract_sequence_B": [
         6,
         0
+      ],
+      "abstract_sequence_B": [
+        0,
+        6
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -6564,12 +6564,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        4,
-        2
+        2,
+        4
       ],
       "abstract_sequence_B": [
-        1,
-        5
+        5,
+        1
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -6656,12 +6656,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        4,
-        1
+        1,
+        4
       ],
       "abstract_sequence_B": [
-        0,
-        5
+        5,
+        0
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -6756,12 +6756,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        0,
-        6
-      ],
-      "abstract_sequence_B": [
         6,
         0
+      ],
+      "abstract_sequence_B": [
+        0,
+        6
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -6864,12 +6864,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 3,
       "abstract_sequence_A": [
-        0,
-        7
-      ],
-      "abstract_sequence_B": [
         7,
         0
+      ],
+      "abstract_sequence_B": [
+        0,
+        7
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -6956,12 +6956,12 @@
       "path_A_future_overlap": 4,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        3,
-        2
+        2,
+        3
       ],
       "abstract_sequence_B": [
-        1,
-        4
+        4,
+        1
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -7064,12 +7064,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        2,
-        5
+        5,
+        2
       ],
       "abstract_sequence_B": [
-        7,
-        0
+        0,
+        7
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -7172,12 +7172,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        2,
-        5
+        5,
+        2
       ],
       "abstract_sequence_B": [
-        6,
-        1
+        1,
+        6
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -7272,12 +7272,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 3,
       "abstract_sequence_A": [
-        0,
-        6
-      ],
-      "abstract_sequence_B": [
         6,
         0
+      ],
+      "abstract_sequence_B": [
+        0,
+        6
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -7364,12 +7364,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        3,
-        2
+        2,
+        3
       ],
       "abstract_sequence_B": [
-        1,
-        4
+        4,
+        1
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -7472,12 +7472,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        4,
-        3
+        3,
+        4
       ],
       "abstract_sequence_B": [
-        1,
-        6
+        6,
+        1
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -7564,12 +7564,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        5,
-        0
+        0,
+        5
       ],
       "abstract_sequence_B": [
-        2,
-        3
+        3,
+        2
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -7664,12 +7664,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 3,
       "abstract_sequence_A": [
-        0,
-        6
-      ],
-      "abstract_sequence_B": [
         6,
         0
+      ],
+      "abstract_sequence_B": [
+        0,
+        6
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -7756,12 +7756,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        1,
-        4
+        4,
+        1
       ],
       "abstract_sequence_B": [
-        5,
-        0
+        0,
+        5
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -7856,12 +7856,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        2,
-        4
-      ],
-      "abstract_sequence_B": [
         4,
         2
+      ],
+      "abstract_sequence_B": [
+        2,
+        4
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -7956,12 +7956,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        0,
-        6
+        6,
+        0
       ],
       "abstract_sequence_B": [
-        4,
-        2
+        2,
+        4
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -8056,12 +8056,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 3,
       "abstract_sequence_A": [
-        6,
-        0
-      ],
-      "abstract_sequence_B": [
         0,
         6
+      ],
+      "abstract_sequence_B": [
+        6,
+        0
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -8148,12 +8148,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        2,
-        3
+        3,
+        2
       ],
       "abstract_sequence_B": [
-        4,
-        1
+        1,
+        4
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -8248,12 +8248,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        1,
-        5
+        5,
+        1
       ],
       "abstract_sequence_B": [
-        6,
-        0
+        0,
+        6
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -8356,12 +8356,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        1,
-        6
+        6,
+        1
       ],
       "abstract_sequence_B": [
-        7,
-        0
+        0,
+        7
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -8448,12 +8448,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 3,
       "abstract_sequence_A": [
-        5,
-        0
-      ],
-      "abstract_sequence_B": [
         0,
         5
+      ],
+      "abstract_sequence_B": [
+        5,
+        0
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -8548,12 +8548,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        4,
-        2
-      ],
-      "abstract_sequence_B": [
         2,
         4
+      ],
+      "abstract_sequence_B": [
+        4,
+        2
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -8640,12 +8640,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        1,
-        4
+        4,
+        1
       ],
       "abstract_sequence_B": [
-        5,
-        0
+        0,
+        5
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -8740,12 +8740,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        0,
-        6
-      ],
-      "abstract_sequence_B": [
         6,
         0
+      ],
+      "abstract_sequence_B": [
+        0,
+        6
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -8832,12 +8832,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 3,
       "abstract_sequence_A": [
-        5,
-        0
-      ],
-      "abstract_sequence_B": [
         0,
         5
+      ],
+      "abstract_sequence_B": [
+        5,
+        0
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -8940,12 +8940,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        3,
-        4
+        4,
+        3
       ],
       "abstract_sequence_B": [
-        5,
-        2
+        2,
+        5
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -9040,12 +9040,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        5,
-        1
-      ],
-      "abstract_sequence_B": [
         1,
         5
+      ],
+      "abstract_sequence_B": [
+        5,
+        1
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -9140,12 +9140,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        6,
-        0
+        0,
+        6
       ],
       "abstract_sequence_B": [
-        2,
-        4
+        4,
+        2
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -9248,12 +9248,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 3,
       "abstract_sequence_A": [
-        7,
-        0
-      ],
-      "abstract_sequence_B": [
         0,
         7
+      ],
+      "abstract_sequence_B": [
+        7,
+        0
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -9356,12 +9356,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        4,
-        3
+        3,
+        4
       ],
       "abstract_sequence_B": [
-        1,
-        6
+        6,
+        1
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -9456,12 +9456,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        0,
-        6
+        6,
+        0
       ],
       "abstract_sequence_B": [
-        4,
-        2
+        2,
+        4
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -9548,12 +9548,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        2,
-        3
+        3,
+        2
       ],
       "abstract_sequence_B": [
-        5,
-        0
+        0,
+        5
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -9656,12 +9656,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 3,
       "abstract_sequence_A": [
-        7,
-        0
-      ],
-      "abstract_sequence_B": [
         0,
         7
+      ],
+      "abstract_sequence_B": [
+        7,
+        0
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -9764,12 +9764,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        1,
-        6
+        6,
+        1
       ],
       "abstract_sequence_B": [
-        4,
-        3
+        3,
+        4
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -9864,12 +9864,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        0,
-        6
+        6,
+        0
       ],
       "abstract_sequence_B": [
-        4,
-        2
+        2,
+        4
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -9956,12 +9956,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        2,
-        3
-      ],
-      "abstract_sequence_B": [
         3,
         2
+      ],
+      "abstract_sequence_B": [
+        2,
+        3
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -10064,12 +10064,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 3,
       "abstract_sequence_A": [
-        7,
-        0
-      ],
-      "abstract_sequence_B": [
         0,
         7
+      ],
+      "abstract_sequence_B": [
+        7,
+        0
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -10172,12 +10172,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        0,
-        7
+        7,
+        0
       ],
       "abstract_sequence_B": [
-        4,
-        3
+        3,
+        4
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -10264,12 +10264,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        4,
-        1
+        1,
+        4
       ],
       "abstract_sequence_B": [
-        0,
-        5
+        5,
+        0
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -10364,12 +10364,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        0,
-        6
+        6,
+        0
       ],
       "abstract_sequence_B": [
-        5,
-        1
+        1,
+        5
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -10456,12 +10456,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        5,
-        0
-      ],
-      "abstract_sequence_B": [
         0,
         5
+      ],
+      "abstract_sequence_B": [
+        5,
+        0
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -10556,12 +10556,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        1,
-        5
-      ],
-      "abstract_sequence_B": [
         5,
         1
+      ],
+      "abstract_sequence_B": [
+        1,
+        5
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -10664,12 +10664,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        6,
-        1
+        1,
+        6
       ],
       "abstract_sequence_B": [
-        2,
-        5
+        5,
+        2
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -10764,12 +10764,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        1,
-        5
-      ],
-      "abstract_sequence_B": [
         5,
         1
+      ],
+      "abstract_sequence_B": [
+        1,
+        5
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -10872,12 +10872,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 3,
       "abstract_sequence_A": [
-        7,
-        0
-      ],
-      "abstract_sequence_B": [
         0,
         7
+      ],
+      "abstract_sequence_B": [
+        7,
+        0
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -10964,12 +10964,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        1,
-        4
+        4,
+        1
       ],
       "abstract_sequence_B": [
-        3,
-        2
+        2,
+        3
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -11064,12 +11064,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        6,
-        0
+        0,
+        6
       ],
       "abstract_sequence_B": [
-        1,
-        5
+        5,
+        1
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -11172,12 +11172,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        7,
-        0
+        0,
+        7
       ],
       "abstract_sequence_B": [
-        1,
-        6
+        6,
+        1
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -11264,12 +11264,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 3,
       "abstract_sequence_A": [
-        5,
-        0
-      ],
-      "abstract_sequence_B": [
         0,
         5
+      ],
+      "abstract_sequence_B": [
+        5,
+        0
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -11372,12 +11372,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        7,
-        0
+        0,
+        7
       ],
       "abstract_sequence_B": [
-        2,
-        5
+        5,
+        2
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -11472,12 +11472,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        2,
-        4
-      ],
-      "abstract_sequence_B": [
         4,
         2
+      ],
+      "abstract_sequence_B": [
+        2,
+        4
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -11564,12 +11564,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        4,
-        1
+        1,
+        4
       ],
       "abstract_sequence_B": [
-        0,
-        5
+        5,
+        0
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -11656,12 +11656,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 3,
       "abstract_sequence_A": [
-        5,
-        0
-      ],
-      "abstract_sequence_B": [
         0,
         5
+      ],
+      "abstract_sequence_B": [
+        5,
+        0
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -11764,12 +11764,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        2,
-        5
+        5,
+        2
       ],
       "abstract_sequence_B": [
-        6,
-        1
+        1,
+        6
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -11872,12 +11872,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        6,
-        1
+        1,
+        6
       ],
       "abstract_sequence_B": [
-        2,
-        5
+        5,
+        2
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -11980,12 +11980,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        5,
-        2
-      ],
-      "abstract_sequence_B": [
         2,
         5
+      ],
+      "abstract_sequence_B": [
+        5,
+        2
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -12072,12 +12072,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        0,
-        5
-      ],
-      "abstract_sequence_B": [
         5,
         0
+      ],
+      "abstract_sequence_B": [
+        0,
+        5
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -12180,12 +12180,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        0,
-        7
+        7,
+        0
       ],
       "abstract_sequence_B": [
-        6,
-        1
+        1,
+        6
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -12280,12 +12280,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        2,
-        4
-      ],
-      "abstract_sequence_B": [
         4,
         2
+      ],
+      "abstract_sequence_B": [
+        2,
+        4
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -12380,12 +12380,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        2,
-        4
-      ],
-      "abstract_sequence_B": [
         4,
         2
+      ],
+      "abstract_sequence_B": [
+        2,
+        4
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -12472,12 +12472,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        0,
-        5
-      ],
-      "abstract_sequence_B": [
         5,
         0
+      ],
+      "abstract_sequence_B": [
+        0,
+        5
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -12580,12 +12580,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        6,
-        1
+        1,
+        6
       ],
       "abstract_sequence_B": [
-        0,
-        7
+        7,
+        0
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -12672,12 +12672,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        4,
-        1
+        1,
+        4
       ],
       "abstract_sequence_B": [
-        2,
-        3
+        3,
+        2
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -12780,12 +12780,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        7,
-        0
+        0,
+        7
       ],
       "abstract_sequence_B": [
-        1,
-        6
+        6,
+        1
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -12872,12 +12872,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        0,
-        5
-      ],
-      "abstract_sequence_B": [
         5,
         0
+      ],
+      "abstract_sequence_B": [
+        0,
+        5
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -12980,12 +12980,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        7,
-        0
-      ],
-      "abstract_sequence_B": [
         0,
         7
+      ],
+      "abstract_sequence_B": [
+        7,
+        0
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -13080,12 +13080,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        5,
-        1
+        1,
+        5
       ],
       "abstract_sequence_B": [
-        0,
-        6
+        6,
+        0
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -13188,12 +13188,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        7,
-        0
+        0,
+        7
       ],
       "abstract_sequence_B": [
-        1,
-        6
+        6,
+        1
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -13280,12 +13280,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 3,
       "abstract_sequence_A": [
-        0,
-        5
-      ],
-      "abstract_sequence_B": [
         5,
         0
+      ],
+      "abstract_sequence_B": [
+        0,
+        5
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -13388,12 +13388,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        3,
-        4
+        4,
+        3
       ],
       "abstract_sequence_B": [
-        6,
-        1
+        1,
+        6
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -13496,12 +13496,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        2,
-        5
-      ],
-      "abstract_sequence_B": [
         5,
         2
+      ],
+      "abstract_sequence_B": [
+        2,
+        5
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -13588,12 +13588,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        0,
-        5
-      ],
-      "abstract_sequence_B": [
         5,
         0
+      ],
+      "abstract_sequence_B": [
+        0,
+        5
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -13680,12 +13680,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        0,
-        5
-      ],
-      "abstract_sequence_B": [
         5,
         0
+      ],
+      "abstract_sequence_B": [
+        0,
+        5
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -13788,12 +13788,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        7,
-        0
-      ],
-      "abstract_sequence_B": [
         0,
         7
+      ],
+      "abstract_sequence_B": [
+        7,
+        0
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -13880,12 +13880,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        3,
-        2
-      ],
-      "abstract_sequence_B": [
         2,
         3
+      ],
+      "abstract_sequence_B": [
+        3,
+        2
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -13980,12 +13980,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        5,
-        1
-      ],
-      "abstract_sequence_B": [
         1,
         5
+      ],
+      "abstract_sequence_B": [
+        5,
+        1
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -14072,12 +14072,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        0,
-        5
-      ],
-      "abstract_sequence_B": [
         5,
         0
+      ],
+      "abstract_sequence_B": [
+        0,
+        5
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -14180,12 +14180,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        1,
-        6
+        6,
+        1
       ],
       "abstract_sequence_B": [
-        5,
-        2
+        2,
+        5
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -14272,12 +14272,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        5,
-        0
+        0,
+        5
       ],
       "abstract_sequence_B": [
-        2,
-        3
+        3,
+        2
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -14364,12 +14364,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        5,
-        0
+        0,
+        5
       ],
       "abstract_sequence_B": [
-        1,
-        4
+        4,
+        1
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -14456,12 +14456,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        0,
-        5
-      ],
-      "abstract_sequence_B": [
         5,
         0
+      ],
+      "abstract_sequence_B": [
+        0,
+        5
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -14564,12 +14564,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        3,
-        4
+        4,
+        3
       ],
       "abstract_sequence_B": [
-        7,
-        0
+        0,
+        7
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -14664,12 +14664,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        4,
-        2
+        2,
+        4
       ],
       "abstract_sequence_B": [
-        1,
-        5
+        5,
+        1
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -14764,12 +14764,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        2,
-        4
+        4,
+        2
       ],
       "abstract_sequence_B": [
-        5,
-        1
+        1,
+        5
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -14856,12 +14856,12 @@
       "path_A_future_overlap": 3,
       "path_B_future_overlap": 3,
       "abstract_sequence_A": [
-        0,
-        5
-      ],
-      "abstract_sequence_B": [
         5,
         0
+      ],
+      "abstract_sequence_B": [
+        0,
+        5
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -14948,12 +14948,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        3,
-        2
+        2,
+        3
       ],
       "abstract_sequence_B": [
-        1,
-        4
+        4,
+        1
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -15056,12 +15056,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        6,
-        1
-      ],
-      "abstract_sequence_B": [
         1,
         6
+      ],
+      "abstract_sequence_B": [
+        6,
+        1
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -15164,12 +15164,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        6,
-        1
-      ],
-      "abstract_sequence_B": [
         1,
         6
+      ],
+      "abstract_sequence_B": [
+        6,
+        1
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -15264,12 +15264,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        0,
-        6
-      ],
-      "abstract_sequence_B": [
         6,
         0
+      ],
+      "abstract_sequence_B": [
+        0,
+        6
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -15364,12 +15364,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        1,
-        5
-      ],
-      "abstract_sequence_B": [
         5,
         1
+      ],
+      "abstract_sequence_B": [
+        1,
+        5
       ],
       "better_path": "b",
       "dominant_axis_A": "vertical",
@@ -15456,12 +15456,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        2,
-        3
-      ],
-      "abstract_sequence_B": [
         3,
         2
+      ],
+      "abstract_sequence_B": [
+        2,
+        3
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -15556,12 +15556,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        5,
-        1
+        1,
+        5
       ],
       "abstract_sequence_B": [
-        0,
-        6
+        6,
+        0
       ],
       "better_path": "b",
       "dominant_axis_A": "horizontal",
@@ -15664,12 +15664,12 @@
       "path_A_future_overlap": 2,
       "path_B_future_overlap": 2,
       "abstract_sequence_A": [
-        0,
-        7
-      ],
-      "abstract_sequence_B": [
         7,
         0
+      ],
+      "abstract_sequence_B": [
+        0,
+        7
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -15756,12 +15756,12 @@
       "path_A_future_overlap": 1,
       "path_B_future_overlap": 3,
       "abstract_sequence_A": [
-        4,
-        1
-      ],
-      "abstract_sequence_B": [
         1,
         4
+      ],
+      "abstract_sequence_B": [
+        4,
+        1
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
@@ -15856,12 +15856,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 1,
       "abstract_sequence_A": [
-        2,
-        4
+        4,
+        2
       ],
       "abstract_sequence_B": [
-        6,
-        0
+        0,
+        6
       ],
       "better_path": "a",
       "dominant_axis_A": "vertical",
@@ -15948,12 +15948,12 @@
       "path_A_future_overlap": 0,
       "path_B_future_overlap": 0,
       "abstract_sequence_A": [
-        3,
-        2
+        2,
+        3
       ],
       "abstract_sequence_B": [
-        1,
-        4
+        4,
+        1
       ],
       "better_path": "a",
       "dominant_axis_A": "horizontal",
