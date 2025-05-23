@@ -91,16 +91,16 @@ beta_params = {
     # 'alpha_col': 1,
     # 'beta_col': 1
 }
-N = 10
-n_grids = 500
+N = 8
+n_grids = 750
 n_episodes = 4
-n_blocks = 4
+n_blocks = 5
 expt = '2AFC'
 expt_info = {
     'type': expt,
     'same_SGs': False,
-    # 'context': 'column',
-    'context': 'row',
+    'context': 'column',
+    # 'context': 'row',
 }
 env_params = {
     'N': N,
