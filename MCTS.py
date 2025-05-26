@@ -813,10 +813,7 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
 
 
 ## parallel function for simulating many trials within the same grid env
-def simulate_agent(agent_params, ppt, df_ppt=None, env_params=None, MCTS_params=None, sampler_params=None, agents= ['BAMCP', 'CE'], progress=False, fit=False):
-    
-    ## if fitting to a participant, extract necessary info from there
-    # if df_ppt:
+def simulate_agent(ppt, env_params=None, MCTS_params=None, sampler_params=None, agents= ['BAMCP', 'CE'], progress=False):
     print(' ') # for some reason need this to get the pbar to appear
 
     ## or, do this manually
