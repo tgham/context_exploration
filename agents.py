@@ -18,336 +18,14 @@ from scipy.stats import rankdata, truncnorm
 from scipy.linalg import cholesky
 from base_kernels import *
 from samplers import GridSampler
+from MCTS import MonteCarloTreeSearch, MonteCarloTreeSearch_Free, MonteCarloTreeSearch_2AFC
+from tqdm.auto import tqdm
 
-
-
-
-class GPAgent:
-
-    def __init__(self, N, K_inf, metric='cityblock',inf_noise=0.01):
-
-        self.metric = metric
-        # self.K_inf = K_inf
-        # self.N = int(np.sqrt(len(K_inf)))
-        self.N = N
-        self.n_actions = 4
-        self.inf_noise = inf_noise
-        self.action_to_direction = {0: np.array([0, 1]), 1: np.array([0, -1]), 2: np.array([1, 0]), 3: np.array([-1, 0])}
-        
-        ## define grid of kernel parameters and their weights
-        n_param_vals = 10
-        lb = 0
-        ub = np.pi 
-        ub -= (ub-lb)/(n_param_vals)
-        self.k_params = np.linspace(lb, ub, n_param_vals)
-        self.k_weights = np.ones(n_param_vals) / n_param_vals
-        # self.k_params = {
-        #     'theta': np.linspace(0, np.pi, n_param_vals),
-        # }
-        
-
-        ## if using a known kernel
-        if K_inf is not None:
-            self.K_inf = K_inf
-
-        ## else, sample a kernel
-        else:
-            self.init_kernels()
-            self.K_inf = self.sample_k()
-
-    ## initialise kernel set
-    def init_kernels(self):
-
-        ## init kernel set
-        x = np.arange(self.N)
-        y = np.arange(self.N)
-        X,Y = np.meshgrid(x,y)
-        locations = np.column_stack([X.ravel(), Y.ravel()])
-        kernel_set = BaseKernels(locations)
-
-        ## create kernel for each parameter in grid
-        self.all_Ks = []
-        for theta in self.k_params:
-            K_inf = kernel_set.rbf_1D(dim=0, theta=theta, sigma_f=2, length_scale=0.5)
-            self.all_Ks.append(K_inf)
-        self.all_Ks = np.array(self.all_Ks)
-    
-    ## sample kernel
-    def sample_k(self):
-        K_idx = np.random.choice(np.arange(len(self.all_Ks)), p=self.k_weights)
-        self.current_theta = self.k_params[K_idx]
-        K_inf = self.all_Ks[K_idx]
-        return K_inf
-    
-    ## kernel weight update
-    def update_k_weights(self, obs):
-        lls = []
-        for k_inf in self.all_Ks:
-            ll = self.likelihood(k_inf, obs)
-            lls.append(ll)
-        self.k_weights = softmax(lls)
-
-        ## get MLE param value
-        # best_idx = self.k_weights
-        # self.best_theta = self.k_params[best_idx]
-    
-    
-    
-    ### interactions with the environment
-
-    ## function for receiving info from env
-    def get_env_info(self, env):
-        self.N = env.N
-        self.obs = env.obs.copy()
-        self.current = env.current
-        self.goal = env.goal
-                     
-
-    ## root sampling of surface
-    def root_sample(self, obs, K_inf):
-
-        ## calculate posterior mean 
-        self.posterior_mean, self.posterior_cov, self.posterior_var = self.post_pred(K_inf = K_inf, obs=self.obs, pred = 'all')
-
-        ## sample from posterior
-        self.posterior_sample = sample(self.posterior_mean, self.posterior_cov).flatten()
-
-    ## dynamic programming
-    def dp(self, certainty_equivalent = False):
-
-        ## dynamic programming to get optimal Q-values, given the agent's knowledge of the environment
-        if certainty_equivalent:
-            dp_costs = self.posterior_mean.reshape(self.N, self.N).copy()
-            # dp_costs += self.expl_beta * np.sqrt(self.posterior_var.reshape(self.N, self.N)) #UCB
-        else:
-            dp_costs = self.posterior_sample.reshape(self.N, self.N).copy()
-        dp_costs[self.goal[0], self.goal[1]] = 0
-        self.V_inf, self.Q_inf, self.A_inf = value_iteration(dp_costs, self.goal)
-
-
-    ## posterior prediction
-    def post_pred(self, K_inf, obs, pred='all', sigma=0.01):
-        # sigma = self.inf_noise
-        if isinstance(pred, str):
-            pred_idx = np.arange(self.N**2)
-        else:
-            pred_idx = pred
-
-        if obs is not None:
-
-            ## centre around 0 
-            obs_idx = obs[:,0]* self.N + obs[:,1]
-            obs_costs = obs[:, 2].copy()
-            centring = 0.5
-            # centring = np.mean(obs_costs)
-            obs_costs += centring
-            # obs_costs += 0.5
-            assert np.all(obs_costs < 0.5), f"Adjusted observations out of bounds: {obs_costs}"
-
-
-            
-            # Covariance matrix of the already observed points
-            K_obs = K_inf[obs_idx][:, obs_idx]
-
-            
-            # Covariance matrix between input points (i.e. points to be predicted) and observed points
-            K_pred = K_inf[pred_idx][:, obs_idx]
-            
-            # inversion covariance matrix
-            # inv_K = np.linalg.inv(K_obs + sigma**2 * np.eye(len(obs_idx)))
-            inv_K = np.linalg.solve(K_obs + sigma**2 * np.eye(len(obs_idx)), np.eye(len(obs_idx)))
-
-            
-            # Posterior mean calculation
-            post_mean = K_pred @ inv_K @ obs_costs
-            # post_var = K_inf[pred_idx][:, pred_idx] - K_pred @ inv_K @ K_pred.T
-            post_cov = K_inf[pred_idx][:, pred_idx] - K_pred @ inv_K @ K_pred.T
-            post_var = np.diag(post_cov)
-
-        
-        ## or if starting from nothing, just return the prior
-        elif obs is None:
-            post_mean = np.zeros(len(pred_idx))  # Zero prior mean
-            post_cov = K_inf[pred_idx][:, pred_idx]  # Full prior covariance
-            post_var = np.diag(post_cov)
-
-        ## revert back to prior mean
-        post_mean -= 0.5
-        # post_mean -= centring
-
-        ## check for any non-negativity
-        # assert np.all((obs_costs-0.5)<0), 'obs is not all negative: {}'.format(self.obs)
-        # if np.any(post_mean >= 0):
-        #     # print(f"Positive posterior mean detected: obs_costs: {obs_costs-0.5}, post_mean: {post_mean}")
-        #     plot_r(post_mean.reshape(self.N,self.N), ax=plt.subplot(), title='post mean')
-
-        #     ## plot obs 
-        #     plot_obs(obs, ax=plt.subplot(), text=True)
-
-        #     ## plot kernel
-        #     plt.figure()
-        #     plot_kernel(K_inf, ax=plt.subplot(), title='K_inf')
-        #     plt.figure()
-        #     sample_tmp = sample(np.zeros(self.N**2), K_inf).reshape(self.N, self.N)
-        #     plot_r(sample_tmp, ax=plt.subplot(), title='sample')
-
-        ## clipping (cheap fix)
-        post_mean = np.clip(post_mean, -0.9, -0.1)
-
-        assert np.all(post_mean < 0), 'post mean is not all negative: \n{}'.format(post_mean.reshape(self.N, self.N))
-
-        return post_mean, post_cov, post_var
-    
-    ## posterior prediction weighted by the likelihood of the observations under each kernel
-    def weighted_post_pred(self, obs, pred='all'):
-        if isinstance(pred, str):
-            pred_idx = np.arange(self.N**2)
-        else:
-            pred_idx = pred    
-        post_means = []
-        post_vars = []
-        lls = []
-        
-        ## imperfect memory of observations
-        # obs = self.obs[-10:]
-
-        if obs is not None:
-
-            ## loop through possible kernels
-            for k_inf in self.all_Ks:
-                post_mean, post_var = self.post_pred(k_inf, obs = obs, pred=pred_idx)
-                post_means.append(post_mean)
-                post_vars.append(post_var)
-
-                ## calculate marginal likelihood of obs given this kernel
-                ll = self.likelihood(k_inf, obs)
-                lls.append(ll)
-            
-            ## weight each posterior prediction by the corresponding marginal likelihood
-            self.k_weights = softmax(lls)
-            post_mean = np.sum([self.k_weights[i] * post_means[i] for i in range(len(self.k_weights))], axis=0)
-
-            ## weighted posterior covariance
-            # post_var = np.sum([k_weights[i] * (post_vars[i] + (post_means[i] - post_mean) @ (post_means[i] - post_mean).T) for i in range(len(k_weights))], axis=0)
-            post_var = np.sum([self.k_weights[i] * (post_vars[i] + np.outer(post_means[i] - post_mean, post_means[i] - post_mean)) for i in range(len(self.k_weights))], axis=0) ## need to check if this is correct
-
-        ## or if starting from nothing, just return the prior
-        elif obs is None:
-            post_mean = np.zeros(len(pred_idx)) - 0.5
-            # post_var = self.K_inf[pred_idx][:, pred_idx]
-            post_var = np.zeros(len(pred_idx))
-
-        return post_mean, post_var
-    
-    ## compute log marginal likelihood of set of observations, given the inference kernel
-    def likelihood(self, K_inf, obs, sigma=0.01):
-        # sigma = self.inf_noise
-        n_obs = len(obs)
-        obs_idx = obs[:,0]* self.N + obs[:,1]
-        obs_costs = obs[:, 2] #i.e. y
-        K_tmp = K_inf[obs_idx][:,obs_idx] 
-        K_tmp = K_tmp + ((sigma**2) * np.eye(n_obs))
-        k_check(K_tmp)
-        
-        ## cholesky decomp
-        L = scipy.linalg.cholesky(K_tmp, lower=True, check_finite=False)
-        alpha = scipy.linalg.cho_solve((L, True), obs_costs, check_finite=False)
-
-        ## calculate log likelihood terms
-        log_det = np.sum(np.log(np.diag(L))) 
-        quad_form = 0.5 * (obs_costs@alpha)
-        norm_term = 0.5 * n_obs * np.log(2*np.pi)
-        ll = -quad_form - log_det - norm_term
-
-        return ll
-    
-    ## generate random observations from current true GP kernel
-    def gen_obs(self, samples, n_obs):
-        obs_idx = np.random.randint(0, self.N**2, size=n_obs)
-
-        ## map these observations to the grid and get the reward values
-        obs_coords = np.column_stack(np.unravel_index(obs_idx, (self.N, self.N)))
-        obs_costs = samples[obs_coords[:, 0], obs_coords[:, 1]]
-        obs = np.column_stack([obs_idx, obs_coords, obs_costs])
-
-        return obs
 
 
     
-    
-    ### define some policies
 
-    ## random
-    def random_policy(self):
-        action = np.random.choice(self.n_actions)
-        return action
-    
-
-    ## greedy wrt/ distance to goal
-    def greedy_policy(self, current, goal, eps=0):
-        if np.random.rand() < eps:
-            return self.random_policy()
-        else:
-            # distances = cdist([current], [goal], metric=self.metric).flatten()
-            ## get adjacent states
-            next_states = np.clip(np.array([current + self.action_to_direction[i] for i in range(self.n_actions)]), 0, self.N-1)
-            
-            ## choose whichever one is closest to the goal
-            distances = cdist(next_states, [goal], metric=self.metric).flatten()
-            min_distance = np.min(distances)
-            action = argm(distances, min_distance)
-            return action
-        
-
-    ## greedy wrt/ both distance to goal and cost, i.e. some combination of the two
-    def balanced_policy(self, current, goal, eps=0, alpha=0.5):
-        if np.random.rand() < eps:
-            return self.random_policy()
-        else:
-
-            
-            ## get adjacent states
-            next_states = np.clip(np.array([current + self.action_to_direction[i] for i in range(self.n_actions)]), 0, self.N-1)
-            next_states_idx = next_states[:, 0]*self.N + next_states[:, 1]
-            
-            ## myopic UCB
-            next_q = self.posterior_sample.reshape(self.N, self.N)[next_states[:, 0], next_states[:, 1]]
-            # next_q = self.posterior_mean.reshape(self.N, self.N)[next_states[:, 0], next_states[:, 1]]
-            # next_var = self.posterior_var.reshape(self.N, self.N)[next_states[:, 0], next_states[:, 1]]
-            # next_q = next_q + self.expl_beta * np.sqrt(next_var)
-
-            ## ensure post_mean is negative
-            if next_q.max() > 0:
-                next_q -= next_q.max()
-
-            
-            ## weight the distance to the goal by the cost of the state
-            distances = cdist(next_states, [goal], metric=self.metric).flatten()
-            combined_q = alpha * softmax(-distances) + (1-alpha) * softmax(next_q)
-            max_combined_q = np.max(combined_q)
-            action = argm(combined_q, max_combined_q)
-            return action
-        
-    
-    ## optimal policy, as given by the dynamic programming Q vals
-    def optimal_policy(self, current, Q=None):
-
-        if Q is None:
-            Q = self.Q_inf
-
-        ## get adjacent states
-        next_states = np.clip(np.array([current + self.action_to_direction[i] for i in range(self.n_actions)]), 0, self.N-1)
-        next_states_idx = next_states[:, 0]*self.N + next_states[:, 1]
-    
-        ## choose action with highest Q-value
-        current_q = Q[current[0], current[1], :]
-        max_current_q = np.nanmax(current_q)
-        action = argm(current_q, max_current_q)
-
-        return action
-    
-
-### farmer model?
+### base farmer model?
 class Farmer:
 
     def __init__(self, N, context_prior=0.5, metric='cityblock'):
@@ -355,7 +33,6 @@ class Farmer:
         self.metric = metric
         self.N = N
         self.n_actions = 4
-        # self.action_to_direction = {0: np.array([0, 1]), 1: np.array([0, -1]), 2: np.array([1, 0]), 3: np.array([-1, 0])}
         self.action_to_direction = {0: np.array([1,0]), 1: np.array([0, 1]), 2: np.array([-1, 0]), 3: np.array([0, -1])}
         
         ## initialise context prior prob
@@ -381,11 +58,8 @@ class Farmer:
 
 
     ## generate full set of root samples
-    def root_samples(self, obs=None, n_samples=1000, n_iter=100, lazy=True, CE=False, correct_prior = True, combo=True):
-        if correct_prior:
-            sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, obs, N=self.N, CE=CE)
-        else:
-            sampler = GridSampler(self.alpha_col, self.beta_col, self.alpha_row, self.beta_row, self.low_cost, self.high_cost, obs, N=self.N, CE=CE)
+    def root_samples(self, obs=None, n_samples=1000, n_iter=100, lazy=True, CE=False, combo=True):
+        sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, obs, N=self.N, CE=CE)
         self.all_posterior_ps = np.zeros((n_samples, self.N))
         self.all_posterior_qs = np.zeros((n_samples, self.N))
         self.all_posterior_p_costs = np.zeros((n_samples, self.N, self.N))
@@ -444,23 +118,33 @@ class Farmer:
             # print('sampler prior:', context_prior, ',', 'posterior:', self.context_prob)
 
             ## use inferred context to sample
-            self.context_indicators = np.random.binomial(1, self.context_prob, size=n_samples) 
-            col_context = self.context_indicators.astype(bool)
-            for s in range(n_samples):
-                self.all_posterior_ps[s,:], self.all_posterior_qs[s,:] = sampler.simple_sample(col_context=col_context[s])
-                self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
+            if not CE:
+                self.context_indicators = np.random.binomial(1, self.context_prob, size=n_samples) 
+                col_context = self.context_indicators.astype(bool)
+                for s in range(n_samples):
+                    self.all_posterior_ps[s,:], self.all_posterior_qs[s,:] = sampler.simple_sample(col_context=col_context[s])
+                    self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
 
-                ## temp fix: this posterior should also be filled in with 1s and 0s for states where a low and high cost have been observed respectively
-                for i,j,c in obs:
-                    i = int(i)
-                    j = int(j)
-                    prob = 1 if c == self.low_cost else 0
-                    self.all_posterior_p_costs[s][i,j] = prob
+                    ## temp fix: this posterior should also be filled in with 1s and 0s for states where a low and high cost have been observed respectively
+                    for i,j,c in obs:
+                        i = int(i)
+                        j = int(j)
+                        prob = 1 if c == self.low_cost else 0
+                        self.all_posterior_p_costs[s][i,j] = prob
+            
+                ## posterior means
+                self.posterior_mean_p_cost = np.mean(self.all_posterior_p_costs, axis=0)
+                self.posterior_mean_p = np.mean(self.all_posterior_ps, axis=0)
+                self.posterior_mean_q = np.mean(self.all_posterior_qs, axis=0)
 
-        ## posterior means
-        self.posterior_mean_p_cost = np.mean(self.all_posterior_p_costs, axis=0)
-        self.posterior_mean_p = np.mean(self.all_posterior_ps, axis=0)
-        self.posterior_mean_q = np.mean(self.all_posterior_qs, axis=0)
+            ## if CE, no need to loop through samples - just get posterior mean under each context, and then calculate weighted average
+            elif CE:
+                posterior_ps_col, posterior_qs_col = sampler.simple_sample(col_context=True)
+                posterior_ps_row, posterior_qs_row = sampler.simple_sample(col_context=False)
+                self.posterior_mean_p_cost = self.context_prob * np.outer(posterior_ps_col, posterior_qs_col) + (1-self.context_prob) * np.outer(posterior_ps_row, posterior_qs_row)
+                self.posterior_mean_p = self.context_prob * posterior_ps_col + (1-self.context_prob) * posterior_ps_row
+                self.posterior_mean_q = self.context_prob * posterior_qs_col + (1-self.context_prob) * posterior_qs_row
+
 
         ## debugging plot - kde of samples
         # fig, axs = plt.subplots(1, 2, figsize=(10, 5))
@@ -476,8 +160,6 @@ class Farmer:
     def quick_context_posterior(self, obs):
         sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, obs, N=self.N)
         context_prob = sampler.context_posterior(context_prior=self.context_prob)
-        # print('quick sampler prior:', self.context_prob, ',', 'posterior:', context_prob)
-        # print()
         return context_prob
 
 
@@ -486,6 +168,7 @@ class Farmer:
 
         ## use expected cost of each state
         if expected_cost:
+
             ## p(high cost)
             # dp_costs = self.posterior_p_cost*self.high_cost + (1-self.posterior_p_cost)*self.low_cost
             # dp_costs[self.goal[0], self.goal[1]] = 0
@@ -496,6 +179,7 @@ class Farmer:
 
         ## or, sample costs using p and q probabilities 
         else:
+
             ## p(high cost)
             # dp_costs = np.array([self.low_cost if r > self.posterior_p_cost.flatten()[i] else self.high_cost for i, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
             # dp_costs[self.goal[0], self.goal[1]] = 0
@@ -539,3 +223,192 @@ class Farmer:
             action = argm(distances, min_distance)
             # print(next_states, distances, min_distance, action)
             return action
+        
+
+        
+    ## run agent on participant's trial sequence
+    def run(self, params, hyper_params, agent = 'BAMCP', df_trials=None, envs=None):
+        
+        ## init expt info
+        n_trials = int(df_trials['trial'].max())
+        n_days = int(df_trials['day'].max() )
+        n_cities = int(df_trials['city'].max())
+        N = envs['city_1_grid_1_env_object'][0].N
+
+        ## initialise model's internal variables
+        self.n_total_trials = len(df_trials)
+        self.df_trials = df_trials
+        self.n_afc = 2 ## can sort this out later
+        self.p_choice = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.p_correct = np.zeros((n_cities, n_days, n_trials))
+        self.Q_vals = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.actions = np.zeros((n_cities, n_days, n_trials))
+        self.context_priors = np.zeros((n_cities, n_days, n_trials))
+        self.context_posteriors = np.zeros((n_cities, n_days, n_trials))
+        self.leaf_visits = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.total_costs = np.zeros((n_cities, n_days, n_trials))
+
+        ## init free params...
+        self.temp = params[0]
+        
+        ## init hyperparameters
+        if agent == 'BAMCP':
+            n_sims = hyper_params['n_sims']
+            exploration_constant = hyper_params['exploration_constant']
+            discount_factor = hyper_params['discount_factor']
+            n_iter = hyper_params['n_iter']
+            lazy = hyper_params['lazy']
+        elif agent == 'CE':
+            n_sims = hyper_params['n_sims']
+            n_iter = hyper_params['n_iter']
+            lazy = hyper_params['lazy']
+
+
+        ## loop through cities
+        for city in tqdm(range(n_cities)):
+
+            ## context prior resets
+            context_prior = 0.5
+
+            ## loop through days
+            for day in range(n_days):
+                self.context_prior = context_prior
+
+                ## get the environment for this day
+                if envs:
+                    env = envs['city_{}_grid_{}_env_object'.format(city+1, day+1)][0]
+                env.set_trial(0)
+
+                ## otherwise, generate a new one
+                # else:
+                #     env = make_env(N, n_trials, expt_info, beta_params, metric)
+
+                ## FIX FOR OLD ENVS: rename some attributes (episode --> trial, etc.)
+                if hasattr(env, 'n_episodes'):
+                    env.n_trials = env.n_episodes
+
+                ## initialise planner
+                if agent == 'BAMCP':
+                    MCTS = None
+                    tree_reset = True
+
+
+                ## loop through trials within day
+                for t in range(n_trials):
+
+                    ### let's just do BAMCP for now...
+
+                    ## reset env/trial
+                    self.context_prob = context_prior ## tmp fix: fix the prior to the prior that was used at the beginning of the grid (to prevent observations contributing to the posterior on multiple trials)
+                    env.reset()
+                    env.set_sim(True)
+                    start = env.current
+                    current = start
+                    goal = env.goal
+                    actions = []
+                    choice_probs = []
+
+                    ## agent receives info from env
+                    self.get_env_info(env)
+
+                    ## agent-specific path selection
+                    if agent == 'BAMCP':
+
+                        ## reset tree (or reuse it)
+                        if tree_reset:
+                            tree = Tree(N)
+                            MCTS = MonteCarloTreeSearch_2AFC(env=env, agent=self, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
+                        else:
+                            MCTS.update_trial()
+                            tree_resets=True
+                        assert t == MCTS.actual_trial, 'trial mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(t, MCTS.env.trial)
+                        assert MCTS.env.sim == True, 'env not in sim mode'
+
+                        ## search
+                        MCTS.actual_state = current
+                        action, MCTS_Q = MCTS.search(n_sims, n_iter=n_iter, lazy=lazy)
+                        self.actions[city, day, t] = action
+                        self.Q_vals[city, day, t] = MCTS_Q
+                        self.p_choice[city, day, t] = softmax(MCTS_Q/self.temp)
+                        correct_path = np.argmax(env.path_actual_costs[t])
+                        self.p_correct[city, day, t] = self.p_choice[city, day, t][correct_path]
+                        self.leaf_visits[city, day, t] = MCTS.tree.root.action_leaves[action].n_action_visits
+
+                    elif agent == 'CE':
+                        env.set_sim(False)
+                        
+                        ## get posterior mean grid
+                        self.root_samples(obs=env.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy, CE=True, combo=False)
+                        env.receive_predictions(self.posterior_mean_p_cost)
+
+                        ## get the cost of each path under the posterior mean
+                        path_costs = []
+                        for path_id in range(env.n_afc):
+                            path_states = env.path_states[t][path_id]
+                            path_cost = 0
+                            for state in path_states:
+                                # path_cost += env_copy.get_pred_cost(state) ## i.e. sample binary costs from the posterior pqs
+                                path_cost += self.posterior_mean_p_cost[state[0], state[1]]*env.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env.high_cost ## or, use expected costs
+                            path_costs.append(path_cost)
+
+                        ## choose the path with the lowest total cost
+                        max_cost = np.max(path_costs)
+                        action = argm(path_costs, max_cost)
+                        self.actions[city, day, t] = action
+                        self.Q_vals[city, day, t] = np.array(path_costs)
+                        self.p_choice[city, day, t] = softmax(np.array(path_costs)/self.temp)
+                        correct_path = np.argmax(env.path_actual_costs[t])
+                        self.p_correct[city, day, t] = self.p_choice[city, day, t][correct_path]
+                        
+
+
+                    ## take action
+                    env.set_sim(False)
+                    env.init_trial(action)
+                    start = env.current
+                    goal = env.goal
+                    assert np.array_equal(start, env.starts[t][action]), 'current state does not match start state\n current: {}, start: {}'.format(env.current, env.starts[t][action])
+                    action_sequence = env.path_actions[t][action]
+                    _, _ = env.take_path(action_sequence)
+                    current = env.current
+                    costs = env.trial_obs[:,-1]
+                    assert len(costs) == len(action_sequence)+1, 'costs and action sequence do not match\n costs: {}, action sequence: {}'.format(len(costs), len(action_sequence))
+                    path_cost = np.sum(costs)
+                    self.total_costs[city, day, t] = path_cost
+                    day_terminated = t == (n_trials-1)
+
+                    ## update observations
+                    self.get_env_info(env)
+
+                    ## update MCTS tree
+                    if agent == 'BAMCP':
+
+                        ## update next node id
+                        init_info_state = np.array(MCTS.tree.root.node_id).reshape(N, N, 2)
+                        trial_obs = env.trial_obs.copy()
+                        next_node_id = MCTS.init_node_id(trial_obs, init_info_state, t)
+
+                        ## prune tree (not always successful due to high branching factor, in which case reset the tree)
+                        if not day_terminated:
+                            if next_node_id in MCTS.tree.root.action_leaves[action].children:
+                                MCTS.tree.prune(action, next_node_id)
+                                assert np.array_equal(MCTS.tree.root.state[2*MCTS.n_afc:], costs), 'error in root update\n root state: {} \n costs: {}'.format(MCTS.tree.root.state[2*MCTS.n_afc:], costs)
+                                tree_reset = False
+                            else:
+                                tree_reset = True
+
+                    ## get the context prior - i.e. the probability with which samples were drawn
+                    context_prior = self.context_prob
+
+                    # get the new context posterior for this agent
+                    context_posterior = self.quick_context_posterior(env.obs)
+
+                    ## (and save these)
+                    self.context_priors[city, day, t] = context_prior
+                    self.context_posteriors[city, day, t] = context_posterior
+
+                    ## carry over the context prob to the next run, if on the final trial of the day
+                    if t == (n_trials-1):
+                        context_prior = context_posterior
+
+            
