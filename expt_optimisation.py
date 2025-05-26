@@ -93,7 +93,7 @@ beta_params = {
 }
 N = 8
 n_grids = 200
-n_episodes = 4
+n_trials = 4
 n_blocks = 5
 expt = '2AFC'
 expt_info = {
@@ -105,7 +105,7 @@ expt_info = {
 env_params = {
     'N': N,
     'n_grids': n_grids,
-    'n_episodes': n_episodes,
+    'n_trials': n_trials,
     'n_blocks': n_blocks,
     'expt_info': expt_info,
     'metric': 'cityblock',
@@ -151,7 +151,7 @@ if __name__ == '__main__':
         ## start pool
         n_cores = np.min([n_cores, n_grids])
         with mp.Pool(n_cores) as pool:
-            print('Parallel simulation of ',expt,' expt, ', n_grids, ' grids, with ',n_episodes,' episodes, ',n_sims,' simulations per episode')
+            print('Parallel simulation of ',expt,' expt, ', n_grids, ' grids, with ',n_trials,' trials, ',n_sims,' simulations per trial')
             sim_out = [pool.apply_async(simulate_agent, args=(m, env_params, MCTS_params, sampler_params, agents, progress),
                                             callback = save_results) for m in range(n_grids)]
             pool.close()
@@ -179,10 +179,10 @@ df_sim = pd.DataFrame(sim_results)
 
 
 ## save simulated grids + results
-df_sim.to_csv('useful_saves/expt_optimisation/{}_{}x{}_env_{}_context_{}-{}-{}-{}_beta_{}_grids_{}_episodes_{}_sims_{}_blocks_results.csv'.format(expt,N,N, expt_info['context'],
+df_sim.to_csv('useful_saves/expt_optimisation/{}_{}x{}_env_{}_context_{}-{}-{}-{}_beta_{}_grids_{}_trials_{}_sims_{}_blocks_results.csv'.format(expt,N,N, expt_info['context'],
                                                                                        beta_params['alpha_row'], beta_params['beta_row'], beta_params['alpha_col'], beta_params['beta_col'],
-                                                                                       n_grids, n_episodes,n_sims, n_blocks))
-with open('useful_saves/expt_optimisation/{}_{}x{}_env_{}_context_{}-{}-{}-{}_beta_{}_grids_{}_episodes_{}_sims_{}_blocks_envs.pkl'.format(expt,N,N, expt_info['context'],
+                                                                                       n_grids, n_trials,n_sims, n_blocks))
+with open('useful_saves/expt_optimisation/{}_{}x{}_env_{}_context_{}-{}-{}-{}_beta_{}_grids_{}_trials_{}_sims_{}_blocks_envs.pkl'.format(expt,N,N, expt_info['context'],
                                                                                                          beta_params['alpha_row'], beta_params['beta_row'], beta_params['alpha_col'], beta_params['beta_col'],
-                                                                                                 n_grids, n_episodes, n_sims, n_blocks), 'wb') as f:
+                                                                                                 n_grids, n_trials, n_sims, n_blocks), 'wb') as f:
     pickle.dump(all_grids, f)
