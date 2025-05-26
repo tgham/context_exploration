@@ -11,7 +11,7 @@ from scipy import special
 from scipy.special import softmax
 
 from plotter import *
-from agents import GPAgent, Farmer
+from agents import Farmer
 
 ## base class 
 class MonteCarloTreeSearch():
@@ -413,7 +413,7 @@ class MonteCarloTreeSearch():
 
 
     ## tree search --> action loop
-    def search(self, n_sims=1000, n_futures=0, n_iter=100, lazy=False, reuse_samples=False, correct_prior = True):
+    def search(self, n_sims=1000, n_iter=100, lazy=False):
 
         ## root sampling of new posterior
         # self.GP.root_sample(certainty_equivalent=True)
@@ -421,9 +421,8 @@ class MonteCarloTreeSearch():
         ## root sampling of new kernel
         # K_inf = self.GP.sample_k()
 
-        ## if samples not provided, generate new set of root samples
-        if not reuse_samples:
-            self.agent.root_samples(obs = self.env.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy, CE=False, correct_prior = correct_prior, combo=False)
+        ## generate new set of root samples
+        self.agent.root_samples(obs = self.env.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy, CE=False, combo=False)
 
 
         ## debugging plot
@@ -814,14 +813,11 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
 
 
 ## parallel function for simulating many trials within the same grid env
-# def simulate_agent(m, N, env_params=None, metric='cityblock', expt='2AFC', n_trials=10, agents = ['GP', 'GP-MCTS', 'BAMCP','CE'], n_sims=1000,n_days=1, correct_prior=True, n_futures=0, n_iter=10, lazy=False, exploration_constant=2, discount_factor=0.95, progress=False):
-def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, agents= ['BAMCP', 'CE'], progress=False):
+def simulate_agent(agent_params, ppt, df_ppt=None, env_params=None, MCTS_params=None, sampler_params=None, agents= ['BAMCP', 'CE'], progress=False, fit=False):
+    
+    ## if fitting to a participant, extract necessary info from there
+    # if df_ppt:
     print(' ') # for some reason need this to get the pbar to appear
-
-    ## unroll param dictionaries
-    # locals().update(env_params)
-    # locals().update(MCTS_params)
-    # locals().update(sampler_params)
 
     ## or, do this manually
     N = env_params['N']
@@ -833,13 +829,11 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
     beta_params = env_params['beta_params']
 
     n_sims = MCTS_params['n_sims']
-    n_futures = MCTS_params['n_futures']
     exploration_constant = MCTS_params['exploration_constant']
     discount_factor = MCTS_params['discount_factor']
 
     n_iter = sampler_params['n_iter']
     lazy = sampler_params['lazy']
-    correct_prior = sampler_params['correct_prior']
     
     ## set context prior for each sampling agent
     context_priors = {}
@@ -853,14 +847,14 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
         sim_out[key]=[]
     
     ## set seed
-    seed=m
+    seed=ppt
     seed=os.getpid()
     np.random.seed(seed)
 
     ## loop through runs of the same grid-trial set
     if progress:
         if n_days > 1:
-            pbar = tqdm(total=n_days*n_trials, desc='Grid_'+str(m)+', '+str(n_days)+' days, '+str(n_trials)+' trials', position=0, leave=False, ascii=True)
+            pbar = tqdm(total=n_days*n_trials, desc='Grid_'+str(ppt)+', '+str(n_days)+' days, '+str(n_trials)+' trials', position=0, leave=False, ascii=True)
     
     ## loop through days - i.e. different grids drawn from the same prior. we will collect these for saving at the end
     all_day_envs = []
@@ -901,7 +895,6 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
         # plot_r(env.costss[0]+1, ax = axs[1], title='Actual costs', cbar=True)
         # plt.show()
 
-
         ## initialise farmer agent
         # farmer = Farmer(N, context_prior=context_prior)
         # farmer = Farmer(N, context_prior=context_priors[ag])
@@ -909,19 +902,14 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
         ## loop through trials (i.e. different start and goal states for the same grid)
         if progress:
             if n_days <= 1:
-                pbar = tqdm(total=n_trials, desc='Grid_'+str(m)+', day '+str(day+1)+'/'+str(n_days), position=m+1, leave=False)
+                pbar = tqdm(total=n_trials, desc='Grid_'+str(ppt)+', day '+str(day+1)+'/'+str(n_days), position=ppt+1, leave=False)
         for t in range(n_trials):
-
-        ## TEMP: just interested in first choice
-        # for t in range(1):
 
             ## loop through agents
             for a, ag in enumerate(agents):
                 
                 ## initialise the farmer
-                # farmer = Farmer(N, context_prior=context_priors[ag])
                 farmer = farmers[ag]
-                # print('agent:', ag, ', trial:', e,', context prior:', farmer.context_prob)
 
                 ## tmp fix: fix the prior to the prior that was used at the beginning of the grid (to prevent observations contributing to the posterior on multiple trials)
                 farmer.context_prob = context_priors[ag]
@@ -960,12 +948,6 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                 CE_Q_values = []
                 ELDs = []
                 EKLs = []
-
-                ## correct vs incorrect prior for BAMCP agent
-                if ag=='BAMCP':
-                    correct_prior=True
-                elif ag=='BAMCP_wrong':
-                    correct_prior=False
                 
 
                 ## GP-MCTS agent receives info from env
@@ -983,17 +965,13 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                     if tree_resets[ag]:#& tree_reset:
                         tree = Tree(N)
                         if expt == 'free':
-                            # MCTS = MonteCarloTreeSearch_Free(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
                             MCTSs[ag] = MonteCarloTreeSearch_Free(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
                         elif expt == '2AFC':
-                            # MCTS = MonteCarloTreeSearch_2AFC(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
                             MCTSs[ag] = MonteCarloTreeSearch_2AFC(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
                 
                     ## if keeping the tree between trials, need to update tree with new trial info
                     elif (not tree_resets[ag]): #& (not tree_reset):
-                        # MCTS.update_trial()
                         MCTSs[ag].update_trial()
-                        # tree_reset = True
                         tree_resets[ag] = True
                         MCTSs[ag].agent = agent ##???
                     MCTS = MCTSs[ag]
@@ -1005,7 +983,6 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                 end_trial = False
                 terminated=False
                 early_terminate = False
-                reuse_samples = False
                 steps = 0
                 if expt=='free':
                     max_steps = len(env_copy.o_trajs[t])*1.75
@@ -1031,8 +1008,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         env_copy.set_sim(False)
 
                         ## get posterior mean grid
-                        # agent.root_samples(obs=env_copy.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy,CE=True, correct_prior = correct_prior)
-                        agent.root_samples(obs=env_copy.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy, CE=True, correct_prior = correct_prior, combo=False)
+                        agent.root_samples(obs=env_copy.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy, CE=True, combo=False)
                         env_copy.receive_predictions(agent.posterior_mean_p_cost)
 
 
@@ -1100,8 +1076,6 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         agent.get_env_info(env_copy)
 
 
-
-
                     ## bamcp
                     elif (ag == 'BAMCP') or (ag == 'BAMCP w/ CE') or (ag=='BAMCP_wrong'):
                         env_copy.set_sim(True)
@@ -1113,7 +1087,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         assert MCTS.env.sim == True, 'env not in sim mode'
                     
                         ## search
-                        action, MCTS_Q = MCTS.search(n_sims, n_futures, n_iter=n_iter, lazy=lazy, reuse_samples=reuse_samples, correct_prior=correct_prior)
+                        action, MCTS_Q = MCTS.search(n_sims, n_iter=n_iter, lazy=lazy)
                         actions.append(action)
                         Q_values.append(MCTS_Q)
                         choice_probs.append(softmax(MCTS_Q))
@@ -1300,14 +1274,14 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         early_terminate = True
 
                     if early_terminate:
-                        print('grid ',m,': trial ',t,' terminated for agent ',ag,' after ',steps,' steps')
+                        print('grid ',ppt,': trial ',t,' terminated for agent ',ag,' after ',steps,' steps')
                         # raise ValueError('grid ',m,': trial ',t,' terminated for agent ',ag,' after ',steps,' steps')
 
                         ## or just skip to the next trial
                         sim_out['agent'].append(agent)
                         sim_out['day'].append(day)
                         sim_out['trial'].append(t)
-                        sim_out['grid'].append(m)
+                        sim_out['grid'].append(ppt)
                         sim_out['start'].append(start)
                         sim_out['goal'].append(goal)
                         sim_out['path_A'].append(env_copy.path_states[t][0])
@@ -1368,7 +1342,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         sim_out['agent'].append(ag)
                         sim_out['day'].append(day)
                         sim_out['trial'].append(t)
-                        sim_out['grid'].append(m)
+                        sim_out['grid'].append(ppt)
                         sim_out['start'].append(start)
                         sim_out['goal'].append(goal)
                         sim_out['path_A'].append(env_copy.path_states[t][0])
