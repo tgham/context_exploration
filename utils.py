@@ -759,6 +759,7 @@ data_keys = [
     'expected_LD',
     'expected_KL',
     'Q_values',
+    'choice_probs',
     'leaf_visits',
     'CE_Q_values',
 

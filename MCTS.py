@@ -8,6 +8,7 @@ import os
 from scipy.spatial.distance import cdist
 from scipy.stats import gaussian_kde
 from scipy import special
+from scipy.special import softmax
 
 from plotter import *
 from agents import GPAgent, Farmer
@@ -953,6 +954,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                 goal = env_copy.goal
                 actions = []
                 CE_actions = []
+                choice_probs = []
                 # context_probs = [] ## i.e. the prob of the context at the start of the trial
                 Q_values = []
                 CE_Q_values = []
@@ -1069,6 +1071,8 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                             max_cost = np.max(path_costs)
                             action = argm(path_costs, max_cost)
                             actions.append(action)
+                            Q_values.append(path_costs)
+                            choice_probs.append(softmax(path_costs))
 
                             ## take the path
                             env_copy.set_sim(False)
@@ -1112,6 +1116,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         action, MCTS_Q = MCTS.search(n_sims, n_futures, n_iter=n_iter, lazy=lazy, reuse_samples=reuse_samples, correct_prior=correct_prior)
                         actions.append(action)
                         Q_values.append(MCTS_Q)
+                        choice_probs.append(softmax(MCTS_Q))
                         leaf_visits = [leaf.n_action_visits for leaf in MCTS.tree.root.action_leaves.values()]
 
 
@@ -1319,6 +1324,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         sim_out['context_posterior'].append(context_posterior)
                         sim_out['actions'].append(actions)
                         sim_out['Q_values'].append(Q_values)
+                        sim_out['choice_probs'].append(choice_probs)
                         sim_out['leaf_visits'].append(leaf_visits)
                         sim_out['CE_actions'].append(CE_actions)
                         sim_out['CE_Q_values'].append(CE_Q_values)
