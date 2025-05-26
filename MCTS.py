@@ -31,13 +31,13 @@ class MonteCarloTreeSearch():
         self.exploration_constant = exploration_constant
         self.exploration_constants = [self.exploration_constant for t in range(self.env.n_trials)]
 
-        ## or, scale exploration constant by the expected cost of the entire block
+        ## or, scale exploration constant by the expected cost of the entire day
         # n_steps = 0
         # for trial in range(self.env.n_trials):
         #     n_steps += len(self.env.path_states[trial][0])
         # self.exploration_constant = exploration_constant * n_steps
 
-        ## or, multiple exploration constants, each scaled by the expected cost of the block from that trial onwards
+        ## or, multiple exploration constants, each scaled by the expected cost of the day from that trial onwards
         expected_cost = np.abs(np.mean([self.low_cost, self.high_cost]))
         self.exploration_constants = []
         for t in range(self.env.n_trials):
@@ -96,7 +96,7 @@ class MonteCarloTreeSearch():
             # self.env.set_state(self.actual_state)
 
         elif self.expt == '2AFC':
-            terminated = node.trial == self.env.n_trials-1 ## i.e. this action leaf corresponds to the action made in the final trial, so it leads to termination of the block
+            terminated = node.trial == self.env.n_trials-1 ## i.e. this action leaf corresponds to the action made in the final trial, so it leads to termination of the day
             # next_state = node.state[:2] #i.e. this stays the same since agent always regens to the same start state. may instead choose to fill this with the states that are actually traversed
             if not terminated:
                 # next_state = self.env.starts[node.trial]
@@ -814,7 +814,7 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
 
 
 ## parallel function for simulating many trials within the same grid env
-# def simulate_agent(m, N, env_params=None, metric='cityblock', expt='2AFC', n_trials=10, agents = ['GP', 'GP-MCTS', 'BAMCP','CE'], n_sims=1000,n_blocks=1, correct_prior=True, n_futures=0, n_iter=10, lazy=False, exploration_constant=2, discount_factor=0.95, progress=False):
+# def simulate_agent(m, N, env_params=None, metric='cityblock', expt='2AFC', n_trials=10, agents = ['GP', 'GP-MCTS', 'BAMCP','CE'], n_sims=1000,n_days=1, correct_prior=True, n_futures=0, n_iter=10, lazy=False, exploration_constant=2, discount_factor=0.95, progress=False):
 def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, agents= ['BAMCP', 'CE'], progress=False):
     print(' ') # for some reason need this to get the pbar to appear
 
@@ -828,7 +828,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
     n_trials = env_params['n_trials']
     expt_info = env_params['expt_info']
     expt = expt_info['type']
-    n_blocks = env_params['n_blocks']
+    n_days = env_params['n_days']
     metric = env_params['metric']
     beta_params = env_params['beta_params']
 
@@ -859,12 +859,12 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
 
     ## loop through runs of the same grid-trial set
     if progress:
-        if n_blocks > 1:
-            pbar = tqdm(total=n_blocks*n_trials, desc='Grid_'+str(m)+', '+str(n_blocks)+' blocks, '+str(n_trials)+' trials', position=0, leave=False, ascii=True)
+        if n_days > 1:
+            pbar = tqdm(total=n_days*n_trials, desc='Grid_'+str(m)+', '+str(n_days)+' days, '+str(n_trials)+' trials', position=0, leave=False, ascii=True)
     
-    ## loop through blocks - i.e. different grids drawn from the same prior. we will collect these for saving at the end
-    all_block_envs = []
-    for block in range(n_blocks):   
+    ## loop through days - i.e. different grids drawn from the same prior. we will collect these for saving at the end
+    all_day_envs = []
+    for day in range(n_days):   
 
         ## create base grid environment
         env = make_env(N, n_trials, expt_info, beta_params, metric)
@@ -908,8 +908,8 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
 
         ## loop through trials (i.e. different start and goal states for the same grid)
         if progress:
-            if n_blocks <= 1:
-                pbar = tqdm(total=n_trials, desc='Grid_'+str(m)+', block '+str(block+1)+'/'+str(n_blocks), position=m+1, leave=False)
+            if n_days <= 1:
+                pbar = tqdm(total=n_trials, desc='Grid_'+str(m)+', day '+str(day+1)+'/'+str(n_days), position=m+1, leave=False)
         for t in range(n_trials):
 
         ## TEMP: just interested in first choice
@@ -1086,13 +1086,13 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                             costs = env_copy.trial_obs[:,-1]
                             path_cost = np.sum(costs)
                             terminated=True
-                            block_terminated = t == (n_trials-1)
+                            day_terminated = t == (n_trials-1)
                             # costs = []
                             # for ac in action_sequence:
                             #     current, cost, terminated, _, _ = env_copy.step(ac)
                             #     costs.append(cost)
                             # path_cost = np.sum(costs)
-                            block_terminated = t == (n_trials-1)
+                            day_terminated = t == (n_trials-1)
                         steps += 1
                         leaf_visits = []
 
@@ -1186,7 +1186,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         #     observed_costs = np.zeros((N,N)) + np.nan
                         #     for i,j,c in env_copy.obs:
                         #         observed_costs[i,j] = c
-                        #     plot_r(observed_costs+1, ax = axs[1, trial], title = f'Grid {block+1}, Trial {ep+1}', cbar=False)
+                        #     plot_r(observed_costs+1, ax = axs[1, trial], title = f'Grid {day+1}, Trial {ep+1}', cbar=False)
                         #     plot_traj([env.path_states[trial][0], env.path_states[trial][1]], ax = axs[1, trial], expt=expt)
                         # all_posterior_p_costs_plot.append(agent.posterior_mean_p_cost)
                         # all_posterior_contexts_plot.append(farmer.context_prob)
@@ -1221,7 +1221,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                             assert len(costs) == len(action_sequence)+1, 'costs and action sequence do not match\n costs: {}, action sequence: {}'.format(len(costs), len(action_sequence))
                             path_cost = np.sum(costs)
                             terminated = True ## trivially true in 2AFC
-                            block_terminated = t == (n_trials-1)
+                            day_terminated = t == (n_trials-1)
 
                             ## update next node id
                             # next_node_id = MCTS.init_node_id(env_copy.obs.copy(), None, t)
@@ -1254,7 +1254,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         elif expt=='2AFC':
 
                             ## pruning not always successful due to high branching factor, in which case reset the tree
-                            if not block_terminated:
+                            if not day_terminated:
 
                                 if next_node_id in MCTS.tree.root.action_leaves[action].children:
                                     MCTS.tree.prune(action, next_node_id)
@@ -1283,7 +1283,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                     # print('prior context:', farmer.context_prob)
 
                     # get the new context posterior for this agent
-                    # print('agent:', ag, ', trial:', e,', block:', block, ', action:', action, ', context prior:', farmer.context_prob)
+                    # print('agent:', ag, ', trial:', e,', day:', day, ', action:', action, ', context prior:', farmer.context_prob)
                     # print('farmers prior context:',farmer.context_prob)
                     context_posterior = farmer.quick_context_posterior(env_copy.obs)
                     # print('posterior context:', context_posterior)
@@ -1305,7 +1305,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
 
                         ## or just skip to the next trial
                         sim_out['agent'].append(agent)
-                        sim_out['block'].append(block)
+                        sim_out['day'].append(day)
                         sim_out['trial'].append(t)
                         sim_out['grid'].append(m)
                         sim_out['start'].append(start)
@@ -1366,7 +1366,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                     ## save data and end the trial
                     elif terminated:
                         sim_out['agent'].append(ag)
-                        sim_out['block'].append(block)
+                        sim_out['day'].append(day)
                         sim_out['trial'].append(t)
                         sim_out['grid'].append(m)
                         sim_out['start'].append(start)
@@ -1449,7 +1449,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
 
                         end_trial = True
             
-                ## carry over the context prob to the next run, if on the final trial of the block
+                ## carry over the context prob to the next run, if on the final trial of the day
                 if t == (n_trials-1):
                     context_priors[ag] = context_posterior
                 # else:
@@ -1458,15 +1458,15 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
             
             if progress:
                 pbar.update(1)
-        if progress & (n_blocks <= 1):
+        if progress & (n_days <= 1):
             pbar.close()
 
-        ## save the env for this block
-        all_block_envs.append(env_copy)
+        ## save the env for this day
+        all_day_envs.append(env_copy)
 
-    if progress & (n_blocks > 1):
+    if progress & (n_days > 1):
         pbar.close()
                     
 
-    return sim_out,all_block_envs
+    return sim_out,all_day_envs
     # return sim_out, _

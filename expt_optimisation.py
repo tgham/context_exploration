@@ -45,18 +45,18 @@ warnings.filterwarnings('ignore')
 ## callback function for saving simulation results
 def save_results(sim):
     sim_out = sim[0]
-    all_block_envs = sim[1]
+    all_day_envs = sim[1]
 
     ## save simulation output
     for key in data_keys:
         sim_results[key].extend(sim_out[key])
     
     
-    ## save the grid surfaces for each of the blocks
-    for block in range(len(all_block_envs)):
-        env = all_block_envs[block]
+    ## save the grid surfaces for each of the days
+    for day in range(len(all_day_envs)):
+        env = all_day_envs[day]
         all_grids['grid'].append(sim_out['grid'][0])
-        all_grids['block'].append(block)
+        all_grids['day'].append(day)
         # all_grids['env'].append(env) ## if pushed for space, comment this out
         for key in grid_keys:
             attribute = getattr(env, key)
@@ -77,7 +77,7 @@ for key in grid_keys:
     all_grids[key] = []
 all_grids['grid'] = [] 
 all_grids['env'] = [] ## in case we want to save the whole thing
-all_grids['block'] = [] ## in case we want to save the whole thing
+all_grids['day'] = [] ## in case we want to save the whole thing
 
 
 ### env inits
@@ -94,7 +94,7 @@ beta_params = {
 N = 8
 n_grids = 100
 n_trials = 4
-n_blocks = 5
+n_days = 5
 expt = '2AFC'
 expt_info = {
     'type': expt,
@@ -106,7 +106,7 @@ env_params = {
     'N': N,
     'n_grids': n_grids,
     'n_trials': n_trials,
-    'n_blocks': n_blocks,
+    'n_days': n_days,
     'expt_info': expt_info,
     'metric': 'cityblock',
     # 'expt': 'free',
@@ -179,10 +179,10 @@ df_sim = pd.DataFrame(sim_results)
 
 
 ## save simulated grids + results
-df_sim.to_csv('useful_saves/expt_optimisation/{}_{}x{}_env_{}_context_{}-{}-{}-{}_beta_{}_grids_{}_trials_{}_sims_{}_blocks_results.csv'.format(expt,N,N, expt_info['context'],
+df_sim.to_csv('useful_saves/expt_optimisation/{}_{}x{}_env_{}_context_{}-{}-{}-{}_beta_{}_grids_{}_trials_{}_sims_{}_days_results.csv'.format(expt,N,N, expt_info['context'],
                                                                                        beta_params['alpha_row'], beta_params['beta_row'], beta_params['alpha_col'], beta_params['beta_col'],
-                                                                                       n_grids, n_trials,n_sims, n_blocks))
-with open('useful_saves/expt_optimisation/{}_{}x{}_env_{}_context_{}-{}-{}-{}_beta_{}_grids_{}_trials_{}_sims_{}_blocks_envs.pkl'.format(expt,N,N, expt_info['context'],
+                                                                                       n_grids, n_trials,n_sims, n_days))
+with open('useful_saves/expt_optimisation/{}_{}x{}_env_{}_context_{}-{}-{}-{}_beta_{}_grids_{}_trials_{}_sims_{}_days_envs.pkl'.format(expt,N,N, expt_info['context'],
                                                                                                          beta_params['alpha_row'], beta_params['beta_row'], beta_params['alpha_col'], beta_params['beta_col'],
-                                                                                                 n_grids, n_trials, n_sims, n_blocks), 'wb') as f:
+                                                                                                 n_grids, n_trials, n_sims, n_days), 'wb') as f:
     pickle.dump(all_grids, f)

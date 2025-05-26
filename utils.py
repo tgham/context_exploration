@@ -721,7 +721,7 @@ def get_next_state(current, direction, N):
 ## data-saving/dict stuff
 data_keys = [
     'agent',
-    'block',
+    'day',
     'grid',
     'trial',
     'start',
