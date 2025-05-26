@@ -121,18 +121,39 @@ class Farmer:
             if not CE:
                 self.context_indicators = np.random.binomial(1, self.context_prob, size=n_samples) 
                 col_context = self.context_indicators.astype(bool)
-                for s in range(n_samples):
-                    self.all_posterior_ps[s,:], self.all_posterior_qs[s,:] = sampler.simple_sample(col_context=col_context[s])
-                    self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
 
-                    ## temp fix: this posterior should also be filled in with 1s and 0s for states where a low and high cost have been observed respectively
-                    for i,j,c in obs:
-                        i = int(i)
-                        j = int(j)
-                        prob = 1 if c == self.low_cost else 0
-                        self.all_posterior_p_costs[s][i,j] = prob
+                ## looping method...
+                # for s in range(n_samples):
+                #     self.all_posterior_ps[s,:], self.all_posterior_qs[s,:] = sampler.simple_sample(col_context=col_context[s])
+                #     self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
+
+                #     ## temp fix: this posterior should also be filled in with 1s and 0s for states where a low and high cost have been observed respectively
+                #     for i,j,c in obs:
+                #         i = int(i)
+                #         j = int(j)
+                #         prob = 1 if c == self.low_cost else 0
+                #         self.all_posterior_p_costs[s][i,j] = prob
+
+                ## or, all at once?
+                n_col_samples = np.sum(self.context_indicators)
+                n_row_samples = n_samples - n_col_samples
+                posterior_ps_col, posterior_qs_col = sampler.simple_sample(col_context=True, n_samples=n_col_samples)
+                posterior_ps_row, posterior_qs_row = sampler.simple_sample(col_context=False, n_samples=n_row_samples)
+                self.all_posterior_ps[:n_col_samples,:] = posterior_ps_col
+                self.all_posterior_ps[n_col_samples:,:] = posterior_ps_row
+                self.all_posterior_qs[:n_col_samples,:] = posterior_qs_col
+                self.all_posterior_qs[n_col_samples:,:] = posterior_qs_row
+
+                ## shuffle them all in the same way
+                idx = np.random.permutation(n_samples)
+                self.all_posterior_ps = self.all_posterior_ps[idx]
+                self.all_posterior_qs = self.all_posterior_qs[idx]
+
+                ## posterior costs - i.e. the outer product of each sample's p and q
+                self.all_posterior_p_costs = np.einsum('si,sj->sij', self.all_posterior_ps, self.all_posterior_qs)
+
             
-                ## posterior means
+                ## posterior means 
                 self.posterior_mean_p_cost = np.mean(self.all_posterior_p_costs, axis=0)
                 self.posterior_mean_p = np.mean(self.all_posterior_ps, axis=0)
                 self.posterior_mean_q = np.mean(self.all_posterior_qs, axis=0)

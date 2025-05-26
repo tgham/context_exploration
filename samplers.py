@@ -63,8 +63,8 @@ def compute_log_likelihood_global(obs, row_probs, col_probs, high_cost, low_cost
 
 
 @njit
-def propose(alpha, beta):
-    return np.random.beta(alpha, beta)
+def propose(alpha, beta, size=1):
+    return np.random.beta(alpha, beta, size=size)
 
 # @njit
 # def beta(a,b):
@@ -329,9 +329,9 @@ class GridSampler:
         return self.row_probs, self.col_probs
     
     ## no combinatorial structure - just use the counts for each row and column
-    def simple_sample(self, col_context=True):
-        self.col_probs = np.ones(self.N) 
-        self.row_probs = np.ones(self.N)
+    def simple_sample(self, col_context=True, n_samples=1):
+        self.col_probs = np.ones((n_samples, self.N)) 
+        self.row_probs = np.ones((n_samples, self.N))
         
         ## if BAMCP, then parameters are *sampled* from beta distribution
         if not self.CE:
@@ -342,7 +342,7 @@ class GridSampler:
                     high_counts_col = self.high_counts_cols[j]
                     alpha = self.alpha_col + low_counts_col
                     beta = self.beta_col + high_counts_col
-                    self.col_probs[j] = propose(alpha, beta)
+                    self.col_probs[:,j] = propose(alpha, beta, size=n_samples)
             else:
                 # self.col_probs = np.ones(self.N)
                 for i in range(self.N):
@@ -350,7 +350,7 @@ class GridSampler:
                     high_counts_row = self.high_counts_rows[i]
                     alpha = self.alpha_row + low_counts_row
                     beta = self.beta_row + high_counts_row
-                    self.row_probs[i] = propose(alpha, beta)
+                    self.row_probs[:,i] = propose(alpha, beta, size=n_samples)
 
         ## if CE, then parameters are *fixed* at the mean of the beta distribution, whose parameters are determined by the counts
         elif self.CE:
@@ -360,14 +360,14 @@ class GridSampler:
                     high_counts_col = self.high_counts_cols[j]
                     alpha = self.alpha_col + low_counts_col
                     beta = self.beta_col + high_counts_col
-                    self.col_probs[j] = alpha / (alpha + beta)
+                    self.col_probs[:,j] = alpha / (alpha + beta)
             else:
                 for i in range(self.N):
                     low_counts_row = self.low_counts_rows[i]
                     high_counts_row = self.high_counts_rows[i]
                     alpha = self.alpha_row + low_counts_row
                     beta = self.beta_row + high_counts_row
-                    self.row_probs[i] = alpha / (alpha + beta)
+                    self.row_probs[:,i] = alpha / (alpha + beta)
         return self.row_probs, self.col_probs
     
 
