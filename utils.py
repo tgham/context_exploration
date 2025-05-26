@@ -43,11 +43,11 @@ def make_env(N, n_trials, expt_info, beta_params, metric, seed=None):
     register(
         id=env_id,
         entry_point='grids.envs:GridEnv',
-        max_trial_steps=100,
+        max_episode_steps=100,
         kwargs={"size": N},
-    )
-    
+    )    
     env = gym.make("grids/GridEnv-v0", N=N, n_trials=n_trials, expt_info=expt_info, beta_params=beta_params, metric=metric, seed=seed)
+    
     return env
 
 

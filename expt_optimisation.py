@@ -92,7 +92,7 @@ beta_params = {
     # 'beta_col': 1
 }
 N = 8
-n_grids = 200
+n_grids = 100
 n_trials = 4
 n_blocks = 5
 expt = '2AFC'

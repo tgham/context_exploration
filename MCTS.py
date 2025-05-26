@@ -34,7 +34,7 @@ class MonteCarloTreeSearch():
         ## or, scale exploration constant by the expected cost of the entire block
         # n_steps = 0
         # for trial in range(self.env.n_trials):
-        #     n_steps += len(self.env.path_states[ep][0])
+        #     n_steps += len(self.env.path_states[trial][0])
         # self.exploration_constant = exploration_constant * n_steps
 
         ## or, multiple exploration constants, each scaled by the expected cost of the block from that trial onwards
@@ -639,7 +639,7 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         ## get the next node id, i.e. the informational state after taking this path
         init_info_state = np.array(action_leaf.parent_id).reshape(self.N, self.N, 2)
         next_node_id = self.init_node_id(simulated_obs, init_info_state, step_trial)
-        # n_total_obs = np.sum([len(self.env.path_states[ep][0]) for trial in range(action_leaf.trial+1)])
+        # n_total_obs = np.sum([len(self.env.path_states[trial][0]) for trial in range(action_leaf.trial+1)])
         # assert n_total_obs == np.sum(next_node_id), 'total obs and next node id do not match\n total obs: {}, next node id: {}'.format(n_total_obs, np.sum(next_node_id))
 
         ## since the agent has chosen a path to the goal, we need to move the environment to the next trial
@@ -693,7 +693,7 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
             ## GREEDY: get the total cost of the two paths and return the better one
             path_costs = []
             for path_id in range(self.n_afc):
-                path_states = self.env.path_states[ep][path_id]
+                path_states = self.env.path_states[trial][path_id]
                 ro_cost = 0
                 for state in path_states:
                     # cost = self.env.get_pred_cost(state)
@@ -737,7 +737,7 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
             ## GREEDY: get the total cost of the two paths and return the better one
             path_costs = []
             for path_id in range(self.n_afc):
-                path_states = self.env.path_states[ep][path_id]
+                path_states = self.env.path_states[trial][path_id]
                 ro_cost = 0
                 for state in path_states:
                     # cost = self.env.get_pred_cost(state)
@@ -974,7 +974,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                 elif (ag == 'BAMCP') or (ag == 'CE') or (ag=='BAMCP w/ CE') or (ag=='CE w/ BAMCP') or (ag=='BAMCP_wrong'):
                     agent = farmer
                 agent.get_env_info(env_copy)
-                if e==0:
+                if t==0:
                     assert len(env_copy.obs)==0, 'obs not empty at start of trial'
 
                 ## reset tree
@@ -997,8 +997,8 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         tree_resets[ag] = True
                         MCTSs[ag].agent = agent ##???
                     MCTS = MCTSs[ag]
-                    assert e == MCTS.actual_trial, 'trial mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(e, MCTS.env.trial)
-                assert e == env_copy.trial, 'trial mismatch between simulation and env\n simulation: {} \n env: {}'.format(e, MCTS.env.trial)
+                    assert t == MCTS.actual_trial, 'trial mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(t, MCTS.env.trial)
+                assert t == env_copy.trial, 'trial mismatch between simulation and env\n simulation: {} \n env: {}'.format(t, MCTS.env.trial)
 
             
                 ## run trial until goal is reached
@@ -1008,7 +1008,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                 reuse_samples = False
                 steps = 0
                 if expt=='free':
-                    max_steps = len(env_copy.o_trajs[e])*1.75
+                    max_steps = len(env_copy.o_trajs[t])*1.75
                 elif expt=='2AFC':
                     max_steps = 100 ## just in case
 
@@ -1039,7 +1039,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         ## plot for debugging?
                         # _, axs = plt.subplots(1, 3, figsize=(10,5))
                         # plot_r(env_copy.p_costs.reshape(N,N), ax=axs[0], title = 'costs')
-                        # plot_traj([env_copy.o_trajs[e], env_copy.a_traj], ax=axs[0])
+                        # plot_traj([env_copy.o_trajs[t], env_copy.a_traj], ax=axs[0])
                         # plot_r(env_copy.predicted_p_costs, ax=axs[1], title = 'posterior mean p cost')
                         # plot_action_tree(agent.Q_inf, current, goal, ax=axs[2], title = 'DP_inf')
                         # plt.show()
@@ -1060,7 +1060,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                             ## get the cost of each path under the posterior mean
                             path_costs = []
                             for path_id in range(env_copy.n_afc):
-                                path_states = env_copy.path_states[e][path_id]
+                                path_states = env_copy.path_states[t][path_id]
                                 path_cost = 0
                                 for state in path_states:
                                     # path_cost += env_copy.get_pred_cost(state) ## i.e. sample binary costs from the posterior pqs
@@ -1071,7 +1071,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                             max_cost = np.max(path_costs)
                             action = argm(path_costs, max_cost)
                             actions.append(action)
-                            Q_values.append(path_costs)
+                            Q_values.append(np.array(path_costs))
                             choice_probs.append(softmax(path_costs))
 
                             ## take the path
@@ -1079,20 +1079,20 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                             env_copy.init_trial(action)
                             start = env_copy.current
                             goal = env_copy.goal
-                            assert np.array_equal(start, env_copy.starts[e][action]), 'current state does not match start state\n current: {}, start: {}'.format(env_copy.current, env_copy.starts[e][action])
-                            action_sequence = env_copy.path_actions[e][action]
+                            assert np.array_equal(start, env_copy.starts[t][action]), 'current state does not match start state\n current: {}, start: {}'.format(env_copy.current, env_copy.starts[t][action])
+                            action_sequence = env_copy.path_actions[t][action]
                             _,_ = env_copy.take_path(action_sequence)
                             current = env_copy.current
                             costs = env_copy.trial_obs[:,-1]
                             path_cost = np.sum(costs)
                             terminated=True
-                            block_terminated = e == (n_trials-1)
+                            block_terminated = t == (n_trials-1)
                             # costs = []
                             # for ac in action_sequence:
                             #     current, cost, terminated, _, _ = env_copy.step(ac)
                             #     costs.append(cost)
                             # path_cost = np.sum(costs)
-                            block_terminated = e == (n_trials-1)
+                            block_terminated = t == (n_trials-1)
                         steps += 1
                         leaf_visits = []
 
@@ -1150,7 +1150,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         elif expt=='2AFC':
                             path_costs = []
                             for path_id in range(env_copy.n_afc):
-                                path_states = env_copy.path_states[e][path_id]
+                                path_states = env_copy.path_states[t][path_id]
                                 path_cost = 0
                                 for state in path_states:
                                     # path_cost += env_copy.get_pred_cost(state) ## i.e. sample binary costs from the posterior pqs
@@ -1170,8 +1170,8 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         # for i, a in enumerate(env_copy.a_traj):
                         #     a_traj[i,:2] = a
                         #     a_traj[i,2] = env_copy.costs[a[0], a[1]]
-                        # # plot_traj([env_copy.o_trajs[e], env_copy.a_traj], ax=axs[0])
-                        # plot_traj([env_copy.o_trajs[e], a_traj], ax=axs[0])
+                        # # plot_traj([env_copy.o_trajs[t], env_copy.a_traj], ax=axs[0])
+                        # plot_traj([env_copy.o_trajs[t], a_traj], ax=axs[0])
                         # plot_r(agent.posterior_mean_p_cost, ax=axs[1], title = 'average posterior p cost')
                         # plot_action_tree(agent.Q_inf, current, goal, ax=axs[2], title = 'CE_DP_inf')
                         # plt.show()
@@ -1187,15 +1187,15 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         #     for i,j,c in env_copy.obs:
                         #         observed_costs[i,j] = c
                         #     plot_r(observed_costs+1, ax = axs[1, trial], title = f'Grid {block+1}, Trial {ep+1}', cbar=False)
-                        #     plot_traj([env.path_states[ep][0], env.path_states[ep][1]], ax = axs[1, trial], expt=expt)
+                        #     plot_traj([env.path_states[trial][0], env.path_states[trial][1]], ax = axs[1, trial], expt=expt)
                         # all_posterior_p_costs_plot.append(agent.posterior_mean_p_cost)
                         # all_posterior_contexts_plot.append(farmer.context_prob)
-                        # for trial in range(0, e+1):
-                        #     context_title = title = r'$p(z_{c}) = $'+str(all_posterior_contexts_plot[ep].round(2))
+                        # for trial in range(0, t+1):
+                        #     context_title = title = r'$p(z_{c}) = $'+str(all_posterior_contexts_plot[trial].round(2))
                         #     title = f'Posterior mean p(low cost)\n{context_title}'
-                        #     plot_r(all_posterior_p_costs_plot[ep], ax = axs[0, trial], title = title, cbar=False)
-                        #     plot_traj([env.path_states[ep][0], env.path_states[ep][1]], ax = axs[0, trial], expt=expt)
-                        # for trial in range(e+1, n_trials):
+                        #     plot_r(all_posterior_p_costs_plot[trial], ax = axs[0, trial], title = title, cbar=False)
+                        #     plot_traj([env.path_states[trial][0], env.path_states[trial][1]], ax = axs[0, trial], expt=expt)
+                        # for trial in range(t+1, n_trials):
                         #     fig.delaxes(axs[0,ep])
                         # plt.show()
 
@@ -1206,13 +1206,13 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         env_copy.init_trial(action)
                         start = env_copy.current
                         goal = env_copy.goal
-                        assert np.array_equal(start, env_copy.starts[e][action]), 'current state does not match start state\n current: {}, start: {}'.format(env_copy.current, env_copy.starts[e][action])
+                        assert np.array_equal(start, env_copy.starts[t][action]), 'current state does not match start state\n current: {}, start: {}'.format(env_copy.current, env_copy.starts[t][action])
                         if expt=='free':
                             current, cost, terminated, _, _ = env_copy.step(action)
                             next_node_id = np.append(current,cost)
                             steps += 1
                         elif expt=='2AFC':
-                            action_sequence = env_copy.path_actions[e][action]
+                            action_sequence = env_copy.path_actions[t][action]
                             _, _ = env_copy.take_path(action_sequence)
                             # current = states[-1]
                             current = env_copy.current
@@ -1221,13 +1221,13 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                             assert len(costs) == len(action_sequence)+1, 'costs and action sequence do not match\n costs: {}, action sequence: {}'.format(len(costs), len(action_sequence))
                             path_cost = np.sum(costs)
                             terminated = True ## trivially true in 2AFC
-                            block_terminated = e == (n_trials-1)
+                            block_terminated = t == (n_trials-1)
 
                             ## update next node id
-                            # next_node_id = MCTS.init_node_id(env_copy.obs.copy(), None, e)
+                            # next_node_id = MCTS.init_node_id(env_copy.obs.copy(), None, t)
                             init_info_state = np.array(MCTS.tree.root.node_id).reshape(N, N, 2)
                             trial_obs = env_copy.trial_obs.copy()
-                            next_node_id = MCTS.init_node_id(trial_obs, init_info_state, e)
+                            next_node_id = MCTS.init_node_id(trial_obs, init_info_state, t)
 
 
                         ## check for backtracking
@@ -1300,26 +1300,26 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         early_terminate = True
 
                     if early_terminate:
-                        print('grid ',m,': trial ',e,' terminated for agent ',ag,' after ',steps,' steps')
-                        # raise ValueError('grid ',m,': trial ',e,' terminated for agent ',ag,' after ',steps,' steps')
+                        print('grid ',m,': trial ',t,' terminated for agent ',ag,' after ',steps,' steps')
+                        # raise ValueError('grid ',m,': trial ',t,' terminated for agent ',ag,' after ',steps,' steps')
 
                         ## or just skip to the next trial
                         sim_out['agent'].append(agent)
                         sim_out['block'].append(block)
-                        sim_out['trial'].append(e)
+                        sim_out['trial'].append(t)
                         sim_out['grid'].append(m)
                         sim_out['start'].append(start)
                         sim_out['goal'].append(goal)
-                        sim_out['path_A'].append(env_copy.path_states[e][0])
-                        sim_out['path_B'].append(env_copy.path_states[e][1])
-                        sim_out['path_A_expected_cost'].append(env_copy.path_expected_costs[e][0])
-                        sim_out['path_B_expected_cost'].append(env_copy.path_expected_costs[e][1])
-                        sim_out['path_A_actual_cost'].append(env_copy.path_actual_costs[e][0])
-                        sim_out['path_B_actual_cost'].append(env_copy.path_actual_costs[e][1])
-                        sim_out['path_A_future_overlap'].append(env_copy.path_future_overlaps[e][0])
-                        sim_out['path_B_future_overlap'].append(env_copy.path_future_overlaps[e][1])
-                        sim_out['abstract_sequence_A'].append(env_copy.sampled_abstract_sequences[e][0])
-                        sim_out['abstract_sequence_B'].append(env_copy.sampled_abstract_sequences[e][1])
+                        sim_out['path_A'].append(env_copy.path_states[t][0])
+                        sim_out['path_B'].append(env_copy.path_states[t][1])
+                        sim_out['path_A_expected_cost'].append(env_copy.path_expected_costs[t][0])
+                        sim_out['path_B_expected_cost'].append(env_copy.path_expected_costs[t][1])
+                        sim_out['path_A_actual_cost'].append(env_copy.path_actual_costs[t][0])
+                        sim_out['path_B_actual_cost'].append(env_copy.path_actual_costs[t][1])
+                        sim_out['path_A_future_overlap'].append(env_copy.path_future_overlaps[t][0])
+                        sim_out['path_B_future_overlap'].append(env_copy.path_future_overlaps[t][1])
+                        sim_out['abstract_sequence_A'].append(env_copy.sampled_abstract_sequences[t][0])
+                        sim_out['abstract_sequence_B'].append(env_copy.sampled_abstract_sequences[t][1])
                         sim_out['context_prior'].append(context_prior)
                         sim_out['context_posterior'].append(context_posterior)
                         sim_out['actions'].append(actions)
@@ -1328,16 +1328,16 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         sim_out['leaf_visits'].append(leaf_visits)
                         sim_out['CE_actions'].append(CE_actions)
                         sim_out['CE_Q_values'].append(CE_Q_values)
-                        sim_out['optimal_actions'].append(env_copy.o_traj_actions[e])
+                        sim_out['optimal_actions'].append(env_copy.o_traj_actions[t])
                         sim_out['costs'].append(np.nan)
-                        sim_out['optimal_costs'].append(env_copy.o_traj_costs[e])
+                        sim_out['optimal_costs'].append(env_copy.o_traj_costs[t])
                         sim_out['total_cost'].append(np.nan)
-                        sim_out['total_optimal_cost'].append(env_copy.o_traj_total_costs[e])
+                        sim_out['total_optimal_cost'].append(env_copy.o_traj_total_costs[t])
                         sim_out['action_score'].append(np.nan)
                         sim_out['cost_ratio'].append(np.nan)
                         sim_out['n_steps'].append(steps)
                         sim_out['actual_trajectory'].append(env_copy.a_traj)
-                        sim_out['optimal_trajectory'].append(env_copy.o_trajs[e])
+                        sim_out['optimal_trajectory'].append(env_copy.o_trajs[t])
                         sim_out['observations'].append(env_copy.obs)
                         # sim_out['action_tree'].append(MCTS.tree.action_tree())
                         sim_out['action_tree'].append(np.nan)
@@ -1347,8 +1347,8 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         ## discounts
                         sim_out['discounted_costs'].append(np.nan)
                         sim_out['total_discounted_cost'].append(np.nan)
-                        discounts = [discount_factor**d for d in range(len(env_copy.o_trajs[e]))] ## NEED TO FIX THIS BUT DON'T HAVE TIME
-                        discounted_costs = [c*d for c,d in zip(env_copy.o_traj_costs[e], discounts)]
+                        discounts = [discount_factor**d for d in range(len(env_copy.o_trajs[t]))] ## NEED TO FIX THIS BUT DON'T HAVE TIME
+                        discounted_costs = [c*d for c,d in zip(env_copy.o_traj_costs[t], discounts)]
                         sim_out['discounted_optimal_costs'].append(discounted_costs)
                         sim_out['total_discounted_optimal_cost'].append(np.sum(discounted_costs))
                         
@@ -1367,20 +1367,20 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                     elif terminated:
                         sim_out['agent'].append(ag)
                         sim_out['block'].append(block)
-                        sim_out['trial'].append(e)
+                        sim_out['trial'].append(t)
                         sim_out['grid'].append(m)
                         sim_out['start'].append(start)
                         sim_out['goal'].append(goal)
-                        sim_out['path_A'].append(env_copy.path_states[e][0])
-                        sim_out['path_B'].append(env_copy.path_states[e][1])
-                        sim_out['path_A_expected_cost'].append(env_copy.path_expected_costs[e][0])
-                        sim_out['path_B_expected_cost'].append(env_copy.path_expected_costs[e][1])
-                        sim_out['path_A_actual_cost'].append(env_copy.path_actual_costs[e][0])
-                        sim_out['path_B_actual_cost'].append(env_copy.path_actual_costs[e][1])
-                        sim_out['abstract_sequence_A'].append(env_copy.sampled_abstract_sequences[e][0])
-                        sim_out['abstract_sequence_B'].append(env_copy.sampled_abstract_sequences[e][1])
-                        sim_out['path_A_future_overlap'].append(env_copy.path_future_overlaps[e][0])
-                        sim_out['path_B_future_overlap'].append(env_copy.path_future_overlaps[e][1])
+                        sim_out['path_A'].append(env_copy.path_states[t][0])
+                        sim_out['path_B'].append(env_copy.path_states[t][1])
+                        sim_out['path_A_expected_cost'].append(env_copy.path_expected_costs[t][0])
+                        sim_out['path_B_expected_cost'].append(env_copy.path_expected_costs[t][1])
+                        sim_out['path_A_actual_cost'].append(env_copy.path_actual_costs[t][0])
+                        sim_out['path_B_actual_cost'].append(env_copy.path_actual_costs[t][1])
+                        sim_out['abstract_sequence_A'].append(env_copy.sampled_abstract_sequences[t][0])
+                        sim_out['abstract_sequence_B'].append(env_copy.sampled_abstract_sequences[t][1])
+                        sim_out['path_A_future_overlap'].append(env_copy.path_future_overlaps[t][0])
+                        sim_out['path_B_future_overlap'].append(env_copy.path_future_overlaps[t][1])
                         sim_out['context_prior'].append(context_prior)
                         sim_out['context_posterior'].append(context_posterior)
                         sim_out['actions'].append(actions)
@@ -1389,7 +1389,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         sim_out['leaf_visits'].append(leaf_visits)
                         sim_out['CE_actions'].append(CE_actions)
                         sim_out['CE_Q_values'].append(CE_Q_values)
-                        sim_out['optimal_actions'].append(env_copy.o_traj_actions[e])
+                        sim_out['optimal_actions'].append(env_copy.o_traj_actions[t])
                         # if np.round(env_copy.optimal_cost,4) < np.round(env_copy.accrued_cost,4):
                         #     print(env_copy.optimal_cost, env_copy.accrued_cost)
                         # assert np.round(env_copy.optimal_cost,4) >= np.round(env_copy.accrued_cost,4), 'accrued cost higher than optimal cost'
@@ -1398,7 +1398,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         sim_out['cost_ratio'].append(env_copy.cost_ratio)
                         sim_out['n_steps'].append(steps)
                         sim_out['actual_trajectory'].append(env_copy.a_traj)
-                        sim_out['optimal_trajectory'].append(env_copy.o_trajs[e])
+                        sim_out['optimal_trajectory'].append(env_copy.o_trajs[t])
                         sim_out['observations'].append(env_copy.obs)
                         # sim_out['action_tree'].append(MCTS.tree.action_tree())
                         sim_out['action_tree'].append(np.nan)
@@ -1409,15 +1409,15 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
 
                         ## actual costs
                         sim_out['costs'].append(env_copy.a_traj_costs)
-                        sim_out['optimal_costs'].append(env_copy.o_traj_costs[e])
+                        sim_out['optimal_costs'].append(env_copy.o_traj_costs[t])
                     
                         # INC START AND END COSTS
                         # sim_out['total_cost'].append(env_copy.a_traj_total_cost) 
-                        # sim_out['total_optimal_cost'].append(env_copy.o_traj_total_costs[e])
+                        # sim_out['total_optimal_cost'].append(env_copy.o_traj_total_costs[t])
 
                         # EXC START AND END COSTS
                         sim_out['total_cost'].append(np.sum(env_copy.a_traj_costs[1:-1]))
-                        sim_out['total_optimal_cost'].append(np.sum(env_copy.o_traj_costs[e][1:-1]))
+                        sim_out['total_optimal_cost'].append(np.sum(env_copy.o_traj_costs[t][1:-1]))
 
 
                         ## calculate discounted actual and optimal costs
@@ -1427,8 +1427,8 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         # discounted_costs = [c*d for c,d in zip(env_copy.a_traj_costs, discounts)]
                         # sim_out['discounted_costs'].append(discounted_costs)
                         # sim_out['total_discounted_cost'].append(np.sum(discounted_costs))
-                        # discounts = [discount_factor**d for d in range(len(env_copy.o_trajs[e]))]
-                        # discounted_costs = [c*d for c,d in zip(env_copy.o_traj_costs[e], discounts)]
+                        # discounts = [discount_factor**d for d in range(len(env_copy.o_trajs[t]))]
+                        # discounted_costs = [c*d for c,d in zip(env_copy.o_traj_costs[t], discounts)]
                         # sim_out['discounted_optimal_costs'].append(discounted_costs)
                         # sim_out['total_discounted_optimal_cost'].append(np.sum(discounted_costs))
 
@@ -1437,8 +1437,8 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         discounted_costs = [c*d for c,d in zip(env_copy.a_traj_costs[1:-1], discounts)]
                         sim_out['discounted_costs'].append(discounted_costs)
                         sim_out['total_discounted_cost'].append(np.sum(discounted_costs))
-                        discounts = [discount_factor**d for d in range(len(env_copy.o_trajs[e])-2)]
-                        discounted_costs = [c*d for c,d in zip(env_copy.o_traj_costs[e][1:-1], discounts)]
+                        discounts = [discount_factor**d for d in range(len(env_copy.o_trajs[t])-2)]
+                        discounted_costs = [c*d for c,d in zip(env_copy.o_traj_costs[t][1:-1], discounts)]
                         sim_out['discounted_optimal_costs'].append(discounted_costs)
                         sim_out['total_discounted_optimal_cost'].append(np.sum(discounted_costs))
 
@@ -1450,7 +1450,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         end_trial = True
             
                 ## carry over the context prob to the next run, if on the final trial of the block
-                if e == (n_trials-1):
+                if t == (n_trials-1):
                     context_priors[ag] = context_posterior
                 # else:
                 #     context_priors[ag] = context_prior

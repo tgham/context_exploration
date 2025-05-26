@@ -262,15 +262,15 @@ class GridEnv(gym.Env):
                         ## save expected costs of the paths
                         path_actual_costs = []
                         path_expected_costs = []
-                        for path in self.path_states[e]:
+                        for path in self.path_states[t]:
                             
                             ## pq = p(high cost)
                             # path_cost = np.sum([self.p_costs[x, y]*self.high_cost + (1-self.p_costs[x, y])*self.low_cost for x, y in path]) 
 
                             ## pq = p(low cost)
                             # path_expected_cost = np.sum([self.p_costs[x, y]*self.low_cost + (1-self.p_costs[x, y])*self.high_cost for x, y in path]) 
-                            path_expected_cost = np.sum([self.p_costs[x, y]*self.compound_cost(self.low_cost,e) + (1-self.p_costs[x, y])*self.compound_cost(self.high_cost,e) for x, y in path])  ## if using compound costs
-                            path_actual_cost = np.sum([self.compound_cost(self.costss[e][x, y],e) for x, y in path])
+                            path_expected_cost = np.sum([self.p_costs[x, y]*self.compound_cost(self.low_cost,t) + (1-self.p_costs[x, y])*self.compound_cost(self.high_cost,t) for x, y in path])  ## if using compound costs
+                            path_actual_cost = np.sum([self.compound_cost(self.costss[t][x, y],t) for x, y in path])
                             path_expected_costs.append(path_expected_cost)
                             path_actual_costs.append(path_actual_cost)
                         self.path_expected_costs.append(path_expected_costs)
@@ -286,8 +286,8 @@ class GridEnv(gym.Env):
         
                 ## hacky fix: make sure all coordinates in the path_states list are tuples of int, rather than tuples of int64
                 for t in range(self.n_trials):
-                    for p, path in enumerate(self.path_states[e]):
-                        self.path_states[e][p] = [tuple([int(x) for x in state]) for state in path]
+                    for p, path in enumerate(self.path_states[t]):
+                        self.path_states[t][p] = [tuple([int(x) for x in state]) for state in path]
                 
                 ## get info on path overlaps in 2AFC expt
                 if self.expt == '2AFC':
@@ -300,22 +300,22 @@ class GridEnv(gym.Env):
 
                         ## no repeats (e.g. if [x,y] appears in trials 2 and 3, only count it once)
                         # future_states = []
-                        # for next_e in range(e+1, self.n_trials):
-                        #     for next_path in self.path_states[next_e]:
+                        # for next_t in range(t+1, self.n_trials):
+                        #     for next_path in self.path_states[next_t]:
                         #         future_states.extend(next_path)
                         # n_intersections = []
-                        # for path in self.path_states[e]:
+                        # for path in self.path_states[t]:
                         #     intersections = set(path).intersection(set(future_states))
                         #     n_intersections.append(len(intersections) -2) ## -2 if start and end are shared
                         # self.path_n_intersections.append(n_intersections)
 
                         ## repeats (e.g. if [x,y] appears in trials 2 and 3, count it twice)
                         n_overlaps = []
-                        for path in self.path_states[e]:
+                        for path in self.path_states[t]:
                             path = path
                             intersections = []
-                            for next_e in range(e+1, self.n_trials):
-                                for next_path in self.path_states[next_e]:
+                            for next_t in range(t+1, self.n_trials):
+                                for next_path in self.path_states[next_t]:
                                     next_path = next_path
                                     intersection = set(path).intersection(set(next_path))
                                     
@@ -345,8 +345,8 @@ class GridEnv(gym.Env):
                         elif first_path[0][1]==first_path[1][1]:
                             p0_y = first_path[0][1]
                             p0_x = first_path[-1][0]
-                        for next_e in range(1, self.n_trials):
-                            for next_path in self.path_states[next_e]:
+                        for next_t in range(1, self.n_trials):
+                            for next_path in self.path_states[next_t]:
                                 for state in next_path[1:-1]:
                                     if state[0]== p0_x:
                                         p0_x_overlap.append(state)
@@ -918,7 +918,7 @@ class GridEnv(gym.Env):
         while (not diff_starts) or (n_common_within_trial >= max_common_within_trial) or (n_common_across_trials >= max_common_across_trials) or (not vals_diff):
             attempt+=1
             if attempt>max_attempts:
-                raise RuntimeError(f"Exceeded maximum attempts ({max_attempts}) while generating paths and start-goal pairs for trial {len(self.starts)}. Failed using sequences {sampled_abstract_sequences}; paths {path_states};\n criteria: diff starts: {diff_starts}, n common within ep: {n_common_within_trial}, n common across trials: {n_common_across_trials}, max common within ep: {max_common_within_trial}, max common across trials: {max_common_across_trials}")
+                raise RuntimeError(f"Exceeded maximum attempts ({max_attempts}) while generating paths and start-goal pairs for trial {len(self.starts)}. Failed using sequences {sampled_abstract_sequences}; paths {path_states};\n criteria: diff starts: {diff_starts}, n common within trial: {n_common_within_trial}, n common across trials: {n_common_across_trials}, max common within trial: {max_common_within_trial}, max common across trials: {max_common_across_trials}")
             path_states = []
             path_actions = []
             starts = []
@@ -976,9 +976,9 @@ class GridEnv(gym.Env):
             n_common_within_trial, n_common_across_trials = self.check_overlap(path_states[0], path_states[1],0)
 
             ## check that the costs of the paths are sufficiently different
-            e = len(self.starts)
-            path_A_cost = np.sum([self.costss[e][x, y] for x, y in path_states[0]])
-            path_B_cost = np.sum([self.costss[e][x, y] for x, y in path_states[1]])
+            t = len(self.starts)
+            path_A_cost = np.sum([self.costss[t][x, y] for x, y in path_states[0]])
+            path_B_cost = np.sum([self.costss[t][x, y] for x, y in path_states[1]])
             cost_tol = 0.8
             vals_ratio = min(np.abs([path_A_cost, path_B_cost])) / max(np.abs([path_A_cost, path_B_cost]))
             vals_diff = vals_ratio < cost_tol
