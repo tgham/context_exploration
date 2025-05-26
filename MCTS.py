@@ -1385,6 +1385,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         sim_out['context_posterior'].append(context_posterior)
                         sim_out['actions'].append(actions)
                         sim_out['Q_values'].append(Q_values)
+                        sim_out['choice_probs'].append(choice_probs)
                         sim_out['leaf_visits'].append(leaf_visits)
                         sim_out['CE_actions'].append(CE_actions)
                         sim_out['CE_Q_values'].append(CE_Q_values)

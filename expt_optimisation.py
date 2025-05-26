@@ -92,7 +92,7 @@ beta_params = {
     # 'beta_col': 1
 }
 N = 8
-n_grids = 750
+n_grids = 200
 n_episodes = 4
 n_blocks = 5
 expt = '2AFC'
@@ -115,7 +115,7 @@ env_params = {
 n_grids = env_params['n_grids']
 
 ## MCTS params
-n_sims = 50000
+n_sims = 1000
 MCTS_params = {
     'n_sims': n_sims,
     'n_futures': 0, 
