@@ -37,7 +37,7 @@ class Actions(Enum):
 
 class GridEnv(gym.Env):
 
-    def __init__(self, N, n_episodes=1, expt_info={'type':'free'}, beta_params=None, metric = 'cityblock', size=5, seed=None):
+    def __init__(self, N, n_trials=1, expt_info={'type':'free'}, beta_params=None, metric = 'cityblock', size=5, seed=None):
         
         ## seed
         if seed is not None:
@@ -147,9 +147,9 @@ class GridEnv(gym.Env):
 
             ####  define costs
 
-            ### define actual binary costs for each episode, assuming they regenerate each time
+            ### define actual binary costs for each trial, assuming they regenerate each time
             # self.costss = []
-            # for e in range(self.n_episodes):
+            # for t in range(self.n_trials):
 
                 ## prob = p(high cost)
                 # self.costss.append(np.array([self.high_cost if r<self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N))
@@ -157,10 +157,10 @@ class GridEnv(gym.Env):
                 ## prob = p(low cost)
                 # self.costss.append(np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N))
 
-            ### or, define actual binary costs for each episode, assuming they are the same across episodes
+            ### or, define actual binary costs for each trial, assuming they are the same across trials
             self.costss = []
             costs = np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
-            self.costss = [costs for e in range(n_episodes)]
+            self.costss = [costs for t in range(n_trials)]
 
             ## check if decent spread of high and low costs - i.e. mean cost should be around the mean of the two costs, +/- some tolerance
             mean_cost = np.mean(costs)
@@ -186,7 +186,7 @@ class GridEnv(gym.Env):
             self.o_traj_costs = []
             self.o_traj_total_costs = []
             self.o_traj_actions = []
-            self.n_episodes = n_episodes
+            self.n_trials = n_trials
 
 
             ## if 2AFC, we use the same SG pair all the way through
@@ -197,8 +197,8 @@ class GridEnv(gym.Env):
                 except:
                     continue
 
-            ## generate relevant trial info for each episode
-            for e in range(n_episodes):
+            ## generate relevant trial info for each trial
+            for t in range(n_trials):
 
                 try:
                 
@@ -232,7 +232,7 @@ class GridEnv(gym.Env):
                             self.path_actions.append(path_actions)
                             self.sampled_abstract_sequences.append([None, None])
                         
-                        ## or, different SGs for each episode
+                        ## or, different SGs for each trial
                         elif not self.same_SGs:
                             max_turns=1
                             sampled_abstract_sequences, path_actions, path_states, starts, goals = self.sample_paths_and_SGs(max_turns)
@@ -281,11 +281,11 @@ class GridEnv(gym.Env):
                     break
 
 
-            ## if all the SGs and paths have been found, then we then need to check overlap across episodes
-            if len(self.starts)==self.n_episodes:
+            ## if all the SGs and paths have been found, then we then need to check overlap across trials
+            if len(self.starts)==self.n_trials:
         
                 ## hacky fix: make sure all coordinates in the path_states list are tuples of int, rather than tuples of int64
-                for e in range(self.n_episodes):
+                for t in range(self.n_trials):
                     for p, path in enumerate(self.path_states[e]):
                         self.path_states[e][p] = [tuple([int(x) for x in state]) for state in path]
                 
@@ -294,13 +294,13 @@ class GridEnv(gym.Env):
                     self.most_overlap = []
                     self.path_future_overlaps = []
 
-                    for e in range(self.n_episodes-1):
+                    for t in range(self.n_trials-1):
 
                         ### calculate the number of states in the current path that appear in the future set
 
-                        ## no repeats (e.g. if [x,y] appears in episodes 2 and 3, only count it once)
+                        ## no repeats (e.g. if [x,y] appears in trials 2 and 3, only count it once)
                         # future_states = []
-                        # for next_e in range(e+1, self.n_episodes):
+                        # for next_e in range(e+1, self.n_trials):
                         #     for next_path in self.path_states[next_e]:
                         #         future_states.extend(next_path)
                         # n_intersections = []
@@ -309,12 +309,12 @@ class GridEnv(gym.Env):
                         #     n_intersections.append(len(intersections) -2) ## -2 if start and end are shared
                         # self.path_n_intersections.append(n_intersections)
 
-                        ## repeats (e.g. if [x,y] appears in episodes 2 and 3, count it twice)
+                        ## repeats (e.g. if [x,y] appears in trials 2 and 3, count it twice)
                         n_overlaps = []
                         for path in self.path_states[e]:
                             path = path
                             intersections = []
-                            for next_e in range(e+1, self.n_episodes):
+                            for next_e in range(e+1, self.n_trials):
                                 for next_path in self.path_states[next_e]:
                                     next_path = next_path
                                     intersection = set(path).intersection(set(next_path))
@@ -328,9 +328,9 @@ class GridEnv(gym.Env):
                             n_overlaps.append(len(intersections))
                         self.path_future_overlaps.append(n_overlaps)
                         self.most_overlap.append(np.argmax(n_overlaps))
-                    self.path_future_overlaps.append([0,0]) ## trivially, the final episode has no future overlaps
+                    self.path_future_overlaps.append([0,0]) ## trivially, the final trial has no future overlaps
 
-                    ## for path A and B of the first episode, calculate the number of states that overlap with the first row and column
+                    ## for path A and B of the first trial, calculate the number of states that overlap with the first row and column
                     self.p0_x_overlaps = []
                     self.p0_y_overlaps = []
                     self.p0_overlaps = np.zeros((2,2)) ## i.e. dim=0 is path A and B, dim=1 is x and y (rows and cols??)
@@ -345,7 +345,7 @@ class GridEnv(gym.Env):
                         elif first_path[0][1]==first_path[1][1]:
                             p0_y = first_path[0][1]
                             p0_x = first_path[-1][0]
-                        for next_e in range(1, self.n_episodes):
+                        for next_e in range(1, self.n_trials):
                             for next_path in self.path_states[next_e]:
                                 for state in next_path[1:-1]:
                                     if state[0]== p0_x:
@@ -362,13 +362,13 @@ class GridEnv(gym.Env):
                         self.p0_overlaps[p, 1] = total_y_overlap
 
 
-                    ## check if the two paths in the first episode have the same number of overlaps
+                    ## check if the two paths in the first trial have the same number of overlaps
                     if self.path_future_overlaps[0][0] == self.path_future_overlaps[0][1]:
                         self.same_overlaps = True
-                        self._episode = 0
+                        self._trial = 0
                         init_done = True
                     # init_done = True
-                    # self._episode = 0
+                    # self._trial = 0
 
             t+=1
             if t>500:
@@ -399,8 +399,8 @@ class GridEnv(gym.Env):
         return self._goal_location
     
     @property
-    def episode(self):
-        return self._episode
+    def trial(self):
+        return self._trial
 
 
     ## reset the environment
@@ -410,7 +410,7 @@ class GridEnv(gym.Env):
 
         ## set costs, given p_costs
         # self.costs = np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
-        self.costs = self.costss[self._episode]
+        self.costs = self.costss[self._trial]
 
         ## set start and end
         if start_goal is not None: 
@@ -418,8 +418,8 @@ class GridEnv(gym.Env):
             self._goal_location = np.array(start_goal[1], dtype=int)
         else:
             # self._agent_location, self._goal_location = self.sample_SG()
-            self._agent_location = np.array(self.starts[self._episode])
-            self._goal_location = np.array(self.goals[self._episode])
+            self._agent_location = np.array(self.starts[self._trial])
+            self._goal_location = np.array(self.goals[self._trial])
 
             
             ## get true Q vals (PROBABLY only need to do this if we're interested in optimal paths, as in the free-choice expt)
@@ -482,10 +482,10 @@ class GridEnv(gym.Env):
         
         # return observation, info
 
-    ## init ep - i.e. in the 2AFC task, once a start has been chosen, initialise the start, goal and obs for that episode
-    def init_ep(self, action):
-        self._agent_location = np.array(self.starts[self._episode][action])
-        self._goal_location = np.array(self.goals[self._episode][action])
+    ## init trial - i.e. in the 2AFC task, once a start has been chosen, initialise the start, goal and obs for that trial
+    def init_trial(self, action):
+        self._agent_location = np.array(self.starts[self._trial][action])
+        self._goal_location = np.array(self.goals[self._trial][action])
         self.terminated = False
         if self.sim:
             current_cost = self.predicted_costs[self._agent_location[0], self._agent_location[1]]
@@ -493,20 +493,20 @@ class GridEnv(gym.Env):
             current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
 
         ## if using compound costs
-        current_cost = self.compound_cost(current_cost, self._episode)
-        self.ep_obs = np.array([[self._agent_location[0], self._agent_location[1], current_cost]])
+        current_cost = self.compound_cost(current_cost, self._trial)
+        self.trial_obs = np.array([[self._agent_location[0], self._agent_location[1], current_cost]])
         self.a_traj = [tuple(self._agent_location)]
 
-    ## soft reset (allows simulation of future episodes without full copying of env) - i.e. update only the start and goal locations
+    ## soft reset (allows simulation of future trials without full copying of env) - i.e. update only the start and goal locations
     def soft_reset(self, start=None, goal=None):
         if start is not None:
             self._agent_location = start
         else:
-            self._agent_location = np.array(self.starts[self._episode])
+            self._agent_location = np.array(self.starts[self._trial])
         if goal is not None:
             self._goal_location = goal
         else:
-            self._goal_location = np.array(self.goals[self._episode])
+            self._goal_location = np.array(self.goals[self._trial])
         self.terminated=False
     
     ## get some S-G pairs
@@ -598,9 +598,9 @@ class GridEnv(gym.Env):
                 raise ValueError('cant find start and end')
 
         ## for sanity check, just place agent and goal in opposite corners
-        # self._agent_location = np.array(self.starts[self.n_eps%4])
-        # self._goal_location = np.array(self.goals[self.n_eps%4])
-        # self.n_eps += 1
+        # self._agent_location = np.array(self.starts[self.n_trials%4])
+        # self._goal_location = np.array(self.goals[self.n_trials%4])
+        # self.n_trials += 1
 
         ## what kind of quadrilateral is this? e.g. is the long edge vertical or horizontal?
         dx = goal_location[0] - agent_location[0]
@@ -640,27 +640,27 @@ class GridEnv(gym.Env):
             ## set path criteria
             rel_cost_diff_tol = 1
             rel_cost_diff = 1
-            n_common_within_ep = np.inf
+            n_common_within_trial = np.inf
             if len(self.path_states)>0:
-                n_common_across_eps = np.inf
+                n_common_across_trials = np.inf
             else:
-                n_common_across_eps = 0
-            max_common_within_ep = (len(moves)-1)/1.5
-            max_common_across_eps = (len(moves)-1)/1.2
+                n_common_across_trials = 0
+            max_common_within_trial = (len(moves)-1)/1.5
+            max_common_across_trials = (len(moves)-1)/1.2
 
             ## sanity check: remove all these constraints
             # rel_cost_diff_tol = 1
-            max_common_within_ep = np.inf
-            max_common_across_eps = np.inf
+            max_common_within_trial = np.inf
+            max_common_across_trials = np.inf
 
             t=0
-            while (rel_cost_diff >= rel_cost_diff_tol) or (n_common_within_ep >= max_common_within_ep) or (n_common_across_eps >= max_common_across_eps):
+            while (rel_cost_diff >= rel_cost_diff_tol) or (n_common_within_trial >= max_common_within_trial) or (n_common_across_trials >= max_common_across_trials):
 
                 ## generate random permutations of the moves
                 moves_1 = np.random.permutation(moves)
                 moves_2 = np.random.permutation(moves)
 
-                ## on first episode, paths are the mirrored simplest manhattan paths
+                ## on first trial, paths are the mirrored simplest manhattan paths
                 if len(self.starts)==0:
                     moves_1 = np.concatenate([x_actions, y_actions])
                     moves_2 = np.concatenate([y_actions, x_actions])
@@ -793,9 +793,9 @@ class GridEnv(gym.Env):
                     rel_cost_diff = min(path_1_cost, path_2_cost) / max(path_1_cost, path_2_cost)
                     # print('rel cost diff:', rel_cost_diff, rel_cost_diff_tol)
 
-                    ## check if too much overlap within or across episodes
-                    n_common_across_eps, n_common_within_ep = self.check_overlap(path_1, path_2,2)
-                    # print('n_common_within_ep:', n_common_within_ep, max_common_within_ep)
+                    ## check if too much overlap within or across trials
+                    n_common_across_trials, n_common_within_trial = self.check_overlap(path_1, path_2,2)
+                    # print('n_common_within_trial:', n_common_within_trial, max_common_within_trial)
                     
                             
                 t+=1
@@ -899,26 +899,26 @@ class GridEnv(gym.Env):
 
         ## set path criteria
         diff_starts = False
-        n_common_within_ep = np.inf
+        n_common_within_trial = np.inf
         if len(self.path_states)>0:
-            n_common_across_eps = np.inf
+            n_common_across_trials = np.inf
         else:
-            n_common_across_eps = 0
-        max_common_within_ep = (path_len-1)/2.5
-        max_common_across_eps = (path_len-1)/2.5
+            n_common_across_trials = 0
+        max_common_within_trial = (path_len-1)/2.5
+        max_common_across_trials = (path_len-1)/2.5
         vals_diff = False
         ## debugging
-        # max_common_within_ep = np.inf
-        # max_common_across_eps = np.inf
+        # max_common_within_trial = np.inf
+        # max_common_across_trials = np.inf
 
 
         ### get the concrete sequences
         max_attempts = 1000
         attempt=0
-        while (not diff_starts) or (n_common_within_ep >= max_common_within_ep) or (n_common_across_eps >= max_common_across_eps) or (not vals_diff):
+        while (not diff_starts) or (n_common_within_trial >= max_common_within_trial) or (n_common_across_trials >= max_common_across_trials) or (not vals_diff):
             attempt+=1
             if attempt>max_attempts:
-                raise RuntimeError(f"Exceeded maximum attempts ({max_attempts}) while generating paths and start-goal pairs for episode {len(self.starts)}. Failed using sequences {sampled_abstract_sequences}; paths {path_states};\n criteria: diff starts: {diff_starts}, n common within ep: {n_common_within_ep}, n common across eps: {n_common_across_eps}, max common within ep: {max_common_within_ep}, max common across eps: {max_common_across_eps}")
+                raise RuntimeError(f"Exceeded maximum attempts ({max_attempts}) while generating paths and start-goal pairs for trial {len(self.starts)}. Failed using sequences {sampled_abstract_sequences}; paths {path_states};\n criteria: diff starts: {diff_starts}, n common within ep: {n_common_within_trial}, n common across trials: {n_common_across_trials}, max common within ep: {max_common_within_trial}, max common across trials: {max_common_across_trials}")
             path_states = []
             path_actions = []
             starts = []
@@ -960,7 +960,7 @@ class GridEnv(gym.Env):
             else:
                 diff_starts = False
 
-            ## also, check that the start or goal of path A is not a state that has appeared in any other episode
+            ## also, check that the start or goal of path A is not a state that has appeared in any other trial
             if len(self.path_states)>0:
                 for paths in self.path_states:
                     p1, p2 = paths
@@ -973,7 +973,7 @@ class GridEnv(gym.Env):
 
             ## check overlap between paths
             path_states = [tuple(map(tuple, path)) for path in path_states]
-            n_common_within_ep, n_common_across_eps = self.check_overlap(path_states[0], path_states[1],0)
+            n_common_within_trial, n_common_across_trials = self.check_overlap(path_states[0], path_states[1],0)
 
             ## check that the costs of the paths are sufficiently different
             e = len(self.starts)
@@ -989,19 +989,19 @@ class GridEnv(gym.Env):
 
     ## count number of overlapping states
     def check_overlap(self, path_1, path_2, minus=2):
-        n_common_within_ep = len(set(path_1).intersection(set(path_2)))-minus ## -2 if start and end are shared
+        n_common_within_trial = len(set(path_1).intersection(set(path_2)))-minus ## -2 if start and end are shared
         if len(self.path_states)>0:
-            common_across_eps = []
+            common_across_trials = []
             for paths in self.path_states:
                 p1, p2 = paths
-                common_across_eps.append(len(set(p1).intersection(set(path_1)))-minus)
-                common_across_eps.append(len(set(p2).intersection(set(path_2)))-minus)
-                common_across_eps.append(len(set(p1).intersection(set(path_2)))-minus)
-                common_across_eps.append(len(set(p2).intersection(set(path_1)))-minus)
-            n_common_across_eps = np.max(common_across_eps)
+                common_across_trials.append(len(set(p1).intersection(set(path_1)))-minus)
+                common_across_trials.append(len(set(p2).intersection(set(path_2)))-minus)
+                common_across_trials.append(len(set(p1).intersection(set(path_2)))-minus)
+                common_across_trials.append(len(set(p2).intersection(set(path_1)))-minus)
+            n_common_across_trials = np.max(common_across_trials)
         else:
-            n_common_across_eps = 0
-        return n_common_within_ep, n_common_across_eps
+            n_common_across_trials = 0
+        return n_common_within_trial, n_common_across_trials
         
 
 
@@ -1089,8 +1089,8 @@ class GridEnv(gym.Env):
         self._agent_location = state
     def set_goal(self, goal):
         self._goal_location = goal
-    def set_episode(self, episode):
-        self._episode = episode
+    def set_trial(self, trial):
+        self._trial = trial
     def set_sim(self, sim):
         self.sim = sim
     def set_obs(self, obs):
@@ -1120,11 +1120,11 @@ class GridEnv(gym.Env):
         ## pq = p(low cost)
         return self.high_cost if np.random.random() > self.predicted_p_costs[state[0], state[1]] else self.low_cost
     
-    ## define way in which costs become compounded over episodes
-    def compound_cost(self, cost, episode):
+    ## define way in which costs become compounded over trials
+    def compound_cost(self, cost, trial):
         cc = cost ## do nothing
-        # cc = cost * (episode + 1)  ## i.e. cost increases linearly with episode number
-        # cc = cost * 2**episode ## i.e. cost increases exponentially with episode number
+        # cc = cost * (trial + 1)  ## i.e. cost increases linearly with trial number
+        # cc = cost * 2**trial ## i.e. cost increases exponentially with trial number
         return cc
     
     
@@ -1186,9 +1186,9 @@ class GridEnv(gym.Env):
         current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
         predicted_cost = self.predicted_costs[self._agent_location[0], self._agent_location[1]]
 
-        ## costs are compounded with each episode??
-        current_cost = self.compound_cost(current_cost, self._episode)
-        predicted_cost = self.compound_cost(predicted_cost, self._episode)
+        ## costs are compounded with each trial??
+        current_cost = self.compound_cost(current_cost, self._trial)
+        predicted_cost = self.compound_cost(predicted_cost, self._trial)
 
         ## return the real cost if not simulating
         if not self.sim:
@@ -1196,7 +1196,7 @@ class GridEnv(gym.Env):
             
             ## update observation and trajectory arrays - i.e. agent observes along the way
             self.a_traj.append(tuple(self._agent_location))
-            self.ep_obs = np.vstack([self.ep_obs, [self._agent_location[0], self._agent_location[1], current_cost]])
+            self.trial_obs = np.vstack([self.trial_obs, [self._agent_location[0], self._agent_location[1], current_cost]])
 
             ## store info on optimality of the choice, given the agent's current position
             self.action_scores.append(action_score)
@@ -1208,19 +1208,19 @@ class GridEnv(gym.Env):
             cost = predicted_cost.copy()
 
 
-        # An episode is done iff the agent has reached the goal
+        # An trial is done iff the agent has reached the goal
         if np.array_equal(self._agent_location, self._goal_location):
             self.terminated = True
             if self.expt=='free':
                 cost=0 ## cost of final state is 0 (MIGHT WANT TO CHANGE THIS...)
         
-            ## update observation array only once the episode is complete
+            ## update observation array only once the trial is complete
             if not self.sim:
-                if len(self.obs)==0: ## i.e. first episode, so just copy the ep_obs
-                    assert self._episode==0, 'episode counter should be 0'
-                    self.obs = self.ep_obs.copy()
-                else: ## otherwise, append the ep_obs to the obs from the previous episodes
-                    self.obs = np.vstack([self.obs, self.ep_obs])
+                if len(self.obs)==0: ## i.e. first trial, so just copy the ep_obs
+                    assert self._trial==0, 'trial counter should be 0'
+                    self.obs = self.trial_obs.copy()
+                else: ## otherwise, append the ep_obs to the obs from the previous trials
+                    self.obs = np.vstack([self.obs, self.trial_obs])
 
                 ## sum of costs of route INC START AND END
                 self.a_traj_costs = [self.costs[x, y] for x, y in self.a_traj]
@@ -1233,12 +1233,12 @@ class GridEnv(gym.Env):
                 ## scores for the trial
                 self.action_score = np.nanmean(self.action_scores)
                 if self.expt == 'free':
-                    self.cost_ratio = self.o_traj_total_costs[self._episode] / self.a_traj_total_cost
+                    self.cost_ratio = self.o_traj_total_costs[self._trial] / self.a_traj_total_cost
                 elif self.expt == '2AFC':
                     self.cost_ratio = 1 ## sort this out later
 
-                ## update ep counter
-                self._episode += 1
+                ## update trial counter
+                self._trial += 1
 
 
         # observation = self.get_obs()

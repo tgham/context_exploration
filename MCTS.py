@@ -23,53 +23,53 @@ class MonteCarloTreeSearch():
         self.agent = agent
         self.low_cost = self.env.low_cost
         self.high_cost = self.env.high_cost
-        self.update_episode()
+        self.update_trial()
         self.tree = tree
         self.N = self.env.N
         self.discount_factor = discount_factor
         starting_cost = self.env.costs[self.actual_state[0], self.actual_state[1]]
         self.exploration_constant = exploration_constant
-        self.exploration_constants = [self.exploration_constant for e in range(self.env.n_episodes)]
+        self.exploration_constants = [self.exploration_constant for t in range(self.env.n_trials)]
 
         ## or, scale exploration constant by the expected cost of the entire block
         # n_steps = 0
-        # for ep in range(self.env.n_episodes):
+        # for trial in range(self.env.n_trials):
         #     n_steps += len(self.env.path_states[ep][0])
         # self.exploration_constant = exploration_constant * n_steps
 
-        ## or, multiple exploration constants, each scaled by the expected cost of the block from that episode onwards
+        ## or, multiple exploration constants, each scaled by the expected cost of the block from that trial onwards
         expected_cost = np.abs(np.mean([self.low_cost, self.high_cost]))
         self.exploration_constants = []
-        for e in range(self.env.n_episodes):
+        for t in range(self.env.n_trials):
             n_steps = 0
             ec = exploration_constant
-            for subseq_e in range(e, self.env.n_episodes):
+            for subseq_t in range(t, self.env.n_trials):
                 # expected_cost = np.abs(np.mean([self.env.compound_cost(self.low_cost, subseq_e),
                 #                                 self.env.compound_cost(self.high_cost, subseq_e)])) ## if using compound
-                n_steps += len(self.env.path_states[subseq_e][0])
+                n_steps += len(self.env.path_states[subseq_t][0])
                 ec += (expected_cost * n_steps)
             self.exploration_constants.append(ec)
         # print(self.exploration_constants)
 
 
         ## create id for root node
-        node_id = self.init_node_id(self.env.obs, None, self.actual_episode)
+        node_id = self.init_node_id(self.env.obs, None, self.actual_trial)
 
         ## some debugging metrics
         self.exploratory_steps = 0
         self.exploitative_steps = 0
-        self.max_Q = np.zeros(self.env.n_episodes) - np.inf
-        self.min_Q = np.zeros(self.env.n_episodes) 
+        self.max_Q = np.zeros(self.env.n_trials) - np.inf
+        self.min_Q = np.zeros(self.env.n_trials) 
 
         ## add state node to the tree
-        self.tree.add_state_node(state=self.actual_state, cost=starting_cost, node_id=node_id, goal = self.actual_goal, terminated=False, episode = self.actual_episode, n_afc = self.n_afc, parent=None)
+        self.tree.add_state_node(state=self.actual_state, cost=starting_cost, node_id=node_id, goal = self.actual_goal, terminated=False, trial = self.actual_trial, n_afc = self.n_afc, parent=None)
 
-    def init_node_id(self, obs=None, init_info_state=None, episode = None):
+    def init_node_id(self, obs=None, init_info_state=None, trial = None):
         raise NotImplementedError('init_node_id not implemented in subclass')
 
-    ## update MCTS with episode info
-    def update_episode(self):
-        raise NotImplementedError('episode update not implemented in subclass')
+    ## update MCTS with trial info
+    def update_trial(self):
+        raise NotImplementedError('trial update not implemented in subclass')
 
     ## tree step
     def tree_step(self, action_leaf):
@@ -80,7 +80,7 @@ class MonteCarloTreeSearch():
         raise NotImplementedError('rollout policy not implemented in subclass')
     
     ## myopic rollout
-    def myopic_rollout(self, myopic_ep):
+    def myopic_rollout(self, myopic_trial):
         raise NotImplementedError('myopic rollout not implemented in subclass')
 
     ## expand the action space of a node
@@ -96,19 +96,19 @@ class MonteCarloTreeSearch():
             # self.env.set_state(self.actual_state)
 
         elif self.expt == '2AFC':
-            terminated = node.episode == self.env.n_episodes-1 ## i.e. this action leaf corresponds to the action made in the final episode, so it leads to termination of the block
+            terminated = node.trial == self.env.n_trials-1 ## i.e. this action leaf corresponds to the action made in the final trial, so it leads to termination of the block
             # next_state = node.state[:2] #i.e. this stays the same since agent always regens to the same start state. may instead choose to fill this with the states that are actually traversed
             if not terminated:
-                # next_state = self.env.starts[node.episode]
-                next_state = self.env.goals[node.episode][action].copy()
+                # next_state = self.env.starts[node.trial]
+                next_state = self.env.goals[node.trial][action].copy()
             else:
                 # next_state = np.array([None, None])
-                next_state = self.env.goals[node.episode][action].copy()
+                next_state = self.env.goals[node.trial][action].copy()
             
         ## update info for s-a leaf - i.e. the state-action pair
         # prev_state = node.state
-        prev_state = self.env.starts[node.episode][action].copy()
-        node.action_leaves[action] = Action_Node(prev_state = prev_state, action=action, next_state = next_state, terminated=terminated, episode=node.episode, parent_id=node.node_id)
+        prev_state = self.env.starts[node.trial][action].copy()
+        node.action_leaves[action] = Action_Node(prev_state = prev_state, action=action, next_state = next_state, terminated=terminated, trial=node.trial, parent_id=node.node_id)
         node.action_leaves[action].performance = 0
         node.action_leaves[action].norm_performance = 0
 
@@ -117,7 +117,7 @@ class MonteCarloTreeSearch():
     ## debugging method for checking if node and env states match
     def check_state(self, node):
         if self.expt == '2AFC':
-            # assert np.array_equal(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.starts[node.episode]), 'mismatch between node and env state\n node: {} \n env: {}'.format(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.starts[node.episode])
+            # assert np.array_equal(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.starts[node.trial]), 'mismatch between node and env state\n node: {} \n env: {}'.format(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.starts[node.trial])
             assert np.array_equal(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.current)
         elif self.expt == 'free':
             assert np.array_equal(node.state[:2], self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.env.current) ### USE THIS IN THE SUBCLASS DEFINITION FOR THE FREE EXPT TOO
@@ -128,9 +128,9 @@ class MonteCarloTreeSearch():
         ## initialise the tree
         node = self.tree.root
         t = 0
-        node_episode = self.env.episode
+        node_trial = self.env.trial
         goal = node.goal
-        assert node_episode == node.episode, 'episode mismatch between env and tree\n env: {} \n tree: {}\n MCTS: {}'.format(node_episode, node.episode, self.actual_episode)
+        assert node_trial == node.trial, 'trial mismatch between env and tree\n env: {} \n tree: {}\n MCTS: {}'.format(node_trial, node.trial, self.actual_trial)
         # assert np.array_equal(node.state[:2], self.actual_state), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.actual_state)
         self.check_state(node)
 
@@ -156,15 +156,15 @@ class MonteCarloTreeSearch():
             # assert np.array_equal(node.state[:2], self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.env.current)
             self.check_state(node)
 
-            ## myopia - i.e. initiate rollout of all subsequent episodes
+            ## myopia - i.e. initiate rollout of all subsequent trials
             # if t == 2:
 
             #     ## revert env
             #     self.env.set_state(self.actual_state)
             #     self.env.set_goal(self.actual_goal)
-            #     self.env.set_episode(self.actual_episode)
+            #     self.env.set_trial(self.actual_trial)
             #     assert np.array_equal(self.env.current, self.actual_state), 'env state not reverted properly'
-            #     assert self.env.episode == self.actual_episode, 'env episode not reverted properly'
+            #     assert self.env.trial == self.actual_trial, 'env trial not reverted properly'
             #     return False
 
             ## expansion step
@@ -180,9 +180,9 @@ class MonteCarloTreeSearch():
                 ## revert env
                 self.env.set_state(self.actual_state)
                 self.env.set_goal(self.actual_goal)
-                self.env.set_episode(self.actual_episode)
+                self.env.set_trial(self.actual_trial)
                 assert np.array_equal(self.env.current, self.actual_state), 'env state not reverted properly'
-                assert self.env.episode == self.actual_episode, 'env episode not reverted properly. should be in {}, but actually in {}'.format(self.actual_episode, self.env.episode)
+                assert self.env.trial == self.actual_trial, 'env trial not reverted properly. should be in {}, but actually in {}'.format(self.actual_trial, self.env.trial)
 
                 return action_leaf
                 
@@ -200,15 +200,15 @@ class MonteCarloTreeSearch():
                 self.node_id_path.append(node.node_id)
 
                 ## move in env
-                next_state, cost, terminated, node_episode, next_node_id = self.tree_step(action_leaf)
+                next_state, cost, terminated, node_trial, next_node_id = self.tree_step(action_leaf)
 
                 # see if the next state node already exists as a child of this action leaf
                 if next_node_id in action_leaf.children:
                     node = action_leaf.children[next_node_id]
                 else:
-                    node = self.tree.add_state_node(next_state, cost, next_node_id, goal, terminated, episode = node_episode, n_afc = self.n_afc, parent=action_leaf)
-                    # if (node_episode==2) and action_leaf.action==0:
-                    #     print('new node after action:', action_leaf.action, 'in episode:', node_episode, 'cost:', cost, 'terminated:', terminated)
+                    node = self.tree.add_state_node(next_state, cost, next_node_id, goal, terminated, trial = node_trial, n_afc = self.n_afc, parent=action_leaf)
+                    # if (node_trial==2) and action_leaf.action==0:
+                    #     print('new node after action:', action_leaf.action, 'in trial:', node_trial, 'cost:', cost, 'terminated:', terminated)
                     #     print(node)
 
                 ## debugging
@@ -224,9 +224,9 @@ class MonteCarloTreeSearch():
         ## revert env
         self.env.set_state(self.actual_state)
         self.env.set_goal(self.actual_goal)
-        self.env.set_episode(self.actual_episode)
+        self.env.set_trial(self.actual_trial)
         assert np.array_equal(self.env.current, self.actual_state), 'env state not reverted properly'
-        assert self.env.episode == self.actual_episode, 'env episode not reverted properly'
+        assert self.env.trial == self.actual_trial, 'env trial not reverted properly'
 
         ## save tree obs for subsequent rollouts
         # self.tree_obs = self.env.obs_tmp.copy()
@@ -338,24 +338,24 @@ class MonteCarloTreeSearch():
 
         ## or, depth-dependent exploration constant
         exploitation_term = action_leaf.performance
-        exploration_term = self.exploration_constants[action_leaf.episode] * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
+        exploration_term = self.exploration_constants[action_leaf.trial] * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
 
         
         ### or, min-max normalisation of Qs, 
 
         ## based on overall min and max Q values (i.e. min and max of all estimates ever recorded at that depth)
-        # min_Q = self.min_Q[action_leaf.episode]
-        # max_Q = self.max_Q[action_leaf.episode]
+        # min_Q = self.min_Q[action_leaf.trial]
+        # max_Q = self.max_Q[action_leaf.trial]
 
         # ## or, based on min and max of current estimates of Qs at that depth
-        # # min_Q, max_Q = self.tree.min_max_Q(node=self.tree.root, depth=action_leaf.episode, current_depth=0)
+        # # min_Q, max_Q = self.tree.min_max_Q(node=self.tree.root, depth=action_leaf.trial, current_depth=0)
 
         # norm_term = max_Q - min_Q
         # if norm_term == 0 or norm_term==np.inf:
         #     exploitation_term = action_leaf.performance
         # else:
         #     exploitation_term = (action_leaf.performance - min_Q) / norm_term
-        # exploration_term = self.exploration_constants[action_leaf.episode] * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
+        # exploration_term = self.exploration_constants[action_leaf.trial] * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
         
         # print('exploration term:', exploration_term, 'exploitation term:', exploitation_term)
         return exploitation_term + exploration_term
@@ -398,7 +398,7 @@ class MonteCarloTreeSearch():
 
         ## calculate UCT for each action leaf
         UCTs = [self.compute_UCT(node, leaf) for leaf in action_leaves]
-        # print('node ep:', node.episode, ', diff in UCTs:', np.max(UCTs) - np.min(UCTs))
+        # print('node trial:', node.trial, ', diff in UCTs:', np.max(UCTs) - np.min(UCTs))
         max_UCT = np.max(UCTs)
         max_idx = argm(UCTs, max_UCT)
         best_child = action_leaves[max_idx]
@@ -437,20 +437,20 @@ class MonteCarloTreeSearch():
         self.first_node_updates_by_depth = []
         self.tree_cost_tracker = []
         self.conditional_tree_cost_tracker = [[],[]] 
-        for e in range(self.env.n_episodes):
+        for t in range(self.env.n_trials):
             self.first_node_updates_by_depth.append([])
             self.tree_cost_tracker.append([])
             self.conditional_tree_cost_tracker[0].append([])
             self.conditional_tree_cost_tracker[1].append([])
         
         ## loop through simulations
-        for t in range(n_sims):
+        for s in range(n_sims):
 
             ## CHEATING: give agent full knowledge of grid probabilities
             # posterior_p_cost = self.env.p_costs
             
             ## root sampling of new posterior
-            posterior_p_cost = self.agent.all_posterior_p_costs[t]
+            posterior_p_cost = self.agent.all_posterior_p_costs[s]
             if self.expt=='free': ## only need to do this in the free-choice expt
                 self.agent.dp(posterior_p_cost, expected_cost=True)
             self.env.receive_predictions(posterior_p_cost)
@@ -510,23 +510,23 @@ class MonteCarloTreeSearch_Free(MonteCarloTreeSearch):
     def __init__(self, env, agent, tree, exploration_constant=2, discount_factor=0.99):
         super().__init__(env, agent, tree, exploration_constant, discount_factor)
 
-    def init_node_id(self, obs=None, init_info_state = None, episode=None):
+    def init_node_id(self, obs=None, init_info_state = None, trial=None):
         node_id = tuple(np.append(self.actual_state, self.env.costs[self.actual_state[0], self.actual_state[1]]))
         return node_id
     
-    def update_episode(self):
+    def update_trial(self):
         self.actual_state = self.env.current
         self.actual_goal = self.env.goal
-        self.actual_episode = self.env.episode
+        self.actual_trial = self.env.trial
 
     ## tree step
     def tree_step(self, action_leaf):
         action = action_leaf.action
         next_state, cost, terminated, _, _ = self.env.step(action)
         self.tree_costs.append(cost)
-        node_episode = self.actual_episode ##??
+        node_trial = self.actual_trial ##??
         next_node_id = tuple(np.append(next_state, cost))
-        return next_state, cost, terminated, node_episode, next_node_id
+        return next_state, cost, terminated, node_trial, next_node_id
     
     ## rollout policy
     def rollout_policy(self, action_leaf):
@@ -577,10 +577,10 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         super().__init__(env, agent, tree, exploration_constant, discount_factor)
 
     ## node_ids are defined by the informational state, i.e. the counts of low and high cost states in each cell
-    def init_node_id(self, obs=None, init_info_state = None, episode=None):
+    def init_node_id(self, obs=None, init_info_state = None, trial=None):
         # info_state = np.zeros((self.N, self.N, 2))
         # high_cost = self.high_cost
-        high_cost = self.env.compound_cost(self.high_cost, episode) ## if using compound costs
+        high_cost = self.env.compound_cost(self.high_cost, trial) ## if using compound costs
         if init_info_state is None:
             init_info_state = np.zeros((self.N, self.N, 2))
         for i,j,c in obs:
@@ -591,25 +591,25 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         node_id = tuple(init_info_state.flatten())
         return node_id
     
-    def update_episode(self):
-        self.actual_episode = self.env.episode
+    def update_trial(self):
+        self.actual_trial = self.env.trial
         # self.actual_state = self.env.current
-        self.actual_state = self.env.starts[self.actual_episode].copy()
-        self.actual_goal = self.env.goals[self.actual_episode].copy() ## in fact, this will probably be two goals
+        self.actual_state = self.env.starts[self.actual_trial].copy()
+        self.actual_goal = self.env.goals[self.actual_trial].copy() ## in fact, this will probably be two goals
 
     ## tree step
     def tree_step(self, action_leaf):
-        # print('tree step in ep ', action_leaf.episode, 'action:', action_leaf.action)
+        # print('tree step in trial ', action_leaf.trial, 'action:', action_leaf.action)
         # start_tmp = self.env.current ## will change this if multiple starts are used
-        start_tmp = self.env.starts[action_leaf.episode][action_leaf.action].copy()
-        goal_tmp = self.env.goals[action_leaf.episode][action_leaf.action].copy()
-        step_ep = action_leaf.episode
+        start_tmp = self.env.starts[action_leaf.trial][action_leaf.action].copy()
+        goal_tmp = self.env.goals[action_leaf.trial][action_leaf.action].copy()
+        step_trial = action_leaf.trial
         self.env.set_state(start_tmp)
         self.env.set_goal(goal_tmp)
-        # self.env.set_episode(step_ep)
+        # self.env.set_trial(step_trial)
         path_id = action_leaf.action
-        assert self.env.episode == action_leaf.episode, 'episode mismatch between env and tree\n env: {} \n tree: {}\n MCTS: {}'.format(self.env.episode, action_leaf.episode, self.actual_episode)
-        action_sequence = self.env.path_actions[step_ep][path_id]
+        assert self.env.trial == action_leaf.trial, 'trial mismatch between env and tree\n env: {} \n tree: {}\n MCTS: {}'.format(self.env.trial, action_leaf.trial, self.actual_trial)
+        action_sequence = self.env.path_actions[step_trial][path_id]
 
         ## initialise costs and observations for this path
         simulated_obs = []
@@ -617,7 +617,7 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
 
         ## take path
         states, costs = self.env.take_path(action_sequence)
-        assert np.array_equal(states[-1], self.env.goals[step_ep][path_id]), 'final state of path does not match goal\n final state: {}, goal: {}'.format(states[-1], self.env.goals[step_ep][path_id])
+        assert np.array_equal(states[-1], self.env.goals[step_trial][path_id]), 'final state of path does not match goal\n final state: {}, goal: {}'.format(states[-1], self.env.goals[step_trial][path_id])
         simulated_obs += [np.append(s, c) for s, c in zip(states, costs)]
 
         ## add back in the start state if it wasn't actually observed in non-sim space
@@ -625,29 +625,29 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         # costs = [self.env.predicted_costs[start_tmp[0], start_tmp[1]]] + costs
         
         ## or, if compound costs
-        simulated_obs = [np.append(start_tmp, self.env.compound_cost(self.env.predicted_costs[start_tmp[0], start_tmp[1]], step_ep))] + simulated_obs
-        costs = [self.env.compound_cost(self.env.predicted_costs[start_tmp[0], start_tmp[1]], step_ep)] + costs 
+        simulated_obs = [np.append(start_tmp, self.env.compound_cost(self.env.predicted_costs[start_tmp[0], start_tmp[1]], step_trial))] + simulated_obs
+        costs = [self.env.compound_cost(self.env.predicted_costs[start_tmp[0], start_tmp[1]], step_trial)] + costs 
         self.tree_costs.append(np.sum(costs))
-        # if (action_leaf.episode==1) and (action_leaf.action==1):
+        # if (action_leaf.trial==1) and (action_leaf.action==1):
         #     print(simulated_obs)
         assert len(simulated_obs) == len(costs), 'sim obs and costs do not match\n sim obs: {}, costs: {}'.format(len(simulated_obs), len(costs))
         assert len(simulated_obs) == len(action_sequence)+1, 'sim obs and action sequence do not match\n sim obs: {}, action seq: {}'.format(len(simulated_obs), len(action_sequence)+1)
         terminated = action_leaf.terminated
         # if terminated:
-        #     print(action_leaf.episode, start_tmp, goal_tmp)
+        #     print(action_leaf.trial, start_tmp, goal_tmp)
 
         ## get the next node id, i.e. the informational state after taking this path
         init_info_state = np.array(action_leaf.parent_id).reshape(self.N, self.N, 2)
-        next_node_id = self.init_node_id(simulated_obs, init_info_state, step_ep)
-        # n_total_obs = np.sum([len(self.env.path_states[ep][0]) for ep in range(action_leaf.episode+1)])
+        next_node_id = self.init_node_id(simulated_obs, init_info_state, step_trial)
+        # n_total_obs = np.sum([len(self.env.path_states[ep][0]) for trial in range(action_leaf.trial+1)])
         # assert n_total_obs == np.sum(next_node_id), 'total obs and next node id do not match\n total obs: {}, next node id: {}'.format(n_total_obs, np.sum(next_node_id))
 
-        ## since the agent has chosen a path to the goal, we need to move the environment to the next episode
-        node_episode = step_ep+1
+        ## since the agent has chosen a path to the goal, we need to move the environment to the next trial
+        node_trial = step_trial+1
         if not terminated:
-            next_state = self.env.starts[node_episode].copy()
-            self.env.set_episode(node_episode)
-            # print('updated episode to:', node_episode)
+            next_state = self.env.starts[node_trial].copy()
+            self.env.set_trial(node_trial)
+            # print('updated trial to:', node_trial)
             self.env.soft_reset()
         else:
             next_state = np.array([None, None])
@@ -655,8 +655,8 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
             self.env.soft_reset(next_state, next_goal)
 
         ## some checks
-        assert len(self.tree_costs)<=self.env.n_episodes, 'tree costs exceed number of episodes, tree len: {}, n_eps: {}'.format(len(self.tree_costs), self.env.n_episodes)
-        return next_state, costs, terminated, node_episode, next_node_id
+        assert len(self.tree_costs)<=self.env.n_trials, 'tree costs exceed number of trials, tree len: {}, n_trials: {}'.format(len(self.tree_costs), self.env.n_trials)
+        return next_state, costs, terminated, node_trial, next_node_id
     
     ## rollout policy
     def rollout_policy(self, action_leaf):
@@ -666,28 +666,28 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
             return None
 
         ## first need to get the starting cost r, which is essentially the cost of path choice that corresponds to the action leaf
-        first_episode = action_leaf.episode
+        first_trial = action_leaf.trial
         path_id = action_leaf.action
         starting_cost = 0
-        for state in self.env.path_states[first_episode][path_id]:
+        for state in self.env.path_states[first_trial][path_id]:
             # cost = self.env.get_pred_cost(state)
             cost = self.env.predicted_costs[state[0], state[1]]
             starting_cost += cost
         total_cost = starting_cost
 
-        ## compound costs per episode
-        total_cost = self.env.compound_cost(total_cost, first_episode)
+        ## compound costs per trial
+        total_cost = self.env.compound_cost(total_cost, first_trial)
 
-        ## if final episode, just stop here
+        ## if final trial, just stop here
         if action_leaf.terminated:
             self.tree_costs.append(total_cost)
             return total_cost
         
-        ## loop through remaining episodes
+        ## loop through remaining trials
         depth = 0
         remaining_ro_costs = []
         ro_choices=[]
-        for ep in range(first_episode+1, self.env.n_episodes):
+        for trial in range(first_trial+1, self.env.n_trials):
             depth+=1
 
             ## GREEDY: get the total cost of the two paths and return the better one
@@ -704,34 +704,34 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
             # if first_step_action == 0:
             #     first_step_cost = path_costs[0]
             #     print('first step cost:', first_step_cost)
-            #     print('RO ep:', ep,', costs:',path_costs)
+            #     print('RO trial:', trial,', costs:',path_costs)
             remaining_ro_costs.append(np.max(path_costs))
             ro_choices.append(np.argmax(path_costs))
             
             
             # best_ro_cost = np.max(path_costs) 
-            best_ro_cost = self.env.compound_cost(np.max(path_costs), ep) ## or if using compound costs
+            best_ro_cost = self.env.compound_cost(np.max(path_costs), trial) ## or if using compound costs
             total_cost += best_ro_cost * self.discount_factor**depth
 
             ## RANDOM: randomly choose between the two paths
             # path_id = np.random.choice(self.n_AFC)
-            # path_states = self.env.path_states[action_leaf.episode+1][path_id]
+            # path_states = self.env.path_states[action_leaf.trial+1][path_id]
             # ro_cost = 0
             # for state in path_states:
             #     cost = self.env.get_pred_cost(state)
             #     ro_cost += cost
 
         self.tree_costs.append(total_cost)
-        assert len(remaining_ro_costs)+first_episode+1 == self.env.n_episodes, 'remaining RO costs do not match number of episodes\n n remaining RO costs: {}, n episodes: {}'.format(len(remaining_ro_costs), self.env.n_episodes)
+        assert len(remaining_ro_costs)+first_trial+1 == self.env.n_trials, 'remaining RO costs do not match number of trials\n n remaining RO costs: {}, n trials: {}'.format(len(remaining_ro_costs), self.env.n_trials)
         return total_cost 
     
     ## myopic rollout - i.e. tree has been cut off at a certain depth, after which point you just do greedy rollouts
-    def myopic_rollout(self, myopic_ep):
+    def myopic_rollout(self, myopic_trial):
 
         ## init
         total_cost = 0
         depth = 0
-        for ep in range(myopic_ep, self.env.n_episodes):
+        for trial in range(myopic_trial, self.env.n_trials):
             depth+=1
 
             ## GREEDY: get the total cost of the two paths and return the better one
@@ -813,8 +813,8 @@ class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
         return expected_KL
 
 
-## parallel function for simulating many episodes within the same grid env
-# def simulate_agent(m, N, env_params=None, metric='cityblock', expt='2AFC', n_episodes=10, agents = ['GP', 'GP-MCTS', 'BAMCP','CE'], n_sims=1000,n_blocks=1, correct_prior=True, n_futures=0, n_iter=10, lazy=False, exploration_constant=2, discount_factor=0.95, progress=False):
+## parallel function for simulating many trials within the same grid env
+# def simulate_agent(m, N, env_params=None, metric='cityblock', expt='2AFC', n_trials=10, agents = ['GP', 'GP-MCTS', 'BAMCP','CE'], n_sims=1000,n_blocks=1, correct_prior=True, n_futures=0, n_iter=10, lazy=False, exploration_constant=2, discount_factor=0.95, progress=False):
 def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, agents= ['BAMCP', 'CE'], progress=False):
     print(' ') # for some reason need this to get the pbar to appear
 
@@ -825,7 +825,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
 
     ## or, do this manually
     N = env_params['N']
-    n_episodes = env_params['n_episodes']
+    n_trials = env_params['n_trials']
     expt_info = env_params['expt_info']
     expt = expt_info['type']
     n_blocks = env_params['n_blocks']
@@ -857,17 +857,17 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
     seed=os.getpid()
     np.random.seed(seed)
 
-    ## loop through runs of the same grid-episode set
+    ## loop through runs of the same grid-trial set
     if progress:
         if n_blocks > 1:
-            pbar = tqdm(total=n_blocks*n_episodes, desc='Grid_'+str(m)+', '+str(n_blocks)+' blocks, '+str(n_episodes)+' episodes', position=0, leave=False, ascii=True)
+            pbar = tqdm(total=n_blocks*n_trials, desc='Grid_'+str(m)+', '+str(n_blocks)+' blocks, '+str(n_trials)+' trials', position=0, leave=False, ascii=True)
     
     ## loop through blocks - i.e. different grids drawn from the same prior. we will collect these for saving at the end
     all_block_envs = []
     for block in range(n_blocks):   
 
         ## create base grid environment
-        env = make_env(N, n_episodes, expt_info, beta_params, metric)
+        env = make_env(N, n_trials, expt_info, beta_params, metric)
         
         ## debugging plot env
         # fig, ax = plt.subplots(1, 1, figsize=(5,5))
@@ -886,7 +886,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
             if (a == 'BAMCP') or (a == 'BAMCP w/ CE') or (a=='BAMCP_wrong'):
                 MCTSs[a] = None
                 tree_resets[a] = True
-        # tree_reset = True ## to determine whether tree is reset at the start of each episode
+        # tree_reset = True ## to determine whether tree is reset at the start of each trial
 
         ## copy of farmers
         farmers = {}
@@ -906,14 +906,14 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
         # farmer = Farmer(N, context_prior=context_prior)
         # farmer = Farmer(N, context_prior=context_priors[ag])
 
-        ## loop through episodes (i.e. different start and goal states for the same grid)
+        ## loop through trials (i.e. different start and goal states for the same grid)
         if progress:
             if n_blocks <= 1:
-                pbar = tqdm(total=n_episodes, desc='Grid_'+str(m)+', block '+str(block+1)+'/'+str(n_blocks), position=m+1, leave=False)
-        for e in range(n_episodes):
+                pbar = tqdm(total=n_trials, desc='Grid_'+str(m)+', block '+str(block+1)+'/'+str(n_blocks), position=m+1, leave=False)
+        for t in range(n_trials):
 
         ## TEMP: just interested in first choice
-        # for e in range(1):
+        # for t in range(1):
 
             ## loop through agents
             for a, ag in enumerate(agents):
@@ -921,13 +921,13 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                 ## initialise the farmer
                 # farmer = Farmer(N, context_prior=context_priors[ag])
                 farmer = farmers[ag]
-                # print('agent:', ag, ', episode:', e,', context prior:', farmer.context_prob)
+                # print('agent:', ag, ', trial:', e,', context prior:', farmer.context_prob)
 
-                ## tmp fix: fix the prior to the prior that was used at the beginning of the grid (to prevent observations contributing to the posterior on multiple episodes)
+                ## tmp fix: fix the prior to the prior that was used at the beginning of the grid (to prevent observations contributing to the posterior on multiple trials)
                 farmer.context_prob = context_priors[ag]
 
                 
-                ### reset episode 
+                ### reset trial 
 
                 ## copy env for our base agents
                 if (ag=='BAMCP') or (ag=='CE') or (ag=='BAMCP_wrong'):
@@ -955,7 +955,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                 actions = []
                 CE_actions = []
                 choice_probs = []
-                # context_probs = [] ## i.e. the prob of the context at the start of the episode
+                # context_probs = [] ## i.e. the prob of the context at the start of the trial
                 Q_values = []
                 CE_Q_values = []
                 ELDs = []
@@ -975,7 +975,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                     agent = farmer
                 agent.get_env_info(env_copy)
                 if e==0:
-                    assert len(env_copy.obs)==0, 'obs not empty at start of episode'
+                    assert len(env_copy.obs)==0, 'obs not empty at start of trial'
 
                 ## reset tree
                 if ((ag == 'BAMCP') or (ag == 'BAMCP w/ CE') or (ag=='BAMCP_wrong')):
@@ -989,20 +989,20 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                             # MCTS = MonteCarloTreeSearch_2AFC(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
                             MCTSs[ag] = MonteCarloTreeSearch_2AFC(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
                 
-                    ## if keeping the tree between episodes, need to update tree with new episode info
+                    ## if keeping the tree between trials, need to update tree with new trial info
                     elif (not tree_resets[ag]): #& (not tree_reset):
-                        # MCTS.update_episode()
-                        MCTSs[ag].update_episode()
+                        # MCTS.update_trial()
+                        MCTSs[ag].update_trial()
                         # tree_reset = True
                         tree_resets[ag] = True
                         MCTSs[ag].agent = agent ##???
                     MCTS = MCTSs[ag]
-                    assert e == MCTS.actual_episode, 'episode mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(e, MCTS.env.episode)
-                assert e == env_copy.episode, 'episode mismatch between simulation and env\n simulation: {} \n env: {}'.format(e, MCTS.env.episode)
+                    assert e == MCTS.actual_trial, 'trial mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(e, MCTS.env.trial)
+                assert e == env_copy.trial, 'trial mismatch between simulation and env\n simulation: {} \n env: {}'.format(e, MCTS.env.trial)
 
             
-                ## run episode until goal is reached
-                end_episode = False
+                ## run trial until goal is reached
+                end_trial = False
                 terminated=False
                 early_terminate = False
                 reuse_samples = False
@@ -1012,7 +1012,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                 elif expt=='2AFC':
                     max_steps = 100 ## just in case
 
-                while not end_episode:
+                while not end_trial:
 
                     ## plain balanced GP
                     if ag == 'GP':
@@ -1076,23 +1076,23 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
 
                             ## take the path
                             env_copy.set_sim(False)
-                            env_copy.init_ep(action)
+                            env_copy.init_trial(action)
                             start = env_copy.current
                             goal = env_copy.goal
                             assert np.array_equal(start, env_copy.starts[e][action]), 'current state does not match start state\n current: {}, start: {}'.format(env_copy.current, env_copy.starts[e][action])
                             action_sequence = env_copy.path_actions[e][action]
                             _,_ = env_copy.take_path(action_sequence)
                             current = env_copy.current
-                            costs = env_copy.ep_obs[:,-1]
+                            costs = env_copy.trial_obs[:,-1]
                             path_cost = np.sum(costs)
                             terminated=True
-                            block_terminated = e == (n_episodes-1)
+                            block_terminated = e == (n_trials-1)
                             # costs = []
                             # for ac in action_sequence:
                             #     current, cost, terminated, _, _ = env_copy.step(ac)
                             #     costs.append(cost)
                             # path_cost = np.sum(costs)
-                            block_terminated = e == (n_episodes-1)
+                            block_terminated = e == (n_trials-1)
                         steps += 1
                         leaf_visits = []
 
@@ -1107,7 +1107,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         env_copy.set_sim(True)
                         MCTS.actual_state = current
                         
-                        ## init MCTS (if resetting the tree for each move, init here. otherwise, this should be outside the episode loop)
+                        ## init MCTS (if resetting the tree for each move, init here. otherwise, this should be outside the trial loop)
                         # tree = Tree(N)
                         # MCTS = MonteCarloTreeSearch(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
                         assert MCTS.env.sim == True, 'env not in sim mode'
@@ -1180,22 +1180,22 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         #     print('MCTS Q:', MCTS_Q_labelled)
                         #     print('n_visits of action leaves:',{env_copy.action_labels[k]:v.n_action_visits for k,v in MCTS.tree.root.action_leaves.items()})
 
-                        ## presentation plot of agent's observations, and the posterior mean (plot all episodes)
-                        # fig, axs = plt.subplots(2, n_episodes, figsize=(n_episodes*5, 10))
-                        # for ep in range(n_episodes):
+                        ## presentation plot of agent's observations, and the posterior mean (plot all trials)
+                        # fig, axs = plt.subplots(2, n_trials, figsize=(n_trials*5, 10))
+                        # for trial in range(n_trials):
                         #     observed_costs = np.zeros((N,N)) + np.nan
                         #     for i,j,c in env_copy.obs:
                         #         observed_costs[i,j] = c
-                        #     plot_r(observed_costs+1, ax = axs[1, ep], title = f'Grid {block+1}, Trial {ep+1}', cbar=False)
-                        #     plot_traj([env.path_states[ep][0], env.path_states[ep][1]], ax = axs[1, ep], expt=expt)
+                        #     plot_r(observed_costs+1, ax = axs[1, trial], title = f'Grid {block+1}, Trial {ep+1}', cbar=False)
+                        #     plot_traj([env.path_states[ep][0], env.path_states[ep][1]], ax = axs[1, trial], expt=expt)
                         # all_posterior_p_costs_plot.append(agent.posterior_mean_p_cost)
                         # all_posterior_contexts_plot.append(farmer.context_prob)
-                        # for ep in range(0, e+1):
+                        # for trial in range(0, e+1):
                         #     context_title = title = r'$p(z_{c}) = $'+str(all_posterior_contexts_plot[ep].round(2))
                         #     title = f'Posterior mean p(low cost)\n{context_title}'
-                        #     plot_r(all_posterior_p_costs_plot[ep], ax = axs[0, ep], title = title, cbar=False)
-                        #     plot_traj([env.path_states[ep][0], env.path_states[ep][1]], ax = axs[0, ep], expt=expt)
-                        # for ep in range(e+1, n_episodes):
+                        #     plot_r(all_posterior_p_costs_plot[ep], ax = axs[0, trial], title = title, cbar=False)
+                        #     plot_traj([env.path_states[ep][0], env.path_states[ep][1]], ax = axs[0, trial], expt=expt)
+                        # for trial in range(e+1, n_trials):
                         #     fig.delaxes(axs[0,ep])
                         # plt.show()
 
@@ -1203,7 +1203,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
 
                         ## take action
                         env_copy.set_sim(False)
-                        env_copy.init_ep(action)
+                        env_copy.init_trial(action)
                         start = env_copy.current
                         goal = env_copy.goal
                         assert np.array_equal(start, env_copy.starts[e][action]), 'current state does not match start state\n current: {}, start: {}'.format(env_copy.current, env_copy.starts[e][action])
@@ -1217,17 +1217,17 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                             # current = states[-1]
                             current = env_copy.current
                             # path_cost = np.sum(costs)
-                            costs = env_copy.ep_obs[:,-1]
+                            costs = env_copy.trial_obs[:,-1]
                             assert len(costs) == len(action_sequence)+1, 'costs and action sequence do not match\n costs: {}, action sequence: {}'.format(len(costs), len(action_sequence))
                             path_cost = np.sum(costs)
                             terminated = True ## trivially true in 2AFC
-                            block_terminated = e == (n_episodes-1)
+                            block_terminated = e == (n_trials-1)
 
                             ## update next node id
                             # next_node_id = MCTS.init_node_id(env_copy.obs.copy(), None, e)
                             init_info_state = np.array(MCTS.tree.root.node_id).reshape(N, N, 2)
-                            ep_obs = env_copy.ep_obs.copy()
-                            next_node_id = MCTS.init_node_id(ep_obs, init_info_state, e)
+                            trial_obs = env_copy.trial_obs.copy()
+                            next_node_id = MCTS.init_node_id(trial_obs, init_info_state, e)
 
 
                         ## check for backtracking
@@ -1246,7 +1246,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         ### prune tree
                         if expt=='free': 
                             
-                            ## no need to prune at the end of the episode in free-choice expt, since the tree resets at this point
+                            ## no need to prune at the end of the trial in free-choice expt, since the tree resets at this point
                             if not terminated:
                                 MCTS.tree.prune(action, next_node_id)
                                 assert np.array_equal(MCTS.tree.root.state[:2], current), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action)
@@ -1283,7 +1283,7 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                     # print('prior context:', farmer.context_prob)
 
                     # get the new context posterior for this agent
-                    # print('agent:', ag, ', episode:', e,', block:', block, ', action:', action, ', context prior:', farmer.context_prob)
+                    # print('agent:', ag, ', trial:', e,', block:', block, ', action:', action, ', context prior:', farmer.context_prob)
                     # print('farmers prior context:',farmer.context_prob)
                     context_posterior = farmer.quick_context_posterior(env_copy.obs)
                     # print('posterior context:', context_posterior)
@@ -1295,18 +1295,18 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                     #     EKLs.append(expected_KL)
 
                     
-                    ## prevent endless episode 
+                    ## prevent endless trial 
                     if steps >= max_steps:
                         early_terminate = True
 
                     if early_terminate:
-                        print('grid ',m,': episode ',e,' terminated for agent ',ag,' after ',steps,' steps')
-                        # raise ValueError('grid ',m,': episode ',e,' terminated for agent ',ag,' after ',steps,' steps')
+                        print('grid ',m,': trial ',e,' terminated for agent ',ag,' after ',steps,' steps')
+                        # raise ValueError('grid ',m,': trial ',e,' terminated for agent ',ag,' after ',steps,' steps')
 
-                        ## or just skip to the next episode
+                        ## or just skip to the next trial
                         sim_out['agent'].append(agent)
                         sim_out['block'].append(block)
-                        sim_out['episode'].append(e)
+                        sim_out['trial'].append(e)
                         sim_out['grid'].append(m)
                         sim_out['start'].append(start)
                         sim_out['goal'].append(goal)
@@ -1358,16 +1358,16 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         # sim_out['posterior_mean'].append(np.nan)
                         # sim_out['theta_MLE'].append(best_theta)
 
-                        end_episode = True
+                        end_trial = True
 
                         ## stop the sim here!
                         return sim_out, env_copy.p_costs
 
-                    ## save data and end the episode
+                    ## save data and end the trial
                     elif terminated:
                         sim_out['agent'].append(ag)
                         sim_out['block'].append(block)
-                        sim_out['episode'].append(e)
+                        sim_out['trial'].append(e)
                         sim_out['grid'].append(m)
                         sim_out['start'].append(start)
                         sim_out['goal'].append(goal)
@@ -1447,10 +1447,10 @@ def simulate_agent(m, env_params=None, MCTS_params=None, sampler_params=None, ag
                         # agent_envs[a] = copy.deepcopy(env_copy)
                         agent_envs[ag] = env_copy
 
-                        end_episode = True
+                        end_trial = True
             
-                ## carry over the context prob to the next run, if on the final episode of the block
-                if e == (n_episodes-1):
+                ## carry over the context prob to the next run, if on the final trial of the block
+                if e == (n_trials-1):
                     context_priors[ag] = context_posterior
                 # else:
                 #     context_priors[ag] = context_prior

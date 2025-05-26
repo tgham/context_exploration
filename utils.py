@@ -30,7 +30,7 @@ from agents import Farmer
 
 
 ## create a grid environment
-def make_env(N, n_episodes, expt_info, beta_params, metric, seed=None):
+def make_env(N, n_trials, expt_info, beta_params, metric, seed=None):
 
     ## register env
     
@@ -43,11 +43,11 @@ def make_env(N, n_episodes, expt_info, beta_params, metric, seed=None):
     register(
         id=env_id,
         entry_point='grids.envs:GridEnv',
-        max_episode_steps=100,
+        max_trial_steps=100,
         kwargs={"size": N},
     )
     
-    env = gym.make("grids/GridEnv-v0", N=N, n_episodes=n_episodes, expt_info=expt_info, beta_params=beta_params, metric=metric, seed=seed)
+    env = gym.make("grids/GridEnv-v0", N=N, n_trials=n_trials, expt_info=expt_info, beta_params=beta_params, metric=metric, seed=seed)
     return env
 
 
@@ -58,13 +58,13 @@ class Node:
 
     # __slots__ = ['state', 'n_state_visits', 'cost', 'terminated', 'node_id', 'parent_node_ids', 'N', 'untried_actions', 'action_leaves']
 
-    def __init__(self, state, cost, node_id, goal, terminated, episode, n_afc, N):
+    def __init__(self, state, cost, node_id, goal, terminated, trial, n_afc, N):
         
         ## state info
-        self.state = np.append(state, cost) ## in the 2AFC case, this amounts to current state + costs that have just been observed on prior simulated episode
+        self.state = np.append(state, cost) ## in the 2AFC case, this amounts to current state + costs that have just been observed on prior simulated trial
         self.n_state_visits = 0
         self.cost = cost
-        self.episode = episode
+        self.trial = trial
         self.terminated = terminated
         self.goal = goal
         # self.node_id = tuple(self.state)
@@ -92,9 +92,9 @@ class Node:
 
     def __str__(self):
         action_leaves_msg = {action: np.round(leaf.performance,3) if leaf is not None else None for action, leaf in self.action_leaves.items()}
-        return "state {}: (episode={}, visits={}, terminated={})\n{})".format(
+        return "state {}: (trial={}, visits={}, terminated={})\n{})".format(
                                                   self.state,
-                                                    self.episode,
+                                                    self.trial,
                                                   self.n_state_visits,
                                                 #   self.cost,
                                                   self.terminated,
@@ -109,7 +109,7 @@ class Node:
     
 class Action_Node:
 
-    def __init__(self, prev_state, action, next_state, terminated, episode, parent_id):
+    def __init__(self, prev_state, action, next_state, terminated, trial, parent_id):
         self.prev_state = prev_state
         self.action = action ## in 2AFC, this specifies the path ID (i.e. 0 or 1)
         self.total_simulation_cost = 0
@@ -117,7 +117,7 @@ class Action_Node:
         self.n_action_visits = 0
         self.next_state = next_state
         self.terminated = terminated
-        self.episode = episode
+        self.trial = trial
         self.node_id = (self.prev_state, self.action) #+ str(self.next_state)
         self.parent_id = parent_id
         self.children={}
@@ -147,7 +147,7 @@ class Tree:
         return not node.terminated and len(node.untried_actions) > 0
 
     ## attach action leaf to child state
-    def add_state_node(self, state, cost, node_id, goal, terminated, episode, n_afc, parent=None):
+    def add_state_node(self, state, cost, node_id, goal, terminated, trial, n_afc, parent=None):
 
         # ## check for existing state node
         # node_id = str(history)
@@ -157,7 +157,7 @@ class Tree:
 
         
         ## create a new state node
-        node = Node(state=state, cost=cost, node_id=node_id, goal=goal, terminated=terminated, episode = episode, n_afc=n_afc, N=self.N)
+        node = Node(state=state, cost=cost, node_id=node_id, goal=goal, terminated=terminated, trial = trial, n_afc=n_afc, N=self.N)
         
         ## store parent-child relationships
         if parent is None:
@@ -234,11 +234,11 @@ class Tree:
         else:
             node_label = f"{node.state}"
             # node_label = f"{node.node_id}"
-        episode_label = f"{node.episode}"
+        trial_label = f"{node.trial}"
 
         # Add branch marker
         branch = "└── " if is_last else "├── "
-        print(f"{indent}{branch}Node: {node_label}, Episode: {episode_label}, Visits: {node.n_state_visits}")
+        print(f"{indent}{branch}Node: {node_label}, Episode: {trial_label}, Visits: {node.n_state_visits}")
 
         # Update indentation for children
         child_indent = indent + ("    " if is_last else "│   ")
@@ -588,7 +588,7 @@ def KL_sim(obs_set, t, farmer, n_samples, plotting = False):
 
     ## get expt + sampler info
     N = farmer.N
-    n_episodes = 2 ## arbitrary
+    n_trials = 2 ## arbitrary
     expt = farmer.expt
     expt_info = {
         'type': expt,
@@ -613,7 +613,7 @@ def KL_sim(obs_set, t, farmer, n_samples, plotting = False):
     all_posterior_mean_p_costs = []
 
     ## reset env
-    env = make_env(N, n_episodes,expt_info, beta_params, 'cityblock')
+    env = make_env(N, n_trials,expt_info, beta_params, 'cityblock')
     env.reset()
 
     ## loop through obs sets
@@ -723,7 +723,7 @@ data_keys = [
     'agent',
     'block',
     'grid',
-    'episode',
+    'trial',
     'start',
     'goal',
     'costs',
