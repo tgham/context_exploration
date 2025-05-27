@@ -320,21 +320,6 @@ class Farmer:
                 ## loop through trials within day
                 for t in range(n_trials):
 
-                    ## if no choice from participant, model should do its thing anyway just for consistency, but then don't save anything...
-                    # missed = pd.isna(df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_chosen'].values[0])
-                    # if missed:
-                    #     print('missed in city {}, day {}, trial {}'.format(city+1, day+1, t+1))
-                    #     print('start: {}, goal: {}'.format(env.starts[t], env.goal))
-                    #     self.p_choice[city, day, t] = np.nan
-                    #     self.p_correct[city, day, t] = np.nan
-                    #     self.Q_vals[city, day, t] = np.nan
-                    #     self.actions[city, day, t] = np.nan
-                    #     self.context_priors[city, day, t] = np.nan
-                    #     self.context_posteriors[city, day, t] = np.nan
-                    #     self.leaf_visits[city, day, t] = np.nan
-                    #     self.total_costs[city, day, t] = np.nan
-                    #     continue
-
                     ## reset env/trial
                     self.context_prob = context_prior ## tmp fix: fix the prior to the prior that was used at the beginning of the grid (to prevent observations contributing to the posterior on multiple trials)
                     env.reset()
@@ -407,10 +392,14 @@ class Farmer:
                         try:
                             missed = pd.isna(df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_chosen'].values[0])
                         except:
-                            print('missing nan? in city {}, day {}, trial {}'.format(city+1, day+1, t+1))
+                            # print('missing nan? in city {}, day {}, trial {}'.format(city+1, day+1, t+1))
                             missed = True
                         if not missed:
                             action = df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_chosen'].values[0]=='b'                        
+
+                            ## check alignment of ppt dataset and environment
+                            assert df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_A_expected_cost'].values[0] == env.path_expected_costs[t][0], 'expected cost does not match ppt data\n env: {}, ppt: {}'.format(env.path_expected_costs[t][0], df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_A_expected_cost'].values[0])
+
                         else:
                             # print('missed in city {}, day {}, trial {}'.format(city+1, day+1, t+1))
                             # print('start: {}, goal: {}'.format(env.starts[t], env.goal))
@@ -429,7 +418,7 @@ class Farmer:
                         env.init_trial(action)
                         start = env.current
                         goal = env.goal
-                        assert np.array_equal(start, env.starts[t][action]), 'current state does not match start state\n current: {}, start: {}.\n tried taking action: {}'.format(env.current, env.starts[t][action], action)
+                        assert np.array_equal(start, env.starts[t][action]), 'current state does not match start state in city {} day {} trial {}\n current: {}, start: {}.\n all starts: {}\n all goals:{}'.format(city, day, t, env.current, env.starts[t][action], env.starts, env.goals)
                         action_sequence = env.path_actions[t][action]
                         _, _ = env.take_path(action_sequence)
                         current = env.current
@@ -442,7 +431,7 @@ class Farmer:
                     ## else, skip to next trial??
                     else:
                         # print('skipping to next trial: ',t+1)
-                        env.set_trial(t+1) ##??
+                        env.set_trial(t+1)
 
                     ## update observations
                     self.get_env_info(env)
@@ -450,19 +439,22 @@ class Farmer:
                     ## update MCTS tree
                     if agent == 'BAMCP':
 
-                        ## update next node id
-                        init_info_state = np.array(MCTS.tree.root.node_id).reshape(N, N, 2)
-                        trial_obs = env.trial_obs.copy()
-                        next_node_id = MCTS.init_node_id(trial_obs, init_info_state, t)
+                        ## update next node id (only if a choice was made??)
+                        if not missed:
+                            init_info_state = np.array(MCTS.tree.root.node_id).reshape(N, N, 2)
+                            trial_obs = env.trial_obs.copy()
+                            next_node_id = MCTS.init_node_id(trial_obs, init_info_state, t)
 
-                        ## prune tree (not always successful due to high branching factor, in which case reset the tree)
-                        if not day_terminated:
-                            if next_node_id in MCTS.tree.root.action_leaves[action].children:
-                                MCTS.tree.prune(action, next_node_id)
-                                assert np.array_equal(MCTS.tree.root.state[2*MCTS.n_afc:], costs), 'error in root update\n root state: {} \n costs: {}'.format(MCTS.tree.root.state[2*MCTS.n_afc:], costs)
-                                tree_reset = False
-                            else:
-                                tree_reset = True
+                            ## prune tree (not always successful due to high branching factor, in which case reset the tree)
+                            if not day_terminated:
+                                if next_node_id in MCTS.tree.root.action_leaves[action].children:
+                                    MCTS.tree.prune(action, next_node_id)
+                                    assert np.array_equal(MCTS.tree.root.state[2*MCTS.n_afc:], costs), 'error in root update\n root state: {} \n costs: {}'.format(MCTS.tree.root.state[2*MCTS.n_afc:], costs)
+                                    tree_reset = False
+                                else:
+                                    tree_reset = True
+                        else:
+                            tree_reset = True
 
                     ## get the context prior - i.e. the probability with which samples were drawn
                     context_prior = self.context_prob
@@ -487,6 +479,9 @@ class Farmer:
 
         ## flatten + other init
         self.p_choice_flat = self.p_choice[:,:,:,1].flatten() ## i.e. p(choose path B)
+        if len(self.p_choice_flat) != len(df_trials):
+            warnings.warn('p_choice_flat length does not match df_trials length. Check your data!')
+            self.p_choice_flat = self.p_choice_flat[:len(df_trials)] ## i.e. truncate to match df_trials length
         # self.p_choice_flat = self.p_choice_flat[~np.isnan(self.p_choice_flat)]
         self.ppt_choices = df_trials['path_chosen'].to_numpy(dtype=bool)
 
