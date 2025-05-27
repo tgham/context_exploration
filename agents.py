@@ -20,6 +20,7 @@ from base_kernels import *
 from samplers import GridSampler
 from MCTS import MonteCarloTreeSearch, MonteCarloTreeSearch_Free, MonteCarloTreeSearch_2AFC
 from tqdm.auto import tqdm
+import pandas as pd
 
 
 
@@ -248,7 +249,7 @@ class Farmer:
 
         
     ## run agent on participant's trial sequence
-    def run(self, params, hyper_params, agent = 'BAMCP', df_trials=None, envs=None):
+    def run(self, params, hyper_params, agent = 'BAMCP', df_trials=None, envs=None,fit=True):
         
         ## init expt info
         n_trials = int(df_trials['trial'].max())
@@ -268,6 +269,7 @@ class Farmer:
         self.context_posteriors = np.zeros((n_cities, n_days, n_trials))
         self.leaf_visits = np.zeros((n_cities, n_days, n_trials, self.n_afc))
         self.total_costs = np.zeros((n_cities, n_days, n_trials))
+        self.trial_loss = np.zeros(self.n_total_trials)
 
         ## init free params...
         self.temp = params[0]
@@ -286,7 +288,8 @@ class Farmer:
 
 
         ## loop through cities
-        for city in tqdm(range(n_cities)):
+        # for city in tqdm(range(n_cities)):
+        for city in range(n_cities):
 
             ## context prior resets
             context_prior = 0.5
@@ -317,7 +320,20 @@ class Farmer:
                 ## loop through trials within day
                 for t in range(n_trials):
 
-                    ### let's just do BAMCP for now...
+                    ## if no choice from participant, model should do its thing anyway just for consistency, but then don't save anything...
+                    # missed = pd.isna(df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_chosen'].values[0])
+                    # if missed:
+                    #     print('missed in city {}, day {}, trial {}'.format(city+1, day+1, t+1))
+                    #     print('start: {}, goal: {}'.format(env.starts[t], env.goal))
+                    #     self.p_choice[city, day, t] = np.nan
+                    #     self.p_correct[city, day, t] = np.nan
+                    #     self.Q_vals[city, day, t] = np.nan
+                    #     self.actions[city, day, t] = np.nan
+                    #     self.context_priors[city, day, t] = np.nan
+                    #     self.context_posteriors[city, day, t] = np.nan
+                    #     self.leaf_visits[city, day, t] = np.nan
+                    #     self.total_costs[city, day, t] = np.nan
+                    #     continue
 
                     ## reset env/trial
                     self.context_prob = context_prior ## tmp fix: fix the prior to the prior that was used at the beginning of the grid (to prevent observations contributing to the posterior on multiple trials)
@@ -383,20 +399,50 @@ class Farmer:
                         
 
 
-                    ## take action
-                    env.set_sim(False)
-                    env.init_trial(action)
-                    start = env.current
-                    goal = env.goal
-                    assert np.array_equal(start, env.starts[t][action]), 'current state does not match start state\n current: {}, start: {}'.format(env.current, env.starts[t][action])
-                    action_sequence = env.path_actions[t][action]
-                    _, _ = env.take_path(action_sequence)
-                    current = env.current
-                    costs = env.trial_obs[:,-1]
-                    assert len(costs) == len(action_sequence)+1, 'costs and action sequence do not match\n costs: {}, action sequence: {}'.format(len(costs), len(action_sequence))
-                    path_cost = np.sum(costs)
-                    self.total_costs[city, day, t] = path_cost
-                    day_terminated = t == (n_trials-1)
+                    ### take model's or ppt's action, depending on whether we are fitting
+                    missed=False
+                    if fit:
+
+                        ## first check if the participant has made a choice
+                        try:
+                            missed = pd.isna(df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_chosen'].values[0])
+                        except:
+                            print('missing nan? in city {}, day {}, trial {}'.format(city+1, day+1, t+1))
+                            missed = True
+                        if not missed:
+                            action = df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_chosen'].values[0]=='b'                        
+                        else:
+                            # print('missed in city {}, day {}, trial {}'.format(city+1, day+1, t+1))
+                            # print('start: {}, goal: {}'.format(env.starts[t], env.goal))
+                            self.p_choice[city, day, t] = np.nan
+                            self.p_correct[city, day, t] = np.nan
+                            self.Q_vals[city, day, t] = np.nan
+                            self.actions[city, day, t] = np.nan
+                            self.context_priors[city, day, t] = np.nan
+                            self.context_posteriors[city, day, t] = np.nan
+                            self.leaf_visits[city, day, t] = np.nan
+                            self.total_costs[city, day, t] = np.nan
+
+                    ## only interact with the environment if participant made a choice
+                    if not missed:
+                        env.set_sim(False)
+                        env.init_trial(action)
+                        start = env.current
+                        goal = env.goal
+                        assert np.array_equal(start, env.starts[t][action]), 'current state does not match start state\n current: {}, start: {}.\n tried taking action: {}'.format(env.current, env.starts[t][action], action)
+                        action_sequence = env.path_actions[t][action]
+                        _, _ = env.take_path(action_sequence)
+                        current = env.current
+                        costs = env.trial_obs[:,-1]
+                        assert len(costs) == len(action_sequence)+1, 'costs and action sequence do not match\n costs: {}, action sequence: {}'.format(len(costs), len(action_sequence))
+                        path_cost = np.sum(costs)
+                        self.total_costs[city, day, t] = path_cost
+                        day_terminated = t == (n_trials-1)
+
+                    ## else, skip to next trial??
+                    else:
+                        # print('skipping to next trial: ',t+1)
+                        env.set_trial(t+1) ##??
 
                     ## update observations
                     self.get_env_info(env)
@@ -432,4 +478,24 @@ class Farmer:
                     if t == (n_trials-1):
                         context_prior = context_posterior
 
+        self.loss_func(df_trials)
+        return self.loss
+
             
+    ## loss function
+    def loss_func(self, df_trials):
+
+        ## flatten + other init
+        self.p_choice_flat = self.p_choice[:,:,:,1].flatten() ## i.e. p(choose path B)
+        # self.p_choice_flat = self.p_choice_flat[~np.isnan(self.p_choice_flat)]
+        self.ppt_choices = df_trials['path_chosen'].to_numpy(dtype=bool)
+
+        ## numerical stability
+        self.p_choice_flat[(self.p_choice_flat==0) & (self.ppt_choices)] = 0 + np.finfo(float).tiny
+        self.p_choice_flat[(self.p_choice_flat==1) & (~self.ppt_choices)] = 1 - np.finfo(float).eps
+
+        ## negative log likelihood
+        self.trial_loss[self.ppt_choices] = np.log(self.p_choice_flat[self.ppt_choices])
+        self.trial_loss[~self.ppt_choices] = np.log((1-self.p_choice_flat[~self.ppt_choices]))
+        self.loss = np.nansum(self.trial_loss)
+
