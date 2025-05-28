@@ -1,4 +1,5 @@
 from enum import Enum
+import copy
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
@@ -18,7 +19,7 @@ from scipy.stats import rankdata, truncnorm
 from scipy.linalg import cholesky
 from base_kernels import *
 from samplers import GridSampler
-from MCTS import MonteCarloTreeSearch, MonteCarloTreeSearch_Free, MonteCarloTreeSearch_2AFC
+from MCTS import MonteCarloTreeSearch_2AFC
 from tqdm.auto import tqdm
 import pandas as pd
 
@@ -246,10 +247,15 @@ class Farmer:
             # print(next_states, distances, min_distance, action)
             return action
         
+    ## choice function
+    def softmax(self, Q):
+        CPs = (1-self.lapse) * softmax(Q/self.temp) + self.lapse/len(Q)
+        return CPs
+
 
         
     ## run agent on participant's trial sequence
-    def run(self, params, hyper_params, agent = 'BAMCP', df_trials=None, envs=None,fit=True):
+    def run(self, params, hyperparams, agent = 'CE', df_trials=None, envs=None,fit=True):
         
         ## init expt info
         n_trials = int(df_trials['trial'].max())
@@ -273,18 +279,20 @@ class Farmer:
 
         ## init free params...
         self.temp = params[0]
+        self.lapse = params[1]
+        # self.lapse=0
         
         ## init hyperparameters
         if agent == 'BAMCP':
-            n_sims = hyper_params['n_sims']
-            exploration_constant = hyper_params['exploration_constant']
-            discount_factor = hyper_params['discount_factor']
-            n_iter = hyper_params['n_iter']
-            lazy = hyper_params['lazy']
+            n_sims = hyperparams['n_sims']
+            exploration_constant = hyperparams['exploration_constant']
+            discount_factor = hyperparams['discount_factor']
+            n_iter = hyperparams['n_iter']
+            lazy = hyperparams['lazy']
         elif agent == 'CE':
-            n_sims = hyper_params['n_sims']
-            n_iter = hyper_params['n_iter']
-            lazy = hyper_params['lazy']
+            n_sims = hyperparams['n_sims']
+            n_iter = hyperparams['n_iter']
+            lazy = hyperparams['lazy']
 
 
         ## loop through cities
@@ -301,15 +309,17 @@ class Farmer:
                 ## get the environment for this day
                 if envs:
                     env = envs['city_{}_grid_{}_env_object'.format(city+1, day+1)][0]
-                env.set_trial(0)
+                env_copy = copy.deepcopy(env)
+                env_copy.set_trial(0)
+                assert not hasattr(env_copy, 'obs'), 'env_copy.obs should not exist before the first trial: {}'.format(len(env_copy.obs),', city:', city+1, 'day:', day+1)
 
                 ## otherwise, generate a new one
                 # else:
                 #     env = make_env(N, n_trials, expt_info, beta_params, metric)
 
                 ## FIX FOR OLD ENVS: rename some attributes (episode --> trial, etc.)
-                if hasattr(env, 'n_episodes'):
-                    env.n_trials = env.n_episodes
+                if hasattr(env_copy, 'n_episodes'):
+                    env_copy.n_trials = env_copy.n_episodes
 
                 ## initialise planner
                 if agent == 'BAMCP':
@@ -322,16 +332,16 @@ class Farmer:
 
                     ## reset env/trial
                     self.context_prob = context_prior ## tmp fix: fix the prior to the prior that was used at the beginning of the grid (to prevent observations contributing to the posterior on multiple trials)
-                    env.reset()
-                    env.set_sim(True)
-                    start = env.current
+                    env_copy.reset()
+                    env_copy.set_sim(True)
+                    start = env_copy.current
                     current = start
-                    goal = env.goal
+                    goal = env_copy.goal
                     actions = []
                     choice_probs = []
 
                     ## agent receives info from env
-                    self.get_env_info(env)
+                    self.get_env_info(env_copy)
 
                     ## agent-specific path selection
                     if agent == 'BAMCP':
@@ -339,38 +349,38 @@ class Farmer:
                         ## reset tree (or reuse it)
                         if tree_reset:
                             tree = Tree(N)
-                            MCTS = MonteCarloTreeSearch_2AFC(env=env, agent=self, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
+                            MCTS = MonteCarloTreeSearch_2AFC(env=env_copy, agent=self, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
                         else:
                             MCTS.update_trial()
                             tree_resets=True
-                        assert t == MCTS.actual_trial, 'trial mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(t, MCTS.env.trial)
-                        assert MCTS.env.sim == True, 'env not in sim mode'
+                        assert t == MCTS.actual_trial, 'trial mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(t, MCTS.env_copy.trial)
+                        assert MCTS.env_copy.sim == True, 'env not in sim mode'
 
                         ## search
                         MCTS.actual_state = current
                         action, MCTS_Q = MCTS.search(n_sims, n_iter=n_iter, lazy=lazy)
                         self.actions[city, day, t] = action
                         self.Q_vals[city, day, t] = MCTS_Q
-                        self.p_choice[city, day, t] = softmax(MCTS_Q/self.temp)
-                        correct_path = np.argmax(env.path_actual_costs[t])
+                        self.p_choice[city, day, t] = self.softmax(MCTS_Q)
+                        correct_path = np.argmax(env_copy.path_actual_costs[t])
                         self.p_correct[city, day, t] = self.p_choice[city, day, t][correct_path]
                         self.leaf_visits[city, day, t] = MCTS.tree.root.action_leaves[action].n_action_visits
 
                     elif agent == 'CE':
-                        env.set_sim(False)
+                        env_copy.set_sim(False)
                         
                         ## get posterior mean grid
-                        self.root_samples(obs=env.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy, CE=True, combo=False)
-                        env.receive_predictions(self.posterior_mean_p_cost)
+                        self.root_samples(obs=env_copy.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy, CE=True, combo=False)
+                        env_copy.receive_predictions(self.posterior_mean_p_cost)
 
                         ## get the cost of each path under the posterior mean
                         path_costs = []
-                        for path_id in range(env.n_afc):
-                            path_states = env.path_states[t][path_id]
+                        for path_id in range(env_copy.n_afc):
+                            path_states = env_copy.path_states[t][path_id]
                             path_cost = 0
                             for state in path_states:
                                 # path_cost += env_copy.get_pred_cost(state) ## i.e. sample binary costs from the posterior pqs
-                                path_cost += self.posterior_mean_p_cost[state[0], state[1]]*env.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env.high_cost ## or, use expected costs
+                                path_cost += self.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost ## or, use expected costs
                             path_costs.append(path_cost)
 
                         ## choose the path with the lowest total cost
@@ -378,8 +388,8 @@ class Farmer:
                         action = argm(path_costs, max_cost)
                         self.actions[city, day, t] = action
                         self.Q_vals[city, day, t] = np.array(path_costs)
-                        self.p_choice[city, day, t] = softmax(np.array(path_costs)/self.temp)
-                        correct_path = np.argmax(env.path_actual_costs[t])
+                        self.p_choice[city, day, t] = self.softmax(np.array(path_costs))
+                        correct_path = np.argmax(env_copy.path_actual_costs[t])
                         self.p_correct[city, day, t] = self.p_choice[city, day, t][correct_path]
                         
 
@@ -392,17 +402,16 @@ class Farmer:
                         try:
                             missed = pd.isna(df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_chosen'].values[0])
                         except:
-                            # print('missing nan? in city {}, day {}, trial {}'.format(city+1, day+1, t+1))
                             missed = True
+
+                        ## if the participant has made a choice, then we use their action (rather than the model's)
                         if not missed:
                             action = df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_chosen'].values[0]=='b'                        
-
-                            ## check alignment of ppt dataset and environment
-                            assert df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_A_expected_cost'].values[0] == env.path_expected_costs[t][0], 'expected cost does not match ppt data\n env: {}, ppt: {}'.format(env.path_expected_costs[t][0], df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_A_expected_cost'].values[0])
+                            assert df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_A_expected_cost'].values[0] == env_copy.path_expected_costs[t][0], 'expected cost does not match ppt data\n env: {}, ppt: {}'.format(env_copy.path_expected_costs[t][0], df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_A_expected_cost'].values[0])
 
                         else:
                             # print('missed in city {}, day {}, trial {}'.format(city+1, day+1, t+1))
-                            # print('start: {}, goal: {}'.format(env.starts[t], env.goal))
+                            # print('start: {}, goal: {}'.format(env_copy.starts[t], env_copy.goal))
                             self.p_choice[city, day, t] = np.nan
                             self.p_correct[city, day, t] = np.nan
                             self.Q_vals[city, day, t] = np.nan
@@ -414,15 +423,15 @@ class Farmer:
 
                     ## only interact with the environment if participant made a choice
                     if not missed:
-                        env.set_sim(False)
-                        env.init_trial(action)
-                        start = env.current
-                        goal = env.goal
-                        assert np.array_equal(start, env.starts[t][action]), 'current state does not match start state in city {} day {} trial {}\n current: {}, start: {}.\n all starts: {}\n all goals:{}'.format(city, day, t, env.current, env.starts[t][action], env.starts, env.goals)
-                        action_sequence = env.path_actions[t][action]
-                        _, _ = env.take_path(action_sequence)
-                        current = env.current
-                        costs = env.trial_obs[:,-1]
+                        env_copy.set_sim(False)
+                        env_copy.init_trial(action)
+                        start = env_copy.current
+                        goal = env_copy.goal
+                        assert np.array_equal(start, env_copy.starts[t][action]), 'current state does not match start state in city {} day {} trial {}\n current: {}, start: {}.\n all starts: {}\n all goals:{}'.format(city, day, t, env_copy.current, env_copy.starts[t][action], env_copy.starts, env_copy.goals)
+                        action_sequence = env_copy.path_actions[t][action]
+                        _, _ = env_copy.take_path(action_sequence)
+                        current = env_copy.current
+                        costs = env_copy.trial_obs[:,-1]
                         assert len(costs) == len(action_sequence)+1, 'costs and action sequence do not match\n costs: {}, action sequence: {}'.format(len(costs), len(action_sequence))
                         path_cost = np.sum(costs)
                         self.total_costs[city, day, t] = path_cost
@@ -431,21 +440,19 @@ class Farmer:
                     ## else, skip to next trial??
                     else:
                         # print('skipping to next trial: ',t+1)
-                        env.set_trial(t+1)
+                        env_copy.set_trial(t+1)
 
                     ## update observations
-                    self.get_env_info(env)
+                    self.get_env_info(env_copy)
 
                     ## update MCTS tree
                     if agent == 'BAMCP':
 
-                        ## update next node id (only if a choice was made??)
+                        ## prune tree (not always successful due to high branching factor, or if participant made no choice in which case reset the tree)
                         if not missed:
                             init_info_state = np.array(MCTS.tree.root.node_id).reshape(N, N, 2)
-                            trial_obs = env.trial_obs.copy()
+                            trial_obs = env_copy.trial_obs.copy()
                             next_node_id = MCTS.init_node_id(trial_obs, init_info_state, t)
-
-                            ## prune tree (not always successful due to high branching factor, in which case reset the tree)
                             if not day_terminated:
                                 if next_node_id in MCTS.tree.root.action_leaves[action].children:
                                     MCTS.tree.prune(action, next_node_id)
@@ -460,7 +467,7 @@ class Farmer:
                     context_prior = self.context_prob
 
                     # get the new context posterior for this agent
-                    context_posterior = self.quick_context_posterior(env.obs)
+                    context_posterior = self.quick_context_posterior(env_copy.obs)
 
                     ## (and save these)
                     self.context_priors[city, day, t] = context_prior
@@ -480,10 +487,12 @@ class Farmer:
         ## flatten + other init
         self.p_choice_flat = self.p_choice[:,:,:,1].flatten() ## i.e. p(choose path B)
         if len(self.p_choice_flat) != len(df_trials):
-            warnings.warn('p_choice_flat length does not match df_trials length. Check your data!')
+            # warnings.warn('p_choice_flat length does not match df_trials length. Check your data!')
+            print('p_choice_flat length does not match df_trials length for participant {}. Truncating p_choice_flat to match df_trials length.'.format(df_trials['ppt'].values[0]))
             self.p_choice_flat = self.p_choice_flat[:len(df_trials)] ## i.e. truncate to match df_trials length
         # self.p_choice_flat = self.p_choice_flat[~np.isnan(self.p_choice_flat)]
-        self.ppt_choices = df_trials['path_chosen'].to_numpy(dtype=bool)
+        self.ppt_choices = (df_trials['path_chosen']=='b').values
+
 
         ## numerical stability
         self.p_choice_flat[(self.p_choice_flat==0) & (self.ppt_choices)] = 0 + np.finfo(float).tiny
@@ -492,5 +501,5 @@ class Farmer:
         ## negative log likelihood
         self.trial_loss[self.ppt_choices] = np.log(self.p_choice_flat[self.ppt_choices])
         self.trial_loss[~self.ppt_choices] = np.log((1-self.p_choice_flat[~self.ppt_choices]))
-        self.loss = np.nansum(self.trial_loss)
+        self.loss = -np.nansum(self.trial_loss)
 
