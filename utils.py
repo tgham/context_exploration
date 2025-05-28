@@ -24,7 +24,7 @@ import pstats
 import subprocess
 import time
 from numba import jit, njit
-from agents import Farmer
+# from agents import Farmer
 
 
 
@@ -715,6 +715,189 @@ def get_next_state(current, direction, N):
         N - 1
     )
     return next_state
+
+
+## rotate grids
+def rotate_grid_world(grid_data, rotation_direction="clockwise", grid_size=8):
+    """
+    Rotate all grid world data in a JSON file or gym env either clockwise or counter-clockwise.
+    
+    Args:
+        grid_data (dict or str): Either the parsed JSON data as a dict, or a file path to the JSON file, or the original env object
+        rotation_direction (str): Either "clockwise" or "counter_clockwise"
+        grid_size (int): Size of the grid (assumes square grid)
+    
+    Returns:
+        dict: Copy of the input data with rotated coordinates and cost surfaces,
+        or the original env object with rotated coordinates and cost surfaces.
+    """
+
+    # Load if a file path is provided
+    if isinstance(grid_data, str):
+        with open(grid_data, 'r') as f:
+            data = json.load(f)
+    else:
+        data = grid_data
+    
+    # Create a deep copy to avoid modifying the original
+    rotated_data = copy.deepcopy(data)
+    
+    # Function to rotate a single coordinate
+    def rotate_coord(coord):
+        x, y = coord
+        if rotation_direction == "clockwise":
+            # 90° clockwise: (x,y) -> (y, grid_size-1-x)
+            return [y, grid_size - 1 - x]
+        else:
+            # 90° counter-clockwise: (x,y) -> (grid_size-1-y, x)
+            return [grid_size - 1 - y, x]
+    
+    # Function to rotate a single cost grid
+    def rotate_cost_grid(grid):
+        n = len(grid)
+        rotated = [[0 for _ in range(n)] for _ in range(n)]
+        
+        for i in range(n):
+            for j in range(n):
+                if rotation_direction == "clockwise":
+                    # 90° clockwise: (i,j) -> (j, n-1-i)
+                    rotated[j][n - 1 - i] = grid[i][j]
+                else:
+                    # 90° counter-clockwise: (i,j) -> (n-1-j, i)
+                    rotated[n - 1 - j][i] = grid[i][j]
+                    
+        return rotated
+    
+    # Rotate trial information, depending on whether a json or env object is provided
+    if 'sequence' in rotated_data:
+        if 'trial_info' in rotated_data['sequence']:
+            for idx, trial in enumerate(rotated_data['sequence']['trial_info']):
+                # Rotate start and goal coordinates
+                if 'start_A' in trial:
+                    rotated_data['sequence']['trial_info'][idx]['start_A'] = rotate_coord(trial['start_A'])
+                if 'start_B' in trial:
+                    rotated_data['sequence']['trial_info'][idx]['start_B'] = rotate_coord(trial['start_B'])
+                if 'goal_A' in trial:
+                    rotated_data['sequence']['trial_info'][idx]['goal_A'] = rotate_coord(trial['goal_A'])
+                if 'goal_B' in trial:
+                    rotated_data['sequence']['trial_info'][idx]['goal_B'] = rotate_coord(trial['goal_B'])
+                
+                # Rotate path coordinates
+                if 'path_A' in trial:
+                    rotated_data['sequence']['trial_info'][idx]['path_A'] = [rotate_coord(coord) for coord in trial['path_A']]
+                if 'path_B' in trial:
+                    rotated_data['sequence']['trial_info'][idx]['path_B'] = [rotate_coord(coord) for coord in trial['path_B']]
+                
+                # Swap axis information
+                if 'dominant_axis_A' in trial:
+                    rotated_data['sequence']['trial_info'][idx]['dominant_axis_A'] = ('horizontal' 
+                                                                    if trial['dominant_axis_A'] == 'vertical' 
+                                                                    else 'vertical')
+                if 'dominant_axis_B' in trial:
+                    rotated_data['sequence']['trial_info'][idx]['dominant_axis_B'] = ('horizontal' 
+                                                                    if trial['dominant_axis_B'] == 'vertical' 
+                                                                    else 'vertical')
+                if 'better_axis' in trial:
+                    rotated_data['sequence']['trial_info'][idx]['better_axis'] = ('horizontal' 
+                                                                if trial['better_axis'] == 'vertical' 
+                                                                else 'vertical')
+                    
+                # reverse abstract sequences - e.g. if abstract_sequence_A is [5,0], it should now be [0,5]
+                if 'abstract_sequence_A' in trial:
+                    # rotated_data['sequence']['trial_info'][idx]['abstract_sequence_A'] = [coord[::-1] for coord in trial['abstract_sequence_A']]
+                    rotated_data['sequence']['trial_info'][idx]['abstract_sequence_A'] = trial['abstract_sequence_A'][::-1]
+                if 'abstract_sequence_B' in trial:
+                    # rotated_data['sequence']['trial_info'][idx]['abstract_sequence_B'] = [coord[::-1] for coord in trial['abstract_sequence_B']]
+                    rotated_data['sequence']['trial_info'][idx]['abstract_sequence_B'] = trial['abstract_sequence_B'][::-1]
+                
+                
+                # Swap context if it's 'row' or 'column'
+                if 'context' in trial:
+                    if trial['context'] == 'row':
+                        rotated_data['sequence']['trial_info'][idx]['context'] = 'column'
+                    elif trial['context'] == 'column':
+                        rotated_data['sequence']['trial_info'][idx]['context'] = 'row'
+        
+        # Rotate environment cost surfaces
+        if 'env_costs' in rotated_data['sequence']:
+            for key in rotated_data['sequence']['env_costs']:
+                if key.startswith('city_') and '_grid_' in key:
+                    rotated_data['sequence']['env_costs'][key] = rotate_cost_grid(data['sequence']['env_costs'][key])
+    
+    else:
+        
+        ##hacky init
+        n_cities = 8
+        n_days = 5
+        n_trials = 4
+
+        ## loop through grid envs
+        for key in rotated_data.keys():
+            for t in range(n_trials):
+            
+                ## rotate start and goal coordinates
+                start_A = rotated_data[key][0].starts[t][0]
+                start_B = rotated_data[key][0].starts[t][1]
+                goal_A = rotated_data[key][0].goals[t][0]
+                goal_B = rotated_data[key][0].goals[t][1]
+                rotated_data[key][0].starts[t][0] = np.array(rotate_coord(start_A))
+                rotated_data[key][0].starts[t][1] = np.array(rotate_coord(start_B))
+                rotated_data[key][0].goals[t][0] = np.array(rotate_coord(goal_A))
+                rotated_data[key][0].goals[t][1] = np.array(rotate_coord(goal_B))
+
+                ## rotate actions - i.e. remap 0,1,2,3 to 1,2,3,0. e.g. [0,0,0,1] becomes [3,0,0,0]
+                # rotate_action = lambda action: (action + 1) % 4 if rotation_direction == "clockwise" else (action - 1) % 4
+                rotate_action = lambda action: (action - 1) % 4 if rotation_direction == "clockwise" else (action + 1) % 4
+                rotated_data[key][0].path_actions[t][0] = [rotate_action(action) for action in rotated_data[key][0].path_actions[t][0]]
+                rotated_data[key][0].path_actions[t][1] = [rotate_action(action) for action in rotated_data[key][0].path_actions[t][1]]
+                
+                ## paths
+                path_A = rotated_data[key][0].path_states[t][0]
+                path_B = rotated_data[key][0].path_states[t][1]
+                rotated_data[key][0].path_states[t][0] = np.array([rotate_coord(coord) for coord in path_A])
+                rotated_data[key][0].path_states[t][1] = np.array([rotate_coord(coord) for coord in path_B])
+
+                ## axis info
+                rotated_data[key][0].dominant_axis_A[t] = ('horizontal'
+                                                            if rotated_data[key][0].dominant_axis_A[t] == 'vertical'
+                                                            else 'vertical')
+                rotated_data[key][0].dominant_axis_B[t] = ('horizontal'
+                                                            if rotated_data[key][0].dominant_axis_B[t] == 'vertical'
+                                                            else 'vertical')
+                
+                ## abstract sequences
+                rotated_data[key][0].sampled_abstract_sequences[t][0] = rotated_data[key][0].sampled_abstract_sequences[t][0][::-1]
+                rotated_data[key][0].sampled_abstract_sequences[t][1] = rotated_data[key][0].sampled_abstract_sequences[t][1][::-1]
+
+            ## context
+            if rotated_data[key][0] == 'row':
+                rotated_data[key][0] = 'column'
+            elif rotated_data[key][0] == 'column':
+                rotated_data[key][0] = 'row'
+
+            ## rotate entire grid
+            rotated_data[key][0].p_costs = np.array(rotate_cost_grid(rotated_data[key][0].p_costs))
+            for t in range(n_trials):
+                rotated_data[key][0].costss[t] = np.array(rotate_cost_grid(rotated_data[key][0].costss[t]))
+                
+    
+    return rotated_data
+
+def save_rotated_data(rotated_data, output_file):
+    """
+    Save rotated data to a JSON file or .pkl
+    
+    Args:
+        rotated_data (dict): The rotated data to save
+        output_file (str): Path to the output file
+    """
+    if 'sequence' in rotated_data:
+        with open(output_file, 'w') as f:
+            json.dump(rotated_data, f, indent=2)
+    else:
+        with open(output_file, 'wb') as f:
+            pickle.dump(rotated_data, f)
+
 
 
 
