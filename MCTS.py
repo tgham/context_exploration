@@ -1,6 +1,6 @@
 import random
 from math import sqrt, log
-from utils import Node, Action_Node, Tree, make_env, argm, data_keys, KL_divergence, get_next_state
+from utils import Action_Node, Tree, make_env, argm, data_keys, KL_divergence, get_next_state
 import copy
 import numpy as np
 from tqdm.auto import tqdm
@@ -11,7 +11,7 @@ from scipy import special
 from scipy.special import softmax
 
 from plotter import *
-from agents import Farmer
+# from agents import Farmer
 
 ## base class 
 class MonteCarloTreeSearch():

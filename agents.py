@@ -61,6 +61,10 @@ class Farmer:
 
     ## generate full set of root samples
     def root_samples(self, obs=None, n_samples=1000, n_iter=100, lazy=True, CE=False, combo=True):
+        
+        ## hacky: obs should not contain duplicates!
+        obs = np.unique(obs, axis=0).tolist() if obs is not None else []
+
         sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, obs, N=self.N, CE=CE)
         self.all_posterior_ps = np.zeros((n_samples, self.N))
         self.all_posterior_qs = np.zeros((n_samples, self.N))
@@ -181,6 +185,10 @@ class Farmer:
 
     ## quick and cheap context posterior
     def quick_context_posterior(self, obs):
+        
+        ## hacky fix: obs should not contain duplicates!
+        obs = np.unique(obs, axis=0).tolist() if obs is not None else []
+        
         sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, obs, N=self.N)
         context_prob = sampler.context_posterior(context_prior=self.context_prob)
         return context_prob

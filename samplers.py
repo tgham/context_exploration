@@ -131,6 +131,9 @@ class GridSampler:
         self.low_cost = low_cost
         self.high_cost = high_cost
 
+        ## hacky fix: should be no duplicates in obs!
+        self.obs = np.unique(self.obs, axis=0)
+
         ## cache obs groups for lazy sampling
         self.row_to_obs = {i: [(i, j, cost) for (i_, j, cost) in self.obs if i_ == i] for i in range(self.N)}
         self.col_to_obs = {j: [(i, j, cost) for (i, j_, cost) in self.obs if j_ == j] for j in range(self.N)}
