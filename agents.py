@@ -154,10 +154,19 @@ class Farmer:
                 idx = np.random.permutation(n_samples)
                 self.all_posterior_ps = self.all_posterior_ps[idx]
                 self.all_posterior_qs = self.all_posterior_qs[idx]
+                self.context_indicators = np.zeros(n_samples)
+                self.context_indicators[:n_col_samples] = 1
+                self.context_indicators = self.context_indicators[idx].astype(bool)
 
                 ## posterior costs - i.e. the outer product of each sample's p and q
                 self.all_posterior_p_costs = np.einsum('si,sj->sij', self.all_posterior_ps, self.all_posterior_qs)
 
+                ## temp fix: this posterior should also be filled in with 1s and 0s for states where a low and high cost have been observed respectively
+                for i,j,c in obs:
+                    i = int(i)
+                    j = int(j)
+                    prob = 1 if c == self.low_cost else 0
+                    self.all_posterior_p_costs[:,i,j] = prob
             
                 ## posterior means 
                 self.posterior_mean_p_cost = np.mean(self.all_posterior_p_costs, axis=0)
