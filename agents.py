@@ -370,8 +370,8 @@ class Farmer:
                         else:
                             MCTS.update_trial()
                             tree_resets=True
-                        assert t == MCTS.actual_trial, 'trial mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(t, MCTS.env_copy.trial)
-                        assert MCTS.env_copy.sim == True, 'env not in sim mode'
+                        assert t == MCTS.actual_trial, 'trial mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(t, MCTS.env.trial)
+                        assert MCTS.env.sim == True, 'env not in sim mode'
 
                         ## search
                         MCTS.actual_state = current
@@ -520,3 +520,21 @@ class Farmer:
         self.trial_loss[~self.ppt_choices] = np.log((1-self.p_choice_flat[~self.ppt_choices]))
         self.loss = -np.nansum(self.trial_loss)
 
+
+    ## pseudo r^2
+    def pseudo_r2(self, df_trials):
+        
+        ## calculate loss under null (random choice)
+        n_trials = len(df_trials)
+        p_choice_null = np.ones(n_trials) * 0.5
+        loss_null = -np.sum(np.log(p_choice_null))
+
+        ## pseudo r^2
+        pseudo_r2 = 1 - (self.loss / loss_null)
+
+        ## LLR test?
+        llr = 2 * (loss_null - self.loss)
+        df = 2
+        p_value = scipy.stats.chi2.sf(llr, df)
+
+        return pseudo_r2, p_value

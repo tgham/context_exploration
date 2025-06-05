@@ -24,7 +24,11 @@ import pstats
 import subprocess
 import time
 from numba import jit, njit
-# from agents import Farmer
+import pickle
+import pandas as pd
+import json
+import os
+
 
 
 
@@ -897,6 +901,174 @@ def save_rotated_data(rotated_data, output_file):
     else:
         with open(output_file, 'wb') as f:
             pickle.dump(rotated_data, f)
+
+def load_data(path):
+    fieldnames = [
+        "trial", "city", "path_chosen", "button_pressed", "reaction_time_ms", 
+        "context", "grid", "path_A_expected_cost", "path_B_expected_cost", 
+        "path_A_actual_cost", "path_B_actual_cost", "path_A_future_overlap", 
+        "path_B_future_overlap", "abstract_sequence_A", "abstract_sequence_B", 
+        "dominant_axis_A", "dominant_axis_B", "better_path", "chose_better_path",
+        "pid", "bonusAchieved"
+    ]
+    df_all = pd.DataFrame(columns=fieldnames)
+
+    # Initialize questionnaire dictionary
+    questionnaire = {
+        "pid": [],
+    }
+    for q in range(1, 18+1):
+        questionnaire['NFC'+str(q)] = []
+    questionnaire['screener'] = []
+    
+    for file in os.listdir(path):
+        if not file.endswith('.json'):
+            continue
+        filename = os.path.join(path, file)
+        pid = file[:-5]
+
+        # Load and decode JSON (double decoding)
+        with open(filename, 'r', encoding='utf-8') as f:
+            try:
+                raw = f.read()
+                first_pass = json.loads(raw)
+                data = json.loads(first_pass)
+            except Exception as e:
+                print(f"Decoding error in file {file}: {e}")
+                continue
+
+        ## sanity check: print 0i30zpvykjyk5btzylrbcfjk
+        # if pid == '0i30zpvykjyk5btzylrbcfjk':
+        #     print('Sanity check for participant 0i30zpvykjyk5btzylrbcfjk')
+
+
+        # Filter for relevant trials
+        trial_data = [
+            trial for trial in data
+            if trial.get('trial_type') == 'html-keyboard-response' and trial.get('choice')
+        ]
+
+        if not trial_data:
+            continue
+
+        ## save questionnaire data
+        questionnaire['pid'].append(pid)
+        nfc_data = [entry for entry in data if entry.get("task") == "NFC"]
+        nfc_data_flat = [
+            item for sublist in nfc_data for item in sublist['response'].items()
+        ]
+        nfc_data_flat = dict(nfc_data_flat)
+        keep_keys = []
+        for key in list(nfc_data_flat.keys()):  # Iterate over a copy of the keys
+            if key[-1] == '.':
+                nfc_data_flat[key[:-1]] = nfc_data_flat[key]
+                keep_keys.append(key[:-1])
+            else:
+                keep_keys.append(key)
+
+        for key in questionnaire.keys():
+            if key in nfc_data_flat.keys():
+                questionnaire[key].append(nfc_data_flat[key])
+            elif key != 'pid':
+                questionnaire[key].append(np.nan)
+
+        df_tmp = pd.DataFrame([{key: trial.get(key, '') for key in fieldnames} for trial in trial_data])
+
+        # Check for completeness (8 cities)
+        n_cities = df_tmp['city'].nunique()
+        if n_cities < 8:
+            print('Incomplete dataset for participant:', file)
+            continue
+
+        # Skip empty lines
+        df_tmp = df_tmp[df_tmp['trial'] != ''].reset_index(drop=True)
+
+        # skip practice trials, i.e. check how many trials have city==1
+        n_city_1 = df_tmp[df_tmp['city'] == 1].shape[0]
+        if n_city_1==28:
+            df_tmp = df_tmp.iloc[8:].reset_index(drop=True)
+        elif n_city_1==36:
+            df_tmp = df_tmp.iloc[16:].reset_index(drop=True)
+        else:
+            print('city 1 trials:',n_city_1)
+        assert (df_tmp.iloc[0]['city'] == 1) & (df_tmp.iloc[0]['trial'] == 1) \
+            and (df_tmp.iloc[0]['grid'] == 1), 'First trial should be city 1, grid 1, trial 1. Instead got: ' \
+            + str(df_tmp.iloc[0]['city']) + ', ' + str(df_tmp.iloc[0]['grid']) + ', ' + str(df_tmp.iloc[0]['trial'])
+        
+        ## check how many trials
+        n_total_trials = len(df_tmp)
+        if n_total_trials != 160:
+            print('Expected 160 trials, but found:', n_total_trials, 'for participant:', pid)
+            continue ## skip
+
+
+        # rename a few cols, e.g. 'grid' to 'day'
+        df_tmp['pid'] = pid
+        df_tmp.rename(columns={'grid': 'day'
+                               }, inplace=True)
+
+
+        df_all = pd.concat([df_all, df_tmp], ignore_index=True)
+
+    # Cleaning
+    df_all = df_all.replace('', np.nan)
+    df_all = df_all.replace('nan', np.nan)
+    df_all = df_all.replace('NaN', np.nan)
+    df_all = df_all.replace('none', np.nan)
+    df_all = df_all.replace('None', np.nan)
+    for col in fieldnames:
+        try:
+            df_all[col] = df_all[col].astype(float)
+        except ValueError:
+            pass
+
+    # count number of nan trials per participant - i.e. nan in path_chosen
+    df_all['path_chosen'] = df_all['path_chosen'].replace('nan', np.nan)
+    df_all['path_chosen'] = df_all['path_chosen'].replace('none', np.nan)
+    for p in df_all['pid'].unique():
+        n_nan = df_all.loc[df_all['pid'] == p, 'path_chosen'].isna().sum()
+        if n_nan > 0:
+            print('n_nan for participant', p, ':', n_nan)
+
+    # Label path IDs and aligned path info
+    df_all['path_chosen'] = df_all['path_chosen'].map({'blue': 'a', 'green': 'b'})
+    df_all = df_all[df_all['trial'].notna()]
+    df_all['chose_aligned_axis'] = np.nan
+    df_all['aligned_path'] = np.nan
+
+    ## remove all non-choices?
+    # df_all = df_all[df_all['path_chosen'].notna()]
+
+    df_all.loc[(df_all['context'] == 'column') & (df_all['dominant_axis_A'] == 'vertical'), 'aligned_path'] = 'a'
+    df_all.loc[(df_all['context'] == 'column') & (df_all['dominant_axis_B'] == 'vertical'), 'aligned_path'] = 'b'
+    df_all.loc[(df_all['context'] == 'row') & (df_all['dominant_axis_A'] == 'horizontal'), 'aligned_path'] = 'a'
+    df_all.loc[(df_all['context'] == 'row') & (df_all['dominant_axis_B'] == 'horizontal'), 'aligned_path'] = 'b'
+
+    df_all['chose_aligned_axis'] = (df_all['path_chosen'] == df_all['aligned_path']).astype(float)
+    df_all['chose_orthogonal_axis'] = (df_all['chose_aligned_axis'] - 1) * -1
+    df_all['chose_aligned_axis'] = df_all['chose_aligned_axis'].astype(bool)
+    df_all['chose_orthogonal_axis'] = df_all['chose_orthogonal_axis'].astype(bool)
+
+    ## accuracy as a function of first-trial choice - i.e. what is the trial-wise accuracy, conditional on having chosen path a or b first
+    df_all['first_path'] = np.nan
+    df_all['second_path'] = np.nan
+    df_all['first_path_orthogonal'] = np.nan
+    df_all['second_path_orthogonal'] = np.nan
+    for pid in df_all['pid'].unique():
+        for city in df_all['city'].unique():
+            for day in df_all['day'].unique():
+                try:
+                    df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'first_path'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'path_chosen'].iloc[0]
+                    df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'first_path_orthogonal'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'chose_orthogonal_axis'].iloc[0]
+                    df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'second_path'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'path_chosen'].iloc[1]
+                    df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'second_path_orthogonal'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'chose_orthogonal_axis'].iloc[1]
+                except:
+                    pass
+
+
+    # Save questionnaire data
+    df_q = pd.DataFrame.from_dict(questionnaire)
+    return df_all, df_q
 
 
 

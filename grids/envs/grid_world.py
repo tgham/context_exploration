@@ -441,7 +441,7 @@ class GridEnv(gym.Env):
         # observation = self.get_obs()
         # info = self._get_info()
         # current_cost = self.get_cost(self._agent_location)
-        current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
+        # current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
 
         ## reset obs on each trial
         # self.obs = np.array([self._agent_location[0], self._agent_location[1], current_cost], ndmin=2)
@@ -485,12 +485,18 @@ class GridEnv(gym.Env):
     ## init trial - i.e. in the 2AFC task, once a start has been chosen, initialise the start, goal and obs for that trial
     def init_trial(self, action):
         self._agent_location = np.array(self.starts[self._trial][action])
+        # if isinstance(self._agent_location[0], tuple):
+        #     print('self._agent_location is a tuple":', self._agent_location, self._trial)
         self._goal_location = np.array(self.goals[self._trial][action])
         self.terminated = False
         if self.sim:
             current_cost = self.predicted_costs[self._agent_location[0], self._agent_location[1]]
         else:
-            current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
+            try:
+                current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
+            except:
+                print('error: ', self.costs[self._agent_location[0]][self._agent_location[1]])
+                current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
 
         ## if using compound costs
         current_cost = self.compound_cost(current_cost, self._trial)
@@ -1216,10 +1222,12 @@ class GridEnv(gym.Env):
         
             ## update observation array only once the trial is complete
             if not self.sim:
-                if len(self.obs)==0: ## i.e. first trial, so just copy the ep_obs
-                    assert self._trial==0, 'trial counter should be 0'
+                if self._trial==0:
+                    assert len(self.obs)==0, 'obs should be empty at the start of the trial'
+
+                if len(self.obs)==0: ## i.e. first trial, so just copy the trial_obs
                     self.obs = self.trial_obs.copy()
-                else: ## otherwise, append the ep_obs to the obs from the previous trials
+                else: ## otherwise, append the trial_obs to the obs from the previous trials
                     self.obs = np.vstack([self.obs, self.trial_obs])
 
                 ## sum of costs of route INC START AND END

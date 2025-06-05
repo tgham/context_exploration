@@ -384,6 +384,7 @@ class GridSampler:
             log_lik_j = np.log(beta(self.alpha_col + low_counts_col, self.beta_col + high_counts_col)) - np.log(beta(self.alpha_col, self.beta_col))
             log_col_likelihoods.append(log_lik_j)
         log_col_likelihood = np.sum(log_col_likelihoods)
+
         
         # Compute log-likelihood for rows
         log_row_likelihoods = []
