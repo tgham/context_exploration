@@ -294,6 +294,10 @@ class Farmer:
         self.total_costs = np.zeros((n_cities, n_days, n_trials))
         self.trial_loss = np.zeros(self.n_total_trials)
 
+        ## for extracting some useful trial data...
+        self.path_A_past_overlaps = np.zeros((n_cities, n_days, n_trials))
+        self.path_B_past_overlaps = np.zeros((n_cities, n_days, n_trials))
+
         ## init free params...
         self.temp = params[0]
         self.lapse = params[1]
@@ -356,6 +360,21 @@ class Farmer:
                     goal = env_copy.goal
                     actions = []
                     choice_probs = []
+
+                    ## optional (useful for analysing bhvral data): check whether any of the agent's observations overlap with the paths of the subsequent trial
+                    paths = env_copy.path_states[t].copy()
+                    obs_list = [tuple(obs[:2]) for obs in env_copy.obs.tolist()]
+                    try:
+                        path_A_past_overlap = len(set(paths[0]).intersection(set(obs_list)))
+                        path_B_past_overlap = len(set(paths[1]).intersection(set(obs_list)))
+                    except:
+                        ## sometimes need to convert each np array to list of tuples...
+                        paths = [set(map(tuple, path)) for path in paths]
+                        path_A_past_overlap = len(set(paths[0]).intersection(set(obs_list)))
+                        path_B_past_overlap = len(set(paths[1]).intersection(set(obs_list)))
+
+                    self.path_A_past_overlaps[city, day, t] = path_A_past_overlap
+                    self.path_B_past_overlaps[city, day, t] = path_B_past_overlap
 
                     ## agent receives info from env
                     self.get_env_info(env_copy)
@@ -505,7 +524,7 @@ class Farmer:
         self.p_choice_flat = self.p_choice[:,:,:,1].flatten() ## i.e. p(choose path B)
         if len(self.p_choice_flat) != len(df_trials):
             # warnings.warn('p_choice_flat length does not match df_trials length. Check your data!')
-            print('p_choice_flat length does not match df_trials length for participant {}. Truncating p_choice_flat to match df_trials length.'.format(df_trials['ppt'].values[0]))
+            print('p_choice_flat length does not match df_trials length for participant {}. Truncating p_choice_flat to match df_trials length.'.format(df_trials['pid'].values[0]))
             self.p_choice_flat = self.p_choice_flat[:len(df_trials)] ## i.e. truncate to match df_trials length
         # self.p_choice_flat = self.p_choice_flat[~np.isnan(self.p_choice_flat)]
         self.ppt_choices = (df_trials['path_chosen']=='b').values
