@@ -28,8 +28,8 @@ import pickle
 import pandas as pd
 import json
 import os
-
-
+from agents import Farmer
+from tqdm.auto import tqdm
 
 
 
@@ -913,6 +913,10 @@ def load_data(path):
     ]
     df_all = pd.DataFrame(columns=fieldnames)
 
+    # Load id mapping (for later simulation)
+    with open('expt/assets/trial_sequences/id_mapping.pkl', 'rb') as f:
+        id_mapping = pickle.load(f)
+
     # Initialize questionnaire dictionary
     questionnaire = {
         "pid": [],
@@ -1039,7 +1043,7 @@ def load_data(path):
     df_all['chose_vertical'] = np.nan # so we have a consistent reference frame
 
     ## remove all non-choices?
-    df_all = df_all[df_all['path_chosen'].notna()]
+    # df_all = df_all[df_all['path_chosen'].notna()]
 
     df_all.loc[(df_all['context'] == 'column') & (df_all['dominant_axis_A'] == 'vertical'), 'aligned_path'] = 'a'
     df_all.loc[(df_all['context'] == 'column') & (df_all['dominant_axis_B'] == 'vertical'), 'aligned_path'] = 'b'
@@ -1056,8 +1060,7 @@ def load_data(path):
     df_all.loc[(df_all['context'] == 'row') & (df_all['chose_aligned'] == False), 'chose_vertical'] = True
 
 
-
-    ## accuracy as a function of first-trial choice - i.e. what is the trial-wise accuracy, conditional on having chosen path a or b first
+    ### get some additional data
     df_all['first_path'] = np.nan
     df_all['second_path'] = np.nan
     df_all['first_path_orthogonal'] = np.nan
@@ -1065,7 +1068,22 @@ def load_data(path):
     df_all['prev_chose_orthogonal'] = np.nan
     df_all['prev_chose_aligned'] = np.nan
     df_all['prev_chose_vertical'] = np.nan
-    for pid in df_all['pid'].unique():
+    df_all['path_A_past_overlaps'] = np.nan
+    df_all['path_B_past_overlaps'] = np.nan
+    df_all['path_A_observed_costs'] = np.nan
+    df_all['path_B_observed_costs'] = np.nan
+    df_all['path_A_observed_no_costs'] = np.nan
+    df_all['path_B_observed_no_costs'] = np.nan
+    df_all['total_past_overlaps'] = np.nan
+    
+    ## diffs, where this is always defined as vertical - horizontal
+    df_all['past_overlaps_diff'] = np.nan 
+    df_all['observed_costs_diff'] = np.nan 
+    df_all['observed_no_costs_diff'] = np.nan
+    
+    ## accuracy as a function of first-trial choice - i.e. what is the trial-wise accuracy, conditional on having chosen path a or b first
+    for p in tqdm(range(len(df_all['pid'].unique())), total=len(df_all['pid'].unique()), desc='Extracting participant accuracy'):
+        pid = df_all['pid'].unique()[p]
         for city in df_all['city'].unique():
             for day in df_all['day'].unique():
                 try:
@@ -1097,6 +1115,64 @@ def load_data(path):
             prev_choice_orthogonal = row['chose_orthogonal']
             prev_choice_vertical = row['chose_vertical']
 
+        
+        ### simulate each participant's choices to extract the missing trial info
+
+        ## get envs
+        try:
+            id = id_mapping[pid][10:]
+        except KeyError:
+            raise KeyError(f'No id mapping for participant {pid}')
+        try:
+            try:
+                with open('expt/assets/trial_sequences/env_objects/env_objects_{}.pkl'.format(id), 'rb') as f:
+                    envs = pickle.load(f)
+            except:
+                with open('expt/assets/trial_sequences/rotated_env_objects/env_objects_{}.pkl'.format(id), 'rb') as f:
+                    envs = pickle.load(f)
+        except FileNotFoundError:
+            raise FileNotFoundError(f'No env objects found for participant {pid} with id {id}')
+        
+        ## simulate
+        agent = Farmer(N=8, context_prior=0.5)
+        agent.run(params = None, hyperparams=None, agent = 'human', df_trials= df_all.loc[df_all['pid'] == pid],envs=envs, fit=False)
+
+        ## extract overlap info
+        df_all.loc[df_all['pid'] == pid, 'path_A_past_overlaps'] = agent.path_A_past_overlaps.flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_B_past_overlaps'] = agent.path_B_past_overlaps.flatten()
+        df_all.loc[df_all['pid'] == pid, 'total_past_overlaps'] = agent.path_A_past_overlaps.flatten() + agent.path_B_past_overlaps.flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_A_observed_costs'] = agent.path_A_observed_costs.flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_B_observed_costs'] = agent.path_B_observed_costs.flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_A_observed_no_costs'] = agent.path_A_observed_no_costs.flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_B_observed_no_costs'] = agent.path_B_observed_no_costs.flatten()
+
+        ## diffs
+        df_all.loc[(df_all['pid'] == pid)
+                   & (df_all['dominant_axis_A'] == 'vertical')
+                   , 'past_overlaps_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'vertical'), 'path_A_past_overlaps'] - df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'vertical'), 'path_B_past_overlaps']
+        df_all.loc[(df_all['pid'] == pid)
+                     & (df_all['dominant_axis_A'] == 'horizontal')
+                     , 'past_overlaps_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'horizontal'), 'path_B_past_overlaps'] - df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'horizontal'), 'path_A_past_overlaps']
+        df_all.loc[(df_all['pid'] == pid)
+                     & (df_all['dominant_axis_A'] == 'vertical')
+                     , 'observed_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'vertical'), 'path_A_observed_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'vertical'), 'path_B_observed_costs']
+        df_all.loc[(df_all['pid'] == pid)
+                        & (df_all['dominant_axis_A'] == 'horizontal')
+                        , 'observed_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'horizontal'), 'path_B_observed_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'horizontal'), 'path_A_observed_costs']
+        df_all.loc[(df_all['pid'] == pid)
+                        & (df_all['dominant_axis_A'] == 'vertical')
+                        , 'observed_no_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'vertical'), 'path_A_observed_no_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'vertical'), 'path_B_observed_no_costs']
+        df_all.loc[(df_all['pid'] == pid)
+                        & (df_all['dominant_axis_A'] == 'horizontal')
+                        , 'observed_no_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'horizontal'), 'path_B_observed_no_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'horizontal'), 'path_A_observed_no_costs']
+        
+        ## sanity check: total past overlaps should be the sum of path A and B past overlaps
+        assert np.all(df_all.loc[df_all['pid'] == pid, 'total_past_overlaps'] == df_all.loc[df_all['pid'] == pid, 'path_A_past_overlaps'] + df_all.loc[df_all['pid'] == pid, 'path_B_past_overlaps']), \
+            'Total past overlaps should be the sum of path A and B past overlaps for participant ' + pid
+        
+        
+        
+        
 
 
 
