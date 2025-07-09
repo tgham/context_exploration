@@ -1002,9 +1002,10 @@ def load_data(path):
             continue ## skip
 
 
-        # rename a few cols, e.g. 'grid' to 'day'
+        # rename a few cols, e.g. 'grid' to 'day', 'reaction_time_ms' to 'RT'
         df_tmp['pid'] = pid
         df_tmp.rename(columns={'grid': 'day'
+                                 , 'reaction_time_ms': 'RT',
                                }, inplace=True)
 
 
@@ -1033,37 +1034,70 @@ def load_data(path):
     # Label path IDs and aligned path info
     df_all['path_chosen'] = df_all['path_chosen'].map({'blue': 'a', 'green': 'b'})
     df_all = df_all[df_all['trial'].notna()]
-    df_all['chose_aligned_axis'] = np.nan
+    df_all['chose_aligned'] = np.nan
     df_all['aligned_path'] = np.nan
+    df_all['chose_vertical'] = np.nan # so we have a consistent reference frame
 
     ## remove all non-choices?
-    # df_all = df_all[df_all['path_chosen'].notna()]
+    df_all = df_all[df_all['path_chosen'].notna()]
 
     df_all.loc[(df_all['context'] == 'column') & (df_all['dominant_axis_A'] == 'vertical'), 'aligned_path'] = 'a'
     df_all.loc[(df_all['context'] == 'column') & (df_all['dominant_axis_B'] == 'vertical'), 'aligned_path'] = 'b'
     df_all.loc[(df_all['context'] == 'row') & (df_all['dominant_axis_A'] == 'horizontal'), 'aligned_path'] = 'a'
     df_all.loc[(df_all['context'] == 'row') & (df_all['dominant_axis_B'] == 'horizontal'), 'aligned_path'] = 'b'
 
-    df_all['chose_aligned_axis'] = (df_all['path_chosen'] == df_all['aligned_path']).astype(float)
-    df_all['chose_orthogonal_axis'] = (df_all['chose_aligned_axis'] - 1) * -1
-    df_all['chose_aligned_axis'] = df_all['chose_aligned_axis'].astype(bool)
-    df_all['chose_orthogonal_axis'] = df_all['chose_orthogonal_axis'].astype(bool)
+    df_all['chose_aligned'] = (df_all['path_chosen'] == df_all['aligned_path']).astype(float)
+    df_all['chose_orthogonal'] = (df_all['chose_aligned'] - 1) * -1
+    df_all['chose_aligned'] = df_all['chose_aligned'].astype(bool)
+    df_all['chose_orthogonal'] = df_all['chose_orthogonal'].astype(bool)
+    df_all.loc[(df_all['context'] == 'column') & (df_all['chose_aligned'] == True), 'chose_vertical'] = True
+    df_all.loc[(df_all['context'] == 'column') & (df_all['chose_aligned'] == False), 'chose_vertical'] = False
+    df_all.loc[(df_all['context'] == 'row') & (df_all['chose_aligned'] == True), 'chose_vertical'] = False
+    df_all.loc[(df_all['context'] == 'row') & (df_all['chose_aligned'] == False), 'chose_vertical'] = True
+
+
 
     ## accuracy as a function of first-trial choice - i.e. what is the trial-wise accuracy, conditional on having chosen path a or b first
     df_all['first_path'] = np.nan
     df_all['second_path'] = np.nan
     df_all['first_path_orthogonal'] = np.nan
     df_all['second_path_orthogonal'] = np.nan
+    df_all['prev_chose_orthogonal'] = np.nan
+    df_all['prev_chose_aligned'] = np.nan
+    df_all['prev_chose_vertical'] = np.nan
     for pid in df_all['pid'].unique():
         for city in df_all['city'].unique():
             for day in df_all['day'].unique():
                 try:
                     df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'first_path'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'path_chosen'].iloc[0]
-                    df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'first_path_orthogonal'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'chose_orthogonal_axis'].iloc[0]
+                    df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'first_path_orthogonal'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'chose_orthogonal'].iloc[0]
                     df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'second_path'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'path_chosen'].iloc[1]
-                    df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'second_path_orthogonal'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'chose_orthogonal_axis'].iloc[1]
+                    df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'second_path_orthogonal'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'chose_orthogonal'].iloc[1]
                 except:
                     pass
+        
+        ## iterate through each participant's dataset and set the previous choice
+        prev_choice = None
+        prev_choice_aligned = None
+        prev_choice_orthogonal = None
+        prev_choice_vertical = None
+        for i, row in df_all.loc[df_all['pid'] == pid].iterrows():
+            if pd.isna(row['path_chosen']):
+                continue
+            if prev_choice is None:
+                df_all.at[i, 'prev_chose_aligned'] = np.nan
+                df_all.at[i, 'prev_chose_orthogonal'] = np.nan
+                df_all.at[i, 'prev_chose_vertical'] = np.nan
+            else:
+                df_all.at[i, 'prev_chose_vertical'] = prev_choice_vertical
+                df_all.at[i, 'prev_chose_aligned'] = prev_choice_aligned
+                df_all.at[i, 'prev_chose_orthogonal'] = prev_choice_orthogonal
+            prev_choice = row['path_chosen']
+            prev_choice_aligned = row['chose_aligned']
+            prev_choice_orthogonal = row['chose_orthogonal']
+            prev_choice_vertical = row['chose_vertical']
+
+
 
 
     # Save questionnaire data
