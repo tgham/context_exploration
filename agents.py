@@ -288,19 +288,23 @@ class Farmer:
         self.p_correct = np.zeros((n_cities, n_days, n_trials))
         self.Q_vals = np.zeros((n_cities, n_days, n_trials, self.n_afc))
         self.actions = np.zeros((n_cities, n_days, n_trials))
+        self.CE_actions = np.zeros((n_cities, n_days, n_trials))
         self.context_priors = np.zeros((n_cities, n_days, n_trials))
         self.context_posteriors = np.zeros((n_cities, n_days, n_trials))
         self.leaf_visits = np.zeros((n_cities, n_days, n_trials, self.n_afc))
         self.total_costs = np.zeros((n_cities, n_days, n_trials))
+        self.path_quality = np.zeros((n_cities, n_days, n_trials)) 
         self.trial_loss = np.zeros(self.n_total_trials)
 
         ## for extracting some useful trial data...
         self.path_A_past_overlaps = np.zeros((n_cities, n_days, n_trials))
         self.path_B_past_overlaps = np.zeros((n_cities, n_days, n_trials))
-        self.path_A_observed_costs = np.zeros((n_cities, n_days, n_trials))
-        self.path_B_observed_costs = np.zeros((n_cities, n_days, n_trials))
-        self.path_A_observed_no_costs = np.zeros((n_cities, n_days, n_trials))
-        self.path_B_observed_no_costs = np.zeros((n_cities, n_days, n_trials))
+        self.path_A_past_observed_costs = np.zeros((n_cities, n_days, n_trials))
+        self.path_B_past_observed_costs = np.zeros((n_cities, n_days, n_trials))
+        self.path_A_past_observed_no_costs = np.zeros((n_cities, n_days, n_trials))
+        self.path_B_past_observed_no_costs = np.zeros((n_cities, n_days, n_trials))
+        self.path_len = np.zeros((n_cities, n_days, n_trials))
+        self.day_costs = np.zeros((n_cities, n_days, n_trials)) ## i.e. the cost of the path chosen by the participant on that trial
         
         ## init params and hyperparams
         if agent == 'BAMCP':
@@ -310,13 +314,14 @@ class Farmer:
             exploration_constant = hyperparams['exploration_constant']
             discount_factor = hyperparams['discount_factor']
             n_iter = hyperparams['n_iter']
-            lazy = hyperparams['lazy']
         elif agent == 'CE':
             self.temp = params[0]
             self.lapse = params[1]
-            n_sims = hyperparams['n_sims']
-            n_iter = hyperparams['n_iter']
-            lazy = hyperparams['lazy']
+            # n_sims = hyperparams['n_sims']
+            # n_iter = hyperparams['n_iter']
+        # elif agent == 'human': ## hacky - need this for CE calcs
+        #     n_sims = hyperparams['n_sims']
+        #     n_iter = hyperparams['n_iter']
 
 
         ## loop through cities
@@ -364,7 +369,9 @@ class Farmer:
                     actions = []
                     choice_probs = []
 
-                    ## if extracting useful behavioural measures: check whether any of the agent's observations overlap with the paths of the subsequent trial
+                    ### if extracting useful behavioural measures
+
+                    ## overlaps with previous observations
                     if agent == 'human':
                         paths = env_copy.path_states[t].copy()
                         obs_list = [tuple(obs[:2]) for obs in env_copy.obs.tolist()]
@@ -377,10 +384,10 @@ class Farmer:
                             path_B_past_overlap = len(B_overlap)
 
                             ## get the number of costs and no-costs that comprise these overlapping states
-                            path_A_observed_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.high_cost for obs in A_overlap)
-                            path_A_observed_no_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.low_cost for obs in A_overlap)
-                            path_B_observed_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.high_cost for obs in B_overlap)
-                            path_B_observed_no_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.low_cost for obs in B_overlap)
+                            path_A_past_observed_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.high_cost for obs in A_overlap)
+                            path_A_past_observed_no_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.low_cost for obs in A_overlap)
+                            path_B_past_observed_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.high_cost for obs in B_overlap)
+                            path_B_past_observed_no_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.low_cost for obs in B_overlap)
                         
                         ## sometimes need to convert each np array to list of tuples...
                         except:
@@ -389,18 +396,23 @@ class Farmer:
                             B_overlap = set(paths[1]).intersection(set(obs_list))
                             path_A_past_overlap = len(A_overlap)
                             path_B_past_overlap = len(B_overlap)
-                            path_A_observed_costs = np.sum([env_copy.costss[t][obs[0], obs[1]] == self.high_cost for obs in A_overlap])
-                            path_A_observed_no_costs = np.sum([env_copy.costss[t][obs[0], obs[1]] == self.low_cost for obs in A_overlap])
-                            path_B_observed_costs = np.sum([env_copy.costss[t][obs[0], obs[1]] == self.high_cost for obs in B_overlap])
-                            path_B_observed_no_costs = np.sum([env_copy.costss[t][obs[0], obs[1]] == self.low_cost for obs in B_overlap])
+                            path_A_past_observed_costs = np.sum([env_copy.costss[t][obs[0], obs[1]] == self.high_cost for obs in A_overlap])
+                            path_A_past_observed_no_costs = np.sum([env_copy.costss[t][obs[0], obs[1]] == self.low_cost for obs in A_overlap])
+                            path_B_past_observed_costs = np.sum([env_copy.costss[t][obs[0], obs[1]] == self.high_cost for obs in B_overlap])
+                            path_B_past_observed_no_costs = np.sum([env_copy.costss[t][obs[0], obs[1]] == self.low_cost for obs in B_overlap])
                         self.path_A_past_overlaps[city, day, t] = path_A_past_overlap
                         self.path_B_past_overlaps[city, day, t] = path_B_past_overlap
-                        self.path_A_observed_costs[city, day, t] = path_A_observed_costs
-                        self.path_B_observed_costs[city, day, t] = path_B_observed_costs
-                        self.path_A_observed_no_costs[city, day, t] = path_A_observed_no_costs
-                        self.path_B_observed_no_costs[city, day, t] = path_B_observed_no_costs
-                        assert path_A_past_overlap == path_A_observed_costs + path_A_observed_no_costs, 'path A past overlap does not match observed costs and no-costs\n path A past overlap: {}, path A observed costs: {}, path A observed no-costs: {}'.format(path_A_past_overlap, path_A_observed_costs, path_A_observed_no_costs)
-                        assert path_B_past_overlap == path_B_observed_costs + path_B_observed_no_costs, 'path B past overlap does not match observed costs and no-costs\n path B past overlap: {}, path B observed costs: {}, path B observed no-costs: {}'.format(path_B_past_overlap, path_B_observed_costs, path_B_observed_no_costs)
+                        self.path_A_past_observed_costs[city, day, t] = path_A_past_observed_costs
+                        self.path_B_past_observed_costs[city, day, t] = path_B_past_observed_costs
+                        self.path_A_past_observed_no_costs[city, day, t] = path_A_past_observed_no_costs
+                        self.path_B_past_observed_no_costs[city, day, t] = path_B_past_observed_no_costs
+                        assert path_A_past_overlap == path_A_past_observed_costs + path_A_past_observed_no_costs, 'path A past overlap does not match observed costs and no-costs\n path A past overlap: {}, path A observed costs: {}, path A observed no-costs: {}'.format(path_A_past_overlap, path_A_past_observed_costs, path_A_past_observed_no_costs)
+                        assert path_B_past_overlap == path_B_past_observed_costs + path_B_past_observed_no_costs, 'path B past overlap does not match observed costs and no-costs\n path B past overlap: {}, path B observed costs: {}, path B observed no-costs: {}'.format(path_B_past_overlap, path_B_past_observed_costs, path_B_past_observed_no_costs)
+
+                        ## misc
+                        self.day_costs[city, day, t] = np.nansum(self.total_costs[city, day, :t+1]) ## i.e. costs observed so far today
+                        self.path_len[city, day, t] = len(env_copy.path_states[t][0])
+                        
 
                     ## agent receives info from env
                     self.get_env_info(env_copy)
@@ -420,7 +432,7 @@ class Farmer:
 
                         ## search
                         MCTS.actual_state = current
-                        action, MCTS_Q = MCTS.search(n_sims, n_iter=n_iter, lazy=lazy)
+                        action, MCTS_Q = MCTS.search(n_sims, n_iter=n_iter)
                         self.actions[city, day, t] = action
                         self.Q_vals[city, day, t] = MCTS_Q
                         self.p_choice[city, day, t] = self.softmax(MCTS_Q)
@@ -432,7 +444,7 @@ class Farmer:
                         env_copy.set_sim(False)
                         
                         ## get posterior mean grid
-                        self.root_samples(obs=env_copy.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy, CE=True, combo=False)
+                        self.root_samples(obs=env_copy.obs, CE=True, combo=False)
                         env_copy.receive_predictions(self.posterior_mean_p_cost)
 
                         ## get the cost of each path under the posterior mean
@@ -455,8 +467,23 @@ class Farmer:
                         self.p_correct[city, day, t] = self.p_choice[city, day, t][correct_path]
 
                     elif agent == 'human':
+                        
                         ## need to trivially set predicted costs to 0 to avoid errors when interacting with the environment
-                        env_copy.receive_predictions(np.zeros((N, N)))
+                        # env_copy.receive_predictions(np.zeros((N, N)))
+
+                        ## or, we might actually calculate the CE-correct answer under the human's observations
+                        self.root_samples(obs=env_copy.obs, CE=True, combo=False)
+                        env_copy.receive_predictions(self.posterior_mean_p_cost)
+                        path_costs = []
+                        for path_id in range(env_copy.n_afc):
+                            path_states = env_copy.path_states[t][path_id]
+                            path_cost = 0
+                            for state in path_states:
+                                path_cost += self.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost ## or, use expected costs
+                            path_costs.append(path_cost)
+                        max_cost = np.max(path_costs)
+                        CE_action = argm(path_costs, max_cost)
+                        self.CE_actions[city, day, t] = CE_action
                         
 
 
@@ -501,7 +528,9 @@ class Farmer:
                         assert len(costs) == len(action_sequence)+1, 'costs and action sequence do not match\n costs: {}, action sequence: {}'.format(len(costs), len(action_sequence))
                         path_cost = np.sum(costs)
                         self.total_costs[city, day, t] = path_cost
+                        self.path_quality[city, day, t] = self.total_costs[city, day, t]/self.path_len[city, day, t] ## i.e. cost as a proportion of path length
                         day_terminated = t == (n_trials-1)
+
 
                     ## else, skip to next trial??
                     else:

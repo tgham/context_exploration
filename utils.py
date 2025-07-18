@@ -28,8 +28,8 @@ import pickle
 import pandas as pd
 import json
 import os
-from agents import Farmer
 from tqdm.auto import tqdm
+from agents import Farmer
 
 
 
@@ -1050,10 +1050,8 @@ def load_data(path):
     df_all.loc[(df_all['context'] == 'row') & (df_all['dominant_axis_A'] == 'horizontal'), 'aligned_path'] = 'a'
     df_all.loc[(df_all['context'] == 'row') & (df_all['dominant_axis_B'] == 'horizontal'), 'aligned_path'] = 'b'
 
-    df_all['chose_aligned'] = (df_all['path_chosen'] == df_all['aligned_path']).astype(float)
-    df_all['chose_orthogonal'] = (df_all['chose_aligned'] - 1) * -1
-    df_all['chose_aligned'] = df_all['chose_aligned'].astype(bool)
-    df_all['chose_orthogonal'] = df_all['chose_orthogonal'].astype(bool)
+    df_all['chose_aligned'] = (df_all['path_chosen'] == df_all['aligned_path']).astype(bool)
+    df_all['chose_orthogonal'] = (df_all['path_chosen'] != df_all['aligned_path']).astype(bool)
     df_all.loc[(df_all['context'] == 'column') & (df_all['chose_aligned'] == True), 'chose_vertical'] = True
     df_all.loc[(df_all['context'] == 'column') & (df_all['chose_aligned'] == False), 'chose_vertical'] = False
     df_all.loc[(df_all['context'] == 'row') & (df_all['chose_aligned'] == True), 'chose_vertical'] = False
@@ -1061,6 +1059,10 @@ def load_data(path):
 
 
     ### get some additional data
+    df_all['CE_action'] = np.nan
+    df_all['CE_chose_vertical'] = np.nan
+    df_all['CE_chose_aligned'] = np.nan
+    df_all['CE_chose_orthogonal'] = np.nan
     df_all['first_path'] = np.nan
     df_all['second_path'] = np.nan
     df_all['first_path_orthogonal'] = np.nan
@@ -1068,13 +1070,23 @@ def load_data(path):
     df_all['prev_chose_orthogonal'] = np.nan
     df_all['prev_chose_aligned'] = np.nan
     df_all['prev_chose_vertical'] = np.nan
+    df_all['prev_day_chose_aligned'] = np.nan ## i.e. for the same trial of the previous day
+    df_all['prev_day_chose_orthogonal'] = np.nan
+    df_all['prev_day_chose_vertical'] = np.nan
     df_all['path_A_past_overlaps'] = np.nan
     df_all['path_B_past_overlaps'] = np.nan
-    df_all['path_A_observed_costs'] = np.nan
-    df_all['path_B_observed_costs'] = np.nan
-    df_all['path_A_observed_no_costs'] = np.nan
-    df_all['path_B_observed_no_costs'] = np.nan
+    df_all['path_A_past_observed_costs'] = np.nan
+    df_all['path_B_past_observed_costs'] = np.nan
+    df_all['path_A_past_observed_no_costs'] = np.nan
+    df_all['path_B_past_observed_no_costs'] = np.nan
     df_all['total_past_overlaps'] = np.nan
+    df_all['observed_cost'] = np.nan
+    df_all['prev_observed_cost'] = np.nan
+    df_all['path_quality'] = np.nan
+    df_all['prev_path_quality'] = np.nan
+    df_all['day_cost'] = np.nan
+    df_all['path_len'] = np.nan
+    df_all['switched_axis'] = np.nan
     
     ## diffs, where this is always defined as vertical - horizontal
     df_all['past_overlaps_diff'] = np.nan 
@@ -1082,15 +1094,29 @@ def load_data(path):
     df_all['observed_no_costs_diff'] = np.nan
     
     ## accuracy as a function of first-trial choice - i.e. what is the trial-wise accuracy, conditional on having chosen path a or b first
-    for p in tqdm(range(len(df_all['pid'].unique())), total=len(df_all['pid'].unique()), desc='Extracting participant accuracy'):
+    for p in tqdm(range(len(df_all['pid'].unique())), total=len(df_all['pid'].unique()), desc='Extracting participant trial info'):
         pid = df_all['pid'].unique()[p]
         for city in df_all['city'].unique():
+            prev_day_chose_aligned = np.nan
+            prev_day_chose_orthogonal = np.nan
+            prev_day_chose_vertical = np.nan
             for day in df_all['day'].unique():
                 try:
                     df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'first_path'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'path_chosen'].iloc[0]
                     df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'first_path_orthogonal'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'chose_orthogonal'].iloc[0]
                     df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'second_path'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'path_chosen'].iloc[1]
                     df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'second_path_orthogonal'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'chose_orthogonal'].iloc[1]
+
+                    ## save previous day choice (only interested in t=1)
+                    df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['trial']==1) & (df_all['pid'] == pid), 'prev_day_chose_aligned'] = prev_day_chose_aligned
+                    df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['trial']==1) & (df_all['pid'] == pid), 'prev_day_chose_orthogonal'] = prev_day_chose_orthogonal
+                    df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['trial']==1) & (df_all['pid'] == pid), 'prev_day_chose_vertical'] = prev_day_chose_vertical
+
+                    ## save day choice for subsequent day...
+                    prev_day_chose_aligned = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['trial']==1) & (df_all['pid'] == pid), 'chose_aligned'].iloc[0]
+                    prev_day_chose_orthogonal = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['trial']==1) & (df_all['pid'] == pid), 'chose_orthogonal'].iloc[0]
+                    prev_day_chose_vertical = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['trial']==1) & (df_all['pid'] == pid), 'chose_vertical'].iloc[0]
+
                 except:
                     pass
         
@@ -1100,9 +1126,9 @@ def load_data(path):
         prev_choice_orthogonal = None
         prev_choice_vertical = None
         for i, row in df_all.loc[df_all['pid'] == pid].iterrows():
-            if pd.isna(row['path_chosen']):
+            if pd.isna(row['path_chosen']): 
                 continue
-            if prev_choice is None:
+            if prev_choice is None: 
                 df_all.at[i, 'prev_chose_aligned'] = np.nan
                 df_all.at[i, 'prev_chose_orthogonal'] = np.nan
                 df_all.at[i, 'prev_chose_vertical'] = np.nan
@@ -1110,6 +1136,7 @@ def load_data(path):
                 df_all.at[i, 'prev_chose_vertical'] = prev_choice_vertical
                 df_all.at[i, 'prev_chose_aligned'] = prev_choice_aligned
                 df_all.at[i, 'prev_chose_orthogonal'] = prev_choice_orthogonal
+                df_all.at[i, 'switched_axis'] = (prev_choice_aligned != row['chose_aligned']) or (prev_choice_orthogonal != row['chose_orthogonal'])
             prev_choice = row['path_chosen']
             prev_choice_aligned = row['chose_aligned']
             prev_choice_orthogonal = row['chose_orthogonal']
@@ -1137,47 +1164,103 @@ def load_data(path):
         agent = Farmer(N=8, context_prior=0.5)
         agent.run(params = None, hyperparams=None, agent = 'human', df_trials= df_all.loc[df_all['pid'] == pid],envs=envs, fit=False)
 
+        ## extract cost info
+        df_all.loc[df_all['pid'] == pid, 'observed_cost'] = agent.total_costs.flatten()
+        df_all.loc[df_all['pid'] == pid, 'prev_observed_cost'] = df_all.loc[df_all['pid'] == pid, 'observed_cost'].shift(1)
+        df_all.loc[df_all['pid'] == pid, 'day_cost'] = agent.day_costs.flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_len'] = agent.path_len.flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_quality'] = agent.path_quality.flatten()
+        df_all.loc[df_all['pid'] == pid, 'prev_path_quality'] = df_all.loc[df_all['pid'] == pid, 'path_quality'].shift(1)
+        
+        ## first trial of each day should have no previous trial info?
+        df_all.loc[(df_all['pid'] == pid) & (df_all['trial'] == 1), 'prev_observed_cost'] = np.nan
+        df_all.loc[(df_all['pid'] == pid) & (df_all['trial'] == 1), 'prev_path_quality'] = np.nan
+        df_all.loc[(df_all['pid'] == pid) & (df_all['trial'] == 1), 'prev_chose_aligned'] = np.nan
+        df_all.loc[(df_all['pid'] == pid) & (df_all['trial'] == 1), 'prev_chose_orthogonal'] = np.nan
+        df_all.loc[(df_all['pid'] == pid) & (df_all['trial'] == 1), 'prev_chose_vertical'] = np.nan
+        
         ## extract overlap info
         df_all.loc[df_all['pid'] == pid, 'path_A_past_overlaps'] = agent.path_A_past_overlaps.flatten()
         df_all.loc[df_all['pid'] == pid, 'path_B_past_overlaps'] = agent.path_B_past_overlaps.flatten()
         df_all.loc[df_all['pid'] == pid, 'total_past_overlaps'] = agent.path_A_past_overlaps.flatten() + agent.path_B_past_overlaps.flatten()
-        df_all.loc[df_all['pid'] == pid, 'path_A_observed_costs'] = agent.path_A_observed_costs.flatten()
-        df_all.loc[df_all['pid'] == pid, 'path_B_observed_costs'] = agent.path_B_observed_costs.flatten()
-        df_all.loc[df_all['pid'] == pid, 'path_A_observed_no_costs'] = agent.path_A_observed_no_costs.flatten()
-        df_all.loc[df_all['pid'] == pid, 'path_B_observed_no_costs'] = agent.path_B_observed_no_costs.flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_A_past_observed_costs'] = agent.path_A_past_observed_costs.flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_B_past_observed_costs'] = agent.path_B_past_observed_costs.flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_A_past_observed_no_costs'] = agent.path_A_past_observed_no_costs.flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_B_past_observed_no_costs'] = agent.path_B_past_observed_no_costs.flatten()
 
-        ## diffs
+        ## diffs (vertical - horizontal)
+        # df_all.loc[(df_all['pid'] == pid)
+        #            & (df_all['dominant_axis_A'] == 'vertical')
+        #            , 'past_overlaps_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'vertical'), 'path_A_past_overlaps'] - df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'vertical'), 'path_B_past_overlaps']
+        # df_all.loc[(df_all['pid'] == pid)
+        #              & (df_all['dominant_axis_A'] == 'horizontal')
+        #              , 'past_overlaps_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'horizontal'), 'path_B_past_overlaps'] - df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'horizontal'), 'path_A_past_overlaps']
+        # df_all.loc[(df_all['pid'] == pid)
+        #              & (df_all['dominant_axis_A'] == 'vertical')
+        #              , 'observed_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'vertical'), 'path_A_past_observed_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'vertical'), 'path_B_past_observed_costs']
+        # df_all.loc[(df_all['pid'] == pid)
+        #                 & (df_all['dominant_axis_A'] == 'horizontal')
+        #                 , 'observed_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'horizontal'), 'path_B_past_observed_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'horizontal'), 'path_A_past_observed_costs']
+        # df_all.loc[(df_all['pid'] == pid)
+        #                 & (df_all['dominant_axis_A'] == 'vertical')
+        #                 , 'observed_no_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'vertical'), 'path_A_past_observed_no_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'vertical'), 'path_B_past_observed_no_costs']
+        # df_all.loc[(df_all['pid'] == pid)
+        #                 & (df_all['dominant_axis_A'] == 'horizontal')
+        #                 , 'observed_no_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'horizontal'), 'path_B_past_observed_no_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'horizontal'), 'path_A_past_observed_no_costs']
+        
+        ## or, diffs (orthogonal - aligned)
         df_all.loc[(df_all['pid'] == pid)
-                   & (df_all['dominant_axis_A'] == 'vertical')
-                   , 'past_overlaps_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'vertical'), 'path_A_past_overlaps'] - df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'vertical'), 'path_B_past_overlaps']
+                   & (df_all['aligned_path'] == 'b')
+                   , 'past_overlaps_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'b'), 'path_A_past_overlaps'] - df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'b'), 'path_B_past_overlaps']
         df_all.loc[(df_all['pid'] == pid)
-                     & (df_all['dominant_axis_A'] == 'horizontal')
-                     , 'past_overlaps_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'horizontal'), 'path_B_past_overlaps'] - df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'horizontal'), 'path_A_past_overlaps']
+                     & (df_all['aligned_path'] == 'a')
+                     , 'past_overlaps_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'a'), 'path_B_past_overlaps'] - df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'a'), 'path_A_past_overlaps']
         df_all.loc[(df_all['pid'] == pid)
-                     & (df_all['dominant_axis_A'] == 'vertical')
-                     , 'observed_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'vertical'), 'path_A_observed_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'vertical'), 'path_B_observed_costs']
+                     & (df_all['aligned_path'] == 'b')
+                     , 'observed_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'b'), 'path_A_past_observed_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'b'), 'path_B_past_observed_costs']
         df_all.loc[(df_all['pid'] == pid)
-                        & (df_all['dominant_axis_A'] == 'horizontal')
-                        , 'observed_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'horizontal'), 'path_B_observed_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'horizontal'), 'path_A_observed_costs']
+                        & (df_all['aligned_path'] == 'a')
+                        , 'observed_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'a'), 'path_B_past_observed_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'a'), 'path_A_past_observed_costs']
         df_all.loc[(df_all['pid'] == pid)
-                        & (df_all['dominant_axis_A'] == 'vertical')
-                        , 'observed_no_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'vertical'), 'path_A_observed_no_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'vertical'), 'path_B_observed_no_costs']
+                        & (df_all['aligned_path'] == 'b')
+                        , 'observed_no_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'b'), 'path_A_past_observed_no_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'b'), 'path_B_past_observed_no_costs']
         df_all.loc[(df_all['pid'] == pid)
-                        & (df_all['dominant_axis_A'] == 'horizontal')
-                        , 'observed_no_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'horizontal'), 'path_B_observed_no_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'horizontal'), 'path_A_observed_no_costs']
+                        & (df_all['aligned_path'] == 'a')
+                        , 'observed_no_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'a'), 'path_B_past_observed_no_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'a'), 'path_A_past_observed_no_costs']
+
         
         ## sanity check: total past overlaps should be the sum of path A and B past overlaps
         assert np.all(df_all.loc[df_all['pid'] == pid, 'total_past_overlaps'] == df_all.loc[df_all['pid'] == pid, 'path_A_past_overlaps'] + df_all.loc[df_all['pid'] == pid, 'path_B_past_overlaps']), \
             'Total past overlaps should be the sum of path A and B past overlaps for participant ' + pid
         
-        
-        
+        ## extract CE choices
+        df_all.loc[df_all['pid'] == pid, 'CE_action'] = agent.CE_actions.flatten()
+    df_all['CE_action'] = df_all['CE_action'].replace({1: 'b', 0: 'a'})
+    df_all['CE_action'] = df_all['CE_action'].astype(str)
+    df_all['CE_chose_aligned'] = (df_all['CE_action'] == df_all['aligned_path']).astype(bool)
+    df_all['CE_chose_orthogonal'] = (df_all['CE_action'] != df_all['aligned_path']).astype(bool)
+    df_all.loc[(df_all['context'] == 'column') & (df_all['CE_chose_aligned'] == True), 'CE_chose_vertical'] = True
+    df_all.loc[(df_all['context'] == 'column') & (df_all['CE_chose_aligned'] == False), 'CE_chose_vertical'] = False
+    df_all.loc[(df_all['context'] == 'row') & (df_all['CE_chose_aligned'] == True), 'CE_chose_vertical'] = False
+    df_all.loc[(df_all['context'] == 'row') & (df_all['CE_chose_aligned'] == False), 'CE_chose_vertical'] = True
+    df_all['CE_human_consistent'] = (df_all['CE_action'] == df_all['path_chosen']).astype(bool)
         
 
-
-
-    # Save questionnaire data
+    # last bit of cleaning of questionnaire data
     df_q = pd.DataFrame.from_dict(questionnaire)
+    answers = ["extremely uncharacteristic of me", "somewhat uncharacteristic of me", "uncertain", "somewhat characteristic of me", "extremely characteristic of me"];
+    for q in range(1, 18+1):
+        df_q['NFC'+str(q)] = df_q['NFC'+str(q)].replace(answers, [1, 2, 3, 4, 5])
+    reverse_items = [3, 4, 5, 7, 8, 9, 12, 16, 17]  # 1-indexed
+    for i in reverse_items:
+        col = f"NFC{i}"
+        df_q[col] = 6 - df_q[col]  # reverse-score
+    df_q = df_q.replace('', np.nan)
+    df_q = df_q.replace('nan', np.nan)
+    df_q = df_q.replace('NaN', np.nan)
+    df_q = df_q.replace('none', np.nan)
+    df_q = df_q.replace('None', np.nan)
+    df_q['NFC_total'] = df_q[[f"NFC{i}" for i in range(1, 19)]].sum(axis=1)
     return df_all, df_q
 
 
