@@ -52,8 +52,6 @@ class GridEnv(gym.Env):
         X,Y = np.meshgrid(x,y)
         self.locations = np.column_stack([X.ravel(), Y.ravel()])
         self.expt = expt_info['type']
-        if self.expt == '2AFC':
-            self.same_SGs = expt_info['same_SGs']
         self.context = expt_info['context']
 
 
@@ -190,7 +188,7 @@ class GridEnv(gym.Env):
 
 
             ## if 2AFC, we use the same SG pair all the way through
-            if self.expt=='2AFC' and self.same_SGs:
+            if self.expt=='2AFC':
                 try:
                     start, goal = self.sample_SG()
                     SG_found=True
@@ -219,37 +217,22 @@ class GridEnv(gym.Env):
 
                     ## 2AFC
                     elif self.expt=='2AFC':
-                        if self.same_SGs:
-                            max_turns = 3
-                            path_actions, path_states = self.sample_paths(start, goal, max_turns)
-                            # self.starts.append(start)
-                            # self.goals.append(goal)
-                            self.starts.append([start, start])
-                            self.goals.append([goal, goal])
-                            # self.starts.append([path_states[0][0], path_states[1][0]])
-                            # self.goals.append([path_states[0][-1], path_states[1][-1]])
-                            self.path_states.append(path_states)
-                            self.path_actions.append(path_actions)
-                            self.sampled_abstract_sequences.append([None, None])
-                        
-                        ## or, different SGs for each trial
-                        elif not self.same_SGs:
-                            max_turns=1
-                            sampled_abstract_sequences, path_actions, path_states, starts, goals = self.sample_paths_and_SGs(max_turns)
-                            self.starts.append(starts)
-                            self.goals.append(goals)
-                            self.path_states.append(path_states)
-                            self.path_actions.append(path_actions)
-                            self.sampled_abstract_sequences.append(sampled_abstract_sequences)
+                        max_turns=1
+                        sampled_abstract_sequences, path_actions, path_states, starts, goals = self.sample_paths_and_SGs(max_turns)
+                        self.starts.append(starts)
+                        self.goals.append(goals)
+                        self.path_states.append(path_states)
+                        self.path_actions.append(path_actions)
+                        self.sampled_abstract_sequences.append(sampled_abstract_sequences)
 
-                            # determine the dominant axis - i.e. is the path more vertical or horizontal?
-                            if sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]:
-                                self.dominant_axis_A.append('vertical')
-                                self.dominant_axis_B.append('horizontal')
-                            elif sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]:
-                                self.dominant_axis_A.append('horizontal')
-                                self.dominant_axis_B.append('vertical')
-                            SG_found = True
+                        # determine the dominant axis - i.e. is the path more vertical or horizontal?
+                        if sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]:
+                            self.dominant_axis_A.append('vertical')
+                            self.dominant_axis_B.append('horizontal')
+                        elif sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]:
+                            self.dominant_axis_A.append('horizontal')
+                            self.dominant_axis_B.append('vertical')
+                        SG_found = True
 
 
                         ## get info about optimal path (WILL CHANGE THIS LATER SINCE THE NOTION OF OPTIMAL IS DIFFERENT FOR 2AFC)
