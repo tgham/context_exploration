@@ -53,6 +53,7 @@ class GridEnv(gym.Env):
         self.locations = np.column_stack([X.ravel(), Y.ravel()])
         self.expt = expt_info['type']
         self.context = expt_info['context']
+        self.n_afc = expt_info['n_afc'] if 'n_afc' in expt_info else 2
 
 
         ### misc gym inits
@@ -92,10 +93,6 @@ class GridEnv(gym.Env):
             ## action labels (NB these deviate from env action space, bc axes are flipped for plotting
             self.action_labels = ['down', 'right', 'up', 'left']
 
-            if self.expt =='free':
-                self.n_afc = 4
-            elif (self.expt == '2AFC') or (self.expt == '2AFC_SG'):
-                self.n_afc = 2
         elif self.metric == 'chebyshev':
             self.action_space = spaces.Discrete(8)
             self.action_to_direction = {
@@ -187,8 +184,8 @@ class GridEnv(gym.Env):
             self.n_trials = n_trials
 
 
-            ## if 2AFC, we use the same SG pair all the way through
-            if self.expt=='2AFC':
+            ## if AFC, we use the same SG pair all the way through
+            if self.expt=='AFC':
                 try:
                     start, goal = self.sample_SG()
                     SG_found=True
@@ -215,8 +212,8 @@ class GridEnv(gym.Env):
                         self.o_traj_total_costs.append(o_traj_total_cost)
                         self.o_traj_actions.append(o_traj_actions)
 
-                    ## 2AFC
-                    elif self.expt=='2AFC':
+                    ## AFC
+                    elif self.expt=='AFC':
                         max_turns=1
                         sampled_abstract_sequences, path_actions, path_states, starts, goals = self.sample_paths_and_SGs(max_turns)
                         self.starts.append(starts)
@@ -235,7 +232,7 @@ class GridEnv(gym.Env):
                         SG_found = True
 
 
-                        ## get info about optimal path (WILL CHANGE THIS LATER SINCE THE NOTION OF OPTIMAL IS DIFFERENT FOR 2AFC)
+                        ## get info about optimal path (WILL CHANGE THIS LATER SINCE THE NOTION OF OPTIMAL IS DIFFERENT FOR AFC)
                         # o_traj, o_traj_costs, o_traj_total_cost, o_traj_actions = self.optimal_trajectory(start, goal)
                         self.o_trajs.append([])
                         self.o_traj_costs.append([])
@@ -272,8 +269,8 @@ class GridEnv(gym.Env):
                     for p, path in enumerate(self.path_states[t]):
                         self.path_states[t][p] = [tuple([int(x) for x in state]) for state in path]
                 
-                ## get info on path overlaps in 2AFC expt
-                if self.expt == '2AFC':
+                ## get info on path overlaps in AFC expt
+                if self.expt == 'AFC':
                     self.most_overlap = []
                     self.path_future_overlaps = []
 
@@ -465,7 +462,7 @@ class GridEnv(gym.Env):
         
         # return observation, info
 
-    ## init trial - i.e. in the 2AFC task, once a start has been chosen, initialise the start, goal and obs for that trial
+    ## init trial - i.e. in the AFC task, once a start has been chosen, initialise the start, goal and obs for that trial
     def init_trial(self, action):
         self._agent_location = np.array(self.starts[self._trial][action])
         # if isinstance(self._agent_location[0], tuple):
@@ -578,8 +575,8 @@ class GridEnv(gym.Env):
                 # worth_it = (manhattan_costs[0]/o_traj_total_cost) <= route_optimality_tolerance and (manhattan_costs[1]/o_traj_total_cost) >= route_optimality_tolerance ## p(low cost)
                 worth_it = (o_traj_total_cost/manhattan_costs[0]) <= route_optimality_tolerance and (o_traj_total_cost/manhattan_costs[1]) <= route_optimality_tolerance ## p(low cost)
 
-            ## or, if we're interested in 2AFC, then we don't need to do this
-            elif self.expt == '2AFC':
+            ## or, if we're interested in AFC, then we don't need to do this
+            elif self.expt == 'AFC':
                 worth_it = True
 
             t+=1
@@ -806,7 +803,7 @@ class GridEnv(gym.Env):
         return path_actions, path_states
     
 
-    ## sample paths and SGs for 2AFC_SG expt
+    ## sample paths and SGs for AFC expt
     def sample_paths_and_SGs(self, max_turns=1):
 
         ### get the sequences of abstract paths
@@ -1154,7 +1151,7 @@ class GridEnv(gym.Env):
                 action_score = norm_Q_vals[action]
 
             ## action score is for the whole path (need to do this later...)
-            elif self.expt == '2AFC':
+            elif self.expt == 'AFC':
                 action_score = 1
 
         
@@ -1225,7 +1222,7 @@ class GridEnv(gym.Env):
                 self.action_score = np.nanmean(self.action_scores)
                 if self.expt == 'free':
                     self.cost_ratio = self.o_traj_total_costs[self._trial] / self.a_traj_total_cost
-                elif self.expt == '2AFC':
+                elif self.expt == 'AFC':
                     self.cost_ratio = 1 ## sort this out later
 
                 ## update trial counter

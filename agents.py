@@ -19,7 +19,7 @@ from scipy.stats import rankdata, truncnorm
 from scipy.linalg import cholesky
 from base_kernels import *
 from samplers import GridSampler
-from MCTS import MonteCarloTreeSearch_2AFC
+from MCTS import MonteCarloTreeSearch_AFC
 from tqdm.auto import tqdm
 import pandas as pd
 
@@ -423,7 +423,7 @@ class Farmer:
                         ## reset tree (or reuse it)
                         if tree_reset:
                             tree = Tree(N)
-                            MCTS = MonteCarloTreeSearch_2AFC(env=env_copy, agent=self, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
+                            MCTS = MonteCarloTreeSearch_AFC(env=env_copy, agent=self, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
                         else:
                             MCTS.update_trial()
                             tree_resets=True

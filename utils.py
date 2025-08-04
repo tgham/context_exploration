@@ -29,7 +29,7 @@ import pandas as pd
 import json
 import os
 from tqdm.auto import tqdm
-from agents import Farmer
+# from agents import Farmer
 
 
 
@@ -65,7 +65,7 @@ class Node:
     def __init__(self, state, cost, node_id, goal, terminated, trial, n_afc, N):
         
         ## state info
-        self.state = np.append(state, cost) ## in the 2AFC case, this amounts to current state + costs that have just been observed on prior simulated trial
+        self.state = np.append(state, cost) ## in the AFC case, this amounts to current state + costs that have just been observed on prior simulated trial
         self.n_state_visits = 0
         self.cost = cost
         self.trial = trial
@@ -115,7 +115,7 @@ class Action_Node:
 
     def __init__(self, prev_state, action, next_state, terminated, trial, parent_id):
         self.prev_state = prev_state
-        self.action = action ## in 2AFC, this specifies the path ID (i.e. 0 or 1)
+        self.action = action ## in AFC, this specifies the path ID (i.e. 0 or 1)
         self.total_simulation_cost = 0
         self.performance = None
         self.n_action_visits = 0
@@ -903,6 +903,7 @@ def save_rotated_data(rotated_data, output_file):
             pickle.dump(rotated_data, f)
 
 def load_data(path):
+    from agents import Farmer ## for later simulation
     fieldnames = [
         "trial", "city", "path_chosen", "button_pressed", "reaction_time_ms", 
         "context", "grid", "path_A_expected_cost", "path_B_expected_cost", 

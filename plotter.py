@@ -81,7 +81,7 @@ def plot_traj(trajs, ax, expt='free',title=None):
     if expt=='free':
         markers = ['*','x','x']
         colours = ['white','red','red']
-    elif expt=='2AFC' or expt=='2AFC_SG':
+    elif expt=='AFC':
         # markers = ['x','x']
         markers = ['*','*']
         # colours = ['blue', 'lime']
@@ -99,7 +99,7 @@ def plot_traj(trajs, ax, expt='free',title=None):
     for ti, traj in enumerate(trajs):
 
         ## optimal path
-        if (ti==0) or (expt=='2AFC'):
+        if (ti==0) or (expt=='AFC'):
 
             ## plot start and goal
             # ax.scatter(traj[0][1]+0.5, traj[0][0]+0.5, color='red', edgecolor='black', s=200, linewidth=2)

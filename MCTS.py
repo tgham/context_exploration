@@ -95,7 +95,7 @@ class MonteCarloTreeSearch():
             ## reset the environment to the actual state
             # self.env.set_state(self.actual_state)
 
-        elif self.expt == '2AFC':
+        elif self.expt == 'AFC':
             terminated = node.trial == self.env.n_trials-1 ## i.e. this action leaf corresponds to the action made in the final trial, so it leads to termination of the day
             # next_state = node.state[:2] #i.e. this stays the same since agent always regens to the same start state. may instead choose to fill this with the states that are actually traversed
             if not terminated:
@@ -116,7 +116,7 @@ class MonteCarloTreeSearch():
     
     ## debugging method for checking if node and env states match
     def check_state(self, node):
-        if self.expt == '2AFC':
+        if self.expt == 'AFC':
             # assert np.array_equal(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.starts[node.trial]), 'mismatch between node and env state\n node: {} \n env: {}'.format(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.starts[node.trial])
             assert np.array_equal(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.current)
         elif self.expt == 'free':
@@ -143,7 +143,7 @@ class MonteCarloTreeSearch():
         ## create a copy of the env
         # env_copy = copy.deepcopy(self.env)
         # assert env_copy.sim, 'env copy is not in sim mode'
-        # if self.expt == '2AFC':
+        # if self.expt == 'AFC':
         #     # env_tmp = copy.deepcopy(self.env)
         #     env_tmp = self.env
         # elif self.expt == 'free':
@@ -570,7 +570,7 @@ class MonteCarloTreeSearch_Free(MonteCarloTreeSearch):
             total_cost += cost*self.discount_factor**depth
     
 
-class MonteCarloTreeSearch_2AFC(MonteCarloTreeSearch):
+class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
     def __init__(self, env, agent, tree, exploration_constant=2, discount_factor=0.99):
         super().__init__(env, agent, tree, exploration_constant, discount_factor)
@@ -963,8 +963,8 @@ def simulate_agent(ppt, env_params=None, MCTS_params=None, sampler_params=None, 
                         tree = Tree(N)
                         if expt == 'free':
                             MCTSs[ag] = MonteCarloTreeSearch_Free(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
-                        elif expt == '2AFC':
-                            MCTSs[ag] = MonteCarloTreeSearch_2AFC(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
+                        elif expt == 'AFC':
+                            MCTSs[ag] = MonteCarloTreeSearch_AFC(env=env_copy, agent=agent, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
                 
                     ## if keeping the tree between trials, need to update tree with new trial info
                     elif (not tree_resets[ag]): #& (not tree_reset):
@@ -983,7 +983,7 @@ def simulate_agent(ppt, env_params=None, MCTS_params=None, sampler_params=None, 
                 steps = 0
                 if expt=='free':
                     max_steps = len(env_copy.o_trajs[t])*1.75
-                elif expt=='2AFC':
+                elif expt=='AFC':
                     max_steps = 100 ## just in case
 
                 while not end_trial:
@@ -1028,7 +1028,7 @@ def simulate_agent(ppt, env_params=None, MCTS_params=None, sampler_params=None, 
                             actions.append(action)
                             current, _, terminated, _, _ = env_copy.step(action)
                             
-                        elif expt == '2AFC':
+                        elif expt == 'AFC':
 
                             ## get the cost of each path under the posterior mean
                             path_costs = []
@@ -1118,7 +1118,7 @@ def simulate_agent(ppt, env_params=None, MCTS_params=None, sampler_params=None, 
                             agent.dp(posterior_mean_p_cost_tmp, expected_cost=True)
                             action_CE = agent.optimal_policy(current, agent.Q_inf)
                             CE_actions.append(action_CE)
-                        elif expt=='2AFC':
+                        elif expt=='AFC':
                             path_costs = []
                             for path_id in range(env_copy.n_afc):
                                 path_states = env_copy.path_states[t][path_id]
@@ -1182,7 +1182,7 @@ def simulate_agent(ppt, env_params=None, MCTS_params=None, sampler_params=None, 
                             current, cost, terminated, _, _ = env_copy.step(action)
                             next_node_id = np.append(current,cost)
                             steps += 1
-                        elif expt=='2AFC':
+                        elif expt=='AFC':
                             action_sequence = env_copy.path_actions[t][action]
                             _, _ = env_copy.take_path(action_sequence)
                             # current = states[-1]
@@ -1191,7 +1191,7 @@ def simulate_agent(ppt, env_params=None, MCTS_params=None, sampler_params=None, 
                             costs = env_copy.trial_obs[:,-1]
                             assert len(costs) == len(action_sequence)+1, 'costs and action sequence do not match\n costs: {}, action sequence: {}'.format(len(costs), len(action_sequence))
                             path_cost = np.sum(costs)
-                            terminated = True ## trivially true in 2AFC
+                            terminated = True ## trivially true in AFC
                             day_terminated = t == (n_trials-1)
 
                             ## update next node id
@@ -1222,7 +1222,7 @@ def simulate_agent(ppt, env_params=None, MCTS_params=None, sampler_params=None, 
                                 MCTS.tree.prune(action, next_node_id)
                                 assert np.array_equal(MCTS.tree.root.state[:2], current), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action)
 
-                        elif expt=='2AFC':
+                        elif expt=='AFC':
 
                             ## pruning not always successful due to high branching factor, in which case reset the tree
                             if not day_terminated:
