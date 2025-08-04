@@ -308,12 +308,12 @@ class GridEnv(gym.Env):
                             n_overlaps.append(len(intersections))
                         self.path_future_overlaps.append(n_overlaps)
                         self.most_overlap.append(np.argmax(n_overlaps))
-                    self.path_future_overlaps.append([0,0]) ## trivially, the final trial has no future overlaps
+                    self.path_future_overlaps.append([[0 for a in range(self.n_afc)]]) ## trivially, the final trial has no future overlaps
 
-                    ## for path A and B of the first trial, calculate the number of states that overlap with the first row and column
+                    ## for path A and B of the first trial, calculate the number of future states that overlap with the first row and column
                     self.p0_x_overlaps = []
                     self.p0_y_overlaps = []
-                    self.p0_overlaps = np.zeros((2,2)) ## i.e. dim=0 is path A and B, dim=1 is x and y (rows and cols??)
+                    self.p0_overlaps = np.zeros((self.n_afc,2)) ## i.e. dim=0 is the path, dim=1 is x and y (rows and cols??)
                     for p, first_path in enumerate(self.path_states[0]):
                         p0_x_overlap = []
                         p0_y_overlap = []
@@ -342,13 +342,17 @@ class GridEnv(gym.Env):
                         self.p0_overlaps[p, 1] = total_y_overlap
 
 
-                    ## check if the two paths in the first trial have the same number of overlaps
-                    if self.path_future_overlaps[0][0] == self.path_future_overlaps[0][1]:
-                        self.same_overlaps = True
-                        self._trial = 0
-                        init_done = True
-                    # init_done = True
-                    # self._trial = 0
+                    ## check if all the paths in the first trial have the same number of overlaps
+                    # n_unique = len(np.unique(self.path_future_overlaps[0]))
+                    # if n_unique == 1:
+                    #     self.same_overlaps = True
+                    #     self._trial = 0
+                    #     init_done = True
+
+                    ## or just skip this if debugging...
+                    self.same_overlaps = True
+                    init_done = True
+                    self._trial = 0
 
             t+=1
             if t>500:
@@ -822,67 +826,68 @@ class GridEnv(gym.Env):
             # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
             #     diff_axes = True
 
-            if len(self.starts)==0:
-            # if len(self.starts)<=1:
-                # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
-                # if ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
-                #     diff_axes = True
-                
-                ## sanity check: choose the longest vertical and horizontal paths
-                if self.context == 'column':
-                    sampled_abstract_sequences = [abstract_sequences[0], abstract_sequences[-1]]
-                elif self.context == 'row':
-                    sampled_abstract_sequences = [abstract_sequences[-1], abstract_sequences[0]]
-                # randomly shuffle these!
-                # sampled_abstract_sequences = np.random.permutation(sampled_abstract_sequences)
-                diff_axes = True
-
-                ## or, the first path is the rightangle path, and the second path is a long path
-                # sampled_abstract_sequences[0] = abstract_sequences[int(np.round(len(abstract_sequences)/2))]
-                # sampled_abstract_sequences[1] = abstract_sequences[-1]
-                # diff_axes=True
-
-                ## or, one is a long path, the other is an L path, as long as they have different axes
-                # first_or_last = np.random.choice([0, -1])
-                # sampled_abstract_sequences[0] = abstract_sequences[first_or_last]
-                # L_path_idx = np.random.choice([i for i in range(2,len(abstract_sequences)-2)])
-                # sampled_abstract_sequences[1] = abstract_sequences[L_path_idx]
-                # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
-                #     diff_axes = True
-
-                ## or, one of each L, but for consistency let's keep the first one dominant in  the direction of the context
-                # if self.context == 'column':
-                #     if ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
-                #         diff_axes = True
-                # elif self.context == 'row':
-                #     if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])):
-                #         diff_axes = True
-
-
-            else:
-
-                ## dominant in the same way
-                # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])):
-                
-                ## one of each
-                if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
-                    diff_axes = True
-                
-                ## both vertically dominant
-                # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
-                #     diff_axes = True
-
-                ## choose the two longest vertical paths
-                # sampled_abstract_sequences = [abstract_sequences[-1], abstract_sequences[-1]]
-                # diff_axes=True
+            if self.n_afc == 2:
+                if len(self.starts)==0:
                     
-        # print('found different axes: ', sampled_abstract_sequences)
-        # seq_idxs = np.random.choice(len(abstract_sequences), size=self.n_afc, replace=False)
-        # sampled_abstract_sequences = [abstract_sequences[i] for i in seq_idxs]
-        # print('sampled_abstract_sequences:', sampled_abstract_sequences)
+                    ## sanity check: choose the longest vertical and horizontal paths
+                    if self.context == 'column':
+                        sampled_abstract_sequences = [abstract_sequences[0], abstract_sequences[-1]]
+                    elif self.context == 'row':
+                        sampled_abstract_sequences = [abstract_sequences[-1], abstract_sequences[0]]
+                    diff_axes = True
 
+                    ## or, one is a long path, the other is an L path, as long as they have different axes
+                    # first_or_last = np.random.choice([0, -1])
+                    # sampled_abstract_sequences[0] = abstract_sequences[first_or_last]
+                    # L_path_idx = np.random.choice([i for i in range(2,len(abstract_sequences)-2)])
+                    # sampled_abstract_sequences[1] = abstract_sequences[L_path_idx]
+                    # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
+                    #     diff_axes = True
 
+                    ## or, one of each L, but for consistency let's keep the first one dominant in  the direction of the context
+                    # if self.context == 'column':
+                    #     if ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
+                    #         diff_axes = True
+                    # elif self.context == 'row':
+                    #     if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])):
+                    #         diff_axes = True
+                else:
 
+                    ## dominant in the same way
+                    # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])):
+                    
+                    ## one of each
+                    if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
+                        diff_axes = True
+
+                    ## choose the two longest vertical paths
+                    # sampled_abstract_sequences = [abstract_sequences[-1], abstract_sequences[-1]]
+                    # diff_axes=True
+    
+            elif self.n_afc > 2:
+                
+                ## one long vertical, one long horizontal, one right-angled L (i.e. the middle abstract sequence)
+                if len(self.starts)==0:
+                    if self.context == 'column':
+                        sampled_abstract_sequences = [abstract_sequences[0], abstract_sequences[-1], abstract_sequences[len(abstract_sequences)//2]]
+                    elif self.context == 'row':
+                        sampled_abstract_sequences = [abstract_sequences[-1], abstract_sequences[0], abstract_sequences[len(abstract_sequences)//2]]
+                    diff_axes = True
+
+                
+                ## sample any sequences, as long as at least one is vertically dominant and one is horizontally dominant
+                else:
+                    one_vertical = False
+                    one_horizontal = False
+                    for s_a_s in sampled_abstract_sequences:
+                        if s_a_s[0] > s_a_s[1]:
+                            one_vertical = True
+                        elif s_a_s[0] < s_a_s[1]:
+                            one_horizontal = True
+                    if one_vertical and one_horizontal:
+                        diff_axes = True
+                    
+        
         ## set path criteria
         diff_starts = False
         n_common_within_trial = np.inf
@@ -893,6 +898,7 @@ class GridEnv(gym.Env):
         max_common_within_trial = (path_len-1)/2.5
         max_common_across_trials = (path_len-1)/2.5
         vals_diff = False
+        
         ## debugging
         # max_common_within_trial = np.inf
         # max_common_across_trials = np.inf
@@ -938,35 +944,38 @@ class GridEnv(gym.Env):
             if n_distinct_starts == self.n_afc:
                 diff_starts = True
 
-            ## check that the start or goal of path A is not a state that appears on path B, and vice versa
-            path_A = set(map(tuple, path_states[0]))
-            path_B = set(map(tuple, path_states[1]))
-            if not (tuple(starts[0]) in path_B or tuple(goals[0]) in path_B or tuple(starts[1]) in path_A or tuple(goals[1]) in path_A):
-                diff_starts = diff_starts and True
-            else:
-                diff_starts = False
+            ## check that the start or goal of path A is not a state that appears on any other path
+            for i in range(self.n_afc):
+                path_A = set(map(tuple, path_states[i]))
+                for j in range(self.n_afc):
+                    if i != j:
+                        path_B = set(map(tuple, path_states[j]))
+                        if tuple(starts[i]) in path_B or tuple(goals[i]) in path_B or tuple(starts[j]) in path_A or tuple(goals[j]) in path_A:
+                            diff_starts = False
+                            break
 
             ## also, check that the start or goal of path A is not a state that has appeared in any other trial
             if len(self.path_states)>0:
                 for paths in self.path_states:
-                    p1, p2 = paths
-                    if not (tuple(starts[0]) in p2 or tuple(goals[0]) in p2 or tuple(starts[1]) in p1 or tuple(goals[1]) in p1):
-                        diff_starts = diff_starts and True
-                    else:
-                        diff_starts = False
-
+                    for pi, p1 in enumerate(paths):
+                        for si, s in enumerate(starts):
+                            if pi != si: ## don't check against itself
+                                g = goals[si]
+                                if tuple(s) in p1 or tuple(g) in p1:
+                                    diff_starts = False
+                                    break
                 
 
             ## check overlap between paths
             path_states = [tuple(map(tuple, path)) for path in path_states]
-            n_common_within_trial, n_common_across_trials = self.check_overlap(path_states[0], path_states[1],0)
+            n_common_within_trial, n_common_across_trials = self.check_overlap(path_states,0)
 
-            ## check that the costs of the paths are sufficiently different
+            
+            ### check that the costs of the paths are sufficiently different
             t = len(self.starts)
-            path_A_cost = np.sum([self.costss[t][x, y] for x, y in path_states[0]])
-            path_B_cost = np.sum([self.costss[t][x, y] for x, y in path_states[1]])
+            path_costs = [np.sum([self.p_costs[x, y] for x, y in path]) for path in path_states]
             cost_tol = 0.8
-            vals_ratio = min(np.abs([path_A_cost, path_B_cost])) / max(np.abs([path_A_cost, path_B_cost]))
+            vals_ratio = min(np.abs(path_costs)) / max(np.abs(path_costs))
             vals_diff = vals_ratio < cost_tol
 
         return sampled_abstract_sequences, path_actions, path_states, starts, goals
@@ -974,16 +983,31 @@ class GridEnv(gym.Env):
 
 
     ## count number of overlapping states
-    def check_overlap(self, path_1, path_2, minus=2):
-        n_common_within_trial = len(set(path_1).intersection(set(path_2)))-minus ## -2 if start and end are shared
+    def check_overlap(self, paths, minus=2):
+
+        ## within trial
+        if len(paths)==2:
+            n_common_within_trial = len(set(paths[0]).intersection(set(paths[1])))-minus ## -2 if start and end are shared
+        else:
+            n_common_within_trial = 0
+            for i in range(len(paths)):
+                for j in range(i+1, len(paths)):
+                    n_common_within_trial += len(set(paths[i]).intersection(set(paths[j])))-minus
+
+        ## across trials
         if len(self.path_states)>0:
             common_across_trials = []
-            for paths in self.path_states:
-                p1, p2 = paths
-                common_across_trials.append(len(set(p1).intersection(set(path_1)))-minus)
-                common_across_trials.append(len(set(p2).intersection(set(path_2)))-minus)
-                common_across_trials.append(len(set(p1).intersection(set(path_2)))-minus)
-                common_across_trials.append(len(set(p2).intersection(set(path_1)))-minus)
+            for trial_paths in self.path_states:
+                if len(trial_paths) == 2:
+                    p1, p2 = trial_paths
+                    common_across_trials.append(len(set(p1).intersection(set(paths[0])))-minus)
+                    common_across_trials.append(len(set(p2).intersection(set(paths[1])))-minus)
+                    common_across_trials.append(len(set(p1).intersection(set(paths[1])))-minus)
+                    common_across_trials.append(len(set(p2).intersection(set(paths[0])))-minus)
+                else:
+                    for tp in trial_paths:
+                        for cp in paths:
+                            common_across_trials.append(len(set(tp).intersection(set(cp)))-minus)
             n_common_across_trials = np.max(common_across_trials)
         else:
             n_common_across_trials = 0

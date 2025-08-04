@@ -83,12 +83,13 @@ def plot_traj(trajs, ax, expt='free',title=None):
         colours = ['white','red','red']
     elif expt=='AFC':
         # markers = ['x','x']
-        markers = ['*','*']
+        n_afc = len(trajs)
+        markers = ['*'] * n_afc
         # colours = ['blue', 'lime']
         colours = ['blue',
-                #    'indianred'
-                'green'
-                   ]
+                'green',
+                   'orange'
+                   ][:n_afc]
         # colours = ['white','white']
     path_letters = ['A','B']
     costs = ['L','H']
