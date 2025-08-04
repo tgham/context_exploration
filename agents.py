@@ -272,18 +272,24 @@ class Farmer:
 
         
     ## run agent on participant's trial sequence
-    def run(self, params, hyperparams, agent = 'CE', df_trials=None, envs=None,fit=True):
+    def run(self, params, hyperparams, agent = 'CE', df_trials=None, envs=None,fit=True, progress=False):
         
         ## init expt info
-        n_trials = int(df_trials['trial'].max())
-        n_days = int(df_trials['day'].max() )
-        n_cities = int(df_trials['city'].max())
-        N = envs['city_1_grid_1_env_object'][0].N
+        try:
+            n_trials = int(df_trials['trial'].max())
+            n_days = int(df_trials['day'].max() )
+            n_cities = int(df_trials['city'].max())
+            N = envs['city_1_grid_1_env_object'][0].N
+            n_afc = df_trials['path_chosen'].nunique()
+        except:
+            n_trials = hyperparams['n_trials']
+            n_days = hyperparams['n_days']
+            n_cities = hyperparams['n_cities']
+            N = hyperparams['N']
+            n_afc = hyperparams['n_afc']
 
         ## initialise model's internal variables
-        self.n_total_trials = len(df_trials)
-        self.df_trials = df_trials
-        self.n_afc = 2 ## can sort this out later
+        self.n_afc = n_afc ## can sort this out later
         self.p_choice = np.zeros((n_cities, n_days, n_trials, self.n_afc))
         self.p_correct = np.zeros((n_cities, n_days, n_trials))
         self.Q_vals = np.zeros((n_cities, n_days, n_trials, self.n_afc))
@@ -294,15 +300,14 @@ class Farmer:
         self.leaf_visits = np.zeros((n_cities, n_days, n_trials, self.n_afc))
         self.total_costs = np.zeros((n_cities, n_days, n_trials))
         self.path_quality = np.zeros((n_cities, n_days, n_trials)) 
-        self.trial_loss = np.zeros(self.n_total_trials)
+        if fit:
+            self.n_total_trials = len(df_trials)
+            self.trial_loss = np.zeros(self.n_total_trials)
 
         ## for extracting some useful trial data...
-        self.path_A_past_overlaps = np.zeros((n_cities, n_days, n_trials))
-        self.path_B_past_overlaps = np.zeros((n_cities, n_days, n_trials))
-        self.path_A_past_observed_costs = np.zeros((n_cities, n_days, n_trials))
-        self.path_B_past_observed_costs = np.zeros((n_cities, n_days, n_trials))
-        self.path_A_past_observed_no_costs = np.zeros((n_cities, n_days, n_trials))
-        self.path_B_past_observed_no_costs = np.zeros((n_cities, n_days, n_trials))
+        self.path_past_overlaps = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.path_past_observed_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.path_past_observed_no_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
         self.path_len = np.zeros((n_cities, n_days, n_trials))
         self.day_costs = np.zeros((n_cities, n_days, n_trials)) ## i.e. the cost of the path chosen by the participant on that trial
         
@@ -323,9 +328,10 @@ class Farmer:
         #     n_sims = hyperparams['n_sims']
         #     n_iter = hyperparams['n_iter']
 
+        if progress:
+            pbar = tqdm(total=n_cities*n_days*n_trials, desc='Running {} agent'.format(agent), leave=False)
 
         ## loop through cities
-        # for city in tqdm(range(n_cities)):
         for city in range(n_cities):
 
             ## context prior resets
@@ -338,6 +344,10 @@ class Farmer:
                 ## get the environment for this day
                 if envs:
                     env = envs['city_{}_grid_{}_env_object'.format(city+1, day+1)][0]
+
+                    ## need to do some fixes for old envs
+                    if env.expt == '2AFC':
+                        env.expt = 'AFC'
                 env_copy = copy.deepcopy(env)
                 env_copy.set_trial(0)
                 assert not hasattr(env_copy, 'obs'), 'env_copy.obs should not exist before the first trial: {}'.format(len(env_copy.obs),', city:', city+1, 'day:', day+1)
@@ -375,40 +385,34 @@ class Farmer:
                     if agent == 'human':
                         paths = env_copy.path_states[t].copy()
                         obs_list = [tuple(obs[:2]) for obs in env_copy.obs.tolist()]
-                        try:
-                            A_overlap = set(paths[0]).intersection(set(obs_list))
-                            B_overlap = set(paths[1]).intersection(set(obs_list))
-                            
-                            ## get the number of states that overlap with the paths
-                            path_A_past_overlap = len(A_overlap)
-                            path_B_past_overlap = len(B_overlap)
+                        for i, path in enumerate(paths):
+                            try:
+                                
+                                ## get the number of states that overlap with the paths
+                                overlap = set(path).intersection(set(obs_list))
+                                path_past_overlap = len(overlap)
 
-                            ## get the number of costs and no-costs that comprise these overlapping states
-                            path_A_past_observed_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.high_cost for obs in A_overlap)
-                            path_A_past_observed_no_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.low_cost for obs in A_overlap)
-                            path_B_past_observed_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.high_cost for obs in B_overlap)
-                            path_B_past_observed_no_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.low_cost for obs in B_overlap)
+                                ## get the number of costs and no-costs that comprise these overlapping states
+                                path_past_observed_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.high_cost for obs in overlap)
+                                path_past_observed_no_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.low_cost for obs in overlap)
+                                self.path_past_overlaps[city, day, t, i] = path_past_overlap
+                                self.path_past_observed_costs[city, day, t, i] = path_past_observed_costs
+                                self.path_past_observed_no_costs[city, day, t, i] = path_past_observed_no_costs
                         
-                        ## sometimes need to convert each np array to list of tuples...
-                        except:
-                            paths = [set(map(tuple, path)) for path in paths]
-                            A_overlap = set(paths[0]).intersection(set(obs_list))
-                            B_overlap = set(paths[1]).intersection(set(obs_list))
-                            path_A_past_overlap = len(A_overlap)
-                            path_B_past_overlap = len(B_overlap)
-                            path_A_past_observed_costs = np.sum([env_copy.costss[t][obs[0], obs[1]] == self.high_cost for obs in A_overlap])
-                            path_A_past_observed_no_costs = np.sum([env_copy.costss[t][obs[0], obs[1]] == self.low_cost for obs in A_overlap])
-                            path_B_past_observed_costs = np.sum([env_copy.costss[t][obs[0], obs[1]] == self.high_cost for obs in B_overlap])
-                            path_B_past_observed_no_costs = np.sum([env_copy.costss[t][obs[0], obs[1]] == self.low_cost for obs in B_overlap])
-                        self.path_A_past_overlaps[city, day, t] = path_A_past_overlap
-                        self.path_B_past_overlaps[city, day, t] = path_B_past_overlap
-                        self.path_A_past_observed_costs[city, day, t] = path_A_past_observed_costs
-                        self.path_B_past_observed_costs[city, day, t] = path_B_past_observed_costs
-                        self.path_A_past_observed_no_costs[city, day, t] = path_A_past_observed_no_costs
-                        self.path_B_past_observed_no_costs[city, day, t] = path_B_past_observed_no_costs
-                        assert path_A_past_overlap == path_A_past_observed_costs + path_A_past_observed_no_costs, 'path A past overlap does not match observed costs and no-costs\n path A past overlap: {}, path A observed costs: {}, path A observed no-costs: {}'.format(path_A_past_overlap, path_A_past_observed_costs, path_A_past_observed_no_costs)
-                        assert path_B_past_overlap == path_B_past_observed_costs + path_B_past_observed_no_costs, 'path B past overlap does not match observed costs and no-costs\n path B past overlap: {}, path B observed costs: {}, path B observed no-costs: {}'.format(path_B_past_overlap, path_B_past_observed_costs, path_B_past_observed_no_costs)
-
+                            ## sometimes need to convert each np array to list of tuples...
+                            except:
+                                # paths = [set(map(tuple, path)) for path in paths]
+                                path = set(map(tuple, path))
+                                overlap = set(path).intersection(set(obs_list))
+                                path_past_overlap = len(overlap)
+                                path_past_observed_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.high_cost for obs in overlap)
+                                path_past_observed_no_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.low_cost for obs in overlap)
+                                self.path_past_overlaps[city, day, t, i] = path_past_overlap
+                                self.path_past_observed_costs[city, day, t, i] = path_past_observed_costs
+                                self.path_past_observed_no_costs[city, day, t, i] = path_past_observed_no_costs
+                            
+                            assert self.path_past_overlaps[city, day, t, i] == self.path_past_observed_costs[city, day, t, i] + self.path_past_observed_no_costs[city, day, t, i], 'path {} past overlap does not match observed costs and no-costs\n path past overlap: {}, path observed costs: {}, path observed no-costs: {}'.format(i+1, self.path_past_overlaps[city, day, t, i], self.path_past_observed_costs[city, day, t, i], self.path_past_observed_no_costs[city, day, t, i])
+                    
                         ## misc
                         self.day_costs[city, day, t] = np.nansum(self.total_costs[city, day, :t+1]) ## i.e. costs observed so far today
                         self.path_len[city, day, t] = len(env_copy.path_states[t][0])
@@ -544,7 +548,11 @@ class Farmer:
 
                         ## prune tree (not always successful due to high branching factor, or if participant made no choice in which case reset the tree)
                         if not missed:
-                            init_info_state = np.array(MCTS.tree.root.node_id).reshape(N, N, MCTS.n_afc)
+                            try:
+                                init_info_state = np.array(MCTS.tree.root.node_id).reshape(N, N, 2)
+                            except:
+                                print('init info state: {}'.format(MCTS.tree.root.node_id))
+                                init_info_state = np.array(MCTS.tree.root.node_id).reshape(N, N, 2)
                             trial_obs = env_copy.trial_obs.copy()
                             next_node_id = MCTS.init_node_id(trial_obs, init_info_state, t)
                             if not day_terminated:
@@ -571,7 +579,16 @@ class Farmer:
                     if t == (n_trials-1):
                         context_prior = context_posterior
 
-        self.loss_func(df_trials)
+                    ## update progress bar
+                    if progress:
+                        pbar.update(1)
+
+        if fit:
+            self.loss_func(df_trials)
+        else:
+            self.loss = None
+        if progress:
+            pbar.close()
         return self.loss
 
             
