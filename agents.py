@@ -548,11 +548,7 @@ class Farmer:
 
                         ## prune tree (not always successful due to high branching factor, or if participant made no choice in which case reset the tree)
                         if not missed:
-                            try:
-                                init_info_state = np.array(MCTS.tree.root.node_id).reshape(N, N, 2)
-                            except:
-                                print('init info state: {}'.format(MCTS.tree.root.node_id))
-                                init_info_state = np.array(MCTS.tree.root.node_id).reshape(N, N, 2)
+                            init_info_state = np.array(MCTS.tree.root.node_id).reshape(N, N, 2)
                             trial_obs = env_copy.trial_obs.copy()
                             next_node_id = MCTS.init_node_id(trial_obs, init_info_state, t)
                             if not day_terminated:
