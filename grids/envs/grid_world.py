@@ -986,28 +986,18 @@ class GridEnv(gym.Env):
     def check_overlap(self, paths, minus=2):
 
         ## within trial
-        if len(paths)==2:
-            n_common_within_trial = len(set(paths[0]).intersection(set(paths[1])))-minus ## -2 if start and end are shared
-        else:
-            n_common_within_trial = 0
-            for i in range(len(paths)):
-                for j in range(i+1, len(paths)):
-                    n_common_within_trial += len(set(paths[i]).intersection(set(paths[j])))-minus
+        n_common_within_trial = 0
+        for i in range(len(paths)):
+            for j in range(i+1, len(paths)):
+                n_common_within_trial += len(set(paths[i]).intersection(set(paths[j])))-minus
 
         ## across trials
         if len(self.path_states)>0:
             common_across_trials = []
             for trial_paths in self.path_states:
-                if len(trial_paths) == 2:
-                    p1, p2 = trial_paths
-                    common_across_trials.append(len(set(p1).intersection(set(paths[0])))-minus)
-                    common_across_trials.append(len(set(p2).intersection(set(paths[1])))-minus)
-                    common_across_trials.append(len(set(p1).intersection(set(paths[1])))-minus)
-                    common_across_trials.append(len(set(p2).intersection(set(paths[0])))-minus)
-                else:
-                    for tp in trial_paths:
-                        for cp in paths:
-                            common_across_trials.append(len(set(tp).intersection(set(cp)))-minus)
+                for tp in trial_paths:
+                    for cp in paths:
+                        common_across_trials.append(len(set(tp).intersection(set(cp)))-minus)
             n_common_across_trials = np.max(common_across_trials)
         else:
             n_common_across_trials = 0

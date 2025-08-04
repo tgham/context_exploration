@@ -118,7 +118,8 @@ class MonteCarloTreeSearch():
     def check_state(self, node):
         if self.expt == 'AFC':
             # assert np.array_equal(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.starts[node.trial]), 'mismatch between node and env state\n node: {} \n env: {}'.format(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.starts[node.trial])
-            assert np.array_equal(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.current)
+            # assert np.array_equal(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.current)
+            assert np.array_equal(node.state[:2*self.n_afc].reshape(self.n_afc,2), self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node.state[:2*self.n_afc].reshape(self.n_afc,2), self.env.current)
         elif self.expt == 'free':
             assert np.array_equal(node.state[:2], self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.env.current) ### USE THIS IN THE SUBCLASS DEFINITION FOR THE FREE EXPT TOO
 
@@ -274,29 +275,27 @@ class MonteCarloTreeSearch():
 
             ## debugging: save updates applied to the first node
             if depth == 0:
-                if action==0:
-                    self.first_node_updates.append([discounted_cost, np.nan])
-                    self.first_node_updates_by_depth[tree_len-1].append([discounted_cost, np.nan])
-                elif action==1:
-                    self.first_node_updates.append([np.nan, discounted_cost])
-                    self.first_node_updates_by_depth[tree_len-1].append([np.nan, discounted_cost])
+                to_append = [np.nan] * self.n_afc
+                to_append[action] = discounted_cost
+                self.first_node_updates.append(to_append)
+                self.first_node_updates_by_depth[tree_len-1].append(to_append)
             
             ## save costs of each step in the tree - i.e. the cost of making each move in the tree
-            if action== 0:
-                self.tree_cost_tracker[depth].append([self.tree_costs[depth], np.nan])
-            elif action== 1:
-                self.tree_cost_tracker[depth].append([np.nan, self.tree_costs[depth]])
+            to_append = [np.nan] * self.n_afc
+            to_append[action] = self.tree_costs[depth]
+            self.tree_cost_tracker[depth].append(to_append)
 
             ## updates, conditional on first action
             first_action = self.tree_path[0][1]
-            # if action== 0:
-            #     # self.conditional_tree_cost_tracker[first_action][depth].append([self.tree_costs[depth], np.nan])
-            # elif action== 1:
-            #     # self.conditional_tree_cost_tracker[first_action][depth].append([np.nan, self.tree_costs[depth]])
-            if first_action == 0:
-                self.conditional_tree_cost_tracker[action][depth].append([self.tree_costs[depth], np.nan])
-            elif first_action == 1:
-                self.conditional_tree_cost_tracker[action][depth].append([np.nan, self.tree_costs[depth]])
+            to_append = [np.nan] * self.n_afc
+            to_append[first_action] = self.tree_costs[depth]
+            self.conditional_tree_cost_tracker[action][depth].append(to_append)
+            # if first_action == 0:
+            #     self.conditional_tree_cost_tracker[action][depth].append([self.tree_costs[depth], np.nan])
+            # elif first_action == 1:
+            #     self.conditional_tree_cost_tracker[action][depth].append([np.nan, self.tree_costs[depth]])
+            # elif first_action == 2:
+            #     self.conditional_tree_cost_tracker[action][depth].append([self.tree_costs[depth], self.tree_costs[depth]])
 
             ## debugging: save max and min Q values to normalise Qs
             if action_leaf.performance > self.max_Q[depth]:
@@ -435,12 +434,13 @@ class MonteCarloTreeSearch():
         self.first_node_updates = []
         self.first_node_updates_by_depth = []
         self.tree_cost_tracker = []
-        self.conditional_tree_cost_tracker = [[],[]] 
+        self.conditional_tree_cost_tracker = [[] for _ in range(self.n_afc)]
         for t in range(self.env.n_trials):
             self.first_node_updates_by_depth.append([])
             self.tree_cost_tracker.append([])
-            self.conditional_tree_cost_tracker[0].append([])
-            self.conditional_tree_cost_tracker[1].append([])
+            for a in range(self.n_afc):
+                self.conditional_tree_cost_tracker[a].append([])
+
         
         ## loop through simulations
         for s in range(n_sims):
@@ -689,7 +689,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         for trial in range(first_trial+1, self.env.n_trials):
             depth+=1
 
-            ## GREEDY: get the total cost of the two paths and return the better one
+            ## GREEDY: get the total cost of the paths and return the better one
             path_costs = []
             for path_id in range(self.n_afc):
                 path_states = self.env.path_states[trial][path_id]
@@ -712,7 +712,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
             best_ro_cost = self.env.compound_cost(np.max(path_costs), trial) ## or if using compound costs
             total_cost += best_ro_cost * self.discount_factor**depth
 
-            ## RANDOM: randomly choose between the two paths
+            ## RANDOM: randomly choose between the paths
             # path_id = np.random.choice(self.n_AFC)
             # path_states = self.env.path_states[action_leaf.trial+1][path_id]
             # ro_cost = 0
@@ -733,7 +733,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         for trial in range(myopic_trial, self.env.n_trials):
             depth+=1
 
-            ## GREEDY: get the total cost of the two paths and return the better one
+            ## GREEDY: get the total cost of the paths and return the better one
             path_costs = []
             for path_id in range(self.n_afc):
                 path_states = self.env.path_states[trial][path_id]

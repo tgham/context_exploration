@@ -490,52 +490,6 @@ def node_angle(a,b):
     return ang
 
 
-## sample from the GP
-def sample(mean, K, sigma=0.01, high_cost=-0.9, low_cost=-0.1):
-    if sigma is None:
-        sigma = 0.01 #i.e. just to add to the diagonal of the kernel matrix
-
-    N = int(np.sqrt(len(mean)))
-
-    ## check kernel is valid
-    k_check(K)
-
-    # sample
-    # if mean is None:
-    #     mean = np.zeros(self.N**2)
-    # mean = np.zeros(self.N**2)
-    # samples = np.random.multivariate_normal(mean, K).reshape(self.N, self.N)
-
-    #normalise
-    # high_cost = self.high_cost
-    # low_cost = self.low_cost
-    # samples = high_cost + (low_cost - high_cost) * (samples - np.min(samples)) / (np.max(samples) - np.min(samples))
-
-
-    ## or truncated
-    lb = np.zeros(N**2) + high_cost
-    ub = np.zeros(N**2) + low_cost
-    K_tmp = K + sigma**2 * np.eye(N**2)
-    tmvn = TruncatedMVN(mean, K_tmp, lb, ub)
-    samples = tmvn.sample(1)
-    samples = samples.reshape(N, N)
-
-    return samples
-
-## check that kernel is PSD and symmetric
-def k_check(K):
-    symm = np.allclose(K,K.T)
-    if not symm:
-        warnings.warn("Kernel matrix is not symmetric.", UserWarning)
-    
-    eigenvalues = np.linalg.eigvals(K)
-    psd = np.all(eigenvalues >= -1e-10)
-    if not psd:
-        warnings.warn("Kernel matrix is not positive semi-definite.", UserWarning)
-
-    return np.any([not symm, not psd])
-
-
 ## parse strings to lists
 def parse_lists(df):
     cols = df.columns[2:]
