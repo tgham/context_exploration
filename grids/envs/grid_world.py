@@ -172,6 +172,7 @@ class GridEnv(gym.Env):
             self.goals = []
             self.dominant_axis_A = []
             self.dominant_axis_B = []
+            self.dominant_axis_C = []
             self.path_states = []
             self.path_actions = []
             self.sampled_abstract_sequences = []
@@ -223,12 +224,14 @@ class GridEnv(gym.Env):
                         self.sampled_abstract_sequences.append(sampled_abstract_sequences)
 
                         # determine the dominant axis - i.e. is the path more vertical or horizontal?
-                        if sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]:
-                            self.dominant_axis_A.append('vertical')
-                            self.dominant_axis_B.append('horizontal')
-                        elif sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]:
-                            self.dominant_axis_A.append('horizontal')
-                            self.dominant_axis_B.append('vertical')
+                        dominant_axis_list = [self.dominant_axis_A, self.dominant_axis_B, self.dominant_axis_C]
+                        for si, s_a_s in enumerate(sampled_abstract_sequences):
+                            if s_a_s[0]> s_a_s[1]:
+                                dominant_axis_list[si].append('vertical')
+                            elif s_a_s[0]< s_a_s[1]:
+                                dominant_axis_list[si].append('horizontal')
+                            elif s_a_s[0]==s_a_s[1]:
+                                dominant_axis_list[si].append('L-shaped')
                         SG_found = True
 
 
@@ -308,7 +311,7 @@ class GridEnv(gym.Env):
                             n_overlaps.append(len(intersections))
                         self.path_future_overlaps.append(n_overlaps)
                         self.most_overlap.append(np.argmax(n_overlaps))
-                    self.path_future_overlaps.append([[0 for a in range(self.n_afc)]]) ## trivially, the final trial has no future overlaps
+                    self.path_future_overlaps.append([0 for a in range(self.n_afc)]) ## trivially, the final trial has no future overlaps
 
                     ## for path A and B of the first trial, calculate the number of future states that overlap with the first row and column
                     self.p0_x_overlaps = []
@@ -1199,7 +1202,7 @@ class GridEnv(gym.Env):
             self.trial_obs = np.vstack([self.trial_obs, [self._agent_location[0], self._agent_location[1], current_cost]])
 
             ## store info on optimality of the choice, given the agent's current position
-            self.action_scores.append(action_score)
+            # self.action_scores.append(action_score)
 
 
         ## return the predicted cost if simulating
