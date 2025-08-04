@@ -1135,13 +1135,13 @@ def load_data(path):
         df_all.loc[(df_all['pid'] == pid) & (df_all['trial'] == 1), 'prev_chose_vertical'] = np.nan
         
         ## extract overlap info
-        df_all.loc[df_all['pid'] == pid, 'path_A_past_overlaps'] = agent.path_A_past_overlaps.flatten()
-        df_all.loc[df_all['pid'] == pid, 'path_B_past_overlaps'] = agent.path_B_past_overlaps.flatten()
-        df_all.loc[df_all['pid'] == pid, 'total_past_overlaps'] = agent.path_A_past_overlaps.flatten() + agent.path_B_past_overlaps.flatten()
-        df_all.loc[df_all['pid'] == pid, 'path_A_past_observed_costs'] = agent.path_A_past_observed_costs.flatten()
-        df_all.loc[df_all['pid'] == pid, 'path_B_past_observed_costs'] = agent.path_B_past_observed_costs.flatten()
-        df_all.loc[df_all['pid'] == pid, 'path_A_past_observed_no_costs'] = agent.path_A_past_observed_no_costs.flatten()
-        df_all.loc[df_all['pid'] == pid, 'path_B_past_observed_no_costs'] = agent.path_B_past_observed_no_costs.flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_A_past_overlaps'] = agent.path_past_overlaps[:,:,:,0].flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_B_past_overlaps'] = agent.path_past_overlaps[:,:,:,1].flatten()
+        df_all.loc[df_all['pid'] == pid, 'total_past_overlaps'] = agent.path_past_overlaps[:,:,:,0].flatten() + agent.path_past_overlaps[:,:,:,1].flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_A_past_observed_costs'] = agent.path_past_observed_costs[:,:,:,0].flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_B_past_observed_costs'] = agent.path_past_observed_costs[:,:,:,1].flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_A_past_observed_no_costs'] = agent.path_past_observed_no_costs[:,:,:,0].flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_B_past_observed_no_costs'] = agent.path_past_observed_no_costs[:,:,:,1].flatten()
 
         ## diffs (vertical - horizontal)
         # df_all.loc[(df_all['pid'] == pid)
