@@ -288,6 +288,9 @@ class Farmer:
             N = hyperparams['N']
             n_afc = hyperparams['n_afc']
 
+        ## determine policy - i.e. greedy vs softmax
+        greedy = hyperparams['greedy'] if 'greedy' in hyperparams else True 
+
         ## initialise model's internal variables
         self.n_afc = n_afc ## can sort this out later
         self.p_choice = np.zeros((n_cities, n_days, n_trials, self.n_afc))
@@ -311,6 +314,7 @@ class Farmer:
         self.path_past_observed_no_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
         self.path_len = np.zeros((n_cities, n_days, n_trials))
         self.day_costs = np.zeros((n_cities, n_days, n_trials)) ## i.e. the cost of the path chosen by the participant on that trial
+
         
         ## init params and hyperparams
         if agent == 'BAMCP':
@@ -445,6 +449,10 @@ class Farmer:
                         self.p_correct[city, day, t] = self.p_choice[city, day, t][correct_path]
                         self.leaf_visits[city, day, t] = MCTS.tree.root.action_leaves[action].n_action_visits
 
+                        ## or, do probability matching if not greedy
+                        if not greedy:
+                            action = np.random.choice(np.arange(len(MCTS_Q)), p=softmax(MCTS_Q))
+
                     elif agent == 'CE':
                         env_copy.set_sim(False)
                         
@@ -470,6 +478,10 @@ class Farmer:
                         self.p_choice[city, day, t] = self.softmax(np.array(path_costs))
                         correct_path = np.argmax(env_copy.path_actual_costs[t])
                         self.p_correct[city, day, t] = self.p_choice[city, day, t][correct_path]
+
+                        ## or, do probability matching if not greedy
+                        if not greedy:
+                            action = np.random.choice(np.arange(len(MCTS_Q)), p=softmax(MCTS_Q))
 
                     elif agent == 'human':
                         
