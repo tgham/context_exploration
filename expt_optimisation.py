@@ -78,12 +78,11 @@ def save_sim(sim_out):
 ## env inits
 N = 11
 metric = 'cityblock'
-known_costs = False
 beta_params = {
-    'alpha_row': 0.25,
-    'beta_row': 0.25,
-    'alpha_col': 0.25,
-    'beta_col': 0.25
+    'alpha_row':0.5,
+    'beta_row': 0.5,
+    'alpha_col':0.5,
+    'beta_col': 0.5
     # 'alpha_row': 0.5,
     # 'beta_row': 0.5,
     # 'alpha_col': 10,
@@ -91,7 +90,7 @@ beta_params = {
     }
 
 ## trial info
-n_sim_participants = 10
+n_sim_participants = 49
 n_cities = 8
 n_days = 5
 n_trials = 4
@@ -102,83 +101,22 @@ expt_info = {
     'n_afc': n_afc,
 }
 
-## generate dataset for each participant
-# ppt_envs = {}
-# for p in tqdm(range(1,n_sim_participants+1)):
-
-#     ## set contexts - i.e. half of the cities are row contexts, half are column contexts
-#     contexts = ['row']*int(n_cities/2) + ['column']*int(n_cities/2)
-#     np.random.shuffle(contexts)
-
-#     ## init df for saving expt info
-#     df_expt = pd.DataFrame(columns=['city', 'context', 'grid','trial', 
-#                                     'better_path',
-#                                     'start_A','start_B','goal_A','goal_B', 'path_A', 'path_B',
-#                                     'path_A_expected_cost', 'path_B_expected_cost',
-#                                     'path_A_actual_cost', 'path_B_actual_cost',
-#                                     'path_A_future_overlap', 'path_B_future_overlap',
-#                                     'abstract_sequence_A', 'abstract_sequence_B',
-#                                     'dominant_axis_A','dominant_axis_B'
-#                                     ])
-#     if n_afc==3:
-#         df_expt = df_expt.join(pd.DataFrame(columns=['start_C', 'goal_C', 'path_C',
-#                             'path_C_expected_cost', 'path_C_actual_cost', 
-#                             'path_C_future_overlap', 'abstract_sequence_C', 
-#                             'dominant_axis_C']))
-#     env_objects = {}
-
-
-#     ## loop through cities, where each city is a new context
-#     for c in range(n_cities):
-#         expt_info['context'] = contexts[c]
-
-#         ## create some envs
-#         envs = [make_env(N, n_trials, expt_info, beta_params, metric) for i in range(n_days)]
-
-#         ## save expt info
-#         for i, env in enumerate(envs):
-#             for e in range(n_trials):
-
-#                 ## ensure that all tuples in the env.path_states list contain int, rather than int64
-#                 if n_afc==2:
-#                     df_expt = pd.concat([df_expt, pd.DataFrame({'city': int(c+1), 'context': expt_info['context'], 'grid': int(i+1), 'trial': int(e+1), 'start_A': [env.path_states[e][0][0]], 'start_B': [env.path_states[e][1][0]], 'goal_A': [env.path_states[e][0][-1]], 'goal_B': [env.path_states[e][1][-1]], 'path_A': [env.path_states[e][0]], 'path_B': [env.path_states[e][1]],
-#                                     'path_A_actual_cost': [env.path_actual_costs[e][0]], 'path_B_actual_cost': [env.path_actual_costs[e][1]],
-#                                     'path_A_expected_cost': env.path_expected_costs[e][0], 'path_B_expected_cost': env.path_expected_costs[e][1],
-#                                     'path_A_future_overlap': env.path_future_overlaps[e][0], 'path_B_future_overlap': env.path_future_overlaps[e][1],
-#                                     'abstract_sequence_A': [env.sampled_abstract_sequences[e][0]], 'abstract_sequence_B': [env.sampled_abstract_sequences[e][1]],
-#                                     'better_path': ['a','b'][np.argmax(env.path_actual_costs[e])],
-#                                     'dominant_axis_A': env.dominant_axis_A[e],
-#                                     'dominant_axis_B': env.dominant_axis_B[e]
-#                                     })], ignore_index=True)
-#                 elif n_afc==3:
-#                     df_expt = pd.concat([df_expt, pd.DataFrame({'city': int(c+1), 'context': expt_info['context'], 'grid': int(i+1), 'trial': int(e+1), 
-#                                     'start_A': [env.path_states[e][0][0]], 'goal_A': [env.path_states[e][0][-1]], 'path_A': [env.path_states[e][0]],
-#                                     'path_A_expected_cost': env.path_expected_costs[e][0], 'path_A_actual_cost': env.path_actual_costs[e][0],
-#                                     'path_A_future_overlap': env.path_future_overlaps[e][0], 'abstract_sequence_A': [env.sampled_abstract_sequences[e][0]],
-#                                     'dominant_axis_A': env.dominant_axis_A[e],
-#                                     'start_B': [env.path_states[e][1][0]], 'goal_B': [env.path_states[e][1][-1]], 'path_B': [env.path_states[e][1]],
-#                                     'path_B_expected_cost': env.path_expected_costs[e][1], 'path_B_actual_cost': env.path_actual_costs[e][1],
-#                                     'path_B_future_overlap': env.path_future_overlaps[e][1], 'abstract_sequence_B': [env.sampled_abstract_sequences[e][1]],
-#                                     'dominant_axis_B': env.dominant_axis_B[e],
-#                                     'start_C': [env.path_states[e][2][0]], 'goal_C': [env.path_states[e][2][-1]], 'path_C': [env.path_states[e][2]],
-#                                     'path_C_expected_cost': env.path_expected_costs[e][2], 'path_C_actual_cost': env.path_actual_costs[e][2],
-#                                     'path_C_future_overlap': env.path_future_overlaps[e][2], 'abstract_sequence_C': [env.sampled_abstract_sequences[e][2]],
-#                                     'better_path': ['a','b','c'][np.argmax(env.path_actual_costs[e])],
-#                                     })], ignore_index=True)
-
-#             env_key = 'city_'+str(c+1)+'_grid_'+str(i+1)
-
-#             ## just for safe-keeping, let's save the whole env too
-#             env_objects[env_key+'_env_object'] = [env]
-#             env_objects['participant'] = p
-
+## init df for saving expt info
+df_expt = pd.DataFrame(columns=['participant', 'city', 'context', 'grid','trial', 
+                                'better_path',
+                                'start_A','start_B','goal_A','goal_B', 'path_A', 'path_B',
+                                'path_A_expected_cost', 'path_B_expected_cost',
+                                'path_A_actual_cost', 'path_B_actual_cost',
+                                'path_A_future_overlap', 'path_B_future_overlap',
+                                'abstract_sequence_A', 'abstract_sequence_B',
+                                'dominant_axis_A','dominant_axis_B'
+                                ])
+if n_afc==3:
+    df_expt = df_expt.join(pd.DataFrame(columns=['start_C', 'goal_C', 'path_C',
+                        'path_C_expected_cost', 'path_C_actual_cost', 
+                        'path_C_future_overlap', 'abstract_sequence_C', 
+                        'dominant_axis_C']))
     
-#     ## save for that ppt
-#     ppt_envs[p] = env_objects
-#     with open('useful_saves/expt_optimisation/simulated_envs/ppt_'+str(p)+'_envs.pkl', 'wb') as f:
-#         pickle.dump(env_objects, f)
-
-
 ## init sim results
 all_sim_out = {
         'participant':[],
@@ -192,11 +130,15 @@ all_sim_out = {
         'p_choice_B':[],
         'p_choice_C':[],
         'p_correct':[],
+        'Q_a':[],
+        'Q_b':[],
+        'Q_c':[],
+        'leaf_visits_a':[],
+        'leaf_visits_b':[],
+        'leaf_visits_c':[]
     }
-n_ppts = 1
 parallel = True
-n_cores = 10
-n_sim_participants = 10
+n_cores = 50
 
 ## init agent and expt
 agent_params = [
@@ -204,7 +146,7 @@ agent_params = [
     0.1, # lapse
 ]
 hyperparams = {
-    'n_sims': 10,
+    'n_sims': 100000,
     'exploration_constant': 1,
     'discount_factor': 1,
     'n_iter': 10,
@@ -215,7 +157,76 @@ hyperparams = {
     'N': N,
     'participant': None, ## hacky
 }
-agents = ['BAMCP', 'CE']        
+agents = ['BAMCP', 'CE']   
+
+## generate dataset for each participant
+ppt_envs = {}
+for p in tqdm(range(1,n_sim_participants+1)):
+
+    ## set contexts - i.e. half of the cities are row contexts, half are column contexts
+    contexts = ['row']*int(n_cities/2) + ['column']*int(n_cities/2)
+    np.random.shuffle(contexts)
+
+    env_objects = {}
+
+
+    ## loop through cities, where each city is a new context
+    for c in range(n_cities):
+        expt_info['context'] = contexts[c]
+
+        ## create some envs
+        envs = [make_env(N, n_trials, expt_info, beta_params, metric) for i in range(n_days)]
+
+        ## save expt info
+        for i, env in enumerate(envs):
+            for e in range(n_trials):
+
+                ## ensure that all tuples in the env.path_states list contain int, rather than int64
+                if n_afc==2:
+                    df_expt = pd.concat([df_expt, pd.DataFrame({'participant': p, 'city': int(c+1), 'context': expt_info['context'], 'grid': int(i+1), 'trial': int(e+1), 'start_A': [env.path_states[e][0][0]], 'start_B': [env.path_states[e][1][0]], 'goal_A': [env.path_states[e][0][-1]], 'goal_B': [env.path_states[e][1][-1]], 'path_A': [env.path_states[e][0]], 'path_B': [env.path_states[e][1]],
+                                    'path_A_actual_cost': [env.path_actual_costs[e][0]], 'path_B_actual_cost': [env.path_actual_costs[e][1]],
+                                    'path_A_expected_cost': env.path_expected_costs[e][0], 'path_B_expected_cost': env.path_expected_costs[e][1],
+                                    'path_A_future_overlap': env.path_future_overlaps[e][0], 'path_B_future_overlap': env.path_future_overlaps[e][1],
+                                    'abstract_sequence_A': [env.sampled_abstract_sequences[e][0]], 'abstract_sequence_B': [env.sampled_abstract_sequences[e][1]],
+                                    'better_path': ['a','b'][np.argmax(env.path_actual_costs[e])],
+                                    'dominant_axis_A': env.dominant_axis_A[e],
+                                    'dominant_axis_B': env.dominant_axis_B[e]
+                                    })], ignore_index=True)
+                elif n_afc==3:
+                    df_expt = pd.concat([df_expt, pd.DataFrame({'participant': p, 'city': int(c+1), 'context': expt_info['context'], 'grid': int(i+1), 'trial': int(e+1), 
+                                    'start_A': [env.path_states[e][0][0]], 'goal_A': [env.path_states[e][0][-1]], 'path_A': [env.path_states[e][0]],
+                                    'path_A_expected_cost': env.path_expected_costs[e][0], 'path_A_actual_cost': env.path_actual_costs[e][0],
+                                    'path_A_future_overlap': env.path_future_overlaps[e][0], 'abstract_sequence_A': [env.sampled_abstract_sequences[e][0]],
+                                    'dominant_axis_A': env.dominant_axis_A[e],
+                                    'start_B': [env.path_states[e][1][0]], 'goal_B': [env.path_states[e][1][-1]], 'path_B': [env.path_states[e][1]],
+                                    'path_B_expected_cost': env.path_expected_costs[e][1], 'path_B_actual_cost': env.path_actual_costs[e][1],
+                                    'path_B_future_overlap': env.path_future_overlaps[e][1], 'abstract_sequence_B': [env.sampled_abstract_sequences[e][1]],
+                                    'dominant_axis_B': env.dominant_axis_B[e],
+                                    'start_C': [env.path_states[e][2][0]], 'goal_C': [env.path_states[e][2][-1]], 'path_C': [env.path_states[e][2]],
+                                    'path_C_expected_cost': env.path_expected_costs[e][2], 'path_C_actual_cost': env.path_actual_costs[e][2],
+                                    'path_C_future_overlap': env.path_future_overlaps[e][2], 'abstract_sequence_C': [env.sampled_abstract_sequences[e][2]],
+                                    'better_path': ['a','b','c'][np.argmax(env.path_actual_costs[e])],
+                                    })], ignore_index=True)
+
+            env_key = 'city_'+str(c+1)+'_grid_'+str(i+1)
+
+            ## just for safe-keeping, let's save the whole env too
+            env_objects[env_key+'_env_object'] = [env]
+            env_objects['participant'] = p
+
+    
+    ## save for that ppt
+    ppt_envs[p] = env_objects
+    with open('useful_saves/expt_optimisation/simulated_envs/ppt_'+str(p)+'_envs.pkl', 'wb') as f:
+        pickle.dump(env_objects, f)
+
+## save expt info
+df_expt.to_csv('useful_saves/expt_optimisation/{}AFC_{}x{}_env_{}-{}-{}-{}_beta_{}_sim_ppts_{}_cities_{}_days_{}_trials_{}_sims_expt_info.csv'.format(n_afc,N,N,
+                                                                                       beta_params['alpha_row'], beta_params['beta_row'], beta_params['alpha_col'], beta_params['beta_col'],
+                                                                                       n_sim_participants, 
+                                                                                       n_cities, n_days, n_trials,
+                                                                                        hyperparams['n_sims']))
+     
 
 ## loop through ppts
 if __name__ == '__main__':

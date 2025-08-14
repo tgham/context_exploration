@@ -614,6 +614,12 @@ class Farmer:
                 'p_choice_B':[],
                 'p_choice_C':[],
                 'p_correct':[],
+                'Q_a':[],
+                'Q_b':[],
+                'Q_c':[],
+                'leaf_visits_a':[],
+                'leaf_visits_b':[],
+                'leaf_visits_c':[]
             }
             for c in range(n_cities):
                 for d in range(n_days):
@@ -625,13 +631,21 @@ class Farmer:
                         sim_out['trial'].append(t+1)
                         sim_out['actions'].append(self.actions[c][d][t])
                         sim_out['context'].append(self.true_context[c])
+                        sim_out['p_correct'].append(self.p_correct[c][d][t])
                         sim_out['p_choice_A'].append(self.p_choice[c][d][t][0])
                         sim_out['p_choice_B'].append(self.p_choice[c][d][t][1])
+                        sim_out['Q_a'].append(self.Q_vals[c][d][t][0])
+                        sim_out['Q_b'].append(self.Q_vals[c][d][t][1])
+                        sim_out['leaf_visits_a'].append(self.leaf_visits[c][d][t][0])
+                        sim_out['leaf_visits_b'].append(self.leaf_visits[c][d][t][1])
                         if self.n_afc==3:
                             sim_out['p_choice_C'].append(self.p_choice[c][d][t][2])
+                            sim_out['Q_c'].append(self.Q_vals[c][d][t][2])
+                            sim_out['leaf_visits_c'].append(self.leaf_visits[c][d][t][2])
                         else:
                             sim_out['p_choice_C'].append(np.nan)
-                        sim_out['p_correct'].append(self.p_correct[c][d][t])
+                            sim_out['Q_c'].append(np.nan)
+                            sim_out['leaf_visits_c'].append(np.nan)
             return sim_out
 
             
