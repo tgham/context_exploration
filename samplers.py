@@ -5,7 +5,7 @@ import random
 from math import log, exp, gamma
 from functools import lru_cache
 from matplotlib import pyplot as plt
-from scipy.special import beta, logsumexp
+from scipy.special import beta, logsumexp, digamma
 
 @njit
 def compute_log_likelihood(sampled_i, sampled_j, rel_obs, proposed_row_p, proposed_col_q, current_row_p, current_col_q, high_cost, low_cost):

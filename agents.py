@@ -1,4 +1,5 @@
 from enum import Enum
+from itertools import product
 import copy
 import gymnasium as gym
 from gymnasium import spaces
@@ -22,6 +23,8 @@ from samplers import GridSampler
 from MCTS import MonteCarloTreeSearch_AFC
 from tqdm.auto import tqdm
 import pandas as pd
+from scipy.special import beta, logsumexp, digamma, comb, betaln
+
 
 
 
@@ -60,12 +63,13 @@ class Farmer:
 
 
     ## generate full set of root samples
-    def root_samples(self, obs=None, n_samples=1000, n_iter=100, lazy=True, CE=False, combo=True):
+    def root_samples(self, obs=None, n_samples=1000, n_iter=100, lazy=True, CE=False, combo=False):
         
         ## hacky: obs should not contain duplicates!
         obs = np.unique(obs, axis=0).tolist() if obs is not None else []
 
         sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, obs, N=self.N, CE=CE)
+        self.sampler = sampler
         self.all_posterior_ps = np.zeros((n_samples, self.N))
         self.all_posterior_qs = np.zeros((n_samples, self.N))
         self.all_posterior_p_costs = np.zeros((n_samples, self.N, self.N))
@@ -201,6 +205,199 @@ class Farmer:
         sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, obs, N=self.N)
         context_prob = sampler.context_posterior(context_prior=self.context_prob)
         return context_prob
+    
+    ## calculate the KL divergence summed over all grid
+    def grid_KL(self, prior_obs, posterior_obs, context = 'column'):
+
+        prior_sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, prior_obs, N=self.N)
+        posterior_sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, posterior_obs, N=self.N)
+
+        if prior_obs is None:
+            n_prior_obs = 0
+        else:
+            n_prior_obs = len(prior_obs)
+        n_posterior_obs = len(posterior_obs)
+
+        KLs = []
+        if context == 'column':
+            for i in range(self.N):
+
+                ## define prior params - that is, the params before the new observations are made
+                low_counts_prior = prior_sampler.low_counts_cols[i]
+                high_counts_prior = prior_sampler.high_counts_cols[i]
+                alpha_prior = prior_sampler.alpha_col + low_counts_prior
+                beta_prior = prior_sampler.beta_col + high_counts_prior
+
+                ## repeat for posterior params
+                low_counts_post = posterior_sampler.low_counts_cols[i]
+                high_counts_post = posterior_sampler.high_counts_cols[i]
+                alpha_post = posterior_sampler.alpha_col + low_counts_post
+                beta_post = posterior_sampler.beta_col + high_counts_post
+
+                ## calculate the difference in low and high counts
+                low_counts_diff = low_counts_post - low_counts_prior
+                high_counts_diff = high_counts_post - high_counts_prior
+
+                ## calculate the KL divergence
+                KL = self.KL_divergence(alpha_prior, beta_prior, alpha_post, beta_post, low_counts_diff, high_counts_diff) 
+                KLs.append(KL)
+
+        elif context == 'row':
+            for j in range(self.N):
+
+                ## define prior params - that is, the params before the new observations are made
+                low_counts_prior = prior_sampler.low_counts_rows[j]
+                high_counts_prior = prior_sampler.high_counts_rows[j]
+                alpha_prior = prior_sampler.alpha_row + low_counts_prior
+                beta_prior = prior_sampler.beta_row + high_counts_prior
+
+                ## repeat for posterior params
+                low_counts_post = posterior_sampler.low_counts_rows[j]
+                high_counts_post = posterior_sampler.high_counts_rows[j]
+                alpha_post = posterior_sampler.alpha_row + low_counts_post
+                beta_post = posterior_sampler.beta_row + high_counts_post
+
+                ## calculate the difference in low and high counts
+                low_counts_diff = low_counts_post - low_counts_prior
+                high_counts_diff = high_counts_post - high_counts_prior
+
+                ## calculate the KL divergence
+                KL = self.KL_divergence(alpha_prior, beta_prior, alpha_post, beta_post, low_counts_diff, high_counts_diff) 
+                KLs.append(KL)
+        
+        return np.sum(KLs)
+    
+
+    ## KL divergence between two beta distributions
+    def KL_divergence(self, alpha_q, beta_q, alpha_p, beta_p, low_counts_diff, high_counts_diff):
+
+        """
+        Calculate the KL divergence between a prior Q and posterior P beta distribution.
+        The prior is a beta distribution with parameters alpha and beta,
+        and the posterior is a beta distribution with parameters alpha + s and beta + f,
+        where s is the number of successes and f is the number of failures."""
+
+        assert alpha_q + low_counts_diff == alpha_p, 'alpha_q + s should equal alpha_p, but got {} + {} != {}'.format(alpha_q, low_counts_diff, alpha_p)
+        KL = np.log((beta(alpha_p, beta_p) / beta(alpha_q, beta_q))) - low_counts_diff*(digamma(alpha_q) - digamma(alpha_q + beta_q)) - high_counts_diff*(digamma(beta_q) - digamma(alpha_q + beta_q))
+
+        return KL
+    
+
+    ## calculate the expected KL of an obs sequence of length n 
+    # def expected_KL(self, prior_obs, new_obs, context):
+        
+    #     ## loop through possible sequences of n binary outcomes (0=low, 1=high)
+    #     EKL_total = 0.0
+    #     n_obs = len(new_obs)
+    #     for seq in product([self.low_cost, self.high_cost], repeat=n_obs):
+
+    #         ## initialise a farmer based on the prior observations (+ the new hypothetical obs)
+    #         prior_sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, prior_obs, N=self.N, CE=True) ## can use CE since we are only interested in the prior mean p and q
+    #         prior_sampler.simple_sample(col_context=context=='column')
+            
+    #         ## loop through hypothetical observations
+    #         obs_tmp = prior_obs.copy() if prior_obs is not None else np.array([])
+    #         p_seq = 1.0
+            
+    #         ### update the sampled after each hypothetical observation??
+    #         if context == 'column':
+    #             for oi, outcome in enumerate(seq):
+
+    #                 ## initialise a farmer based on the prior observations (+ the new hypothetical obs)
+    #                 # prior_sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, obs_tmp, N=self.N, CE=True) ## can use CE since we are only interested in the prior mean p and q
+                    
+    #                 ## append prior obs with hypothetical obs
+    #                 i, j, _ = new_obs[oi]
+    #                 obs_tmp = np.vstack([obs_tmp, [i,j, outcome]]) if len(obs_tmp)>0 else np.array([[i,j, outcome]])
+
+    #                 ## get prior predictive probability of a low cost in this state
+    #                 # prior_sampler.simple_sample(col_context=True)
+    #                 p_obs = prior_sampler.col_probs[0][int(j)]
+
+    #                 ## update prob of observing this sequence
+    #                 p_seq *= p_obs if outcome == self.low_cost else (1 - p_obs)
+
+
+
+    #         elif context == 'row':
+    #             for oi, outcome in enumerate(seq):
+
+    #                 ## initialise a farmer based on the prior observations (+ the new hypothetical obs)
+    #                 # prior_sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, obs_tmp, N=self.N, CE=True) ## can use CE since we are only interested in the prior mean p and q
+                    
+    #                 ## append prior obs with hypothetical obs
+    #                 i, j, _ = new_obs[oi]
+    #                 obs_tmp = np.vstack([obs_tmp, [i,j, outcome]]) if len(obs_tmp)>0 else np.array([[i,j, outcome]])
+
+    #                 ## get prior predictive probability of a low cost in this state
+    #                 # prior_sampler.simple_sample(col_context=False)
+    #                 p_obs = prior_sampler.row_probs[0][int(i)]
+
+    #                 ## update prob of observing this sequence
+    #                 p_seq *= p_obs if outcome == self.low_cost else (1 - p_obs)
+            
+    #         # Compute KL for this hypothetical final posterior
+    #         KL_seq = self.grid_KL(prior_obs, obs_tmp, context)
+    #         # print('seq:', seq, 'p_seq:', p_seq, 'KL_seq',KL_seq)
+    #         EKL_total += p_seq * KL_seq
+
+    #     return EKL_total
+
+    def beta_binomial_pmf(self, k, n, a, b):
+        """Beta-binomial predictive probability p(k | a, b, n)."""
+        return comb(n, k) * np.exp(betaln(a + k, b + n - k) - betaln(a, b))
+
+    def expected_KL(self, prior_obs, new_obs, context):
+        """
+        Compute the expected KL divergence for a planned set of observations
+        without enumerating all binary sequences, using the beta-binomial formula.
+        """
+        EKL_total = 0.0
+        
+        # Initialise prior sampler to get current alpha/beta params after prior_obs
+        prior_sampler = GridSampler(self.alpha_row, self.beta_row,
+                                    self.alpha_col, self.beta_col,
+                                    self.low_cost, self.high_cost,
+                                    prior_obs, N=self.N, CE=True)
+        prior_sampler.simple_sample(col_context=(context == 'column'))
+
+        # Group planned observations by row (row context) or col (column context)
+        if context == 'row':
+            group_key = lambda obs: obs[0]  # group by row index
+            alphas = prior_sampler.alpha_row
+            betas = prior_sampler.beta_row
+        else:
+            group_key = lambda obs: obs[1]  # group by column index
+            alphas = prior_sampler.alpha_col
+            betas = prior_sampler.beta_col
+
+        grouped = {}
+        for i, j, _ in new_obs:
+            key = group_key((i, j, None))
+            grouped.setdefault(key, []).append((i, j))
+        
+        # Iterate over each row/col group independently
+        for idx, obs_list in grouped.items():
+            n_i = len(obs_list)       # planned obs in this row/col
+            # a_i = alphas[idx]
+            # b_i = betas[idx]
+            a_i = alphas ## hacky - these need to be alpha + low_counts etc.
+            b_i = betas
+            
+            # Sum over k successes
+            E_KL_i = 0.0
+            for k in range(n_i + 1):
+                p_k = self.beta_binomial_pmf(k, n_i, a_i, b_i)
+                KL_k = self.KL_divergence(a_i, b_i, a_i + k, b_i + n_i - k, k, n_i-k)
+                E_KL_i += p_k * KL_k
+            print('n_i:', n_i, 'idx:', idx, 'obs_list:', obs_list, 'E_KL_i:', E_KL_i)
+            
+            EKL_total += E_KL_i
+        
+        return EKL_total
+
+
+
 
 
     ## dynamic programming
