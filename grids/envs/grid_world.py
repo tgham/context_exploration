@@ -313,36 +313,37 @@ class GridEnv(gym.Env):
                         self.most_overlap.append(np.argmax(n_overlaps))
                     self.path_future_overlaps.append([0 for a in range(self.n_afc)]) ## trivially, the final trial has no future overlaps
 
-                    ## for path A and B of the first trial, calculate the number of future states that overlap with the first row and column
-                    self.p0_x_overlaps = []
-                    self.p0_y_overlaps = []
-                    self.p0_overlaps = np.zeros((self.n_afc,2)) ## i.e. dim=0 is the path, dim=1 is x and y (rows and cols??)
-                    for p, first_path in enumerate(self.path_states[0]):
-                        p0_x_overlap = []
-                        p0_y_overlap = []
 
-                        ## check if opening path is column first or row first
-                        if first_path[0][0]==first_path[1][0]: ## i.e. the x stays the same, 
-                            p0_x = first_path[0][0]
-                            p0_y = first_path[-1][1]
-                        elif first_path[0][1]==first_path[1][1]:
-                            p0_y = first_path[0][1]
-                            p0_x = first_path[-1][0]
+                    ## for each of the first paths, check how many subsequently visited states are on rows or columns covered by these initial paths
+                    self.p0_row_overlaps = []
+                    self.p0_col_overlaps = []
+                    self.p0_overlaps = np.zeros((self.n_afc,2)) ## i.e. dim=0 is the path, dim=1 is rows and cols
+                    self.p0_total_overlaps = np.zeros(self.n_afc)
+                    for p, first_path in enumerate(self.path_states[0]):
+                        p0_row_overlap = []
+                        p0_col_overlap = []
+
+                        ## get the rows and columns that are covered by the first path
+                        p0_rows = [state[0] for state in first_path]
+                        p0_cols = [state[1] for state in first_path]
+                        
+                        ## loop through the future paths and check how many of them cover these rows and columns
                         for next_t in range(1, self.n_trials):
                             for next_path in self.path_states[next_t]:
                                 for state in next_path[1:-1]:
-                                    if state[0]== p0_x:
-                                        p0_x_overlap.append(state)
-                                    if state[1]==p0_y:
-                                        p0_y_overlap.append(state)
-                        total_x_overlap = len(p0_x_overlap)
-                        total_y_overlap = len(p0_y_overlap)
-                        # total_column_overlap = len(set(p0_column_overlap)) ## if you don't want to count states twice
-                        # total_row_overlap = len(set(p0_row_overlap)) ## if you don't want to count states twice
-                        self.p0_x_overlaps.append(total_x_overlap)
-                        self.p0_y_overlaps.append(total_y_overlap)
-                        self.p0_overlaps[p, 0] = total_x_overlap
-                        self.p0_overlaps[p, 1] = total_y_overlap
+                                    if state[0] in p0_rows:
+                                        p0_row_overlap.append(state)
+                                    if state[1] in p0_cols:
+                                        p0_col_overlap.append(state)
+                        # total_row_overlap = len(p0_row_overlap)
+                        # total_col_overlap = len(p0_col_overlap)
+                        total_col_overlap = len(set(p0_col_overlap)) ## if you don't want to count states twice
+                        total_row_overlap = len(set(p0_row_overlap)) ## if you don't want to count states twice
+                        self.p0_row_overlaps.append(total_row_overlap)
+                        self.p0_col_overlaps.append(total_col_overlap)
+                        self.p0_overlaps[p, 0] = total_row_overlap
+                        self.p0_overlaps[p, 1] = total_col_overlap
+                        self.p0_total_overlaps[p] = total_row_overlap + total_col_overlap
 
 
                     ## check if all the paths in the first trial have the same number of overlaps
@@ -814,7 +815,7 @@ class GridEnv(gym.Env):
     def sample_paths_and_SGs(self, max_turns=1):
 
         ### get the sequences of abstract paths
-        path_len = np.random.randint(self.N-3, self.N)
+        path_len = np.random.randint(self.N-4, self.N)
         # path_len = self.N-4
         # path_len = 5
         abstract_sequences = self.generate_abstract_sequences(path_len, max_turns)
