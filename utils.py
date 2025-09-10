@@ -29,6 +29,7 @@ import pandas as pd
 import json
 import os
 from tqdm.auto import tqdm
+import copy
 # from agents import Farmer
 
 
@@ -849,9 +850,10 @@ def save_rotated_data(rotated_data, output_file):
         rotated_data (dict): The rotated data to save
         output_file (str): Path to the output file
     """
-    if 'sequence' in rotated_data:
+    if ('sequence' in rotated_data) or ('trial_info' in rotated_data):
         with open(output_file, 'w') as f:
             json.dump(rotated_data, f, indent=2)
+        print(f"Rotated data saved to {output_file}")
     else:
         with open(output_file, 'wb') as f:
             pickle.dump(rotated_data, f)
@@ -859,18 +861,21 @@ def save_rotated_data(rotated_data, output_file):
 def load_data(path):
     from agents import Farmer ## for later simulation
     fieldnames = [
+        "pid", 
         "trial", "city", "path_chosen", "button_pressed", "reaction_time_ms", 
         "context", "grid", "path_A_expected_cost", "path_B_expected_cost", 
         "path_A_actual_cost", "path_B_actual_cost", "path_A_future_overlap", 
         "path_B_future_overlap", "abstract_sequence_A", "abstract_sequence_B", 
         "dominant_axis_A", "dominant_axis_B", "better_path", "chose_better_path",
-        "pid", "bonusAchieved"
+        "bonusAchieved",
+        'expt_info_filename'
     ]
     df_all = pd.DataFrame(columns=fieldnames)
 
     # Load id mapping (for later simulation)
     with open('expt/assets/trial_sequences/id_mapping.pkl', 'rb') as f:
         id_mapping = pickle.load(f)
+    all_expt_info_ids = []
 
     # Initialize questionnaire dictionary
     questionnaire = {
@@ -899,6 +904,11 @@ def load_data(path):
         ## sanity check: print 0i30zpvykjyk5btzylrbcfjk
         # if pid == '0i30zpvykjyk5btzylrbcfjk':
         #     print('Sanity check for participant 0i30zpvykjyk5btzylrbcfjk')
+
+        ## bonus?
+        # bonus = [trial.get('bonusAchieved', 0) for trial in data if 'bonusAchieved' in trial]
+        # if bonus:
+        #     print('Bonus for participant', pid, ':', bonus[0])
 
 
         # Filter for relevant trials
@@ -936,7 +946,7 @@ def load_data(path):
         # Check for completeness (8 cities)
         n_cities = df_tmp['city'].nunique()
         if n_cities < 8:
-            print('Incomplete dataset for participant:', file)
+            print('Incomplete dataset for participant:', file,'. Found only', n_cities, 'cities.')
             continue
 
         # Skip empty lines
@@ -958,7 +968,42 @@ def load_data(path):
         n_total_trials = len(df_tmp)
         if n_total_trials != 160:
             print('Expected 160 trials, but found:', n_total_trials, 'for participant:', pid)
-            continue ## skip
+            display(df_tmp.tail())
+
+            ## hacky fix for 'e248nl43jdfwg8bisl7sjezc' who is missing the final day of the final city: add four more trials with nans
+            if pid == 'e248nl43jdfwg8bisl7sjezc' and n_total_trials == 156:
+                print('Applying hacky fix for participant', pid, 'by adding four empty trials for the missing final day of the final city')
+                last_city = df_tmp['city'].max()
+                last_trial = df_tmp[df_tmp['city'] == last_city]['trial'].max()
+                last_day = df_tmp[df_tmp['city'] == last_city]['grid'].max()
+                for i in range(1, 5):
+                    new_row = {
+                        'pid': pid,
+                        'trial': i,
+                        'city': 8,
+                        'path_chosen': np.nan,
+                        'button_pressed': np.nan,
+                        'reaction_time_ms': np.nan,
+                        'context': np.nan,
+                        'grid': 5,
+                        'path_A_expected_cost': np.nan,
+                        'path_B_expected_cost': np.nan,
+                        'path_A_actual_cost': np.nan,
+                        'path_B_actual_cost': np.nan,
+                        'path_A_future_overlap': np.nan,
+                        'path_B_future_overlap': np.nan,
+                        'abstract_sequence_A': np.nan,
+                        'abstract_sequence_B': np.nan,
+                        'dominant_axis_A': np.nan,
+                        'dominant_axis_B': np.nan,
+                        'better_path': np.nan,
+                        'chose_better_path': np.nan,
+                        'bonusAchieved': np.nan,
+                        'expt_info_filename': id_mapping.get(pid, '')
+                    }
+                    df_tmp = pd.concat([df_tmp, pd.DataFrame([new_row])], ignore_index=True)
+                print('New total trials after fix:', len(df_tmp))
+            # continue ## skip
 
 
         # rename a few cols, e.g. 'grid' to 'day', 'reaction_time_ms' to 'RT'
@@ -966,8 +1011,26 @@ def load_data(path):
         df_tmp.rename(columns={'grid': 'day'
                                  , 'reaction_time_ms': 'RT',
                                }, inplace=True)
+        
+        ## check for duplicated trial sequences
+        try:
+            id = id_mapping[pid][10:]
+        except KeyError:
+            raise KeyError(f'No id mapping for participant {pid}')
+        if id in all_expt_info_ids:
+            print('Warning: id already in list:', id)
 
+            ## remove
+            # df_all = df_all[df_all['pid'] != pid]
 
+            ## tweak id
+            # id = id + '_dup'
+
+            ## do nothing
+            continue
+        
+        df_all.loc[df_all['pid'] == pid, 'expt_info_filename'] = id
+        all_expt_info_ids.append(id)
         df_all = pd.concat([df_all, df_tmp], ignore_index=True)
 
     # Cleaning
@@ -985,6 +1048,7 @@ def load_data(path):
     # count number of nan trials per participant - i.e. nan in path_chosen
     df_all['path_chosen'] = df_all['path_chosen'].replace('nan', np.nan)
     df_all['path_chosen'] = df_all['path_chosen'].replace('none', np.nan)
+    df_all.loc[df_all['path_chosen'].isna(), 'chose_better_path'] = np.nan
     for p in df_all['pid'].unique():
         n_nan = df_all.loc[df_all['pid'] == p, 'path_chosen'].isna().sum()
         if n_nan > 0:
@@ -1020,8 +1084,10 @@ def load_data(path):
     df_all['CE_chose_orthogonal'] = np.nan
     df_all['first_path'] = np.nan
     df_all['second_path'] = np.nan
+    df_all['third_path'] = np.nan
     df_all['first_path_orthogonal'] = np.nan
     df_all['second_path_orthogonal'] = np.nan
+    df_all['third_path_orthogonal'] = np.nan
     df_all['prev_chose_orthogonal'] = np.nan
     df_all['prev_chose_aligned'] = np.nan
     df_all['prev_chose_vertical'] = np.nan
@@ -1061,6 +1127,8 @@ def load_data(path):
                     df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'first_path_orthogonal'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'chose_orthogonal'].iloc[0]
                     df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'second_path'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'path_chosen'].iloc[1]
                     df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'second_path_orthogonal'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'chose_orthogonal'].iloc[1]
+                    df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'third_path'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'path_chosen'].iloc[2]
+                    df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'third_path_orthogonal'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'chose_orthogonal'].iloc[2]
 
                     ## save previous day choice (only interested in t=1)
                     df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['trial']==1) & (df_all['pid'] == pid), 'prev_day_chose_aligned'] = prev_day_chose_aligned
@@ -1206,17 +1274,33 @@ def load_data(path):
     answers = ["extremely uncharacteristic of me", "somewhat uncharacteristic of me", "uncertain", "somewhat characteristic of me", "extremely characteristic of me"];
     for q in range(1, 18+1):
         df_q['NFC'+str(q)] = df_q['NFC'+str(q)].replace(answers, [1, 2, 3, 4, 5])
-    reverse_items = [3, 4, 5, 7, 8, 9, 12, 16, 17]  # 1-indexed
-    for i in reverse_items:
-        col = f"NFC{i}"
-        df_q[col] = 6 - df_q[col]  # reverse-score
     df_q = df_q.replace('', np.nan)
     df_q = df_q.replace('nan', np.nan)
     df_q = df_q.replace('NaN', np.nan)
     df_q = df_q.replace('none', np.nan)
     df_q = df_q.replace('None', np.nan)
+    reverse_items = [3, 4, 5, 7, 8, 9, 12, 16, 17]  # 1-indexed
+    for i in reverse_items:
+        col = f"NFC{i}"
+        df_q[col] = 6 - df_q[col]  # reverse-score
     df_q['NFC_total'] = df_q[[f"NFC{i}" for i in range(1, 19)]].sum(axis=1)
     return df_all, df_q
+
+
+## check counterbalancing - does each unrotated id have a rotated counterpart?
+def check_counterbalance(df):
+    unrotated_ids = []
+    rotated_ids = []
+    for id in sorted(df['expt_info_filename'].unique()):
+        if id[-7:] == 'rotated':
+            rotated_ids.append(id)
+        else:
+            unrotated_ids.append(id)
+        if id[-7:] != 'rotated':
+            if id+'_rotated' not in df['expt_info_filename'].unique():
+                print('No rotated counterpart for id:', id)
+    print('n unrotated ids:', len(unrotated_ids))
+    print('n rotated ids:', len(rotated_ids))
 
 
 
