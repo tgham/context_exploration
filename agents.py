@@ -486,7 +486,14 @@ class Farmer:
             n_afc = hyperparams['n_afc']
 
         ## determine policy - i.e. greedy vs softmax
-        greedy = hyperparams['greedy'] if 'greedy' in hyperparams else True 
+        if hyperparams is None:
+            hyperparams = {}
+        if 'greedy' in hyperparams:
+            greedy = hyperparams['greedy']
+        else:
+            greedy = True 
+
+
 
         ## initialise model's internal variables
         self.n_afc = n_afc ## can sort this out later
