@@ -360,10 +360,29 @@ class GridEnv(gym.Env):
                     #     self._trial = 0
                     #     init_done = True
 
+                    ## for the relevant context, check how different the first trial's path's future overlaps with the relevant axis are
+                    if self.context == 'row':
+                        relevant_first_overlaps = self.path_future_row_overlaps[0]
+                    elif self.context == 'column':
+                        relevant_first_overlaps = self.path_future_col_overlaps[0]
+                    relevant_overlap_ratio = np.max(relevant_first_overlaps) / np.min(relevant_first_overlaps)
+
+                    ## must be at least twice as many overlaps in one path than the other
+                    # if relevant_overlap_ratio >= 2:
+                    #     self.same_overlaps = False
+                    #     self._trial = 0
+                    #     init_done = True
+
+                    ## or, even more restrictive: the context-aligned path must have more overlaps
+                    if (relevant_overlap_ratio >= 2) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]):
+                        self.same_overlaps = False
+                        self._trial = 0
+                        init_done = True
+
                     ## or just skip this if debugging...
-                    self.same_overlaps = True
-                    init_done = True
-                    self._trial = 0
+                    # self.same_overlaps = True
+                    # init_done = True
+                    # self._trial = 0
 
             t+=1
             if t>500:
@@ -822,9 +841,14 @@ class GridEnv(gym.Env):
     def sample_paths_and_SGs(self, max_turns=1):
 
         ### get the sequences of abstract paths
-        path_len = np.random.randint(self.N-4, self.N)
+        path_len = np.random.randint(self.N-5, self.N)
         # path_len = self.N-4
         # path_len = 5
+        
+        ## force path_len to be odd
+        # if path_len%2==0:
+        #     path_len += 1
+
         abstract_sequences = self.generate_abstract_sequences(path_len, max_turns)
 
         ## sample a pair of abstract sequences
@@ -840,12 +864,12 @@ class GridEnv(gym.Env):
             if self.n_afc == 2:
                 if len(self.starts)==0:
                     
-                    ## sanity check: choose the longest vertical and horizontal paths
-                    if self.context == 'column':
-                        sampled_abstract_sequences = [abstract_sequences[0], abstract_sequences[-1]]
-                    elif self.context == 'row':
-                        sampled_abstract_sequences = [abstract_sequences[-1], abstract_sequences[0]]
-                    diff_axes = True
+                    ## choose the longest vertical and horizontal paths
+                    # if self.context == 'column':
+                    #     sampled_abstract_sequences = [abstract_sequences[0], abstract_sequences[-1]]
+                    # elif self.context == 'row':
+                    #     sampled_abstract_sequences = [abstract_sequences[-1], abstract_sequences[0]]
+                    # diff_axes = True
 
                     ## or, one is a long path, the other is an L path, as long as they have different axes
                     # first_or_last = np.random.choice([0, -1])
@@ -856,12 +880,17 @@ class GridEnv(gym.Env):
                     #     diff_axes = True
 
                     ## or, one of each L, but for consistency let's keep the first one dominant in  the direction of the context
-                    # if self.context == 'column':
-                    #     if ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
-                    #         diff_axes = True
-                    # elif self.context == 'row':
-                    #     if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])):
-                    #         diff_axes = True
+                    if self.context == 'column':
+                        if ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
+                            diff_axes = True
+                    elif self.context == 'row':
+                        if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])):
+                            diff_axes = True
+
+                    ## or, two Ls of the same kind, where each arm is the same length 
+                    # if path_len%2==1:
+                    #     sampled_abstract_sequences = [abstract_sequences[len(abstract_sequences)//2], abstract_sequences[len(abstract_sequences)//2]]
+                    #     diff_axes = True
                 else:
 
                     ## dominant in the same way
