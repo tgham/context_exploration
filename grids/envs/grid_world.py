@@ -374,7 +374,14 @@ class GridEnv(gym.Env):
                     #     init_done = True
 
                     ## or, even more restrictive: the context-aligned path must have more overlaps
-                    if (relevant_overlap_ratio >= 2) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]):
+                    # if (relevant_overlap_ratio >= 1.5) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]):
+                    #     self.same_overlaps = False
+                    #     self._trial = 0
+                    #     init_done = True
+
+                    ## or, very restrictive: the context-aligned path must have more relevant overlaps, BUT the other path must have more irrelevant overlaps?
+                    irrelevant_first_overlaps = self.path_future_col_overlaps[0] if self.context=='row' else self.path_future_row_overlaps[0]
+                    if (relevant_overlap_ratio >= 1.2) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]) & (irrelevant_first_overlaps[1]<irrelevant_first_overlaps[0]):
                         self.same_overlaps = False
                         self._trial = 0
                         init_done = True
