@@ -363,9 +363,12 @@ class GridEnv(gym.Env):
                     ## for the relevant context, check how different the first trial's path's future overlaps with the relevant axis are
                     if self.context == 'row':
                         relevant_first_overlaps = self.path_future_row_overlaps[0]
+                        irrelevant_first_overlaps = self.path_future_col_overlaps[0]
                     elif self.context == 'column':
                         relevant_first_overlaps = self.path_future_col_overlaps[0]
+                        irrelevant_first_overlaps = self.path_future_row_overlaps[0]
                     relevant_overlap_ratio = np.max(relevant_first_overlaps) / np.min(relevant_first_overlaps)
+                    irrelevant_overlap_ratio = np.max(irrelevant_first_overlaps) / np.min(irrelevant_first_overlaps)
 
                     ## must be at least twice as many overlaps in one path than the other
                     # if relevant_overlap_ratio >= 2:
@@ -374,17 +377,25 @@ class GridEnv(gym.Env):
                     #     init_done = True
 
                     ## or, even more restrictive: the context-aligned path must have more overlaps
-                    # if (relevant_overlap_ratio >= 1.5) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]):
+                    # if (relevant_overlap_ratio >= 2) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]):
                     #     self.same_overlaps = False
                     #     self._trial = 0
                     #     init_done = True
 
                     ## or, very restrictive: the context-aligned path must have more relevant overlaps, BUT the other path must have more irrelevant overlaps?
-                    irrelevant_first_overlaps = self.path_future_col_overlaps[0] if self.context=='row' else self.path_future_row_overlaps[0]
-                    if (relevant_overlap_ratio >= 2) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]) & (irrelevant_first_overlaps[1]<irrelevant_first_overlaps[0]):
+                    # if (relevant_overlap_ratio >= 2) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]) & (irrelevant_first_overlaps[1]<irrelevant_first_overlaps[0]):
+                    if (relevant_overlap_ratio >= 2) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]) & (irrelevant_overlap_ratio>=2):
                         self.same_overlaps = False
                         self._trial = 0
                         init_done = True
+
+                    ## or, very very restrictive: as above, but also require first path to have more overlaps in total...
+                    # total_first_overlaps = self.path_future_row_and_col_overlaps[0]
+                    # if (relevant_overlap_ratio >= 2) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]) & (irrelevant_overlap_ratio>=2) & (total_first_overlaps[0]>total_first_overlaps[1]):
+                    #     self.same_overlaps = False
+                    #     self._trial = 0
+                    #     init_done = True
+
 
                     ## or just skip this if debugging...
                     # self.same_overlaps = True
@@ -847,17 +858,22 @@ class GridEnv(gym.Env):
     ## sample paths and SGs for AFC expt
     def sample_paths_and_SGs(self, max_turns=1):
 
-        ### get the sequences of abstract paths
-        path_len = np.random.randint(self.N-5, self.N)
-        # path_len = self.N-4
-        # path_len = 6
+        ### get the sequences of abstract paths 
+
+        ## set path len (should be even on first trial if we want to force L shapes)
+        min_path_len = self.N-3
+        if len(self.starts)==0:
+            path_len = np.random.choice([i for i in range(min_path_len, self.N) if i%2==0])
+        else:
+            path_len = np.random.randint(min_path_len, self.N)
 
         abstract_sequences = self.generate_abstract_sequences(path_len, max_turns)
 
         ## sample a pair of abstract sequences
         diff_axes = False
         while not diff_axes:
-            seq_idxs = np.random.choice(len(abstract_sequences), size=self.n_afc, replace=False)
+            # seq_idxs = np.random.choice(len(abstract_sequences), size=self.n_afc, replace=False) 
+            seq_idxs = np.random.randint(1, len(abstract_sequences)-1, size=self.n_afc) ## ensure there is 1 turn, i.e. no straight paths
             sampled_abstract_sequences = [abstract_sequences[i] for i in seq_idxs]
 
             ## ensure that one has more horizontal moves than its vertical moves, and the other has more vertical moves than its horizontal moves
@@ -883,17 +899,14 @@ class GridEnv(gym.Env):
                     #     diff_axes = True
 
                     ## or, one of each L, but for consistency let's keep the first one dominant in  the direction of the context
-                    # if self.context == 'column':
-                    #     if ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
-                    #         diff_axes = True
-                    # elif self.context == 'row':
-                    #     if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])):
-                    #         diff_axes = True
+                    if self.context == 'column':
+                        if ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
+                            diff_axes = True
+                    elif self.context == 'row':
+                        if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])):
+                            diff_axes = True
 
                     ## or, two Ls of the same kind, where each arm is the same length 
-                    ## force path_len to be even
-                    if path_len%2==1:
-                        path_len+=1
                     sampled_abstract_sequences = [abstract_sequences[len(abstract_sequences)//2], abstract_sequences[len(abstract_sequences)//2]]
                     diff_axes = True
                 else:
