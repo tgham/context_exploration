@@ -384,7 +384,7 @@ class GridEnv(gym.Env):
 
                     ## or, very restrictive: the context-aligned path must have more relevant overlaps, BUT the other path must have more irrelevant overlaps?
                     # if (relevant_overlap_ratio >= 2) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]) & (irrelevant_first_overlaps[1]<irrelevant_first_overlaps[0]):
-                    if (relevant_overlap_ratio >= 2) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]) & (irrelevant_overlap_ratio>=2):
+                    if (relevant_overlap_ratio >= 2) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]) & (irrelevant_overlap_ratio>=2) & (irrelevant_first_overlaps[1]<irrelevant_first_overlaps[0]):
                         self.same_overlaps = False
                         self._trial = 0
                         init_done = True
