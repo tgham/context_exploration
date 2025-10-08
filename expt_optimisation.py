@@ -75,7 +75,11 @@ def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params,
                     'abstract_sequence_A': [env.sampled_abstract_sequences[e][0]],
                     'abstract_sequence_B': [env.sampled_abstract_sequences[e][1]],
                     'dominant_axis_A': env.dominant_axis_A[e],
-                    'dominant_axis_B': env.dominant_axis_B[e]
+                    'dominant_axis_B': env.dominant_axis_B[e],
+                    'path_A_future_row_overlap': env.path_future_row_overlaps[e][0], 'path_B_future_row_overlap': env.path_future_row_overlaps[e][1],
+                    'path_A_future_col_overlap': env.path_future_col_overlaps[e][0], 'path_B_future_col_overlap': env.path_future_col_overlaps[e][1],
+                    'path_A_future_row_and_col_overlap': env.path_future_row_and_col_overlaps[e][0], 'path_B_future_row_and_col_overlap': env.path_future_row_and_col_overlaps[e][1],
+
                 }
 
                 # add extra row depending on n_afc
@@ -91,7 +95,9 @@ def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params,
                         'path_C_future_overlap': env.path_future_overlaps[e][2],
                         'abstract_sequence_C': [env.sampled_abstract_sequences[e][2]],
                         'dominant_axis_C': env.dominant_axis_C[e],
-                        'better_path': ['a','b','c'][np.argmax(env.path_actual_costs[e])]
+                        'path_C_future_row_overlap': env.path_future_row_overlaps[e][2], 'path_C_future_col_overlap': env.path_future_col_overlaps[e][2],
+                        'path_C_future_row_and_col_overlap': env.path_future_row_and_col_overlaps[e][2],
+                        'better_path': ['a','b','c'][np.argmax(env.path_actual_costs[e])],
                     }
                     row.update(row_c)
                 df_expt = pd.concat([df_expt, pd.DataFrame([row])], ignore_index=True)
@@ -177,13 +183,20 @@ df_expt = pd.DataFrame(columns=['participant', 'city', 'context', 'grid','trial'
                                 'path_A_actual_cost', 'path_B_actual_cost',
                                 'path_A_future_overlap', 'path_B_future_overlap',
                                 'abstract_sequence_A', 'abstract_sequence_B',
-                                'dominant_axis_A','dominant_axis_B'
+                                'dominant_axis_A','dominant_axis_B',
+                                'path_A_future_row_overlap', 'path_B_future_row_overlap',
+                                'path_A_future_col_overlap', 'path_B_future_col_overlap',
+                                'path_A_future_row_and_col_overlap', 'path_B_future_row_and_col_overlap'
                                 ])
 if n_afc==3:
     df_expt = df_expt.join(pd.DataFrame(columns=['start_C', 'goal_C', 'path_C',
                         'path_C_expected_cost', 'path_C_actual_cost', 
                         'path_C_future_overlap', 'abstract_sequence_C', 
-                        'dominant_axis_C']))
+                        'dominant_axis_C',
+                        'path_C_future_row_overlap', 'path_C_future_col_overlap',
+                        'path_C_future_row_and_col_overlap'
+                        ]))
+    
     
 ## init sim results
 all_sim_out = {
@@ -207,6 +220,7 @@ all_sim_out = {
     }
 parallel = True
 n_cores = 10
+create=True
 
 ## init agent and expt
 agent_params = [
@@ -228,95 +242,96 @@ hyperparams = {
 agents = ['BAMCP', 'CE']   
 
 ## generate dataset for each participant
-if parallel:
-    if __name__ == '__main__':
-        n_cores = min(mp.cpu_count(), n_sim_participants)
-        with mp.Pool(n_cores) as pool:
-            results = list(tqdm(pool.starmap(
-                generate_ppt_sequence,
-                [(p, n_cities, n_days, n_trials, expt_info.copy(), beta_params, metric, n_afc, N, hyperparams)
-                for p in range(1, n_sim_participants + 1)]
-            ), total=n_sim_participants))
+if create:
+    if parallel:
+        if __name__ == '__main__':
+            n_cores = min(mp.cpu_count(), n_sim_participants)
+            with mp.Pool(n_cores) as pool:
+                results = list(tqdm(pool.starmap(
+                    generate_ppt_sequence,
+                    [(p, n_cities, n_days, n_trials, expt_info.copy(), beta_params, metric, n_afc, N, hyperparams)
+                    for p in range(1, n_sim_participants + 1)]
+                ), total=n_sim_participants))
 
-        # combine all participant-level DataFrames
-        df_expt = pd.concat(results, ignore_index=True)
+            # combine all participant-level DataFrames
+            df_expt = pd.concat(results, ignore_index=True)
 
-        # save combined CSV
-        df_expt.to_csv(
-            f'useful_saves/expt_optimisation/{n_afc}AFC_{N}x{N}_env_{beta_params["alpha_row"]}-{beta_params["beta_row"]}-'
-            f'{beta_params["alpha_col"]}-{beta_params["beta_col"]}_beta_{n_sim_participants}_cities_{n_cities}_days_'
-            f'{n_days}_trials_{n_trials}_sims_expt_info.csv',
-            index=False
-        )
+            # save combined CSV
+            df_expt.to_csv(
+                f'useful_saves/expt_optimisation/{n_afc}AFC_{N}x{N}_env_{beta_params["alpha_row"]}-{beta_params["beta_row"]}-'
+                f'{beta_params["alpha_col"]}-{beta_params["beta_col"]}_beta_{n_sim_participants}_cities_{n_cities}_days_'
+                f'{n_days}_trials_{n_trials}_sims_expt_info.csv',
+                index=False
+            )
 
-elif not parallel:
-    ppt_envs = {}
-    for p in tqdm(range(1,n_sim_participants+1)):
+    elif not parallel:
+        ppt_envs = {}
+        for p in tqdm(range(1,n_sim_participants+1)):
 
-        out = generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info.copy(), beta_params, metric, n_afc, N, hyperparams)
-        df_expt = pd.concat([df_expt, out], ignore_index=True)
-        
-        # env_objects = {}
+            out = generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info.copy(), beta_params, metric, n_afc, N, hyperparams)
+            df_expt = pd.concat([df_expt, out], ignore_index=True)
+            
+            # env_objects = {}
 
-        # ## set contexts - i.e. half of the cities are row contexts, half are column contexts
-        # contexts = ['row']*int(n_cities/2) + ['column']*int(n_cities/2)
-        # np.random.shuffle(contexts)
+            # ## set contexts - i.e. half of the cities are row contexts, half are column contexts
+            # contexts = ['row']*int(n_cities/2) + ['column']*int(n_cities/2)
+            # np.random.shuffle(contexts)
 
 
-        # ## loop through cities, where each city is a new context
-        # for c in range(n_cities):
-        #     expt_info['context'] = contexts[c]
+            # ## loop through cities, where each city is a new context
+            # for c in range(n_cities):
+            #     expt_info['context'] = contexts[c]
 
-        #     ## create some envs
-        #     envs = [make_env(N, n_trials, expt_info, beta_params, metric) for i in range(n_days)]
+            #     ## create some envs
+            #     envs = [make_env(N, n_trials, expt_info, beta_params, metric) for i in range(n_days)]
 
-        #     ## save expt info
-        #     for i, env in enumerate(envs):
-        #         for e in range(n_trials):
-        #             if n_afc==2:
-        #                 df_expt = pd.concat([df_expt, pd.DataFrame({'participant': p, 'city': int(c+1), 'context': expt_info['context'], 'grid': int(i+1), 'trial': int(e+1), 'start_A': [env.path_states[e][0][0]], 'start_B': [env.path_states[e][1][0]], 'goal_A': [env.path_states[e][0][-1]], 'goal_B': [env.path_states[e][1][-1]], 'path_A': [env.path_states[e][0]], 'path_B': [env.path_states[e][1]],
-        #                                 'path_A_actual_cost': [env.path_actual_costs[e][0]], 'path_B_actual_cost': [env.path_actual_costs[e][1]],
-        #                                 'path_A_expected_cost': env.path_expected_costs[e][0], 'path_B_expected_cost': env.path_expected_costs[e][1],
-        #                                 'path_A_future_overlap': env.path_future_overlaps[e][0], 'path_B_future_overlap': env.path_future_overlaps[e][1],
-        #                                 'abstract_sequence_A': [env.sampled_abstract_sequences[e][0]], 'abstract_sequence_B': [env.sampled_abstract_sequences[e][1]],
-        #                                 'better_path': ['a','b'][np.argmax(env.path_actual_costs[e])],
-        #                                 'dominant_axis_A': env.dominant_axis_A[e],
-        #                                 'dominant_axis_B': env.dominant_axis_B[e]
-        #                                 })], ignore_index=True)
-        #             elif n_afc==3:
-        #                 df_expt = pd.concat([df_expt, pd.DataFrame({'participant': p, 'city': int(c+1), 'context': expt_info['context'], 'grid': int(i+1), 'trial': int(e+1), 
-        #                                 'start_A': [env.path_states[e][0][0]], 'goal_A': [env.path_states[e][0][-1]], 'path_A': [env.path_states[e][0]],
-        #                                 'path_A_expected_cost': env.path_expected_costs[e][0], 'path_A_actual_cost': env.path_actual_costs[e][0],
-        #                                 'path_A_future_overlap': env.path_future_overlaps[e][0], 'abstract_sequence_A': [env.sampled_abstract_sequences[e][0]],
-        #                                 'dominant_axis_A': env.dominant_axis_A[e],
-        #                                 'start_B': [env.path_states[e][1][0]], 'goal_B': [env.path_states[e][1][-1]], 'path_B': [env.path_states[e][1]],
-        #                                 'path_B_expected_cost': env.path_expected_costs[e][1], 'path_B_actual_cost': env.path_actual_costs[e][1],
-        #                                 'path_B_future_overlap': env.path_future_overlaps[e][1], 'abstract_sequence_B': [env.sampled_abstract_sequences[e][1]],
-        #                                 'dominant_axis_B': env.dominant_axis_B[e],
-        #                                 'start_C': [env.path_states[e][2][0]], 'goal_C': [env.path_states[e][2][-1]], 'path_C': [env.path_states[e][2]],
-        #                                 'path_C_expected_cost': env.path_expected_costs[e][2], 'path_C_actual_cost': env.path_actual_costs[e][2],
-        #                                 'path_C_future_overlap': env.path_future_overlaps[e][2], 'abstract_sequence_C': [env.sampled_abstract_sequences[e][2]],
-        #                                 'better_path': ['a','b','c'][np.argmax(env.path_actual_costs[e])],
-        #                                 })], ignore_index=True)
+            #     ## save expt info
+            #     for i, env in enumerate(envs):
+            #         for e in range(n_trials):
+            #             if n_afc==2:
+            #                 df_expt = pd.concat([df_expt, pd.DataFrame({'participant': p, 'city': int(c+1), 'context': expt_info['context'], 'grid': int(i+1), 'trial': int(e+1), 'start_A': [env.path_states[e][0][0]], 'start_B': [env.path_states[e][1][0]], 'goal_A': [env.path_states[e][0][-1]], 'goal_B': [env.path_states[e][1][-1]], 'path_A': [env.path_states[e][0]], 'path_B': [env.path_states[e][1]],
+            #                                 'path_A_actual_cost': [env.path_actual_costs[e][0]], 'path_B_actual_cost': [env.path_actual_costs[e][1]],
+            #                                 'path_A_expected_cost': env.path_expected_costs[e][0], 'path_B_expected_cost': env.path_expected_costs[e][1],
+            #                                 'path_A_future_overlap': env.path_future_overlaps[e][0], 'path_B_future_overlap': env.path_future_overlaps[e][1],
+            #                                 'abstract_sequence_A': [env.sampled_abstract_sequences[e][0]], 'abstract_sequence_B': [env.sampled_abstract_sequences[e][1]],
+            #                                 'better_path': ['a','b'][np.argmax(env.path_actual_costs[e])],
+            #                                 'dominant_axis_A': env.dominant_axis_A[e],
+            #                                 'dominant_axis_B': env.dominant_axis_B[e]
+            #                                 })], ignore_index=True)
+            #             elif n_afc==3:
+            #                 df_expt = pd.concat([df_expt, pd.DataFrame({'participant': p, 'city': int(c+1), 'context': expt_info['context'], 'grid': int(i+1), 'trial': int(e+1), 
+            #                                 'start_A': [env.path_states[e][0][0]], 'goal_A': [env.path_states[e][0][-1]], 'path_A': [env.path_states[e][0]],
+            #                                 'path_A_expected_cost': env.path_expected_costs[e][0], 'path_A_actual_cost': env.path_actual_costs[e][0],
+            #                                 'path_A_future_overlap': env.path_future_overlaps[e][0], 'abstract_sequence_A': [env.sampled_abstract_sequences[e][0]],
+            #                                 'dominant_axis_A': env.dominant_axis_A[e],
+            #                                 'start_B': [env.path_states[e][1][0]], 'goal_B': [env.path_states[e][1][-1]], 'path_B': [env.path_states[e][1]],
+            #                                 'path_B_expected_cost': env.path_expected_costs[e][1], 'path_B_actual_cost': env.path_actual_costs[e][1],
+            #                                 'path_B_future_overlap': env.path_future_overlaps[e][1], 'abstract_sequence_B': [env.sampled_abstract_sequences[e][1]],
+            #                                 'dominant_axis_B': env.dominant_axis_B[e],
+            #                                 'start_C': [env.path_states[e][2][0]], 'goal_C': [env.path_states[e][2][-1]], 'path_C': [env.path_states[e][2]],
+            #                                 'path_C_expected_cost': env.path_expected_costs[e][2], 'path_C_actual_cost': env.path_actual_costs[e][2],
+            #                                 'path_C_future_overlap': env.path_future_overlaps[e][2], 'abstract_sequence_C': [env.sampled_abstract_sequences[e][2]],
+            #                                 'better_path': ['a','b','c'][np.argmax(env.path_actual_costs[e])],
+            #                                 })], ignore_index=True)
 
-        #         env_key = 'city_'+str(c+1)+'_grid_'+str(i+1)
+            #         env_key = 'city_'+str(c+1)+'_grid_'+str(i+1)
 
-        #         ## just for safe-keeping, let's save the whole env too
-        #         env_objects[env_key+'_env_object'] = [env]
-        #         env_objects['participant'] = p
+            #         ## just for safe-keeping, let's save the whole env too
+            #         env_objects[env_key+'_env_object'] = [env]
+            #         env_objects['participant'] = p
 
-        
-        # ## save for that ppt
-        # ppt_envs[p] = env_objects
-        # with open('useful_saves/expt_optimisation/simulated_envs/ppt_'+str(p)+'_envs.pkl', 'wb') as f:
-        #     pickle.dump(env_objects, f)
+            
+            # ## save for that ppt
+            # ppt_envs[p] = env_objects
+            # with open('useful_saves/expt_optimisation/simulated_envs/ppt_'+str(p)+'_envs.pkl', 'wb') as f:
+            #     pickle.dump(env_objects, f)
 
-    ## save expt info
-    df_expt.to_csv('useful_saves/expt_optimisation/{}AFC_{}x{}_env_{}-{}-{}-{}_beta_{}_sim_ppts_{}_cities_{}_days_{}_trials_{}_sims_expt_info.csv'.format(n_afc,N,N,
-                                                                                        beta_params['alpha_row'], beta_params['beta_row'], beta_params['alpha_col'], beta_params['beta_col'],
-                                                                                        n_sim_participants, 
-                                                                                        n_cities, n_days, n_trials,
-                                                                                            hyperparams['n_sims']))
+        ## save expt info
+        df_expt.to_csv('useful_saves/expt_optimisation/{}AFC_{}x{}_env_{}-{}-{}-{}_beta_{}_sim_ppts_{}_cities_{}_days_{}_trials_{}_sims_expt_info.csv'.format(n_afc,N,N,
+                                                                                            beta_params['alpha_row'], beta_params['beta_row'], beta_params['alpha_col'], beta_params['beta_col'],
+                                                                                            n_sim_participants, 
+                                                                                            n_cities, n_days, n_trials,
+                                                                                                hyperparams['n_sims']))
      
 
 ## loop through ppts
