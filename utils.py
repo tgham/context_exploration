@@ -999,7 +999,8 @@ def load_data(path):
                         'better_path': np.nan,
                         'chose_better_path': np.nan,
                         'bonusAchieved': np.nan,
-                        'expt_info_filename': id_mapping.get(pid, '')
+                        # 'expt_info_filename': id_mapping.get(pid, '')
+                        'expt_info_filename': np.nan,
                     }
                     df_tmp = pd.concat([df_tmp, pd.DataFrame([new_row])], ignore_index=True)
                 print('New total trials after fix:', len(df_tmp))
@@ -1029,7 +1030,10 @@ def load_data(path):
             ## do nothing
             continue
         
-        df_all.loc[df_all['pid'] == pid, 'expt_info_filename'] = id
+        try:
+            df_tmp.loc[df_tmp['pid'] == pid, 'expt_info_filename'] = str(int(id))
+        except:
+            df_tmp.loc[df_tmp['pid'] == pid, 'expt_info_filename'] = str(id)
         all_expt_info_ids.append(id)
         df_all = pd.concat([df_all, df_tmp], ignore_index=True)
 
@@ -1051,8 +1055,8 @@ def load_data(path):
     df_all.loc[df_all['path_chosen'].isna(), 'chose_better_path'] = np.nan
     for p in df_all['pid'].unique():
         n_nan = df_all.loc[df_all['pid'] == p, 'path_chosen'].isna().sum()
-        if n_nan > 0:
-            print('n_nan for participant', p, ':', n_nan)
+        # if n_nan > 0:
+        #     print('n_nan for participant', p, ':', n_nan)
 
     # Label path IDs and aligned path info
     df_all['path_chosen'] = df_all['path_chosen'].map({'blue': 'a', 'green': 'b'})
@@ -1291,7 +1295,10 @@ def load_data(path):
 def check_counterbalance(df):
     unrotated_ids = []
     rotated_ids = []
-    for id in sorted(df['expt_info_filename'].unique()):
+    # for id in sorted(df['expt_info_filename'].unique()):
+    for id in df['expt_info_filename'].unique():
+        if isinstance(id, float):
+            id = str(int(id))
         if id[-7:] == 'rotated':
             rotated_ids.append(id)
         else:
