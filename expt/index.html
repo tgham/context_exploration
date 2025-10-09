@@ -697,17 +697,18 @@
             font-size: 18px;
             font-weight: bold;
             z-index: 50;
-            /* pointer-events: none; */
-            /* text-shadow: 0 1px 2px rgba(255,255,255,0.6); */
             line-height: 1;
             user-select: none;
+            /* Center content inside the label boxes */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
         }
         .row-label {
-            /* removed hardcoded left: use JS to place next to leftmost cell */
             transform: translateY(-50%);
         }
         .col-label {
-            /* removed hardcoded bottom: use JS to place below bottom row cell */
             transform: translateX(-50%);
             white-space: nowrap;
         }
@@ -779,8 +780,8 @@
                 colLefts.sort((a,b)=>a-b);
 
                 // Increase spacing of row labels from the leftmost cells
-                const ROW_LABEL_GAP = 20;
-                const COL_LABEL_GAP = 6;
+                const ROW_LABEL_GAP = 30;
+                const COL_LABEL_GAP = 9;
 
                 // Row labels (1..N) at centers of leftmost cells per row
                 rowTops.forEach((rowTop, rIdx) => {
@@ -794,6 +795,8 @@
                     lbl.textContent = String(rIdx + 1);
                     lbl.style.top = y + 'px';
                     lbl.style.left = x + 'px';
+                    // Center number within the left gap
+                    lbl.style.width = ROW_LABEL_GAP + 'px';
                     grid.appendChild(lbl);
                 });
 
@@ -803,12 +806,14 @@
                     if (!colCells.length) return;
                     const bottommost = colCells.reduce((a,b)=> (a.top > b.top ? a : b));
                     const x = bottommost.left + bottommost.w / 2;
-                    const y = bottommost.top + bottommost.h + COL_LABEL_GAP;
+                    const y = bottommost.top + bottommost.h + COL_LABEL_GAP; // keep existing spacing
                     const lbl = document.createElement('div');
                     lbl.className = 'col-label';
                     lbl.textContent = toLetters(cIdx);
                     lbl.style.left = x + 'px';
                     lbl.style.top = y + 'px';
+                    // Optional: center letter within a fixed height box
+                    lbl.style.height = COL_LABEL_GAP + 'px';
                     grid.appendChild(lbl);
                 });
             }
