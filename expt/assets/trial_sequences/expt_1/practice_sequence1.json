@@ -1,0 +1,298 @@
+{
+    "trial_info": [
+        {
+            "city": 1,
+            "context": "column",
+            "grid": 1,
+            "trial": 1,
+            "start_A": [
+                2,
+                0
+            ],
+            "start_B": [
+                0,
+                6
+            ],
+            "goal_A": [
+                2,
+                7
+            ],
+            "goal_B": [
+                7,
+                6
+            ],
+            "path_A": [
+                [
+                    2,
+                    0
+                ],
+                [
+                    2,
+                    1
+                ],
+                [
+                    2,
+                    2
+                ],
+                [
+                    2,
+                    3
+                ],
+                [
+                    2,
+                    4
+                ],
+                [
+                    2,
+                    5
+                ],
+                [
+                    2,
+                    6
+                ],
+                [
+                    2,
+                    7
+                ]
+            ],
+            "path_B": [
+                [
+                    0,
+                    6
+                ],
+                [
+                    1,
+                    6
+                ],
+                [
+                    2,
+                    6
+                ],
+                [
+                    3,
+                    6
+                ],
+                [
+                    4,
+                    6
+                ],
+                [
+                    5,
+                    6
+                ],
+                [
+                    6,
+                    6
+                ],
+                [
+                    7,
+                    6
+                ]
+            ],
+            "path_A_expected_cost": -4.215626468938931,
+            "path_B_expected_cost": -0.28223009044345027,
+            "path_A_actual_cost": -2,
+            "path_B_actual_cost": -1,
+            "path_A_future_overlap": 1,
+            "path_B_future_overlap": 1,
+            "abstract_sequence_A": [
+                0,
+                7
+            ],
+            "abstract_sequence_B": [
+                7,
+                0
+            ],
+            "better_path": "b",
+            "dominant_axis_A": "horizontal",
+            "dominant_axis_B": "vertical"
+        },
+        {
+            "city": 1,
+            "context": "column",
+            "grid": 1,
+            "trial": 2,
+            "start_A": [
+                1,
+                4
+            ],
+            "start_B": [
+                4,
+                3
+            ],
+            "goal_A": [
+                7,
+                4
+            ],
+            "goal_B": [
+                6,
+                7
+            ],
+            "path_A": [
+                [
+                    1,
+                    4
+                ],
+                [
+                    2,
+                    4
+                ],
+                [
+                    3,
+                    4
+                ],
+                [
+                    4,
+                    4
+                ],
+                [
+                    5,
+                    4
+                ],
+                [
+                    6,
+                    4
+                ],
+                [
+                    7,
+                    4
+                ]
+            ],
+            "path_B": [
+                [
+                    4,
+                    3
+                ],
+                [
+                    5,
+                    3
+                ],
+                [
+                    6,
+                    3
+                ],
+                [
+                    6,
+                    4
+                ],
+                [
+                    6,
+                    5
+                ],
+                [
+                    6,
+                    6
+                ],
+                [
+                    6,
+                    7
+                ]
+            ],
+            "path_A_expected_cost": -3.7257055843604583,
+            "path_B_expected_cost": -4.579911711228364,
+            "path_A_actual_cost": -2,
+            "path_B_actual_cost": -4,
+            "path_A_future_overlap": 0,
+            "path_B_future_overlap": 0,
+            "abstract_sequence_A": [
+                6,
+                0
+            ],
+            "abstract_sequence_B": [
+                2,
+                4
+            ],
+            "better_path": "a",
+            "dominant_axis_A": "vertical",
+            "dominant_axis_B": "horizontal"
+        }
+    ],
+    "env_costs": {
+        "city_1_grid_1": [
+            [
+                -1,
+                0,
+                -1,
+                -1,
+                -1,
+                0,
+                -1,
+                -1
+            ],
+            [
+                -1,
+                0,
+                -1,
+                -1,
+                0,
+                -1,
+                0,
+                -1
+            ],
+            [
+                0,
+                0,
+                0,
+                -1,
+                0,
+                0,
+                0,
+                -1
+            ],
+            [
+                -1,
+                0,
+                -1,
+                -1,
+                -1,
+                0,
+                0,
+                -1
+            ],
+            [
+                0,
+                0,
+                -1,
+                -1,
+                -1,
+                0,
+                0,
+                -1
+            ],
+            [
+                -1,
+                0,
+                -1,
+                -1,
+                0,
+                0,
+                0,
+                -1
+            ],
+            [
+                -1,
+                0,
+                -1,
+                -1,
+                0,
+                0,
+                0,
+                -1
+            ],
+            [
+                -1,
+                0,
+                -1,
+                -1,
+                0,
+                0,
+                0,
+                -1
+            ]
+        ],
+        "grid_size": 8,
+        "n_trials": 2,
+        "n_grids": 1,
+        "n_cities": 1
+    }
+}
