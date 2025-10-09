@@ -383,15 +383,14 @@ class GridEnv(gym.Env):
                     #     init_done = True
 
                     ## or, very restrictive: the context-aligned path must have more relevant overlaps, BUT the other path must have more irrelevant overlaps?
-                    # if (relevant_overlap_ratio >= 2) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]) & (irrelevant_first_overlaps[1]<irrelevant_first_overlaps[0]):
-                    if (relevant_overlap_ratio >= 2) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]) & (irrelevant_overlap_ratio>=2):
+                    if (relevant_overlap_ratio >= 2) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]) & (irrelevant_overlap_ratio>=2) & (irrelevant_first_overlaps[1]<irrelevant_first_overlaps[0]):
                         self.same_overlaps = False
                         self._trial = 0
                         init_done = True
 
                     ## or, very very restrictive: as above, but also require first path to have more overlaps in total...
                     # total_first_overlaps = self.path_future_row_and_col_overlaps[0]
-                    # if (relevant_overlap_ratio >= 2) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]) & (irrelevant_overlap_ratio>=2) & (total_first_overlaps[0]>total_first_overlaps[1]):
+                    # if (relevant_overlap_ratio >= 2) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]) & (irrelevant_overlap_ratio>=2) & (irrelevant_first_overlaps[1]<irrelevant_first_overlaps[0]) & (total_first_overlaps[0]>total_first_overlaps[1]):
                     #     self.same_overlaps = False
                     #     self._trial = 0
                     #     init_done = True
@@ -861,11 +860,14 @@ class GridEnv(gym.Env):
         ### get the sequences of abstract paths 
 
         ## set path len (should be even on first trial if we want to force L shapes)
-        min_path_len = self.N-3
-        if len(self.starts)==0:
-            path_len = np.random.choice([i for i in range(min_path_len, self.N) if i%2==0])
-        else:
-            path_len = np.random.randint(min_path_len, self.N)
+        # min_path_len = self.N-3
+        # if len(self.starts)==0:
+        #     path_len = np.random.choice([i for i in range(min_path_len, self.N) if i%2==0])
+        # else:
+        #     path_len = np.random.randint(min_path_len, self.N)
+
+        ## or, just set to N
+        path_len = self.N
 
         abstract_sequences = self.generate_abstract_sequences(path_len, max_turns)
 
