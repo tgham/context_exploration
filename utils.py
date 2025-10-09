@@ -675,6 +675,114 @@ def get_next_state(current, direction, N):
     )
     return next_state
 
+## func for generating a single participant
+def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params, metric, n_afc, N, save_path=None):
+
+    ## if real ppt sequences, ensure even split of contexts, otherwise if we're generating practice sequences, these are pre-determined
+    if n_cities > 1:
+        contexts = ['row']*int(n_cities/2) + ['column']*int(n_cities/2)
+        np.random.shuffle(contexts)
+    else:
+        contexts = [expt_info['context']]*n_cities
+    env_objects = {}
+    env_costs = {}
+    df_expt = pd.DataFrame()
+
+    for c in range(n_cities):
+        expt_info['context'] = contexts[c]
+
+        ## generate envs for this city
+        envs = [make_env(N, n_trials, expt_info, beta_params, metric) for _ in range(n_days)]
+
+        ## save expt info
+        for i, env in enumerate(envs):
+            for e in range(n_trials):
+                row = {
+                    'participant': p,
+                    'city': int(c+1),
+                    'context': expt_info['context'],
+                    'grid': int(i+1),
+                    'trial': int(e+1),
+                    'start_A': env.path_states[e][0][0],
+                    'start_B': env.path_states[e][1][0],
+                    'goal_A': env.path_states[e][0][-1],
+                    'goal_B': env.path_states[e][1][-1],
+                    'path_A': env.path_states[e][0],
+                    'path_B': env.path_states[e][1],
+                    'path_A_actual_cost': env.path_actual_costs[e][0],
+                    'path_B_actual_cost': env.path_actual_costs[e][1],
+                    'path_A_expected_cost': env.path_expected_costs[e][0],
+                    'path_B_expected_cost': env.path_expected_costs[e][1],
+                    'path_A_future_overlap': env.path_future_overlaps[e][0],
+                    'path_B_future_overlap': env.path_future_overlaps[e][1],
+                    'abstract_sequence_A': [env.sampled_abstract_sequences[e][0]],
+                    'abstract_sequence_B': [env.sampled_abstract_sequences[e][1]],
+                    'dominant_axis_A': env.dominant_axis_A[e],
+                    'dominant_axis_B': env.dominant_axis_B[e],
+                    'path_A_future_row_overlap': env.path_future_row_overlaps[e][0], 'path_B_future_row_overlap': env.path_future_row_overlaps[e][1],
+                    'path_A_future_col_overlap': env.path_future_col_overlaps[e][0], 'path_B_future_col_overlap': env.path_future_col_overlaps[e][1],
+                    'path_A_future_row_and_col_overlap': env.path_future_row_and_col_overlaps[e][0], 'path_B_future_row_and_col_overlap': env.path_future_row_and_col_overlaps[e][1],
+
+                }
+
+                # add extra row depending on n_afc
+                if n_afc == 2:
+                    row['better_path'] = ['a','b'][np.argmax(env.path_actual_costs[e])]
+                elif n_afc == 3:
+                    row_c = {
+                        'start_C': env.path_states[e][2][0],
+                        'goal_C': env.path_states[e][2][-1],
+                        'path_C': env.path_states[e][2],
+                        'path_C_actual_cost': env.path_actual_costs[e][2],
+                        'path_C_expected_cost': env.path_expected_costs[e][2],
+                        'path_C_future_overlap': env.path_future_overlaps[e][2],
+                        'abstract_sequence_C': [env.sampled_abstract_sequences[e][2]],
+                        'dominant_axis_C': env.dominant_axis_C[e],
+                        'path_C_future_row_overlap': env.path_future_row_overlaps[e][2], 'path_C_future_col_overlap': env.path_future_col_overlaps[e][2],
+                        'path_C_future_row_and_col_overlap': env.path_future_row_and_col_overlaps[e][2],
+                        'better_path': ['a','b','c'][np.argmax(env.path_actual_costs[e])],
+                    }
+                    row.update(row_c)
+                df_expt = pd.concat([df_expt, pd.DataFrame([row])], ignore_index=True)
+            env_key = f'city_{c+1}_grid_{i+1}'
+            env_costs[env_key] = env.costss[0].tolist()
+            env_objects[env_key + '_env_object'] = [env]
+        env_objects['participant'] = p
+        env_costs['grid_size'] = N
+        env_costs['n_trials'] = n_trials
+        env_costs['n_grids'] = n_days
+        env_costs['n_cities'] = n_cities
+
+
+    ## save per-participant env object, depending on purpose
+    
+    # i.e. just expt optimisation
+    if save_path is None:
+        with open('useful_saves/expt_optimisation/simulated_envs/ppt_'+str(p)+'_envs.pkl', 'wb') as f:
+            pickle.dump(env_objects, f)
+        return df_expt
+    
+    # i.e. actual ppt sequences for online testing
+    else:
+
+        ## combine info to single dict and save with json
+        expt_dict = {
+            'trial_info': df_expt.to_dict('records'),
+            'env_costs': env_costs
+        }
+        # path_1 = json_path + '/expt_info_{}.json'.format(p)
+        # path_1 = save_paths['expt_path'] + str(p) + '.json'
+        path_1 = save_path + '/expt_info/expt_2_info_' + str(p) + '.json'
+        # with open('expt/assets/trial_sequences/expt_2/expt_info_{}.json'.format(p), 'w') as f:
+        with open(path_1, 'w') as f:
+            json.dump(expt_dict, f, indent=4)
+        # path_2 = json_path + '/env_objects_{}.pkl'.format(p)
+        # path_2 = save_paths['env_path'] + str(p) + '.pkl'
+        path_2 = save_path + '/env_objects/expt_2_env_objects_' + str(p) + '.pkl'
+        # with open('expt/assets/trial_sequences/expt_2/env_objects/env_objects_{}.pkl'.format(p), 'wb') as f:
+        with open(path_2, 'wb') as f:
+            pickle.dump(env_objects, f)
+
 
 ## rotate grids
 def rotate_grid_world(grid_data, rotation_direction="clockwise", grid_size=8):
@@ -1091,7 +1199,7 @@ def load_data(path):
     df_all['third_path'] = np.nan
     df_all['first_path_orthogonal'] = np.nan
     df_all['second_path_orthogonal'] = np.nan
-    df_all['third_path_orthogonal'] = np.nan
+    df_all['third_path_orthogonal'] = np.nan 
     df_all['prev_chose_orthogonal'] = np.nan
     df_all['prev_chose_aligned'] = np.nan
     df_all['prev_chose_vertical'] = np.nan
@@ -1200,11 +1308,11 @@ def load_data(path):
         df_all.loc[df_all['pid'] == pid, 'prev_path_quality'] = df_all.loc[df_all['pid'] == pid, 'path_quality'].shift(1)
         
         ## first trial of each day should have no previous trial info?
-        df_all.loc[(df_all['pid'] == pid) & (df_all['trial'] == 1), 'prev_observed_cost'] = np.nan
-        df_all.loc[(df_all['pid'] == pid) & (df_all['trial'] == 1), 'prev_path_quality'] = np.nan
-        df_all.loc[(df_all['pid'] == pid) & (df_all['trial'] == 1), 'prev_chose_aligned'] = np.nan
-        df_all.loc[(df_all['pid'] == pid) & (df_all['trial'] == 1), 'prev_chose_orthogonal'] = np.nan
-        df_all.loc[(df_all['pid'] == pid) & (df_all['trial'] == 1), 'prev_chose_vertical'] = np.nan
+        # df_all.loc[(df_all['pid'] == pid) & (df_all['trial'] == 1), 'prev_observed_cost'] = np.nan
+        # df_all.loc[(df_all['pid'] == pid) & (df_all['trial'] == 1), 'prev_path_quality'] = np.nan
+        # df_all.loc[(df_all['pid'] == pid) & (df_all['trial'] == 1), 'prev_chose_aligned'] = np.nan
+        # df_all.loc[(df_all['pid'] == pid) & (df_all['trial'] == 1), 'prev_chose_orthogonal'] = np.nan
+        # df_all.loc[(df_all['pid'] == pid) & (df_all['trial'] == 1), 'prev_chose_vertical'] = np.nan
         
         ## extract overlap info
         df_all.loc[df_all['pid'] == pid, 'path_A_past_overlaps'] = agent.path_past_overlaps[:,:,:,0].flatten()
