@@ -52,9 +52,10 @@
             margin: 20px auto;
             transition: opacity 0.2s ease-in-out;
             background-color: rgb(208, 208, 210); /* Semi-transparent background */
-            padding: 15px;
+            padding: 32px; /* Increased from 15px */
             border-radius: 10px;
             box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+            position: relative; /* enable absolute labels */
         }
 
         .cost-display-container, .choice-container, .instruction-section {
@@ -260,12 +261,13 @@
             grid-gap: 13px; /* Increased from 11px */
             margin: 0 auto;
             background-color: rgb(208, 208, 210);
-            padding: 17px; /* Increased from 14px */
+            padding: 32px; /* Increased from 17px */
             border-radius: 10px; /* Increased from 8px */
             grid-template-columns: repeat(auto-fit, 43px); /* Increased from 36px */
             grid-auto-rows: 43px; /* Increased from 36px */
             justify-content: center;
             align-content: center;
+            position: relative; /* enable absolute labels */
         }
 
         .upcoming-cell {
@@ -309,12 +311,13 @@
             grid-gap: 13px; /* Increased from 11px */
             margin: 0 auto;
             background-color: rgba(208, 208, 210, 0.6); /* Slightly more transparent */
-            padding: 17px; /* Increased from 14px */
+            padding: 32px; /* Increased from 17px */
             border-radius: 10px; /* Increased from 8px */
             grid-template-columns: repeat(auto-fit, 43px); /* Increased from 36px */
             grid-auto-rows: 43px; /* Increased from 36px */
             justify-content: center;
             align-content: center;
+            position: relative; /* enable absolute labels */
         }
 
         .upcoming-cell-done {
@@ -687,7 +690,27 @@
         margin-right: 30px;
         }
 
-
+        /* New: chess-style grid labels */
+        .row-label, .col-label {
+            position: absolute;
+            color: #000000;
+            font-size: 18px;
+            font-weight: bold;
+            z-index: 50;
+            /* pointer-events: none; */
+            /* text-shadow: 0 1px 2px rgba(255,255,255,0.6); */
+            line-height: 1;
+            user-select: none;
+        }
+        .row-label {
+            /* removed hardcoded left: use JS to place next to leftmost cell */
+            transform: translateY(-50%);
+        }
+        .col-label {
+            /* removed hardcoded bottom: use JS to place below bottom row cell */
+            transform: translateX(-50%);
+            white-space: nowrap;
+        }
 
     </style>
 </head>
@@ -699,6 +722,114 @@
             return new jsPsychModule.JsPsych(options);
         }
     </script>
+
+    <!-- Auto-label grids (left: numbers, bottom: letters) based on cell positions -->
+    <script>
+        (function () {
+            const GRID_SELECTORS = ['.grid-container', '.upcoming-grid', '.upcoming-grid-done'];
+
+            function toLetters(idx) {
+                // Excel-style labels: 0 -> A, 25 -> Z, 26 -> AA, etc.
+                let n = idx + 1, s = '';
+                while (n > 0) {
+                    const m = (n - 1) % 26;
+                    s = String.fromCharCode(65 + m) + s;
+                    n = Math.floor((n - 1) / 26);
+                }
+                return s;
+            }
+
+            function labelGrid(grid) {
+                // Remove old labels
+                grid.querySelectorAll('.row-label, .col-label').forEach(el => el.remove());
+
+                const cell = grid.querySelector('.grid-cell, .upcoming-cell, .upcoming-cell-done');
+                if (!cell) return;
+
+                // Determine which cell selector this grid uses
+                let cellSelector = '.grid-cell';
+                if (cell.classList.contains('upcoming-cell')) cellSelector = '.upcoming-cell';
+                if (cell.classList.contains('upcoming-cell-done')) cellSelector = '.upcoming-cell-done';
+
+                const cells = Array.from(grid.querySelectorAll(cellSelector));
+                if (!cells.length) return;
+
+                const cs = getComputedStyle(grid);
+                const borderLeft = parseFloat(cs.borderLeftWidth) || 0;
+                const borderTop = parseFloat(cs.borderTopWidth) || 0;
+                const gridRect = grid.getBoundingClientRect();
+                const eps = 1; // tolerance for grouping rows/cols
+
+                // Collect per-cell geometry relative to the grid (padding box)
+                const data = cells.map(el => {
+                    const r = el.getBoundingClientRect();
+                    const left = r.left - gridRect.left - borderLeft;
+                    const top = r.top - gridRect.top - borderTop;
+                    return { el, left, top, w: r.width, h: r.height };
+                });
+
+                // Unique row tops and column lefts with tolerance
+                const rowTops = [];
+                const colLefts = [];
+                for (const d of data) {
+                    if (!rowTops.some(v => Math.abs(v - d.top) <= eps)) rowTops.push(d.top);
+                    if (!colLefts.some(v => Math.abs(v - d.left) <= eps)) colLefts.push(d.left);
+                }
+                rowTops.sort((a,b)=>a-b);
+                colLefts.sort((a,b)=>a-b);
+
+                // Increase spacing of row labels from the leftmost cells
+                const ROW_LABEL_GAP = 20;
+                const COL_LABEL_GAP = 6;
+
+                // Row labels (1..N) at centers of leftmost cells per row
+                rowTops.forEach((rowTop, rIdx) => {
+                    const rowCells = data.filter(d => Math.abs(d.top - rowTop) <= eps);
+                    if (!rowCells.length) return;
+                    const leftmost = rowCells.reduce((a,b)=> (a.left < b.left ? a : b));
+                    const y = leftmost.top + leftmost.h / 2;
+                    const x = leftmost.left - ROW_LABEL_GAP; 
+                    const lbl = document.createElement('div');
+                    lbl.className = 'row-label';
+                    lbl.textContent = String(rIdx + 1);
+                    lbl.style.top = y + 'px';
+                    lbl.style.left = x + 'px';
+                    grid.appendChild(lbl);
+                });
+
+                // Column labels (A..N) centered below bottom-most cell in each column
+                colLefts.forEach((colLeft, cIdx) => {
+                    const colCells = data.filter(d => Math.abs(d.left - colLeft) <= eps);
+                    if (!colCells.length) return;
+                    const bottommost = colCells.reduce((a,b)=> (a.top > b.top ? a : b));
+                    const x = bottommost.left + bottommost.w / 2;
+                    const y = bottommost.top + bottommost.h + COL_LABEL_GAP;
+                    const lbl = document.createElement('div');
+                    lbl.className = 'col-label';
+                    lbl.textContent = toLetters(cIdx);
+                    lbl.style.left = x + 'px';
+                    lbl.style.top = y + 'px';
+                    grid.appendChild(lbl);
+                });
+            }
+
+            function labelAll() {
+                GRID_SELECTORS.forEach(sel => {
+                    document.querySelectorAll(sel).forEach(labelGrid);
+                });
+            }
+
+            // Re-label when DOM changes (new grids) or on resize (auto-fit columns can change)
+            const observer = new MutationObserver(() => requestAnimationFrame(labelAll));
+
+            document.addEventListener('DOMContentLoaded', () => {
+                labelAll();
+                observer.observe(document.body, { childList: true, subtree: true });
+                window.addEventListener('resize', () => requestAnimationFrame(labelAll));
+            });
+        })();
+    </script>
+
     <script type="module" src="experiment.js"></script>
 </body>
 </html>
