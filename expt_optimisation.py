@@ -22,11 +22,8 @@ from gymnasium.envs.registration import register, registry, make, spec
 import pickle
 import copy
 
-# from utils import make_env, Node, Tree, argm, value_iteration, data_keys
-# from MCTS import MonteCarloTreeSearch, simulate_agent
-
-from utils import make_env, Node, Tree, argm, data_keys, grid_keys, parse_lists, KL_divergence, profile_func, KL_sim, value_iteration
-from MCTS import MonteCarloTreeSearch, MonteCarloTreeSearch_Free, MonteCarloTreeSearch_2AFC, simulate_agent
+from utils import make_env, Node, Tree, argm, data_keys, grid_keys, parse_lists, KL_divergence, profile_func, KL_sim, value_iteration, generate_ppt_sequence
+from MCTS import MonteCarloTreeSearch, MonteCarloTreeSearch_Free, MonteCarloTreeSearch_AFC, simulate_agent
 
 import IPython
 
@@ -34,155 +31,214 @@ import multiprocess as mp
 import pingouin as pg
 from scipy.special import expit
 
-from agents import GPAgent, Farmer
+from agents import Farmer
 from samplers import GridSampler
 
 
 warnings.filterwarnings('ignore')
 
 
+## need this for paralellising because of the way the loops are structured...
+def agent_loop(p, agent_params, hyperparams, agents):
+    N = hyperparams['N']
+    sim_outs = []
 
-## callback function for saving simulation results
-def save_results(sim):
-    sim_out = sim[0]
-    all_block_envs = sim[1]
+    ## load env objects
+    with open('useful_saves/expt_optimisation/simulated_envs/ppt_'+str(p)+'_envs.pkl', 'rb') as f:
+        env_objects = pickle.load(f)
 
-    ## save simulation output
-    for key in data_keys:
-        sim_results[key].extend(sim_out[key])
+    ## loop through agents
+    for agent in agents:
+        farmer = Farmer(N)
+        sim_out = farmer.run(agent_params, hyperparams, agent=agent, df_trials=None, envs=env_objects, fit=False, progress=False)
+        sim_outs.append(sim_out)
     
+    ## join sim_outs together
+    if len (sim_outs) == 0:
+        return sim_out
+    else:
+        sim_out = {}
+        for key in sim_outs[0].keys():
+            sim_out[key] = []
+            for sim in sim_outs:
+                if key in sim:
+                    sim_out[key].extend(sim[key])
     
-    ## save the grid surfaces for each of the blocks
-    for block in range(len(all_block_envs)):
-        env = all_block_envs[block]
-        all_grids['grid'].append(sim_out['grid'][0])
-        all_grids['block'].append(block)
-        # all_grids['env'].append(env) ## if pushed for space, comment this out
-        for key in grid_keys:
-            attribute = getattr(env, key)
-            all_grids[key].append(attribute)
+    return sim_out
 
-    ## update progress bar
+## callback for parallelised fitting
+def save_sim(sim_out):
+    for key in sim_out:
+        all_sim_out[key].extend(sim_out[key])
     master_pbar.update(1)
 
-    
-## sim init
-parallel=True
-n_cores = 50
-sim_results = {}
-for key in data_keys:
-    sim_results[key] = []
-all_grids = {}
-for key in grid_keys:
-    all_grids[key] = []
-all_grids['grid'] = [] 
-all_grids['env'] = [] ## in case we want to save the whole thing
-all_grids['block'] = [] ## in case we want to save the whole thing
 
 
-### env inits
+## env inits
+N = 12
+metric = 'cityblock'
 beta_params = {
-    'alpha_row': 0.25,
+    'alpha_row':0.25,
     'beta_row': 0.25,
-    'alpha_col': 0.25,
+    'alpha_col':0.25,
     'beta_col': 0.25
-    # 'alpha_row': 1,
-    # 'beta_row': 1,
-    # 'alpha_col': 1,
-    # 'beta_col': 1
-}
-N = 10
-n_grids = 500
-n_episodes = 4
-n_blocks = 4
-expt = '2AFC'
+    # 'alpha_row': 0.5,
+    # 'beta_row': 0.5,
+    # 'alpha_col': 10,
+    # 'beta_col': 0.1
+    }
+
+## trial info
+n_sim_participants = 50
+n_cities = 8
+n_days = 5
+n_trials = 4
+expt = 'AFC'
+n_afc = 2
 expt_info = {
     'type': expt,
-    'same_SGs': False,
-    # 'context': 'column',
-    'context': 'row',
+    'n_afc': n_afc,
 }
-env_params = {
-    'N': N,
-    'n_grids': n_grids,
-    'n_episodes': n_episodes,
-    'n_blocks': n_blocks,
-    'expt_info': expt_info,
-    'metric': 'cityblock',
-    # 'expt': 'free',
-    'beta_params': beta_params,
-}
-n_grids = env_params['n_grids']
 
-## MCTS params
-n_sims = 50000
-MCTS_params = {
-    'n_sims': n_sims,
-    'n_futures': 0, 
+## init df for saving expt info
+df_expt = pd.DataFrame(columns=['participant', 'city', 'context', 'grid','trial', 
+                                'better_path',
+                                'start_A','start_B','goal_A','goal_B', 'path_A', 'path_B',
+                                'path_A_expected_cost', 'path_B_expected_cost',
+                                'path_A_actual_cost', 'path_B_actual_cost',
+                                'path_A_future_overlap', 'path_B_future_overlap',
+                                'abstract_sequence_A', 'abstract_sequence_B',
+                                'dominant_axis_A','dominant_axis_B',
+                                'path_A_future_row_overlap', 'path_B_future_row_overlap',
+                                'path_A_future_col_overlap', 'path_B_future_col_overlap',
+                                'path_A_future_row_and_col_overlap', 'path_B_future_row_and_col_overlap'
+                                ])
+if n_afc==3:
+    df_expt = df_expt.join(pd.DataFrame(columns=['start_C', 'goal_C', 'path_C',
+                        'path_C_expected_cost', 'path_C_actual_cost', 
+                        'path_C_future_overlap', 'abstract_sequence_C', 
+                        'dominant_axis_C',
+                        'path_C_future_row_overlap', 'path_C_future_col_overlap',
+                        'path_C_future_row_and_col_overlap'
+                        ]))
+    
+    
+## init sim results
+all_sim_out = {
+        'participant':[],
+        'agent':[],
+        'city':[],
+        'day':[],
+        'trial':[],
+        'context':[],
+        'actions':[],
+        'p_choice_A':[],
+        'p_choice_B':[],
+        'p_choice_C':[],
+        'p_correct':[],
+        'Q_a':[],
+        'Q_b':[],
+        'Q_c':[],
+        'leaf_visits_a':[],
+        'leaf_visits_b':[],
+        'leaf_visits_c':[]
+    }
+parallel = True
+n_cores = 128
+create=True
+
+## init agent and expt
+agent_params = [
+    0.1, # temp
+    0.1, # lapse
+]
+hyperparams = {
+    'n_sims': 50000,
     'exploration_constant': 1,
     'discount_factor': 1,
-}
-
-## sampler params
-sampler_params = {
     'n_iter': 10,
-    'lazy': False,
-    'correct_prior': True,
+    'n_trials': n_trials,
+    'n_afc': n_afc,
+    'n_days': n_days,
+    'n_cities': n_cities,
+    'N': N,
+    'participant': None, ## hacky
 }
+agents = ['BAMCP', 'CE']   
 
-## define agents to simulate
-agents = [
-    # 'GP',
-           'BAMCP',
-           'CE',
-        #    'BAMCP_wrong',
-        #    'BAMCP w/ CE',
-        #    'CE w/ BAMCP'
-          ]
-progress=False
-
-## loop through grid types
-if __name__ == '__main__':
-    master_pbar = tqdm(total=n_grids, desc='All_grids', position=0, leave=True, colour='green')
-
-    ## begin parallelised simulations of grids
+## generate dataset for each participant
+if create:
     if parallel:
+        if __name__ == '__main__':
+            print('Generating {} experiment sequences in parallel'.format(n_sim_participants))
+            n_cores = min(mp.cpu_count(), n_sim_participants)
+            with mp.Pool(n_cores) as pool:
+                results = list(tqdm(pool.starmap(
+                    generate_ppt_sequence,
+                    [(p, n_cities, n_days, n_trials, expt_info.copy(), beta_params, metric, n_afc, N)
+                    for p in range(1, n_sim_participants + 1)]
+                ), total=n_sim_participants))
+
+            # combine all participant-level DataFrames
+            df_expt = pd.concat(results, ignore_index=True)
+
+            ## save expt info
+            df_expt.to_csv('useful_saves/expt_optimisation/{}AFC_{}x{}_env_{}-{}-{}-{}_beta_{}_sim_ppts_{}_cities_{}_days_{}_trials_{}_sims_expt_info.csv'.format(n_afc,N,N,
+                                                                                                beta_params['alpha_row'], beta_params['beta_row'], beta_params['alpha_col'], beta_params['beta_col'],
+                                                                                                n_sim_participants, 
+                                                                                                n_cities, n_days, n_trials,
+                                                                                                    hyperparams['n_sims']))
+
+    elif not parallel:
+        ppt_envs = {}
+        print('Generating {} experiment sequences serially'.format(n_sim_participants))
+        for p in tqdm(range(1,n_sim_participants+1)):
+
+            out = generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info.copy(), beta_params, metric, n_afc, N)
+            df_expt = pd.concat([df_expt, out], ignore_index=True)
+
+        ## save expt info
+        df_expt.to_csv('useful_saves/expt_optimisation/{}AFC_{}x{}_env_{}-{}-{}-{}_beta_{}_sim_ppts_{}_cities_{}_days_{}_trials_{}_sims_expt_info.csv'.format(n_afc,N,N,
+                                                                                            beta_params['alpha_row'], beta_params['beta_row'], beta_params['alpha_col'], beta_params['beta_col'],
+                                                                                            n_sim_participants, 
+                                                                                            n_cities, n_days, n_trials,
+                                                                                                hyperparams['n_sims']))
+     
+
+## loop through ppts
+if __name__ == '__main__':
+    master_pbar = tqdm(total=n_sim_participants, position=0, leave=True, colour='green')
+    
+    if not parallel:
+        # for p in tqdm(range(1, n_participants+1)):
+        for p in tqdm(range(1, n_sim_participants)):
+            env_objects = ppt_envs[p]
+
+            ## loop through agents
+            sim_out = agent_loop(agent_params, hyperparams, agents, env_objects)
+            save_sim(sim_out)
+
+    elif parallel:
 
         ## start pool
-        n_cores = np.min([n_cores, n_grids])
+        n_cores = np.min([n_cores, n_sim_participants])
         with mp.Pool(n_cores) as pool:
-            print('Parallel simulation of ',expt,' expt, ', n_grids, ' grids, with ',n_episodes,' episodes, ',n_sims,' simulations per episode')
-            sim_out = [pool.apply_async(simulate_agent, args=(m, env_params, MCTS_params, sampler_params, agents, progress),
-                                            callback = save_results) for m in range(n_grids)]
+            print('Parallel simulation:', n_cities, ' cities, ', n_days,', days, ',n_trials,' trials, ',hyperparams['n_sims'],' simulations per trial')
+            sim_out = [pool.apply_async(agent_loop, args=(p, agent_params, hyperparams, agents),
+                                            callback = save_sim) for p in range(1, n_sim_participants+1)]
             pool.close()
             pool.join()
 
-    else:
+print()
+print('Simulation complete')
+print()
 
-        ## loop through grids
-        for m in tqdm(range(n_grids)):
-            sim_out = simulate_agent(m, env_params, MCTS_params, sampler_params, agents, progress)
-            save_results(sim_out)
-
-print('Parallel complete')
-
-## remove empty keys from dict
-del_keys = []
-for key in sim_results.keys():
-    if not bool(sim_results[key]):
-        del_keys.append(key)
-for dk in del_keys:
-    sim_results.pop(dk)
-
-## dataframe of simulation results
-df_sim = pd.DataFrame(sim_results)
+## convert dict to df
+df_sim = pd.DataFrame(all_sim_out)
 
 
 ## save simulated grids + results
-df_sim.to_csv('useful_saves/expt_optimisation/{}_{}x{}_env_{}_context_{}-{}-{}-{}_beta_{}_grids_{}_episodes_{}_sims_{}_blocks_results.csv'.format(expt,N,N, expt_info['context'],
+df_sim.to_csv('useful_saves/expt_optimisation/{}AFC_{}x{}_env_{}-{}-{}-{}_beta_{}_sim_ppts_{}_cities_{}_days_{}_trials_{}_sims_results.csv'.format(n_afc,N,N,
                                                                                        beta_params['alpha_row'], beta_params['beta_row'], beta_params['alpha_col'], beta_params['beta_col'],
-                                                                                       n_grids, n_episodes,n_sims, n_blocks))
-with open('useful_saves/expt_optimisation/{}_{}x{}_env_{}_context_{}-{}-{}-{}_beta_{}_grids_{}_episodes_{}_sims_{}_blocks_envs.pkl'.format(expt,N,N, expt_info['context'],
-                                                                                                         beta_params['alpha_row'], beta_params['beta_row'], beta_params['alpha_col'], beta_params['beta_col'],
-                                                                                                 n_grids, n_episodes, n_sims, n_blocks), 'wb') as f:
-    pickle.dump(all_grids, f)
+                                                                                       n_sim_participants, 
+                                                                                       n_cities, n_days, n_trials,hyperparams['n_sims']))

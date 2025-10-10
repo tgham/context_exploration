@@ -24,13 +24,18 @@ import pstats
 import subprocess
 import time
 from numba import jit, njit
-from agents import Farmer
-
+import pickle
+import pandas as pd
+import json
+import os
+from tqdm.auto import tqdm
+import copy
+# from agents import Farmer
 
 
 
 ## create a grid environment
-def make_env(N, n_episodes, expt_info, beta_params, metric, seed=None):
+def make_env(N, n_trials, expt_info, beta_params, metric, seed=None):
 
     ## register env
     
@@ -45,9 +50,9 @@ def make_env(N, n_episodes, expt_info, beta_params, metric, seed=None):
         entry_point='grids.envs:GridEnv',
         max_episode_steps=100,
         kwargs={"size": N},
-    )
+    )    
+    env = gym.make("grids/GridEnv-v0", N=N, n_trials=n_trials, expt_info=expt_info, beta_params=beta_params, metric=metric, seed=seed)
     
-    env = gym.make("grids/GridEnv-v0", N=N, n_episodes=n_episodes, expt_info=expt_info, beta_params=beta_params, metric=metric, seed=seed)
     return env
 
 
@@ -58,13 +63,13 @@ class Node:
 
     # __slots__ = ['state', 'n_state_visits', 'cost', 'terminated', 'node_id', 'parent_node_ids', 'N', 'untried_actions', 'action_leaves']
 
-    def __init__(self, state, cost, node_id, goal, terminated, episode, n_afc, N):
+    def __init__(self, state, cost, node_id, goal, terminated, trial, n_afc, N):
         
         ## state info
-        self.state = np.append(state, cost) ## in the 2AFC case, this amounts to current state + costs that have just been observed on prior simulated episode
+        self.state = np.append(state, cost) ## in the AFC case, this amounts to current state + costs that have just been observed on prior simulated trial
         self.n_state_visits = 0
         self.cost = cost
-        self.episode = episode
+        self.trial = trial
         self.terminated = terminated
         self.goal = goal
         # self.node_id = tuple(self.state)
@@ -92,9 +97,9 @@ class Node:
 
     def __str__(self):
         action_leaves_msg = {action: np.round(leaf.performance,3) if leaf is not None else None for action, leaf in self.action_leaves.items()}
-        return "state {}: (episode={}, visits={}, terminated={})\n{})".format(
+        return "state {}: (trial={}, visits={}, terminated={})\n{})".format(
                                                   self.state,
-                                                    self.episode,
+                                                    self.trial,
                                                   self.n_state_visits,
                                                 #   self.cost,
                                                   self.terminated,
@@ -109,15 +114,15 @@ class Node:
     
 class Action_Node:
 
-    def __init__(self, prev_state, action, next_state, terminated, episode, parent_id):
+    def __init__(self, prev_state, action, next_state, terminated, trial, parent_id):
         self.prev_state = prev_state
-        self.action = action ## in 2AFC, this specifies the path ID (i.e. 0 or 1)
+        self.action = action ## in AFC, this specifies the path ID (i.e. 0 or 1)
         self.total_simulation_cost = 0
         self.performance = None
         self.n_action_visits = 0
         self.next_state = next_state
         self.terminated = terminated
-        self.episode = episode
+        self.trial = trial
         self.node_id = (self.prev_state, self.action) #+ str(self.next_state)
         self.parent_id = parent_id
         self.children={}
@@ -147,7 +152,7 @@ class Tree:
         return not node.terminated and len(node.untried_actions) > 0
 
     ## attach action leaf to child state
-    def add_state_node(self, state, cost, node_id, goal, terminated, episode, n_afc, parent=None):
+    def add_state_node(self, state, cost, node_id, goal, terminated, trial, n_afc, parent=None):
 
         # ## check for existing state node
         # node_id = str(history)
@@ -157,7 +162,7 @@ class Tree:
 
         
         ## create a new state node
-        node = Node(state=state, cost=cost, node_id=node_id, goal=goal, terminated=terminated, episode = episode, n_afc=n_afc, N=self.N)
+        node = Node(state=state, cost=cost, node_id=node_id, goal=goal, terminated=terminated, trial = trial, n_afc=n_afc, N=self.N)
         
         ## store parent-child relationships
         if parent is None:
@@ -234,11 +239,11 @@ class Tree:
         else:
             node_label = f"{node.state}"
             # node_label = f"{node.node_id}"
-        episode_label = f"{node.episode}"
+        trial_label = f"{node.trial}"
 
         # Add branch marker
         branch = "└── " if is_last else "├── "
-        print(f"{indent}{branch}Node: {node_label}, Episode: {episode_label}, Visits: {node.n_state_visits}")
+        print(f"{indent}{branch}Node: {node_label}, Episode: {trial_label}, Visits: {node.n_state_visits}")
 
         # Update indentation for children
         child_indent = indent + ("    " if is_last else "│   ")
@@ -486,52 +491,6 @@ def node_angle(a,b):
     return ang
 
 
-## sample from the GP
-def sample(mean, K, sigma=0.01, high_cost=-0.9, low_cost=-0.1):
-    if sigma is None:
-        sigma = 0.01 #i.e. just to add to the diagonal of the kernel matrix
-
-    N = int(np.sqrt(len(mean)))
-
-    ## check kernel is valid
-    k_check(K)
-
-    # sample
-    # if mean is None:
-    #     mean = np.zeros(self.N**2)
-    # mean = np.zeros(self.N**2)
-    # samples = np.random.multivariate_normal(mean, K).reshape(self.N, self.N)
-
-    #normalise
-    # high_cost = self.high_cost
-    # low_cost = self.low_cost
-    # samples = high_cost + (low_cost - high_cost) * (samples - np.min(samples)) / (np.max(samples) - np.min(samples))
-
-
-    ## or truncated
-    lb = np.zeros(N**2) + high_cost
-    ub = np.zeros(N**2) + low_cost
-    K_tmp = K + sigma**2 * np.eye(N**2)
-    tmvn = TruncatedMVN(mean, K_tmp, lb, ub)
-    samples = tmvn.sample(1)
-    samples = samples.reshape(N, N)
-
-    return samples
-
-## check that kernel is PSD and symmetric
-def k_check(K):
-    symm = np.allclose(K,K.T)
-    if not symm:
-        warnings.warn("Kernel matrix is not symmetric.", UserWarning)
-    
-    eigenvalues = np.linalg.eigvals(K)
-    psd = np.all(eigenvalues >= -1e-10)
-    if not psd:
-        warnings.warn("Kernel matrix is not positive semi-definite.", UserWarning)
-
-    return np.any([not symm, not psd])
-
-
 ## parse strings to lists
 def parse_lists(df):
     cols = df.columns[2:]
@@ -588,7 +547,7 @@ def KL_sim(obs_set, t, farmer, n_samples, plotting = False):
 
     ## get expt + sampler info
     N = farmer.N
-    n_episodes = 2 ## arbitrary
+    n_trials = 2 ## arbitrary
     expt = farmer.expt
     expt_info = {
         'type': expt,
@@ -613,7 +572,7 @@ def KL_sim(obs_set, t, farmer, n_samples, plotting = False):
     all_posterior_mean_p_costs = []
 
     ## reset env
-    env = make_env(N, n_episodes,expt_info, beta_params, 'cityblock')
+    env = make_env(N, n_trials,expt_info, beta_params, 'cityblock')
     env.reset()
 
     ## loop through obs sets
@@ -716,14 +675,757 @@ def get_next_state(current, direction, N):
     )
     return next_state
 
+## func for generating a single participant
+def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params, metric, n_afc, N, save_path=None):
+
+    ## if real ppt sequences, ensure even split of contexts, otherwise if we're generating practice sequences, these are pre-determined
+    if n_cities > 1:
+        contexts = ['row']*int(n_cities/2) + ['column']*int(n_cities/2)
+        np.random.shuffle(contexts)
+    else:
+        contexts = [expt_info['context']]*n_cities
+    env_objects = {}
+    env_costs = {}
+    df_expt = pd.DataFrame()
+
+    for c in range(n_cities):
+        expt_info['context'] = contexts[c]
+
+        ## generate envs for this city
+        envs = [make_env(N, n_trials, expt_info, beta_params, metric) for _ in range(n_days)]
+
+        ## save expt info
+        for i, env in enumerate(envs):
+            for e in range(n_trials):
+                row = {
+                    'participant': p,
+                    'city': int(c+1),
+                    'context': expt_info['context'],
+                    'grid': int(i+1),
+                    'trial': int(e+1),
+                    'start_A': env.path_states[e][0][0],
+                    'start_B': env.path_states[e][1][0],
+                    'goal_A': env.path_states[e][0][-1],
+                    'goal_B': env.path_states[e][1][-1],
+                    'path_A': env.path_states[e][0],
+                    'path_B': env.path_states[e][1],
+                    'path_A_actual_cost': env.path_actual_costs[e][0],
+                    'path_B_actual_cost': env.path_actual_costs[e][1],
+                    'path_A_expected_cost': env.path_expected_costs[e][0],
+                    'path_B_expected_cost': env.path_expected_costs[e][1],
+                    'path_A_future_overlap': env.path_future_overlaps[e][0],
+                    'path_B_future_overlap': env.path_future_overlaps[e][1],
+                    'abstract_sequence_A': [env.sampled_abstract_sequences[e][0]],
+                    'abstract_sequence_B': [env.sampled_abstract_sequences[e][1]],
+                    'dominant_axis_A': env.dominant_axis_A[e],
+                    'dominant_axis_B': env.dominant_axis_B[e],
+                    'path_A_future_row_overlap': env.path_future_row_overlaps[e][0], 'path_B_future_row_overlap': env.path_future_row_overlaps[e][1],
+                    'path_A_future_col_overlap': env.path_future_col_overlaps[e][0], 'path_B_future_col_overlap': env.path_future_col_overlaps[e][1],
+                    'path_A_future_row_and_col_overlap': env.path_future_row_and_col_overlaps[e][0], 'path_B_future_row_and_col_overlap': env.path_future_row_and_col_overlaps[e][1],
+
+                }
+
+                # add extra row depending on n_afc
+                if n_afc == 2:
+                    row['better_path'] = ['a','b'][np.argmax(env.path_actual_costs[e])]
+                elif n_afc == 3:
+                    row_c = {
+                        'start_C': env.path_states[e][2][0],
+                        'goal_C': env.path_states[e][2][-1],
+                        'path_C': env.path_states[e][2],
+                        'path_C_actual_cost': env.path_actual_costs[e][2],
+                        'path_C_expected_cost': env.path_expected_costs[e][2],
+                        'path_C_future_overlap': env.path_future_overlaps[e][2],
+                        'abstract_sequence_C': [env.sampled_abstract_sequences[e][2]],
+                        'dominant_axis_C': env.dominant_axis_C[e],
+                        'path_C_future_row_overlap': env.path_future_row_overlaps[e][2], 'path_C_future_col_overlap': env.path_future_col_overlaps[e][2],
+                        'path_C_future_row_and_col_overlap': env.path_future_row_and_col_overlaps[e][2],
+                        'better_path': ['a','b','c'][np.argmax(env.path_actual_costs[e])],
+                    }
+                    row.update(row_c)
+                df_expt = pd.concat([df_expt, pd.DataFrame([row])], ignore_index=True)
+            env_key = f'city_{c+1}_grid_{i+1}'
+            env_costs[env_key] = env.costss[0].tolist()
+            env_objects[env_key + '_env_object'] = [env]
+        env_objects['participant'] = p
+        env_costs['grid_size'] = N
+        env_costs['n_trials'] = n_trials
+        env_costs['n_grids'] = n_days
+        env_costs['n_cities'] = n_cities
+
+
+    ## save per-participant env object, depending on purpose
+    
+    # i.e. just expt optimisation
+    if save_path is None:
+        with open('useful_saves/expt_optimisation/simulated_envs/ppt_'+str(p)+'_envs.pkl', 'wb') as f:
+            pickle.dump(env_objects, f)
+        return df_expt
+    
+    # i.e. actual ppt sequences for online testing
+    else:
+
+        ## combine info to single dict and save with json
+        expt_dict = {
+            'trial_info': df_expt.to_dict('records'),
+            'env_costs': env_costs
+        }
+        # path_1 = json_path + '/expt_info_{}.json'.format(p)
+        # path_1 = save_paths['expt_path'] + str(p) + '.json'
+        path_1 = save_path + '/expt_info/expt_2_info_' + str(p) + '.json'
+        # with open('expt/assets/trial_sequences/expt_2/expt_info_{}.json'.format(p), 'w') as f:
+        with open(path_1, 'w') as f:
+            json.dump(expt_dict, f, indent=4)
+        # path_2 = json_path + '/env_objects_{}.pkl'.format(p)
+        # path_2 = save_paths['env_path'] + str(p) + '.pkl'
+        path_2 = save_path + '/env_objects/expt_2_env_objects_' + str(p) + '.pkl'
+        # with open('expt/assets/trial_sequences/expt_2/env_objects/env_objects_{}.pkl'.format(p), 'wb') as f:
+        with open(path_2, 'wb') as f:
+            pickle.dump(env_objects, f)
+
+
+## rotate grids
+def rotate_grid_world(grid_data, rotation_direction="clockwise", grid_size=8):
+    """
+    Rotate all grid world data in a JSON file or gym env either clockwise or counter-clockwise.
+    
+    Args:
+        grid_data (dict or str): Either the parsed JSON data as a dict, or a file path to the JSON file, or the original env object
+        rotation_direction (str): Either "clockwise" or "counter_clockwise"
+        grid_size (int): Size of the grid (assumes square grid)
+    
+    Returns:
+        dict: Copy of the input data with rotated coordinates and cost surfaces,
+        or the original env object with rotated coordinates and cost surfaces.
+    """
+
+    # Load if a file path is provided
+    if isinstance(grid_data, str):
+        with open(grid_data, 'r') as f:
+            data = json.load(f)
+    else:
+        data = grid_data
+    
+    # Create a deep copy to avoid modifying the original
+    rotated_data = copy.deepcopy(data)
+    
+    # Function to rotate a single coordinate
+    def rotate_coord(coord):
+        x, y = coord
+        if rotation_direction == "clockwise":
+            # 90° clockwise: (x,y) -> (y, grid_size-1-x)
+            return [y, grid_size - 1 - x]
+        else:
+            # 90° counter-clockwise: (x,y) -> (grid_size-1-y, x)
+            return [grid_size - 1 - y, x]
+    
+    # Function to rotate a single cost grid
+    def rotate_cost_grid(grid):
+        n = len(grid)
+        rotated = [[0 for _ in range(n)] for _ in range(n)]
+        
+        for i in range(n):
+            for j in range(n):
+                if rotation_direction == "clockwise":
+                    # 90° clockwise: (i,j) -> (j, n-1-i)
+                    rotated[j][n - 1 - i] = grid[i][j]
+                else:
+                    # 90° counter-clockwise: (i,j) -> (n-1-j, i)
+                    rotated[n - 1 - j][i] = grid[i][j]
+                    
+        return rotated
+    
+    # Rotate trial information, depending on whether a json or env object is provided
+    if 'sequence' in rotated_data:
+        if 'trial_info' in rotated_data['sequence']:
+            for idx, trial in enumerate(rotated_data['sequence']['trial_info']):
+                # Rotate start and goal coordinates
+                if 'start_A' in trial:
+                    rotated_data['sequence']['trial_info'][idx]['start_A'] = rotate_coord(trial['start_A'])
+                if 'start_B' in trial:
+                    rotated_data['sequence']['trial_info'][idx]['start_B'] = rotate_coord(trial['start_B'])
+                if 'goal_A' in trial:
+                    rotated_data['sequence']['trial_info'][idx]['goal_A'] = rotate_coord(trial['goal_A'])
+                if 'goal_B' in trial:
+                    rotated_data['sequence']['trial_info'][idx]['goal_B'] = rotate_coord(trial['goal_B'])
+                
+                # Rotate path coordinates
+                if 'path_A' in trial:
+                    rotated_data['sequence']['trial_info'][idx]['path_A'] = [rotate_coord(coord) for coord in trial['path_A']]
+                if 'path_B' in trial:
+                    rotated_data['sequence']['trial_info'][idx]['path_B'] = [rotate_coord(coord) for coord in trial['path_B']]
+                
+                # Swap axis information
+                if 'dominant_axis_A' in trial:
+                    rotated_data['sequence']['trial_info'][idx]['dominant_axis_A'] = ('horizontal' 
+                                                                    if trial['dominant_axis_A'] == 'vertical' 
+                                                                    else 'vertical')
+                if 'dominant_axis_B' in trial:
+                    rotated_data['sequence']['trial_info'][idx]['dominant_axis_B'] = ('horizontal' 
+                                                                    if trial['dominant_axis_B'] == 'vertical' 
+                                                                    else 'vertical')
+                if 'better_axis' in trial:
+                    rotated_data['sequence']['trial_info'][idx]['better_axis'] = ('horizontal' 
+                                                                if trial['better_axis'] == 'vertical' 
+                                                                else 'vertical')
+                    
+                # reverse abstract sequences - e.g. if abstract_sequence_A is [5,0], it should now be [0,5]
+                if 'abstract_sequence_A' in trial:
+                    # rotated_data['sequence']['trial_info'][idx]['abstract_sequence_A'] = [coord[::-1] for coord in trial['abstract_sequence_A']]
+                    rotated_data['sequence']['trial_info'][idx]['abstract_sequence_A'] = trial['abstract_sequence_A'][::-1]
+                if 'abstract_sequence_B' in trial:
+                    # rotated_data['sequence']['trial_info'][idx]['abstract_sequence_B'] = [coord[::-1] for coord in trial['abstract_sequence_B']]
+                    rotated_data['sequence']['trial_info'][idx]['abstract_sequence_B'] = trial['abstract_sequence_B'][::-1]
+                
+                
+                # Swap context if it's 'row' or 'column'
+                if 'context' in trial:
+                    if trial['context'] == 'row':
+                        rotated_data['sequence']['trial_info'][idx]['context'] = 'column'
+                    elif trial['context'] == 'column':
+                        rotated_data['sequence']['trial_info'][idx]['context'] = 'row'
+        
+        # Rotate environment cost surfaces
+        if 'env_costs' in rotated_data['sequence']:
+            for key in rotated_data['sequence']['env_costs']:
+                if key.startswith('city_') and '_grid_' in key:
+                    rotated_data['sequence']['env_costs'][key] = rotate_cost_grid(data['sequence']['env_costs'][key])
+    
+    else:
+        
+        ##hacky init
+        n_cities = 8
+        n_days = 5
+        n_trials = 4
+
+        ## loop through grid envs
+        for key in rotated_data.keys():
+            for t in range(n_trials):
+            
+                ## rotate start and goal coordinates
+                start_A = rotated_data[key][0].starts[t][0]
+                start_B = rotated_data[key][0].starts[t][1]
+                goal_A = rotated_data[key][0].goals[t][0]
+                goal_B = rotated_data[key][0].goals[t][1]
+                rotated_data[key][0].starts[t][0] = np.array(rotate_coord(start_A))
+                rotated_data[key][0].starts[t][1] = np.array(rotate_coord(start_B))
+                rotated_data[key][0].goals[t][0] = np.array(rotate_coord(goal_A))
+                rotated_data[key][0].goals[t][1] = np.array(rotate_coord(goal_B))
+
+                ## rotate actions - i.e. remap 0,1,2,3 to 1,2,3,0. e.g. [0,0,0,1] becomes [3,0,0,0]
+                # rotate_action = lambda action: (action + 1) % 4 if rotation_direction == "clockwise" else (action - 1) % 4
+                rotate_action = lambda action: (action - 1) % 4 if rotation_direction == "clockwise" else (action + 1) % 4
+                rotated_data[key][0].path_actions[t][0] = [rotate_action(action) for action in rotated_data[key][0].path_actions[t][0]]
+                rotated_data[key][0].path_actions[t][1] = [rotate_action(action) for action in rotated_data[key][0].path_actions[t][1]]
+                
+                ## paths
+                path_A = rotated_data[key][0].path_states[t][0]
+                path_B = rotated_data[key][0].path_states[t][1]
+                rotated_data[key][0].path_states[t][0] = np.array([rotate_coord(coord) for coord in path_A])
+                rotated_data[key][0].path_states[t][1] = np.array([rotate_coord(coord) for coord in path_B])
+
+                ## axis info
+                rotated_data[key][0].dominant_axis_A[t] = ('horizontal'
+                                                            if rotated_data[key][0].dominant_axis_A[t] == 'vertical'
+                                                            else 'vertical')
+                rotated_data[key][0].dominant_axis_B[t] = ('horizontal'
+                                                            if rotated_data[key][0].dominant_axis_B[t] == 'vertical'
+                                                            else 'vertical')
+                
+                ## abstract sequences
+                rotated_data[key][0].sampled_abstract_sequences[t][0] = rotated_data[key][0].sampled_abstract_sequences[t][0][::-1]
+                rotated_data[key][0].sampled_abstract_sequences[t][1] = rotated_data[key][0].sampled_abstract_sequences[t][1][::-1]
+
+            ## context
+            if rotated_data[key][0] == 'row':
+                rotated_data[key][0] = 'column'
+            elif rotated_data[key][0] == 'column':
+                rotated_data[key][0] = 'row'
+
+            ## rotate entire grid
+            rotated_data[key][0].p_costs = np.array(rotate_cost_grid(rotated_data[key][0].p_costs))
+            for t in range(n_trials):
+                rotated_data[key][0].costss[t] = np.array(rotate_cost_grid(rotated_data[key][0].costss[t]))
+                
+    
+    return rotated_data
+
+def save_rotated_data(rotated_data, output_file):
+    """
+    Save rotated data to a JSON file or .pkl
+    
+    Args:
+        rotated_data (dict): The rotated data to save
+        output_file (str): Path to the output file
+    """
+    if ('sequence' in rotated_data) or ('trial_info' in rotated_data):
+        with open(output_file, 'w') as f:
+            json.dump(rotated_data, f, indent=2)
+        print(f"Rotated data saved to {output_file}")
+    else:
+        with open(output_file, 'wb') as f:
+            pickle.dump(rotated_data, f)
+
+def load_data(path):
+    from agents import Farmer ## for later simulation
+    fieldnames = [
+        "pid", 
+        "trial", "city", "path_chosen", "button_pressed", "reaction_time_ms", 
+        "context", "grid", "path_A_expected_cost", "path_B_expected_cost", 
+        "path_A_actual_cost", "path_B_actual_cost", "path_A_future_overlap", 
+        "path_B_future_overlap", "abstract_sequence_A", "abstract_sequence_B", 
+        "dominant_axis_A", "dominant_axis_B", "better_path", "chose_better_path",
+        "bonusAchieved",
+        'expt_info_filename'
+    ]
+    df_all = pd.DataFrame(columns=fieldnames)
+
+    # Load id mapping (for later simulation)
+    with open('expt/assets/trial_sequences/id_mapping.pkl', 'rb') as f:
+        id_mapping = pickle.load(f)
+    all_expt_info_ids = []
+
+    # Initialize questionnaire dictionary
+    questionnaire = {
+        "pid": [],
+    }
+    for q in range(1, 18+1):
+        questionnaire['NFC'+str(q)] = []
+    questionnaire['screener'] = []
+    
+    for file in os.listdir(path):
+        if not file.endswith('.json'):
+            continue
+        filename = os.path.join(path, file)
+        pid = file[:-5]
+
+        # Load and decode JSON (double decoding)
+        with open(filename, 'r', encoding='utf-8') as f:
+            try:
+                raw = f.read()
+                first_pass = json.loads(raw)
+                data = json.loads(first_pass)
+            except Exception as e:
+                print(f"Decoding error in file {file}: {e}")
+                continue
+
+        ## sanity check: print 0i30zpvykjyk5btzylrbcfjk
+        # if pid == '0i30zpvykjyk5btzylrbcfjk':
+        #     print('Sanity check for participant 0i30zpvykjyk5btzylrbcfjk')
+
+        ## bonus?
+        # bonus = [trial.get('bonusAchieved', 0) for trial in data if 'bonusAchieved' in trial]
+        # if bonus:
+        #     print('Bonus for participant', pid, ':', bonus[0])
+
+
+        # Filter for relevant trials
+        trial_data = [
+            trial for trial in data
+            if trial.get('trial_type') == 'html-keyboard-response' and trial.get('choice')
+        ]
+
+        if not trial_data:
+            continue
+
+        ## save questionnaire data
+        questionnaire['pid'].append(pid)
+        nfc_data = [entry for entry in data if entry.get("task") == "NFC"]
+        nfc_data_flat = [
+            item for sublist in nfc_data for item in sublist['response'].items()
+        ]
+        nfc_data_flat = dict(nfc_data_flat)
+        keep_keys = []
+        for key in list(nfc_data_flat.keys()):  # Iterate over a copy of the keys
+            if key[-1] == '.':
+                nfc_data_flat[key[:-1]] = nfc_data_flat[key]
+                keep_keys.append(key[:-1])
+            else:
+                keep_keys.append(key)
+
+        for key in questionnaire.keys():
+            if key in nfc_data_flat.keys():
+                questionnaire[key].append(nfc_data_flat[key])
+            elif key != 'pid':
+                questionnaire[key].append(np.nan)
+
+        df_tmp = pd.DataFrame([{key: trial.get(key, '') for key in fieldnames} for trial in trial_data])
+
+        # Check for completeness (8 cities)
+        n_cities = df_tmp['city'].nunique()
+        if n_cities < 8:
+            print('Incomplete dataset for participant:', file,'. Found only', n_cities, 'cities.')
+            continue
+
+        # Skip empty lines
+        df_tmp = df_tmp[df_tmp['trial'] != ''].reset_index(drop=True)
+
+        # skip practice trials, i.e. check how many trials have city==1
+        n_city_1 = df_tmp[df_tmp['city'] == 1].shape[0]
+        if n_city_1==28:
+            df_tmp = df_tmp.iloc[8:].reset_index(drop=True)
+        elif n_city_1==36:
+            df_tmp = df_tmp.iloc[16:].reset_index(drop=True)
+        else:
+            print('city 1 trials:',n_city_1)
+        assert (df_tmp.iloc[0]['city'] == 1) & (df_tmp.iloc[0]['trial'] == 1) \
+            and (df_tmp.iloc[0]['grid'] == 1), 'First trial should be city 1, grid 1, trial 1. Instead got: ' \
+            + str(df_tmp.iloc[0]['city']) + ', ' + str(df_tmp.iloc[0]['grid']) + ', ' + str(df_tmp.iloc[0]['trial'])
+        
+        ## check how many trials
+        n_total_trials = len(df_tmp)
+        if n_total_trials != 160:
+            print('Expected 160 trials, but found:', n_total_trials, 'for participant:', pid)
+            display(df_tmp.tail())
+
+            ## hacky fix for 'e248nl43jdfwg8bisl7sjezc' who is missing the final day of the final city: add four more trials with nans
+            if pid == 'e248nl43jdfwg8bisl7sjezc' and n_total_trials == 156:
+                print('Applying hacky fix for participant', pid, 'by adding four empty trials for the missing final day of the final city')
+                last_city = df_tmp['city'].max()
+                last_trial = df_tmp[df_tmp['city'] == last_city]['trial'].max()
+                last_day = df_tmp[df_tmp['city'] == last_city]['grid'].max()
+                for i in range(1, 5):
+                    new_row = {
+                        'pid': pid,
+                        'trial': i,
+                        'city': 8,
+                        'path_chosen': np.nan,
+                        'button_pressed': np.nan,
+                        'reaction_time_ms': np.nan,
+                        'context': np.nan,
+                        'grid': 5,
+                        'path_A_expected_cost': np.nan,
+                        'path_B_expected_cost': np.nan,
+                        'path_A_actual_cost': np.nan,
+                        'path_B_actual_cost': np.nan,
+                        'path_A_future_overlap': np.nan,
+                        'path_B_future_overlap': np.nan,
+                        'abstract_sequence_A': np.nan,
+                        'abstract_sequence_B': np.nan,
+                        'dominant_axis_A': np.nan,
+                        'dominant_axis_B': np.nan,
+                        'better_path': np.nan,
+                        'chose_better_path': np.nan,
+                        'bonusAchieved': np.nan,
+                        # 'expt_info_filename': id_mapping.get(pid, '')
+                        'expt_info_filename': np.nan,
+                    }
+                    df_tmp = pd.concat([df_tmp, pd.DataFrame([new_row])], ignore_index=True)
+                print('New total trials after fix:', len(df_tmp))
+            # continue ## skip
+
+
+        # rename a few cols, e.g. 'grid' to 'day', 'reaction_time_ms' to 'RT'
+        df_tmp['pid'] = pid
+        df_tmp.rename(columns={'grid': 'day'
+                                 , 'reaction_time_ms': 'RT',
+                               }, inplace=True)
+        
+        ## check for duplicated trial sequences
+        try:
+            id = id_mapping[pid][10:]
+        except KeyError:
+            raise KeyError(f'No id mapping for participant {pid}')
+        if id in all_expt_info_ids:
+            print('Warning: id already in list:', id)
+
+            ## remove
+            # df_all = df_all[df_all['pid'] != pid]
+
+            ## tweak id
+            # id = id + '_dup'
+
+            ## do nothing
+            continue
+        
+        try:
+            df_tmp.loc[df_tmp['pid'] == pid, 'expt_info_filename'] = str(int(id))
+        except:
+            df_tmp.loc[df_tmp['pid'] == pid, 'expt_info_filename'] = str(id)
+        all_expt_info_ids.append(id)
+        df_all = pd.concat([df_all, df_tmp], ignore_index=True)
+
+    # Cleaning
+    df_all = df_all.replace('', np.nan)
+    df_all = df_all.replace('nan', np.nan)
+    df_all = df_all.replace('NaN', np.nan)
+    df_all = df_all.replace('none', np.nan)
+    df_all = df_all.replace('None', np.nan)
+    for col in fieldnames:
+        try:
+            df_all[col] = df_all[col].astype(float)
+        except ValueError:
+            pass
+
+    # count number of nan trials per participant - i.e. nan in path_chosen
+    df_all['path_chosen'] = df_all['path_chosen'].replace('nan', np.nan)
+    df_all['path_chosen'] = df_all['path_chosen'].replace('none', np.nan)
+    df_all.loc[df_all['path_chosen'].isna(), 'chose_better_path'] = np.nan
+    for p in df_all['pid'].unique():
+        n_nan = df_all.loc[df_all['pid'] == p, 'path_chosen'].isna().sum()
+        # if n_nan > 0:
+        #     print('n_nan for participant', p, ':', n_nan)
+
+    # Label path IDs and aligned path info
+    df_all['path_chosen'] = df_all['path_chosen'].map({'blue': 'a', 'green': 'b'})
+    df_all = df_all[df_all['trial'].notna()]
+    df_all['chose_aligned'] = np.nan
+    df_all['aligned_path'] = np.nan
+    df_all['chose_vertical'] = np.nan # so we have a consistent reference frame
+
+    ## remove all non-choices?
+    # df_all = df_all[df_all['path_chosen'].notna()]
+
+    df_all.loc[(df_all['context'] == 'column') & (df_all['dominant_axis_A'] == 'vertical'), 'aligned_path'] = 'a'
+    df_all.loc[(df_all['context'] == 'column') & (df_all['dominant_axis_B'] == 'vertical'), 'aligned_path'] = 'b'
+    df_all.loc[(df_all['context'] == 'row') & (df_all['dominant_axis_A'] == 'horizontal'), 'aligned_path'] = 'a'
+    df_all.loc[(df_all['context'] == 'row') & (df_all['dominant_axis_B'] == 'horizontal'), 'aligned_path'] = 'b'
+
+    df_all['chose_aligned'] = (df_all['path_chosen'] == df_all['aligned_path']).astype(bool)
+    df_all['chose_orthogonal'] = (df_all['path_chosen'] != df_all['aligned_path']).astype(bool)
+    df_all.loc[(df_all['context'] == 'column') & (df_all['chose_aligned'] == True), 'chose_vertical'] = True
+    df_all.loc[(df_all['context'] == 'column') & (df_all['chose_aligned'] == False), 'chose_vertical'] = False
+    df_all.loc[(df_all['context'] == 'row') & (df_all['chose_aligned'] == True), 'chose_vertical'] = False
+    df_all.loc[(df_all['context'] == 'row') & (df_all['chose_aligned'] == False), 'chose_vertical'] = True
+
+
+    ### get some additional data
+    df_all['CE_action'] = np.nan
+    df_all['CE_chose_vertical'] = np.nan
+    df_all['CE_chose_aligned'] = np.nan
+    df_all['CE_chose_orthogonal'] = np.nan
+    df_all['first_path'] = np.nan
+    df_all['second_path'] = np.nan
+    df_all['third_path'] = np.nan
+    df_all['first_path_orthogonal'] = np.nan
+    df_all['second_path_orthogonal'] = np.nan
+    df_all['third_path_orthogonal'] = np.nan 
+    df_all['prev_chose_orthogonal'] = np.nan
+    df_all['prev_chose_aligned'] = np.nan
+    df_all['prev_chose_vertical'] = np.nan
+    df_all['prev_day_chose_aligned'] = np.nan ## i.e. for the same trial of the previous day
+    df_all['prev_day_chose_orthogonal'] = np.nan
+    df_all['prev_day_chose_vertical'] = np.nan
+    df_all['path_A_past_overlaps'] = np.nan
+    df_all['path_B_past_overlaps'] = np.nan
+    df_all['path_A_past_observed_costs'] = np.nan
+    df_all['path_B_past_observed_costs'] = np.nan
+    df_all['path_A_past_observed_no_costs'] = np.nan
+    df_all['path_B_past_observed_no_costs'] = np.nan
+    df_all['total_past_overlaps'] = np.nan
+    df_all['observed_cost'] = np.nan
+    df_all['prev_observed_cost'] = np.nan
+    df_all['path_quality'] = np.nan
+    df_all['prev_path_quality'] = np.nan
+    df_all['day_cost'] = np.nan
+    df_all['path_len'] = np.nan
+    df_all['switched_axis'] = np.nan
+    
+    ## diffs, where this is always defined as vertical - horizontal
+    df_all['past_overlaps_diff'] = np.nan 
+    df_all['observed_costs_diff'] = np.nan 
+    df_all['observed_no_costs_diff'] = np.nan
+    
+    ## accuracy as a function of first-trial choice - i.e. what is the trial-wise accuracy, conditional on having chosen path a or b first
+    for p in tqdm(range(len(df_all['pid'].unique())), total=len(df_all['pid'].unique()), desc='Extracting participant trial info'):
+        pid = df_all['pid'].unique()[p]
+        for city in df_all['city'].unique():
+            prev_day_chose_aligned = np.nan
+            prev_day_chose_orthogonal = np.nan
+            prev_day_chose_vertical = np.nan
+            for day in df_all['day'].unique():
+                try:
+                    df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'first_path'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'path_chosen'].iloc[0]
+                    df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'first_path_orthogonal'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'chose_orthogonal'].iloc[0]
+                    df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'second_path'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'path_chosen'].iloc[1]
+                    df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'second_path_orthogonal'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'chose_orthogonal'].iloc[1]
+                    df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'third_path'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'path_chosen'].iloc[2]
+                    df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'third_path_orthogonal'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'chose_orthogonal'].iloc[2]
+
+                    ## save previous day choice (only interested in t=1)
+                    df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['trial']==1) & (df_all['pid'] == pid), 'prev_day_chose_aligned'] = prev_day_chose_aligned
+                    df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['trial']==1) & (df_all['pid'] == pid), 'prev_day_chose_orthogonal'] = prev_day_chose_orthogonal
+                    df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['trial']==1) & (df_all['pid'] == pid), 'prev_day_chose_vertical'] = prev_day_chose_vertical
+
+                    ## save day choice for subsequent day...
+                    prev_day_chose_aligned = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['trial']==1) & (df_all['pid'] == pid), 'chose_aligned'].iloc[0]
+                    prev_day_chose_orthogonal = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['trial']==1) & (df_all['pid'] == pid), 'chose_orthogonal'].iloc[0]
+                    prev_day_chose_vertical = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['trial']==1) & (df_all['pid'] == pid), 'chose_vertical'].iloc[0]
+
+                except:
+                    pass
+        
+        ## iterate through each participant's dataset and set the previous choice
+        prev_choice = None
+        prev_choice_aligned = None
+        prev_choice_orthogonal = None
+        prev_choice_vertical = None
+        for i, row in df_all.loc[df_all['pid'] == pid].iterrows():
+            if pd.isna(row['path_chosen']): 
+                continue
+            if prev_choice is None: 
+                df_all.at[i, 'prev_chose_aligned'] = np.nan
+                df_all.at[i, 'prev_chose_orthogonal'] = np.nan
+                df_all.at[i, 'prev_chose_vertical'] = np.nan
+            else:
+                df_all.at[i, 'prev_chose_vertical'] = prev_choice_vertical
+                df_all.at[i, 'prev_chose_aligned'] = prev_choice_aligned
+                df_all.at[i, 'prev_chose_orthogonal'] = prev_choice_orthogonal
+                df_all.at[i, 'switched_axis'] = (prev_choice_aligned != row['chose_aligned']) or (prev_choice_orthogonal != row['chose_orthogonal'])
+            prev_choice = row['path_chosen']
+            prev_choice_aligned = row['chose_aligned']
+            prev_choice_orthogonal = row['chose_orthogonal']
+            prev_choice_vertical = row['chose_vertical']
+
+        
+        ### simulate each participant's choices to extract the missing trial info
+
+        ## get envs
+        try:
+            id = id_mapping[pid][10:]
+        except KeyError:
+            raise KeyError(f'No id mapping for participant {pid}')
+        try:
+            try:
+                with open('expt/assets/trial_sequences/env_objects/env_objects_{}.pkl'.format(id), 'rb') as f:
+                    envs = pickle.load(f)
+            except:
+                with open('expt/assets/trial_sequences/rotated_env_objects/env_objects_{}.pkl'.format(id), 'rb') as f:
+                    envs = pickle.load(f)
+        except FileNotFoundError:
+            raise FileNotFoundError(f'No env objects found for participant {pid} with id {id}')
+        
+        ## simulate
+        agent = Farmer(N=8, context_prior=0.5)
+        agent.run(params = None, hyperparams=None, agent = 'human', df_trials= df_all.loc[df_all['pid'] == pid],envs=envs, fit=False)
+
+        ## extract cost info
+        df_all.loc[df_all['pid'] == pid, 'observed_cost'] = agent.total_costs.flatten()
+        df_all.loc[df_all['pid'] == pid, 'prev_observed_cost'] = df_all.loc[df_all['pid'] == pid, 'observed_cost'].shift(1)
+        df_all.loc[df_all['pid'] == pid, 'day_cost'] = agent.day_costs.flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_len'] = agent.path_len.flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_quality'] = agent.path_quality.flatten()
+        df_all.loc[df_all['pid'] == pid, 'prev_path_quality'] = df_all.loc[df_all['pid'] == pid, 'path_quality'].shift(1)
+        
+        ## first trial of each day should have no previous trial info?
+        # df_all.loc[(df_all['pid'] == pid) & (df_all['trial'] == 1), 'prev_observed_cost'] = np.nan
+        # df_all.loc[(df_all['pid'] == pid) & (df_all['trial'] == 1), 'prev_path_quality'] = np.nan
+        # df_all.loc[(df_all['pid'] == pid) & (df_all['trial'] == 1), 'prev_chose_aligned'] = np.nan
+        # df_all.loc[(df_all['pid'] == pid) & (df_all['trial'] == 1), 'prev_chose_orthogonal'] = np.nan
+        # df_all.loc[(df_all['pid'] == pid) & (df_all['trial'] == 1), 'prev_chose_vertical'] = np.nan
+        
+        ## extract overlap info
+        df_all.loc[df_all['pid'] == pid, 'path_A_past_overlaps'] = agent.path_past_overlaps[:,:,:,0].flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_B_past_overlaps'] = agent.path_past_overlaps[:,:,:,1].flatten()
+        df_all.loc[df_all['pid'] == pid, 'total_past_overlaps'] = agent.path_past_overlaps[:,:,:,0].flatten() + agent.path_past_overlaps[:,:,:,1].flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_A_past_observed_costs'] = agent.path_past_observed_costs[:,:,:,0].flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_B_past_observed_costs'] = agent.path_past_observed_costs[:,:,:,1].flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_A_past_observed_no_costs'] = agent.path_past_observed_no_costs[:,:,:,0].flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_B_past_observed_no_costs'] = agent.path_past_observed_no_costs[:,:,:,1].flatten()
+
+        ## diffs (vertical - horizontal)
+        # df_all.loc[(df_all['pid'] == pid)
+        #            & (df_all['dominant_axis_A'] == 'vertical')
+        #            , 'past_overlaps_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'vertical'), 'path_A_past_overlaps'] - df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'vertical'), 'path_B_past_overlaps']
+        # df_all.loc[(df_all['pid'] == pid)
+        #              & (df_all['dominant_axis_A'] == 'horizontal')
+        #              , 'past_overlaps_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'horizontal'), 'path_B_past_overlaps'] - df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'horizontal'), 'path_A_past_overlaps']
+        # df_all.loc[(df_all['pid'] == pid)
+        #              & (df_all['dominant_axis_A'] == 'vertical')
+        #              , 'observed_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'vertical'), 'path_A_past_observed_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'vertical'), 'path_B_past_observed_costs']
+        # df_all.loc[(df_all['pid'] == pid)
+        #                 & (df_all['dominant_axis_A'] == 'horizontal')
+        #                 , 'observed_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'horizontal'), 'path_B_past_observed_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'horizontal'), 'path_A_past_observed_costs']
+        # df_all.loc[(df_all['pid'] == pid)
+        #                 & (df_all['dominant_axis_A'] == 'vertical')
+        #                 , 'observed_no_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'vertical'), 'path_A_past_observed_no_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'vertical'), 'path_B_past_observed_no_costs']
+        # df_all.loc[(df_all['pid'] == pid)
+        #                 & (df_all['dominant_axis_A'] == 'horizontal')
+        #                 , 'observed_no_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'horizontal'), 'path_B_past_observed_no_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'horizontal'), 'path_A_past_observed_no_costs']
+        
+        ## or, diffs (orthogonal - aligned)
+        df_all.loc[(df_all['pid'] == pid)
+                   & (df_all['aligned_path'] == 'b')
+                   , 'past_overlaps_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'b'), 'path_A_past_overlaps'] - df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'b'), 'path_B_past_overlaps']
+        df_all.loc[(df_all['pid'] == pid)
+                     & (df_all['aligned_path'] == 'a')
+                     , 'past_overlaps_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'a'), 'path_B_past_overlaps'] - df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'a'), 'path_A_past_overlaps']
+        df_all.loc[(df_all['pid'] == pid)
+                     & (df_all['aligned_path'] == 'b')
+                     , 'observed_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'b'), 'path_A_past_observed_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'b'), 'path_B_past_observed_costs']
+        df_all.loc[(df_all['pid'] == pid)
+                        & (df_all['aligned_path'] == 'a')
+                        , 'observed_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'a'), 'path_B_past_observed_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'a'), 'path_A_past_observed_costs']
+        df_all.loc[(df_all['pid'] == pid)
+                        & (df_all['aligned_path'] == 'b')
+                        , 'observed_no_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'b'), 'path_A_past_observed_no_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'b'), 'path_B_past_observed_no_costs']
+        df_all.loc[(df_all['pid'] == pid)
+                        & (df_all['aligned_path'] == 'a')
+                        , 'observed_no_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'a'), 'path_B_past_observed_no_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'a'), 'path_A_past_observed_no_costs']
+
+        
+        ## sanity check: total past overlaps should be the sum of path A and B past overlaps
+        assert np.all(df_all.loc[df_all['pid'] == pid, 'total_past_overlaps'] == df_all.loc[df_all['pid'] == pid, 'path_A_past_overlaps'] + df_all.loc[df_all['pid'] == pid, 'path_B_past_overlaps']), \
+            'Total past overlaps should be the sum of path A and B past overlaps for participant ' + pid
+        
+        ## extract CE choices
+        df_all.loc[df_all['pid'] == pid, 'CE_action'] = agent.CE_actions.flatten()
+    df_all['CE_action'] = df_all['CE_action'].replace({1: 'b', 0: 'a'})
+    df_all['CE_action'] = df_all['CE_action'].astype(str)
+    df_all['CE_chose_aligned'] = (df_all['CE_action'] == df_all['aligned_path']).astype(bool)
+    df_all['CE_chose_orthogonal'] = (df_all['CE_action'] != df_all['aligned_path']).astype(bool)
+    df_all.loc[(df_all['context'] == 'column') & (df_all['CE_chose_aligned'] == True), 'CE_chose_vertical'] = True
+    df_all.loc[(df_all['context'] == 'column') & (df_all['CE_chose_aligned'] == False), 'CE_chose_vertical'] = False
+    df_all.loc[(df_all['context'] == 'row') & (df_all['CE_chose_aligned'] == True), 'CE_chose_vertical'] = False
+    df_all.loc[(df_all['context'] == 'row') & (df_all['CE_chose_aligned'] == False), 'CE_chose_vertical'] = True
+    df_all['CE_human_consistent'] = (df_all['CE_action'] == df_all['path_chosen']).astype(bool)
+        
+
+    # last bit of cleaning of questionnaire data
+    df_q = pd.DataFrame.from_dict(questionnaire)
+    answers = ["extremely uncharacteristic of me", "somewhat uncharacteristic of me", "uncertain", "somewhat characteristic of me", "extremely characteristic of me"];
+    for q in range(1, 18+1):
+        df_q['NFC'+str(q)] = df_q['NFC'+str(q)].replace(answers, [1, 2, 3, 4, 5])
+    df_q = df_q.replace('', np.nan)
+    df_q = df_q.replace('nan', np.nan)
+    df_q = df_q.replace('NaN', np.nan)
+    df_q = df_q.replace('none', np.nan)
+    df_q = df_q.replace('None', np.nan)
+    reverse_items = [3, 4, 5, 7, 8, 9, 12, 16, 17]  # 1-indexed
+    for i in reverse_items:
+        col = f"NFC{i}"
+        df_q[col] = 6 - df_q[col]  # reverse-score
+    df_q['NFC_total'] = df_q[[f"NFC{i}" for i in range(1, 19)]].sum(axis=1)
+    return df_all, df_q
+
+
+## check counterbalancing - does each unrotated id have a rotated counterpart?
+def check_counterbalance(df):
+    unrotated_ids = []
+    rotated_ids = []
+    # for id in sorted(df['expt_info_filename'].unique()):
+    for id in df['expt_info_filename'].unique():
+        if isinstance(id, float):
+            id = str(int(id))
+        if id[-7:] == 'rotated':
+            rotated_ids.append(id)
+        else:
+            unrotated_ids.append(id)
+        if id[-7:] != 'rotated':
+            if id+'_rotated' not in df['expt_info_filename'].unique():
+                print('No rotated counterpart for id:', id)
+    print('n unrotated ids:', len(unrotated_ids))
+    print('n rotated ids:', len(rotated_ids))
+
+
 
 
 ## data-saving/dict stuff
 data_keys = [
     'agent',
-    'block',
+    'day',
     'grid',
-    'episode',
+    'trial',
     'start',
     'goal',
     'costs',
@@ -759,6 +1461,7 @@ data_keys = [
     'expected_LD',
     'expected_KL',
     'Q_values',
+    'choice_probs',
     'leaf_visits',
     'CE_Q_values',
 

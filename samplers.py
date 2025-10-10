@@ -5,7 +5,7 @@ import random
 from math import log, exp, gamma
 from functools import lru_cache
 from matplotlib import pyplot as plt
-from scipy.special import beta, logsumexp
+from scipy.special import beta, logsumexp, digamma
 
 @njit
 def compute_log_likelihood(sampled_i, sampled_j, rel_obs, proposed_row_p, proposed_col_q, current_row_p, current_col_q, high_cost, low_cost):
@@ -63,8 +63,8 @@ def compute_log_likelihood_global(obs, row_probs, col_probs, high_cost, low_cost
 
 
 @njit
-def propose(alpha, beta):
-    return np.random.beta(alpha, beta)
+def propose(alpha, beta, size=1):
+    return np.random.beta(alpha, beta, size=size)
 
 # @njit
 # def beta(a,b):
@@ -130,6 +130,9 @@ class GridSampler:
         self.N = N
         self.low_cost = low_cost
         self.high_cost = high_cost
+
+        ## hacky fix: should be no duplicates in obs!
+        self.obs = np.unique(self.obs, axis=0)
 
         ## cache obs groups for lazy sampling
         self.row_to_obs = {i: [(i, j, cost) for (i_, j, cost) in self.obs if i_ == i] for i in range(self.N)}
@@ -329,9 +332,9 @@ class GridSampler:
         return self.row_probs, self.col_probs
     
     ## no combinatorial structure - just use the counts for each row and column
-    def simple_sample(self, col_context=True):
-        self.col_probs = np.ones(self.N) 
-        self.row_probs = np.ones(self.N)
+    def simple_sample(self, col_context=True, n_samples=1):
+        self.col_probs = np.ones((n_samples, self.N)) 
+        self.row_probs = np.ones((n_samples, self.N))
         
         ## if BAMCP, then parameters are *sampled* from beta distribution
         if not self.CE:
@@ -342,7 +345,7 @@ class GridSampler:
                     high_counts_col = self.high_counts_cols[j]
                     alpha = self.alpha_col + low_counts_col
                     beta = self.beta_col + high_counts_col
-                    self.col_probs[j] = propose(alpha, beta)
+                    self.col_probs[:,j] = propose(alpha, beta, size=n_samples)
             else:
                 # self.col_probs = np.ones(self.N)
                 for i in range(self.N):
@@ -350,7 +353,7 @@ class GridSampler:
                     high_counts_row = self.high_counts_rows[i]
                     alpha = self.alpha_row + low_counts_row
                     beta = self.beta_row + high_counts_row
-                    self.row_probs[i] = propose(alpha, beta)
+                    self.row_probs[:,i] = propose(alpha, beta, size=n_samples)
 
         ## if CE, then parameters are *fixed* at the mean of the beta distribution, whose parameters are determined by the counts
         elif self.CE:
@@ -360,14 +363,14 @@ class GridSampler:
                     high_counts_col = self.high_counts_cols[j]
                     alpha = self.alpha_col + low_counts_col
                     beta = self.beta_col + high_counts_col
-                    self.col_probs[j] = alpha / (alpha + beta)
+                    self.col_probs[:,j] = alpha / (alpha + beta)
             else:
                 for i in range(self.N):
                     low_counts_row = self.low_counts_rows[i]
                     high_counts_row = self.high_counts_rows[i]
                     alpha = self.alpha_row + low_counts_row
                     beta = self.beta_row + high_counts_row
-                    self.row_probs[i] = alpha / (alpha + beta)
+                    self.row_probs[:,i] = alpha / (alpha + beta)
         return self.row_probs, self.col_probs
     
 
@@ -381,6 +384,7 @@ class GridSampler:
             log_lik_j = np.log(beta(self.alpha_col + low_counts_col, self.beta_col + high_counts_col)) - np.log(beta(self.alpha_col, self.beta_col))
             log_col_likelihoods.append(log_lik_j)
         log_col_likelihood = np.sum(log_col_likelihoods)
+
         
         # Compute log-likelihood for rows
         log_row_likelihoods = []

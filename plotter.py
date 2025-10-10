@@ -3,17 +3,23 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 ## visualise the samples
-def plot_r(sampled_rewards, ax, title=None, cbar=False):
-    # vmin = np.min(sampled_rewards)
-    # vmax = np.max(sampled_rewards)
-    # vmin = -1
-    # vmax = 0
-    vmin = 0
-    vmax = 1
-    sns.heatmap(sampled_rewards, ax=ax, cbar=cbar, square=True, cmap='viridis', 
-                vmin=vmin, 
-                vmax=vmax,
-                    cbar_kws={'ticks': [0, 1], 'label': 'p(toll)', 'shrink': 0.7})
+def plot_r(sampled_rewards, ax, title=None, cbar=False, binary = False):
+    
+    if not binary:
+        vmin = 0
+        vmax = 1
+        sns.heatmap(sampled_rewards, ax=ax, cbar=cbar, square=True, cmap='viridis', 
+                    vmin=vmin, 
+                    vmax=vmax,
+                        cbar_kws={'ticks': [0, 1], 'label': 'p(toll)', 'shrink': 0.7})
+        
+    elif binary:
+        vmin = 0
+        vmax = 1
+        sns.heatmap(sampled_rewards, ax=ax, cbar=cbar, square=True, cmap=sns.color_palette(["lightgrey", "red"]), 
+            vmin=vmin, 
+            vmax=vmax,
+            cbar_kws={'ticks': [0, 1], 'label': 'p(low cost)', 'shrink': 0.7})
     # ax.imshow(sampled_rewards, extent=(0, self.N, 0, self.N), origin = 'upper')
     # ax.set_xticks(np.arange(0, self.N+1, 5))
     # ax.set_yticks(np.arange(0, self.N+1, 5))
@@ -34,6 +40,7 @@ def plot_r(sampled_rewards, ax, title=None, cbar=False):
         ax.axvline(i, color='black', lw=0.5)
 
     return ax
+
 
 def plot_state(current, goal, ax, title=None):
     ax.scatter(current[1]+0.5, current[0]+0.5, color='red', s=200)
@@ -74,11 +81,15 @@ def plot_traj(trajs, ax, expt='free',title=None):
     if expt=='free':
         markers = ['*','x','x']
         colours = ['white','red','red']
-    elif expt=='2AFC' or expt=='2AFC_SG':
+    elif expt=='AFC':
         # markers = ['x','x']
-        markers = ['*','*']
+        n_afc = len(trajs)
+        markers = ['*'] * n_afc
         # colours = ['blue', 'lime']
-        colours = ['blue','indianred']
+        colours = ['blue',
+                'green',
+                   'orange'
+                   ][:n_afc]
         # colours = ['white','white']
     path_letters = ['A','B']
     costs = ['L','H']
@@ -89,7 +100,7 @@ def plot_traj(trajs, ax, expt='free',title=None):
     for ti, traj in enumerate(trajs):
 
         ## optimal path
-        if (ti==0) or (expt=='2AFC'):
+        if (ti==0) or (expt=='AFC'):
 
             ## plot start and goal
             # ax.scatter(traj[0][1]+0.5, traj[0][0]+0.5, color='red', edgecolor='black', s=200, linewidth=2)
