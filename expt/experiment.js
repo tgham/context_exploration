@@ -60,7 +60,7 @@ if (test) {
     var ppt_data = jsPsych.data.get().json();
     send_incomplete(subject_id, ppt_data);
     console.log('debugging with subject_id 1');
-    fetch('assets/trial_sequences/expt_info_1.json')
+    fetch('assets/trial_sequences/expt_2/expt_info/expt_2_info_1.json')
     .then(response => response.json())
     .then(data => {
         grid = new Grid(data); // Initialize the Grid class with the loaded data        
@@ -1011,10 +1011,10 @@ function initPractice() {
     practice4TrialIndex = 0;
 
     return Promise.all([
-        loadPracticeGrid('assets/trial_sequences/practice_sequence1.json', 'practice1Grid').then(grid => practice1Grid = grid),
-        loadPracticeGrid('assets/trial_sequences/practice_sequence2.json', 'practice2Grid').then(grid => practice2Grid = grid),
-        loadPracticeGrid('assets/trial_sequences/practice_sequence3.json', 'practice3Grid').then(grid => practice3Grid = grid),
-        loadPracticeGrid('assets/trial_sequences/practice_sequence4.json', 'practice4Grid').then(grid => practice4Grid = grid)
+        loadPracticeGrid('assets/trial_sequences/expt_2/practice/expt_info/expt_2_info_1.json', 'practice1Grid').then(grid => practice1Grid = grid),
+        loadPracticeGrid('assets/trial_sequences/expt_2/practice/expt_info/expt_2_info_2.json', 'practice2Grid').then(grid => practice2Grid = grid),
+        loadPracticeGrid('assets/trial_sequences/expt_2/practice/expt_info/expt_2_info_3.json', 'practice3Grid').then(grid => practice3Grid = grid),
+        loadPracticeGrid('assets/trial_sequences/expt_2/practice/expt_info/expt_2_info_4.json', 'practice4Grid').then(grid => practice4Grid = grid)
     ]).then(() => {
         console.log('All practice grids loaded successfully.');
     }).catch(error => {
@@ -2703,7 +2703,7 @@ const instructionsReview = {
 const instructions9 = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
-        const nDays = grid.nGrids; // Retrieve the number of days from grid.nGrids
+        const nGrids = grid.nGrids; // Retrieve the number of days from grid.nGrids
         return `
             <div class="instruction-section">
                 <h1>Bonus Payment</h1>
@@ -3013,8 +3013,8 @@ function initializeExperiment() {
     // Combine everything into a single timeline
     const fullTimeline = [
       ...ethicsTimeline,
-      instructionsLoop,
-      ...quizTimeline,
+    //   instructionsLoop,
+    //   ...quizTimeline,
       ...mainTimeline
     ];
   
