@@ -171,8 +171,8 @@ let zoomFactor;
 function applyScreenScaling() {
     
     // Define the reference dimensions (MacBook Pro 16" M2)
-    const baseWidth = 3456/2;
-    const baseHeight = 2234/2;
+    const baseWidth = 3456 / 2;
+    const baseHeight = 2234 / 2;
 
     const screenWidth = window.screen.width;
     const screenHeight = window.screen.height;
@@ -180,14 +180,18 @@ function applyScreenScaling() {
     const widthRatio = screenWidth / baseWidth;
     const heightRatio = screenHeight / baseHeight;
 
-    zoomFactor = Math.min(widthRatio, heightRatio);
+    // Start with a base zoom factor of 80% (0.8)
+    const baseZoomFactor = 0.8;
+
+    // Adjust the zoom factor based on the screen proportions
+    zoomFactor = baseZoomFactor * Math.min(widthRatio, heightRatio);
 
     document.body.style.zoom = zoomFactor;
     
     console.log(`User screen: ${screenWidth}x${screenHeight}`);
     console.log(`Reference screen: ${baseWidth}x${baseHeight}`);
+    console.log(`Base zoom factor: ${baseZoomFactor}`);
     console.log(`Applied scaling factor: ${zoomFactor.toFixed(3)}`);
-  
 }
 
 
@@ -1181,53 +1185,50 @@ function mergeCosts(trialCost, callback) {
             const originalContent = totalCostElement.textContent;
             const originalColor = totalCostElement.style.color;
             
-            totalCostElement.textContent = `You ran out of time! -$${trialCost}`;
-            totalCostElement.style.color = "#f87171";
+            trialCostElement.textContent = `You ran out of time! -$${trialCost}`;
+            trialCostElement.style.color = "#f87171";
+            trialCostElement.classList.remove("hidden");
             
-            // Wait n seconds before continuing
-            setTimeout(() => {
-                totalCostElement.style.color = originalColor;
-                
-                // Continue with normal animation flow after showing the message
-                if (totalCostElement && trialCostElement) {
-                    // Add warning animation to cost display
-                    if (trialCost > 0) {
-                        trialCostElement.classList.add("cost-animate");
-                    }
-                    
-                    trialCostElement.style.transition = "transform 0.5s ease-in-out";
-                    trialCostElement.style.transform = "translateY(-20px)";
-
-                    setTimeout(() => {
-                        totalCost += trialCost;
-                        
-                        // Animated counter for total cost
-                        const startCost = totalCost - trialCost;
-                        const duration = 500;
-                        const frameDuration = 1000 / 60;
-                        const totalFrames = Math.round(duration / frameDuration);
-                        let frame = 0;
-                        
-                        const counter = setInterval(() => {
-                            frame++;
-                            const progress = frame / totalFrames;
-                            const currentCount = Math.floor(startCost + progress * trialCost);
-                            totalCostElement.textContent = `-$${currentCount}`;
-                            
-                            if (frame === totalFrames) {
-                                clearInterval(counter);
-                                totalCostElement.textContent = `-$${totalCost}`;
-
-                                // Reset trial cost display with animation
-                                trialCostElement.textContent = `-$0`;
-                                trialCostElement.classList.remove("cost-animate");
-                                trialCostElement.style.transform = "translateY(0)";
-                                trialCostElement.classList.add("hidden");
-                            }
-                        }, frameDuration);
-                    }, 100);
+            // setTimeout(() => {
+            totalCostElement.style.color = originalColor;
+            
+            // Continue with normal animation flow after showing the message
+            if (totalCostElement && trialCostElement) {
+                // Add warning animation to cost display
+                if (trialCost > 0) {
+                    trialCostElement.classList.add("cost-animate");
                 }
-            }, 1000);
+                
+                // trialCostElement.style.transition = "transform 0.5s ease-in-out";
+                // trialCostElement.style.transform = "translateY(-20px)";
+
+                setTimeout(() => {
+                totalCost += trialCost;
+            
+                const startCost = totalCost - trialCost;
+                const duration = 1000;
+                const startTime = performance.now();
+            
+                function animate(now) {
+                    const elapsed = now - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+                    const currentCount = Math.floor(startCost + progress * trialCost);
+                    totalCostElement.textContent = `-$${currentCount}`;
+            
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    } else {
+                        totalCostElement.textContent = `-$${totalCost}`;
+                        // trialCostElement.textContent = `-$0`;
+                        // trialCostElement.classList.remove("cost-animate");
+                        trialCostElement.style.transform = "translateY(0)";
+                    }
+                }
+            
+                requestAnimationFrame(animate);
+            }, 100);
+            }
+            // }, 500);
         }
     } else {
         trialFine = false;
@@ -1244,31 +1245,28 @@ function mergeCosts(trialCost, callback) {
 
             setTimeout(() => {
                 totalCost += trialCost;
-                
-                // Animated counter for total cost
+            
                 const startCost = totalCost - trialCost;
-                const duration = 500;
-                const frameDuration = 1000 / 60;
-                const totalFrames = Math.round(duration / frameDuration);
-                let frame = 0;
-                
-                const counter = setInterval(() => {
-                    frame++;
-                    const progress = frame / totalFrames;
+                const duration = 1000;
+                const startTime = performance.now();
+            
+                function animate(now) {
+                    const elapsed = now - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
                     const currentCount = Math.floor(startCost + progress * trialCost);
                     totalCostElement.textContent = `-$${currentCount}`;
-                    
-                    if (frame === totalFrames) {
-                        clearInterval(counter);
+            
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    } else {
                         totalCostElement.textContent = `-$${totalCost}`;
-
-                        // Reset trial cost display with animation
-                        trialCostElement.textContent = `-$0`;
-                        trialCostElement.classList.remove("cost-animate");
+                        // trialCostElement.textContent = `-$0`;
+                        // trialCostElement.classList.remove("cost-animate");
                         trialCostElement.style.transform = "translateY(0)";
-                        trialCostElement.classList.add("hidden");
                     }
-                }, frameDuration);
+                }
+            
+                requestAnimationFrame(animate);
             }, 100);
         }
     }
@@ -2896,35 +2894,36 @@ function createInstructionsTimeline() {
     timeline.push(practice1AnimationTrial);
 
     // Practice a full day
-    timeline.push(instructions3);
-    timeline.push(practiceFirstDayTrial);
-    for (let i = 0; i < grid.nTrials; i++) {
-        timeline.push(practice2PreSelectionTrial);
-        timeline.push(practice2SelectionTrial);
-        timeline.push(practice2AnimationTrial);
-    }
-    timeline.push(practiceGridFeedback);
+    // timeline.push(instructions3);
+    // timeline.push(practiceFirstDayTrial);
+    // for (let i = 0; i < grid.nTrials; i++) {
+    //     timeline.push(practice2PreSelectionTrial);
+    //     timeline.push(practice2SelectionTrial);
+    //     timeline.push(practice2AnimationTrial);
+    // }
+    // timeline.push(practiceGridFeedback);
 
-    // Animation to show grid resetting, and then another day
-    timeline.push(instructions4);
-    timeline.push(practiceFirstDayTrial);
-    for (let i = 0; i < grid.nTrials; i++) {
-        timeline.push(practice2PreSelectionTrial);
-        timeline.push(practice2SelectionTrial);
-        timeline.push(practice2AnimationTrial);
-    }
-    timeline.push(practiceGridFeedback);
+    // // Animation to show grid resetting, and then another day
+    // timeline.push(instructions4);
+    // timeline.push(practiceFirstDayTrial);
+    // for (let i = 0; i < grid.nTrials; i++) {
+    //     timeline.push(practice2PreSelectionTrial);
+    //     timeline.push(practice2SelectionTrial);
+    //     timeline.push(practice2AnimationTrial);
+    // }
+    // timeline.push(practiceGridFeedback);
 
     // New city animation
-    timeline.push(instructions5);
+    // timeline.push(instructions5);
 
-    for (let i = 1; i <= grid.nGrids; i++) {
-        timeline.push(instructions6);
-    }
-    timeline.push(instructions7);
-    for (let i = 1; i <= grid.nGrids; i++) {
-        timeline.push(instructions8);
-    }
+    // // illustrate contexts
+    // for (let i = 1; i <= grid.nGrids; i++) {
+    //     timeline.push(instructions6);
+    // }
+    // timeline.push(instructions7);
+    // for (let i = 1; i <= grid.nGrids; i++) {
+    //     timeline.push(instructions8);
+    // }
 
     // Add the option to review the instructions
     timeline.push(instructionsReview);
@@ -3013,7 +3012,7 @@ function initializeExperiment() {
     // Combine everything into a single timeline
     const fullTimeline = [
       ...ethicsTimeline,
-    //   instructionsLoop,
+      instructionsLoop,
     //   ...quizTimeline,
       ...mainTimeline
     ];
