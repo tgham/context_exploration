@@ -56,6 +56,7 @@
             border-radius: 10px;
             box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
             position: relative; /* enable absolute labels */
+            contain: layout paint;
         }
 
         .cost-display-container, .choice-container, .instruction-section {
@@ -268,6 +269,7 @@
             justify-content: center;
             align-content: center;
             position: relative; /* enable absolute labels */
+            contain: layout paint;
         }
 
         .upcoming-cell {
@@ -318,6 +320,7 @@
             justify-content: center;
             align-content: center;
             position: relative; /* enable absolute labels */
+            contain: layout paint;
         }
 
         .upcoming-cell-done {
@@ -704,6 +707,7 @@
             align-items: center;
             justify-content: center;
             text-align: center;
+            pointer-events: none;
         }
         .row-label {
             transform: translateY(-50%);
@@ -728,9 +732,9 @@
     <script>
         (function () {
             const GRID_SELECTORS = ['.grid-container', '.upcoming-grid', '.upcoming-grid-done'];
+            const GRID_QUERY = GRID_SELECTORS.join(',');
 
             function toLetters(idx) {
-                // Excel-style labels: 0 -> A, 25 -> Z, 26 -> AA, etc.
                 let n = idx + 1, s = '';
                 while (n > 0) {
                     const m = (n - 1) % 26;
@@ -741,13 +745,13 @@
             }
 
             function labelGrid(grid) {
-                // Remove old labels
+                if (!grid || !grid.isConnected) return;
+
                 grid.querySelectorAll('.row-label, .col-label').forEach(el => el.remove());
 
                 const cell = grid.querySelector('.grid-cell, .upcoming-cell, .upcoming-cell-done');
                 if (!cell) return;
 
-                // Determine which cell selector this grid uses
                 let cellSelector = '.grid-cell';
                 if (cell.classList.contains('upcoming-cell')) cellSelector = '.upcoming-cell';
                 if (cell.classList.contains('upcoming-cell-done')) cellSelector = '.upcoming-cell-done';
@@ -755,21 +759,15 @@
                 const cells = Array.from(grid.querySelectorAll(cellSelector));
                 if (!cells.length) return;
 
-                const cs = getComputedStyle(grid);
-                const borderLeft = parseFloat(cs.borderLeftWidth) || 0;
-                const borderTop = parseFloat(cs.borderTopWidth) || 0;
-                const gridRect = grid.getBoundingClientRect();
-                const eps = 1; // tolerance for grouping rows/cols
+                const eps = 1;
+                const data = cells.map(el => ({
+                    el,
+                    left: el.offsetLeft,
+                    top: el.offsetTop,
+                    w: el.offsetWidth,
+                    h: el.offsetHeight
+                }));
 
-                // Collect per-cell geometry relative to the grid (padding box)
-                const data = cells.map(el => {
-                    const r = el.getBoundingClientRect();
-                    const left = r.left - gridRect.left - borderLeft;
-                    const top = r.top - gridRect.top - borderTop;
-                    return { el, left, top, w: r.width, h: r.height };
-                });
-
-                // Unique row tops and column lefts with tolerance
                 const rowTops = [];
                 const colLefts = [];
                 for (const d of data) {
@@ -779,59 +777,106 @@
                 rowTops.sort((a,b)=>a-b);
                 colLefts.sort((a,b)=>a-b);
 
-                // Increase spacing of row labels from the leftmost cells
                 const ROW_LABEL_GAP = 30;
                 const COL_LABEL_GAP = 9;
 
-                // Row labels (1..N) at centers of leftmost cells per row
                 rowTops.forEach((rowTop, rIdx) => {
                     const rowCells = data.filter(d => Math.abs(d.top - rowTop) <= eps);
                     if (!rowCells.length) return;
                     const leftmost = rowCells.reduce((a,b)=> (a.left < b.left ? a : b));
                     const y = leftmost.top + leftmost.h / 2;
-                    const x = leftmost.left - ROW_LABEL_GAP; 
+                    const x = leftmost.left - ROW_LABEL_GAP;
                     const lbl = document.createElement('div');
                     lbl.className = 'row-label';
                     lbl.textContent = String(rIdx + 1);
                     lbl.style.top = y + 'px';
                     lbl.style.left = x + 'px';
-                    // Center number within the left gap
                     lbl.style.width = ROW_LABEL_GAP + 'px';
                     grid.appendChild(lbl);
                 });
 
-                // Column labels (A..N) centered below bottom-most cell in each column
                 colLefts.forEach((colLeft, cIdx) => {
                     const colCells = data.filter(d => Math.abs(d.left - colLeft) <= eps);
                     if (!colCells.length) return;
                     const bottommost = colCells.reduce((a,b)=> (a.top > b.top ? a : b));
                     const x = bottommost.left + bottommost.w / 2;
-                    const y = bottommost.top + bottommost.h + COL_LABEL_GAP; // keep existing spacing
+                    const y = bottommost.top + bottommost.h + COL_LABEL_GAP;
                     const lbl = document.createElement('div');
                     lbl.className = 'col-label';
                     lbl.textContent = toLetters(cIdx);
                     lbl.style.left = x + 'px';
                     lbl.style.top = y + 'px';
-                    // Optional: center letter within a fixed height box
                     lbl.style.height = COL_LABEL_GAP + 'px';
                     grid.appendChild(lbl);
                 });
             }
 
-            function labelAll() {
-                GRID_SELECTORS.forEach(sel => {
-                    document.querySelectorAll(sel).forEach(labelGrid);
+            // Batch labeling requests to one rAF per frame
+            const pending = new Set();
+            let rafId = 0;
+            function schedule(grid) {
+                if (!grid || !grid.matches || !grid.matches(GRID_QUERY)) return;
+                pending.add(grid);
+                if (rafId) return;
+                rafId = requestAnimationFrame(() => {
+                    pending.forEach(g => labelGrid(g));
+                    pending.clear();
+                    rafId = 0;
                 });
             }
 
-            // Re-label when DOM changes (new grids) or on resize (auto-fit columns can change)
-            const observer = new MutationObserver(() => requestAnimationFrame(labelAll));
+            function labelAllExisting() {
+                document.querySelectorAll(GRID_QUERY).forEach(schedule);
+            }
+
+            // Watch grids for size/layout changes only (not every class/style toggle on the page)
+            const resizeObserver = new ResizeObserver(entries => {
+                for (const entry of entries) schedule(entry.target);
+            });
+            const watched = new WeakSet();
+            function watchGrid(grid) {
+                if (!watched.has(grid)) {
+                    resizeObserver.observe(grid);
+                    watched.add(grid);
+                }
+            }
+
+            function findGridsIn(node, out = []) {
+                if (!(node instanceof Element)) return out;
+                if (node.matches(GRID_QUERY)) out.push(node);
+                node.querySelectorAll?.(GRID_QUERY).forEach(el => out.push(el));
+                return out;
+            }
+
+            // Observe only additions/removals, not attributes, to avoid relabel storms during animations
+            const mutationObserver = new MutationObserver(mutations => {
+                for (const m of mutations) {
+                    for (const n of m.addedNodes) {
+                        const grids = findGridsIn(n);
+                        grids.forEach(g => { watchGrid(g); schedule(g); });
+                    }
+                    // No action needed for removed nodes; labels are inside the grid and go away with it
+                }
+            });
 
             document.addEventListener('DOMContentLoaded', () => {
-                labelAll();
-                observer.observe(document.body, { childList: true, subtree: true });
-                window.addEventListener('resize', () => requestAnimationFrame(labelAll));
+                labelAllExisting();
+                document.querySelectorAll(GRID_QUERY).forEach(watchGrid);
+
+                mutationObserver.observe(document.body, { childList: true, subtree: true });
+                window.addEventListener('resize', () => {
+                    document.querySelectorAll(GRID_QUERY).forEach(schedule);
+                }, { passive: true });
             });
+
+            window.addEventListener('beforeunload', () => {
+                mutationObserver.disconnect();
+                resizeObserver.disconnect();
+                if (rafId) cancelAnimationFrame(rafId);
+            });
+
+            // Optional: manual hook if needed elsewhere
+            window.relabelGrids = () => labelAllExisting();
         })();
     </script>
 
