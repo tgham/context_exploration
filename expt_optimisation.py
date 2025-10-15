@@ -257,7 +257,7 @@ if create:
             df_expt = pd.concat(results, ignore_index=True)
 
             ## save expt info
-            df_expt.to_csv('useful_saves/expt_optimisation/{}AFC_{}x{}_env_{}-{}-{}-{}_beta_{}_sim_ppts_{}_cities_{}_days_{}_trials_{}_sims_expt_info.csv'.format(n_afc,N,N,
+            df_expt.to_csv('useful_saves/expt_optimisation/sim_results/{}AFC_{}x{}_env_{}-{}-{}-{}_beta_{}_sim_ppts_{}_cities_{}_days_{}_trials_{}_sims_expt_info.csv'.format(n_afc,N,N,
                                                                                                 beta_params['alpha_row'], beta_params['beta_row'], beta_params['alpha_col'], beta_params['beta_col'],
                                                                                                 n_sim_participants, 
                                                                                                 n_cities, n_days, n_trials,
@@ -272,7 +272,7 @@ if create:
             df_expt = pd.concat([df_expt, out], ignore_index=True)
 
         ## save expt info
-        df_expt.to_csv('useful_saves/expt_optimisation/{}AFC_{}x{}_env_{}-{}-{}-{}_beta_{}_sim_ppts_{}_cities_{}_days_{}_trials_{}_sims_expt_info.csv'.format(n_afc,N,N,
+        df_expt.to_csv('useful_saves/expt_optimisation/sim_results/{}AFC_{}x{}_env_{}-{}-{}-{}_beta_{}_sim_ppts_{}_cities_{}_days_{}_trials_{}_sims_expt_info.csv'.format(n_afc,N,N,
                                                                                             beta_params['alpha_row'], beta_params['beta_row'], beta_params['alpha_col'], beta_params['beta_col'],
                                                                                             n_sim_participants, 
                                                                                             n_cities, n_days, n_trials,
