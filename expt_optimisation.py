@@ -22,7 +22,7 @@ from gymnasium.envs.registration import register, registry, make, spec
 import pickle
 import copy
 
-from utils import make_env, Node, Tree, argm, data_keys, grid_keys, parse_lists, KL_divergence, profile_func, KL_sim, value_iteration
+from utils import make_env, Node, Tree, argm, data_keys, grid_keys, parse_lists, KL_divergence, profile_func, KL_sim, value_iteration, generate_ppt_sequence
 from MCTS import MonteCarloTreeSearch, MonteCarloTreeSearch_Free, MonteCarloTreeSearch_AFC, simulate_agent
 
 import IPython
@@ -37,80 +37,6 @@ from samplers import GridSampler
 
 warnings.filterwarnings('ignore')
 
-## func for generating a single participant
-def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params, metric, n_afc, N, hyperparams):
-    contexts = ['row']*int(n_cities/2) + ['column']*int(n_cities/2)
-    np.random.shuffle(contexts)
-
-    env_objects = {}
-    df_expt = pd.DataFrame()
-
-    for c in range(n_cities):
-        expt_info['context'] = contexts[c]
-
-        ## generate envs for this city
-        envs = [make_env(N, n_trials, expt_info, beta_params, metric) for _ in range(n_days)]
-
-        ## save expt info
-        for i, env in enumerate(envs):
-            for e in range(n_trials):
-                row = {
-                    'participant': p,
-                    'city': int(c+1),
-                    'context': expt_info['context'],
-                    'grid': int(i+1),
-                    'trial': int(e+1),
-                    'start_A': env.path_states[e][0][0],
-                    'start_B': env.path_states[e][1][0],
-                    'goal_A': env.path_states[e][0][-1],
-                    'goal_B': env.path_states[e][1][-1],
-                    'path_A': [env.path_states[e][0]],
-                    'path_B': [env.path_states[e][1]],
-                    'path_A_actual_cost': env.path_actual_costs[e][0],
-                    'path_B_actual_cost': env.path_actual_costs[e][1],
-                    'path_A_expected_cost': env.path_expected_costs[e][0],
-                    'path_B_expected_cost': env.path_expected_costs[e][1],
-                    'path_A_future_overlap': env.path_future_overlaps[e][0],
-                    'path_B_future_overlap': env.path_future_overlaps[e][1],
-                    'abstract_sequence_A': [env.sampled_abstract_sequences[e][0]],
-                    'abstract_sequence_B': [env.sampled_abstract_sequences[e][1]],
-                    'dominant_axis_A': env.dominant_axis_A[e],
-                    'dominant_axis_B': env.dominant_axis_B[e],
-                    'path_A_future_row_overlap': env.path_future_row_overlaps[e][0], 'path_B_future_row_overlap': env.path_future_row_overlaps[e][1],
-                    'path_A_future_col_overlap': env.path_future_col_overlaps[e][0], 'path_B_future_col_overlap': env.path_future_col_overlaps[e][1],
-                    'path_A_future_row_and_col_overlap': env.path_future_row_and_col_overlaps[e][0], 'path_B_future_row_and_col_overlap': env.path_future_row_and_col_overlaps[e][1],
-
-                }
-
-                # add extra row depending on n_afc
-                if n_afc == 2:
-                    row['better_path'] = ['a','b'][np.argmax(env.path_actual_costs[e])]
-                elif n_afc == 3:
-                    row_c = {
-                        'start_C': env.path_states[e][2][0],
-                        'goal_C': env.path_states[e][2][-1],
-                        'path_C': [env.path_states[e][2]],
-                        'path_C_actual_cost': env.path_actual_costs[e][2],
-                        'path_C_expected_cost': env.path_expected_costs[e][2],
-                        'path_C_future_overlap': env.path_future_overlaps[e][2],
-                        'abstract_sequence_C': [env.sampled_abstract_sequences[e][2]],
-                        'dominant_axis_C': env.dominant_axis_C[e],
-                        'path_C_future_row_overlap': env.path_future_row_overlaps[e][2], 'path_C_future_col_overlap': env.path_future_col_overlaps[e][2],
-                        'path_C_future_row_and_col_overlap': env.path_future_row_and_col_overlaps[e][2],
-                        'better_path': ['a','b','c'][np.argmax(env.path_actual_costs[e])],
-                    }
-                    row.update(row_c)
-                df_expt = pd.concat([df_expt, pd.DataFrame([row])], ignore_index=True)
-            env_key = f'city_{c+1}_grid_{i+1}'
-            env_objects[env_key + '_env_object'] = [env]
-        env_objects['participant'] = p
-
-    # save per-participant env object
-    with open('useful_saves/expt_optimisation/simulated_envs/ppt_'+str(p)+'_envs.pkl', 'wb') as f:
-        pickle.dump(env_objects, f)
-
-    return df_expt
-
 
 ## need this for paralellising because of the way the loops are structured...
 def agent_loop(p, agent_params, hyperparams, agents):
@@ -118,7 +44,8 @@ def agent_loop(p, agent_params, hyperparams, agents):
     sim_outs = []
 
     ## load env objects
-    with open('useful_saves/expt_optimisation/simulated_envs/ppt_'+str(p)+'_envs.pkl', 'rb') as f:
+    # with open('useful_saves/expt_optimisation/simulated_envs/ppt_'+str(p)+'_envs.pkl', 'rb') as f:
+    with open('useful_saves/expt_optimisation/simulated_envs/env_objects/expt_2_env_objects_' + str(p) + '.pkl', 'rb') as f:
         env_objects = pickle.load(f)
 
     ## loop through agents
@@ -249,7 +176,7 @@ if create:
             with mp.Pool(n_cores) as pool:
                 results = list(tqdm(pool.starmap(
                     generate_ppt_sequence,
-                    [(p, n_cities, n_days, n_trials, expt_info.copy(), beta_params, metric, n_afc, N, hyperparams)
+                    [(p, n_cities, n_days, n_trials, expt_info.copy(), beta_params, metric, n_afc, N)
                     for p in range(1, n_sim_participants + 1)]
                 ), total=n_sim_participants))
 
@@ -268,7 +195,7 @@ if create:
         print('Generating {} experiment sequences serially'.format(n_sim_participants))
         for p in tqdm(range(1,n_sim_participants+1)):
 
-            out = generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info.copy(), beta_params, metric, n_afc, N, hyperparams)
+            out = generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info.copy(), beta_params, metric, n_afc, N)
             df_expt = pd.concat([df_expt, out], ignore_index=True)
 
         ## save expt info

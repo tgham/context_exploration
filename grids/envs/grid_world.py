@@ -280,6 +280,10 @@ class GridEnv(gym.Env):
                     self.path_future_col_overlaps = np.zeros((self.n_trials, self.n_afc))
                     self.path_future_row_and_col_overlaps = np.zeros((self.n_trials, self.n_afc))
 
+                    self.path_future_rel_irrel = np.zeros((self.n_trials, self.n_trials, self.n_afc, self.n_afc)) + np.nan # trials, next_trials, A vs B, rel vs irrel
+                    self.path_future_rel_irrel_ratios = np.zeros((self.n_trials, self.n_trials, self.n_afc)) + np.nan # trials, next_trials, rel vs irrel - i.e. what is the ratio of A vs B on rel trials and then irrel trials, per upcoming trial
+                    self.path_future_rel_irrel_ave_ratios = np.zeros((self.n_trials, self.n_afc)) + np.nan # trials, rel vs irrel - i.e. what is the averaged ratio of A vs B on rel trials and then irrel trials, across all upcoming trials
+
                     for t in range(self.n_trials-1):
 
                         ### calculate the number of states in the current path that appear in the future set
@@ -327,31 +331,62 @@ class GridEnv(gym.Env):
 
                             ## loop through the future paths and check how many of them cover these rows and columns
                             for next_t in range(t+1, self.n_trials):
+                                rel_overlap_tmp = []
+                                irrel_overlap_tmp = []
                                 for next_path in self.path_states[next_t]:
                                     for state in next_path:
                                         if state[0] in p_rows:
                                             row_overlap.append(state)
+                                            if self.context=='row':
+                                                rel_overlap_tmp.append(state)
+                                            elif self.context=='column':
+                                                irrel_overlap_tmp.append(state)
                                         if state[1] in p_cols:
                                             col_overlap.append(state)
-                            total_row_overlap = len(row_overlap)
-                            total_col_overlap = len(col_overlap)
+                                            if self.context=='column':
+                                                rel_overlap_tmp.append(state)
+                                            elif self.context=='row':
+                                                irrel_overlap_tmp.append(state)
+
+                                ## count total number of overlapping states (inc duplicates)
+                            #     self.path_future_rel_irrel[t, next_t, p, 0] = len(rel_overlap_tmp)
+                            #     self.path_future_rel_irrel[t, next_t, p, 1] = len(irrel_overlap_tmp)
+                            # total_row_overlap = len(row_overlap)
+                            # total_col_overlap = len(col_overlap)
+
+                                ## count total number of overlapping states (exc duplicates)
+                                self.path_future_rel_irrel[t, next_t, p, 0] = len(set(rel_overlap_tmp))
+                                self.path_future_rel_irrel[t, next_t, p, 1] = len(set(irrel_overlap_tmp))
+                            total_row_overlap = len(set(row_overlap))
+                            total_col_overlap = len(set(col_overlap))
+                            # if self.context == 'row':
+                            #     assert total_row_overlap == np.nansum(self.path_future_rel_irrel[t, :, p, 0]), 'total_row_overlap: '+str(total_row_overlap)+' vs self.path_future_rel_irrel: '+str(np.nansum(self.path_future_rel_irrel[t, :, p, 0]))
+                            #     assert total_col_overlap == np.nansum(self.path_future_rel_irrel[t, :, p, 1]), 'total_col_overlap: '+str(total_col_overlap)+' vs self.path_future_rel_irrel: '+str(np.nansum(self.path_future_rel_irrel[t, :, p, 1]))
+                            # elif self.context == 'column':
+                            #     assert total_col_overlap == np.nansum(self.path_future_rel_irrel[t, :, p, 0]), 'total_col_overlap: '+str(total_col_overlap)+' vs self.path_future_rel_irrel: '+str(np.nansum(self.path_future_rel_irrel[t, :, p, 0]))
+                            #     assert total_row_overlap == np.nansum(self.path_future_rel_irrel[t, :, p, 1]), 'total_row_overlap: '+str(total_row_overlap)+' vs self.path_future_rel_irrel: '+str(np.nansum(self.path_future_rel_irrel[t, :, p, 1]))
+                                
                             # total_col_overlap = len(set(col_overlap)) ## if you don't want to count states twice
                             # total_row_overlap = len(set(row_overlap)) ## if you don't want to count states twice
                             self.path_future_row_overlaps[t, p] = total_row_overlap
                             self.path_future_col_overlaps[t, p] = total_col_overlap
-                            self.path_future_row_and_col_overlaps[t, p] = total_row_overlap + total_col_overlap
 
                     ## trivially, the final trial has no future overlaps
                     self.path_future_overlaps.append([0 for a in range(self.n_afc)]) 
                     self.path_future_row_overlaps[-1, :] = np.zeros(self.n_afc)
                     self.path_future_col_overlaps[-1, :] = np.zeros(self.n_afc)
                     self.path_future_row_and_col_overlaps[-1, :] = np.zeros(self.n_afc)
-                    # print('path future row overlaps: ')
-                    # print(self.path_future_row_overlaps)
-                    # print('path future col overlaps: ')
-                    # print(self.path_future_col_overlaps)
-                    # print()
 
+                    ## calculate overlap ratios
+                    for t in range(self.n_trials-1):
+
+                        ## get A:B for relevant vs irrelevant
+                        AB_rel = self.path_future_rel_irrel[t, :, 0, 0]/self.path_future_rel_irrel[t, :, 1, 0]
+                        AB_irrel = self.path_future_rel_irrel[t, :, 0, 1]/self.path_future_rel_irrel[t, :, 1, 1]
+                        self.path_future_rel_irrel_ratios[t, :, 0] = AB_rel
+                        self.path_future_rel_irrel_ratios[t, :, 1] = AB_irrel
+                        self.path_future_rel_irrel_ave_ratios[t, :] = np.nanmean(self.path_future_rel_irrel_ratios[t, :, :], axis=0)
+                        
 
                     ## check if all the paths in the first trial have the same number of overlaps
                     # n_unique = len(np.unique(self.path_future_overlaps[0]))
@@ -369,28 +404,35 @@ class GridEnv(gym.Env):
                         irrelevant_first_overlaps = self.path_future_row_overlaps[0]
                     relevant_overlap_ratio = np.max(relevant_first_overlaps) / np.min(relevant_first_overlaps)
                     irrelevant_overlap_ratio = np.max(irrelevant_first_overlaps) / np.min(irrelevant_first_overlaps)
+                    overlap_ratio_tol = 2
 
-                    ## must be at least twice as many overlaps in one path than the other
-                    # if relevant_overlap_ratio >= 2:
+                    ## must be at least overlap_ratio_tol times as many overlaps in one path than the other
+                    # if relevant_overlap_ratio >= overlap_ratio_tol:
                     #     self.same_overlaps = False
                     #     self._trial = 0
                     #     init_done = True
 
-                    ## or, even more restrictive: the context-aligned path must have more overlaps
-                    # if (relevant_overlap_ratio >= 2) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]):
+                    ## or, even more restrictive: the context-aligned path must have more relevant overlaps
+                    # if (relevant_overlap_ratio >= overlap_ratio_tol) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]):
                     #     self.same_overlaps = False
                     #     self._trial = 0
                     #     init_done = True
 
                     ## or, very restrictive: the context-aligned path must have more relevant overlaps, BUT the other path must have more irrelevant overlaps?
-                    if (relevant_overlap_ratio >= 2) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]) & (irrelevant_overlap_ratio>=2) & (irrelevant_first_overlaps[1]<irrelevant_first_overlaps[0]):
+                    if (relevant_overlap_ratio >= overlap_ratio_tol) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]) & (irrelevant_overlap_ratio>=overlap_ratio_tol) & (irrelevant_first_overlaps[1]<irrelevant_first_overlaps[0]):
                         self.same_overlaps = False
                         self._trial = 0
                         init_done = True
 
+                    ## as above, but using the average ratios of A to B for relevant and irrelevant overlaps
+                    # if (self.path_future_rel_irrel_ave_ratios[0,1] >= overlap_ratio_tol) & (1/self.path_future_rel_irrel_ave_ratios[0,0] >= overlap_ratio_tol):
+                    #     self.same_overlaps = False
+                    #     self._trial = 0
+                    #     init_done = True
+
                     ## or, very very restrictive: as above, but also require first path to have more overlaps in total...
                     # total_first_overlaps = self.path_future_row_and_col_overlaps[0]
-                    # if (relevant_overlap_ratio >= 2) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]) & (irrelevant_overlap_ratio>=2) & (irrelevant_first_overlaps[1]<irrelevant_first_overlaps[0]) & (total_first_overlaps[0]>total_first_overlaps[1]):
+                    # if (relevant_overlap_ratio >= overlap_ratio_tol) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]) & (irrelevant_overlap_ratio>=overlap_ratio_tol) & (irrelevant_first_overlaps[1]<irrelevant_first_overlaps[0]) & (total_first_overlaps[0]>total_first_overlaps[1]):
                     #     self.same_overlaps = False
                     #     self._trial = 0
                     #     init_done = True
@@ -861,26 +903,26 @@ class GridEnv(gym.Env):
 
         ## set path len (should be even on first trial if we want to force L shapes)
         # min_path_len = self.N-3
+        # max_path_len = self.N
         # if len(self.starts)==0:
-        #     path_len = np.random.choice([i for i in range(min_path_len, self.N) if i%2==0])
+        #     path_len = int(np.random.choice([i for i in range(min_path_len, max_path_len) if i%2==0]))
         # else:
-        #     path_len = np.random.randint(min_path_len, self.N)
+        #     path_len = np.random.randint(min_path_len, max_path_len)
 
-        ## or, just set to N
-        path_len = self.N
+        ## or, just set to some value
+        path_len = self.N-1
 
         abstract_sequences = self.generate_abstract_sequences(path_len, max_turns)
 
-        ## sample a pair of abstract sequences
         diff_axes = False
         while not diff_axes:
-            # seq_idxs = np.random.choice(len(abstract_sequences), size=self.n_afc, replace=False) 
-            seq_idxs = np.random.randint(1, len(abstract_sequences)-1, size=self.n_afc) ## ensure there is 1 turn, i.e. no straight paths
-            sampled_abstract_sequences = [abstract_sequences[i] for i in seq_idxs]
 
-            ## ensure that one has more horizontal moves than its vertical moves, and the other has more vertical moves than its horizontal moves
-            # if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
-            #     diff_axes = True
+            ## sample a pair of abstract sequences
+            # seq_idxs = np.random.choice(len(abstract_sequences), size=self.n_afc, replace=False) 
+
+            ## or, ensure that we don't sample the first or last (i.e. straight line) sequences
+            seq_idxs = np.random.randint(1, len(abstract_sequences)-1, size=self.n_afc) 
+            sampled_abstract_sequences = [abstract_sequences[i] for i in seq_idxs]
 
             if self.n_afc == 2:
                 if len(self.starts)==0:
@@ -955,8 +997,8 @@ class GridEnv(gym.Env):
             n_common_across_trials = np.inf
         else:
             n_common_across_trials = 0
-        max_common_within_trial = (path_len-1)/2.5
-        max_common_across_trials = (path_len-1)/2.5
+        max_common_within_trial = (path_len-1)/2
+        max_common_across_trials = (path_len-1)/2
         vals_diff = False
         
         ## debugging
@@ -975,20 +1017,73 @@ class GridEnv(gym.Env):
             path_actions = []
             starts = []
             goals = []
-            for s_a_s in sampled_abstract_sequences:
+            
+            ## if placing in opposite corners, determine which of four pairings to use (i.e. top left and bottom right, top right and bottom left, bottom left and top right, bottom right and top left)
+            if len(self.starts)==0:
+                corner_pairing = np.random.choice([0,1,2,3])
+
+            for s_a_s_i, s_a_s in enumerate(sampled_abstract_sequences):
                 in_grid = False
+                
                 while not in_grid:
                     transformation = np.random.choice(['none', 'x', 'y'])
-                    # transformation = 'none'
 
                     ## randomly place the start location
-                    start = np.random.randint(0, self.N-1, size=2)
-                    path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation=transformation)
+                    # start = np.random.randint(0, self.N-1, size=2)
+                    # path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation=transformation)
+
+                    ## or, if first trial, put them in either top left and bottom right, or top right and bottom left corners
+                    if len(self.starts)==0:
+                        if corner_pairing == 0:
+                            if s_a_s_i==0:
+                                start = np.array([0, 0])
+                            elif s_a_s_i==1:
+                                start = np.array([self.N-1, self.N-1])
+
+                        elif corner_pairing == 1:
+                            if s_a_s_i==0:
+                                start = np.array([0, self.N-1])
+                            elif s_a_s_i==1:
+                                start = np.array([self.N-1, 0])
+                        elif corner_pairing == 2:
+                            if s_a_s_i==0:
+                                start = np.array([self.N-1, 0])
+                            elif s_a_s_i==1:
+                                start = np.array([0, self.N-1])
+                        elif corner_pairing == 3:
+                            if s_a_s_i==0:
+                                start = np.array([self.N-1, self.N-1])
+                            elif s_a_s_i==1:
+                                start = np.array([0, 0])
+                        path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation=transformation)
+
+                        # print('s:',s_a_s_i,', transformation: ',transformation, 'start:', start, 'path:', path, 'corner_pairing:', corner_pairing)
+
+                    ## otherwise, random location
+                    else:
+                        start = np.random.randint(0, self.N-1, size=2)
+                        path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation=transformation)
                     
                     ## sanity check: in the corner!
                     # if len(self.starts)==0:
                     #     start = np.array([0, 0])
                     #     path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation='none')
+
+
+                    ## if these paths fall outside the grid, push them back in
+                    if np.any(path[:,0] > self.N-1):
+                        excess = np.max(path[:,0]) - (self.N-1)
+                        path[:,0] = path[:,0] - excess
+                    if np.any(path[:,0] < 0):
+                        excess = np.min(path[:,0])
+                        path[:,0] = path[:,0] - excess
+                    if np.any(path[:,1] > self.N-1):
+                        excess = np.max(path[:,1]) - (self.N-1)
+                        path[:,1] = path[:,1] - excess
+                    if np.any(path[:,1] < 0):
+                        excess = np.min(path[:,1])
+                        path[:,1] = path[:,1] - excess
+                    start = path[0]
 
                     ## check to see if all states are in the grid
                     if np.all(path >= 0) and np.all(path < self.N):
@@ -1033,8 +1128,8 @@ class GridEnv(gym.Env):
             
             ### check that the costs of the paths are sufficiently different
             t = len(self.starts)
-            path_costs = [np.sum([self.p_costs[x, y] for x, y in path]) for path in path_states]
-            cost_tol = 0.8
+            path_costs = [np.sum([self.costss[t][x, y] for x, y in path]) for path in path_states]
+            cost_tol = 0.6
             vals_ratio = min(np.abs(path_costs)) / max(np.abs(path_costs))
             vals_diff = vals_ratio < cost_tol
 
@@ -1133,7 +1228,7 @@ class GridEnv(gym.Env):
             raise ValueError("Invalid transformation")
         # random.shuffle(moves)  # Randomize order while preserving counts
         
-        state = start
+        state = start.copy()
         path = [state.copy()]
         for move in moves:
             state += np.array(move)
