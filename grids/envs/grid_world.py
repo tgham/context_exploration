@@ -404,7 +404,7 @@ class GridEnv(gym.Env):
                         irrelevant_first_overlaps = self.path_future_row_overlaps[0]
                     relevant_overlap_ratio = np.max(relevant_first_overlaps) / np.min(relevant_first_overlaps)
                     irrelevant_overlap_ratio = np.max(irrelevant_first_overlaps) / np.min(irrelevant_first_overlaps)
-                    overlap_ratio_tol = 2.5
+                    overlap_ratio_tol = 2
 
                     ## must be at least overlap_ratio_tol times as many overlaps in one path than the other
                     # if relevant_overlap_ratio >= overlap_ratio_tol:
@@ -419,17 +419,16 @@ class GridEnv(gym.Env):
                     #     init_done = True
 
                     ## or, very restrictive: the context-aligned path must have more relevant overlaps, BUT the other path must have more irrelevant overlaps?
-                    # if (relevant_overlap_ratio >= overlap_ratio_tol) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]) & (irrelevant_overlap_ratio>=overlap_ratio_tol) & (irrelevant_first_overlaps[1]<irrelevant_first_overlaps[0]):
-                    #     self.same_overlaps = False
-                    #     self._trial = 0
-                    #     init_done = True
-
-                    ## as above, but using the average ratios of A to B for relevant and irrelevant overlaps
-                    # if (self.path_future_rel_irrel_ave_ratios[0,1] >= overlap_ratio_tol) & (self.path_future_rel_irrel_ave_ratios[0,0] <= 1/overlap_ratio_tol):
-                    if (self.path_future_rel_irrel_ave_ratios[0,1] >= overlap_ratio_tol) & (1/self.path_future_rel_irrel_ave_ratios[0,0] >= overlap_ratio_tol):
+                    if (relevant_overlap_ratio >= overlap_ratio_tol) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]) & (irrelevant_overlap_ratio>=overlap_ratio_tol) & (irrelevant_first_overlaps[1]<irrelevant_first_overlaps[0]):
                         self.same_overlaps = False
                         self._trial = 0
                         init_done = True
+
+                    ## as above, but using the average ratios of A to B for relevant and irrelevant overlaps
+                    # if (self.path_future_rel_irrel_ave_ratios[0,1] >= overlap_ratio_tol) & (1/self.path_future_rel_irrel_ave_ratios[0,0] >= overlap_ratio_tol):
+                    #     self.same_overlaps = False
+                    #     self._trial = 0
+                    #     init_done = True
 
                     ## or, very very restrictive: as above, but also require first path to have more overlaps in total...
                     # total_first_overlaps = self.path_future_row_and_col_overlaps[0]
@@ -911,7 +910,7 @@ class GridEnv(gym.Env):
         #     path_len = np.random.randint(min_path_len, max_path_len)
 
         ## or, just set to some value
-        path_len = self.N-2
+        path_len = self.N-1
 
         abstract_sequences = self.generate_abstract_sequences(path_len, max_turns)
 
@@ -1018,20 +1017,73 @@ class GridEnv(gym.Env):
             path_actions = []
             starts = []
             goals = []
-            for s_a_s in sampled_abstract_sequences:
+            
+            ## if placing in opposite corners, determine which of four pairings to use (i.e. top left and bottom right, top right and bottom left, bottom left and top right, bottom right and top left)
+            if len(self.starts)==0:
+                corner_pairing = np.random.choice([0,1,2,3])
+
+            for s_a_s_i, s_a_s in enumerate(sampled_abstract_sequences):
                 in_grid = False
+                
                 while not in_grid:
                     transformation = np.random.choice(['none', 'x', 'y'])
-                    # transformation = 'none'
 
                     ## randomly place the start location
-                    start = np.random.randint(0, self.N-1, size=2)
-                    path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation=transformation)
+                    # start = np.random.randint(0, self.N-1, size=2)
+                    # path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation=transformation)
+
+                    ## or, if first trial, put them in either top left and bottom right, or top right and bottom left corners
+                    if len(self.starts)==0:
+                        if corner_pairing == 0:
+                            if s_a_s_i==0:
+                                start = np.array([0, 0])
+                            elif s_a_s_i==1:
+                                start = np.array([self.N-1, self.N-1])
+
+                        elif corner_pairing == 1:
+                            if s_a_s_i==0:
+                                start = np.array([0, self.N-1])
+                            elif s_a_s_i==1:
+                                start = np.array([self.N-1, 0])
+                        elif corner_pairing == 2:
+                            if s_a_s_i==0:
+                                start = np.array([self.N-1, 0])
+                            elif s_a_s_i==1:
+                                start = np.array([0, self.N-1])
+                        elif corner_pairing == 3:
+                            if s_a_s_i==0:
+                                start = np.array([self.N-1, self.N-1])
+                            elif s_a_s_i==1:
+                                start = np.array([0, 0])
+                        path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation=transformation)
+
+                        # print('s:',s_a_s_i,', transformation: ',transformation, 'start:', start, 'path:', path, 'corner_pairing:', corner_pairing)
+
+                    ## otherwise, random location
+                    else:
+                        start = np.random.randint(0, self.N-1, size=2)
+                        path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation=transformation)
                     
                     ## sanity check: in the corner!
                     # if len(self.starts)==0:
                     #     start = np.array([0, 0])
                     #     path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation='none')
+
+
+                    ## if these paths fall outside the grid, push them back in
+                    if np.any(path[:,0] > self.N-1):
+                        excess = np.max(path[:,0]) - (self.N-1)
+                        path[:,0] = path[:,0] - excess
+                    if np.any(path[:,0] < 0):
+                        excess = np.min(path[:,0])
+                        path[:,0] = path[:,0] - excess
+                    if np.any(path[:,1] > self.N-1):
+                        excess = np.max(path[:,1]) - (self.N-1)
+                        path[:,1] = path[:,1] - excess
+                    if np.any(path[:,1] < 0):
+                        excess = np.min(path[:,1])
+                        path[:,1] = path[:,1] - excess
+                    start = path[0]
 
                     ## check to see if all states are in the grid
                     if np.all(path >= 0) and np.all(path < self.N):
@@ -1176,7 +1228,7 @@ class GridEnv(gym.Env):
             raise ValueError("Invalid transformation")
         # random.shuffle(moves)  # Randomize order while preserving counts
         
-        state = start
+        state = start.copy()
         path = [state.copy()]
         for move in moves:
             state += np.array(move)
