@@ -758,30 +758,30 @@ def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params,
     
     # i.e. just expt optimisation
     if save_path is None:
-        with open('useful_saves/expt_optimisation/simulated_envs/ppt_'+str(p)+'_envs.pkl', 'wb') as f:
-            pickle.dump(env_objects, f)
-        return df_expt
+        # with open('useful_saves/expt_optimisation/simulated_envs/ppt_'+str(p)+'_envs.pkl', 'wb') as f:
+        # with open('useful_saves/expt_optimisation/simulated_env_objects/expt_2_env_objects_' + str(p) + '.pkl', 'wb') as f:
+        #     pickle.dump(env_objects, f)
+        # return df_expt
+        save_path = 'useful_saves/expt_optimisation/'
     
     # i.e. actual ppt sequences for online testing
-    else:
+    # else:
 
-        ## combine info to single dict and save with json
-        expt_dict = {
-            'trial_info': df_expt.to_dict('records'),
-            'env_costs': env_costs
-        }
-        # path_1 = json_path + '/expt_info_{}.json'.format(p)
-        # path_1 = save_paths['expt_path'] + str(p) + '.json'
-        path_1 = save_path + '/expt_info/expt_2_info_' + str(p) + '.json'
-        # with open('expt/assets/trial_sequences/expt_2/expt_info_{}.json'.format(p), 'w') as f:
-        with open(path_1, 'w') as f:
-            json.dump(expt_dict, f, indent=4)
-        # path_2 = json_path + '/env_objects_{}.pkl'.format(p)
-        # path_2 = save_paths['env_path'] + str(p) + '.pkl'
-        path_2 = save_path + '/env_objects/expt_2_env_objects_' + str(p) + '.pkl'
-        # with open('expt/assets/trial_sequences/expt_2/env_objects/env_objects_{}.pkl'.format(p), 'wb') as f:
-        with open(path_2, 'wb') as f:
-            pickle.dump(env_objects, f)
+    ## combine info to single dict and save with json
+    expt_dict = {
+        'trial_info': df_expt.to_dict('records'),
+        'env_costs': env_costs
+    }
+    path_1 = save_path + '/expt_info/expt_2_info_' + str(p) + '.json'
+    with open(path_1, 'w') as f:
+        json.dump(expt_dict, f, indent=4)
+
+    ## save env objects
+    path_2 = save_path + '/env_objects/expt_2_env_objects_' + str(p) + '.pkl'
+    with open(path_2, 'wb') as f:
+        pickle.dump(env_objects, f)
+    
+    return df_expt
 
 
 ## rotate grids
