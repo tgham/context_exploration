@@ -1354,10 +1354,12 @@ const pathPreSelectionTrial = {
 const pathSelectionTrial = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
-        // Randomly assign F and J to blue and green paths
+        // Randomly assign letters to blue and green paths
         const keyAssignment = Math.random() < 0.5 ? 
-            { blue: 'F', green: 'J' } : 
-            { blue: 'J', green: 'F' };
+            // { blue: 'F', green: 'J' } : 
+            // { blue: 'J', green: 'F' };
+            { blue: 'Q', green: 'P' } : 
+            { blue: 'P', green: 'Q' };
         
         // Store the assignment for this trial
         jsPsych.data.addProperties({
@@ -1373,7 +1375,8 @@ const pathSelectionTrial = {
             </div>
         `;
     },
-    choices: ['f', 'j'], 
+    // choices: ['f', 'j'], 
+    choices: ['q', 'p'], 
     trial_duration: 8000, // Automatically ends after 5 seconds
     on_finish: function(data) {
         // Get the key assignment for this trial
@@ -1383,11 +1386,20 @@ const pathSelectionTrial = {
         };
         
         // Determine the chosen path based on the key pressed
+        // let choice;
+        // if (data.response === 'f') {
+        //     choice = keyAssignment.blue === 'F' ? 'blue' : 'green';
+        // } else if (data.response === 'j') {
+        //     choice = keyAssignment.blue === 'J' ? 'blue' : 'green';
+        // } else {
+        //     choice = 'nan'; // Log as 'nan' if no response is made
+        //     nTimeouts++;
+        // }
         let choice;
-        if (data.response === 'f') {
-            choice = keyAssignment.blue === 'F' ? 'blue' : 'green';
-        } else if (data.response === 'j') {
-            choice = keyAssignment.blue === 'J' ? 'blue' : 'green';
+        if (data.response === 'q') {
+            choice = keyAssignment.blue === 'Q' ? 'blue' : 'green';
+        } else if (data.response === 'p') {
+            choice = keyAssignment.blue === 'P' ? 'blue' : 'green';
         } else {
             choice = 'nan'; // Log as 'nan' if no response is made
             nTimeouts++;
@@ -1995,7 +2007,8 @@ const practice1SelectionTrial = {
         
 
         // Determine the key assignment based on the trial index
-        const keyAssignment = { blue: 'F', green: 'J' };
+        // const keyAssignment = { blue: 'F', green: 'J' };
+        const keyAssignment = { blue: 'Q', green: 'P' };
         const instruction = practice1TrialIndex === 0 
             ? `<h3>Please select the <span style="color: #5dadec; font-weight: bold;">BLUE</span> path by pressing the <span style="font-weight: bold;">${keyAssignment.blue}</span> key.</h3>`
             : `<h3>Please select the <span style="color:  #4ade80; font-weight: bold;">GREEN</span> path by pressing the <span style="font-weight: bold;">${keyAssignment.green}</span> key.</h3>`;
@@ -2037,7 +2050,8 @@ const practice1SelectionTrial = {
         // `;
     },
     choices: function() {
-        return practice1TrialIndex === 0 ? ['f'] : ['j'];
+        // return practice1TrialIndex === 0 ? ['f'] : ['j'];
+        return practice1TrialIndex === 0 ? ['q'] : ['p'];
     },
     on_load: function() {
     },
@@ -2050,11 +2064,17 @@ const practice1SelectionTrial = {
         };
         
         // Determine the choice based on the key pressed
+        // let choice;
+        // if (data.response === 'f') {
+        //     choice = keyAssignment.blue === 'F' ? 'blue' : 'green';
+        // } else if (data.response === 'j') {
+        //     choice = keyAssignment.green === 'J' ? 'green' : 'blue';
+        // }
         let choice;
-        if (data.response === 'f') {
-            choice = keyAssignment.blue === 'F' ? 'blue' : 'green';
-        } else if (data.response === 'j') {
-            choice = keyAssignment.green === 'J' ? 'green' : 'blue';
+        if (data.response === 'q') {
+            choice = keyAssignment.blue === 'Q' ? 'blue' : 'green';
+        } else if (data.response === 'p') {
+            choice = keyAssignment.green === 'P' ? 'green' : 'blue';
         }
         
         // Record their choice
@@ -2151,13 +2171,13 @@ const instructions3 = {
             <p style="font-size: ${fontSize};">All ${n} pairs of jobs will be presented on screen at once, side-by-side. Each dispatch takes place at a different time of the day and is marked with one of the following clock icons, displayed above the dispatch:</p>
             <p style="font-family: golemClocks; text-align: center; font-size: ${fontSize};">&#x00E6; &#x00DD; &#x0026; &#x263A;</p>
             <p style="font-size: ${fontSize};">You will move through these dispatches from left- to right-hand side of the screen. Your current dispatch is highlighted in <span style="color: #ece75d;">yellow</span>, while your past dispatches are <span style="color: rgb(138, 138, 184);">greyed out</span>.</p>
-            <p style="font-size: ${fontSize};">You will first have a couple of seconds to think about which job you would like to select. You can select your desired job once the dispatch grid turns yellow and the keys have been assigned to the paths - i.e. once 'F' or 'J' has been assigned to the green or blue job in your current dispatch.</p>
+            <p style="font-size: ${fontSize};">You will first have a couple of seconds to think about which job you would like to select. You can select your desired job once the dispatch grid turns yellow and the keys have been assigned to the paths - i.e. once 'Q' or 'P' has been assigned to the green or blue job in your current dispatch.</p>
             <p style="font-size: ${fontSize};">You will have 8 seconds to select a job once the dispatch grid has turned yellow. If you fail to make a choice within this time limit, you will pay a fine of <span style="color: #f87171;">$10</span>.</p>
         </div>
         <div class="instruction-section">
             <h1>Toll Locations:</h1>
             <p style="font-size: ${fontSize};">The locations of tolls remain fixed throughout the day. Once you visit an intersection, you find out how busy it is, and hence whether or not you have to pay a toll whenever you reach that intersection again on the same day. This information is reflected in your upcoming dispatches, too.</p>
-            <p style="font-size: ${fontSize};">This information may help you for the rest of the day by allowing you to select jobs where you don’t have to pay any tolls.</p>
+            <p style="font-size: ${fontSize};">This information may help you for the rest of the day by allowing you to select jobs where you don’t have to pay any tolls. Note that the rows and columns of the cities are labelled with numbers and letters respectively to improve readability.</p>
         </div>
         <div class="instruction-section">
             <h2 style="font-size: ${fontSize};">Press spacebar to practise your first full day.</h2>
@@ -2214,10 +2234,13 @@ const practice2PreSelectionTrial = {
 const practice2SelectionTrial = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
-        // Randomly assign F and J to blue and green paths
+        // Randomly assign letters to blue and green paths
+        // const keyAssignment = Math.random() < 0.5 ? 
+        //     { blue: 'F', green: 'J' } : 
+        //     { blue: 'J', green: 'F' };
         const keyAssignment = Math.random() < 0.5 ? 
-            { blue: 'F', green: 'J' } : 
-            { blue: 'J', green: 'F' };
+            { blue: 'Q', green: 'P' } : 
+            { blue: 'P', green: 'Q' };
         
         // Store the assignment for this trial
         jsPsych.data.addProperties({
@@ -2242,7 +2265,8 @@ const practice2SelectionTrial = {
             </div>
         `;
     },
-    choices: ['f', 'j'], 
+    // choices: ['f', 'j'], 
+    choices: ['q', 'p'], 
     trial_duration: 8000, // Automatically ends after 5 seconds
     on_finish: function(data) {
         // Get the key assignment for this trial
@@ -2253,10 +2277,10 @@ const practice2SelectionTrial = {
         
         // Determine the chosen path based on the key pressed
         let choice;
-        if (data.response === 'f') {
-            choice = keyAssignment.blue === 'F' ? 'blue' : 'green';
-        } else if (data.response === 'j') {
-            choice = keyAssignment.blue === 'J' ? 'blue' : 'green';
+        if (data.response === 'q') {
+            choice = keyAssignment.blue === 'Q' ? 'blue' : 'green';
+        } else if (data.response === 'p') {
+            choice = keyAssignment.blue === 'P' ? 'blue' : 'green';
         } else {
             choice = 'nan'; // Log as 'nan' if no response is made
         }
