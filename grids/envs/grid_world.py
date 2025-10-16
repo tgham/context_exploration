@@ -1173,8 +1173,9 @@ class GridEnv(gym.Env):
             ### check that the costs of the paths are sufficiently different
             t = len(self.starts)
             path_costs = [np.sum([self.costss[t][x, y] for x, y in path]) for path in path_states]
-            cost_tol = 0.6
-            vals_ratio = min(np.abs(path_costs)) / max(np.abs(path_costs))
+            cost_tol = 1
+            epsilon = 1e-8  # Small term to prevent division by zero
+            vals_ratio = min(np.abs(path_costs) + epsilon) / max(np.abs(path_costs) + epsilon)
             vals_diff = vals_ratio < cost_tol
 
         return sampled_abstract_sequences, path_actions, path_states, starts, goals

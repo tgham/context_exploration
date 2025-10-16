@@ -90,7 +90,7 @@ beta_params = {
     }
 
 ## trial info
-n_sim_participants = 70
+n_sim_participants = 100
 n_cities = 8
 n_days = 5
 n_trials = 4
