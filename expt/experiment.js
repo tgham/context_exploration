@@ -181,7 +181,7 @@ function applyScreenScaling() {
     const heightRatio = screenHeight / baseHeight;
 
     // Start with a base zoom factor of 80% (0.8)
-    const baseZoomFactor = 0.8;
+    const baseZoomFactor = 0.9;
 
     // Adjust the zoom factor based on the screen proportions
     zoomFactor = baseZoomFactor * Math.min(widthRatio, heightRatio);
@@ -2995,50 +2995,50 @@ function createInstructionsTimeline() {
     // Practice selection
     timeline.push(instructions2);
     timeline.push(instructions2_5);
-    // timeline.push(practice1SelectionTrial);
-    // timeline.push(practice1AnimationTrial);
-    // timeline.push(practice1SelectionTrial);
-    // timeline.push(practice1AnimationTrial);
+    timeline.push(practice1SelectionTrial);
+    timeline.push(practice1AnimationTrial);
+    timeline.push(practice1SelectionTrial);
+    timeline.push(practice1AnimationTrial);
 
     // Practice a full day
     timeline.push(instructions3);
-    // timeline.push(practiceFirstDayTrial);
-    // for (let i = 0; i < grid.nTrials; i++) {
-    //     timeline.push(practice2PreSelectionTrial);
-    //     timeline.push(practice2SelectionTrial);
-    //     timeline.push(practice2AnimationTrial);
-    // }
-    // timeline.push(practiceGridFeedback);
+    timeline.push(practiceFirstDayTrial);
+    for (let i = 0; i < grid.nTrials; i++) {
+        timeline.push(practice2PreSelectionTrial);
+        timeline.push(practice2SelectionTrial);
+        timeline.push(practice2AnimationTrial);
+    }
+    timeline.push(practiceGridFeedback);
 
     // // Animation to show grid resetting, and then another day
-    // timeline.push(instructions4);
-    // timeline.push(practiceFirstDayTrial);
-    // for (let i = 0; i < grid.nTrials; i++) {
-    //     timeline.push(practice2PreSelectionTrial);
-    //     timeline.push(practice2SelectionTrial);
-    //     timeline.push(practice2AnimationTrial);
-    // }
-    // timeline.push(practiceGridFeedback);
+    timeline.push(instructions4);
+    timeline.push(practiceFirstDayTrial);
+    for (let i = 0; i < grid.nTrials; i++) {
+        timeline.push(practice2PreSelectionTrial);
+        timeline.push(practice2SelectionTrial);
+        timeline.push(practice2AnimationTrial);
+    }
+    timeline.push(practiceGridFeedback);
 
     // New city animation
-    // timeline.push(instructions5);
+    timeline.push(instructions5);
 
-    // // illustrate contexts
-    // for (let i = 1; i <= grid.nGrids; i++) {
-    //     timeline.push(instructions6);
-    // }
-    // timeline.push(instructions7);
-    // for (let i = 1; i <= grid.nGrids; i++) {
-    //     timeline.push(instructions8);
-    // }
+    // illustrate contexts
+    for (let i = 1; i <= grid.nGrids; i++) {
+        timeline.push(instructions6);
+    }
+    timeline.push(instructions7);
+    for (let i = 1; i <= grid.nGrids; i++) {
+        timeline.push(instructions8);
+    }
 
     // Add the option to review the instructions
     timeline.push(instructionsReview);
 
-    timeline.push(feedback_trial1);
-    timeline.push(feedback_trial2);
-    timeline.push(feedback_trial3);
-    timeline.push(feedback_trial4);
+    // timeline.push(feedback_trial1);
+    // timeline.push(feedback_trial2);
+    // timeline.push(feedback_trial3);
+    // timeline.push(feedback_trial4);
     
     return timeline
 }
@@ -3099,6 +3099,7 @@ function createMainTimeline() {
 
 // Start experiment when the page loads
 function initializeExperiment() {
+    
     // ethics timeline
     const ethicsTimeline = createEthicsTimeline();
   
@@ -3129,7 +3130,7 @@ function initializeExperiment() {
     const fullTimeline = [
       ...ethicsTimeline,
       instructionsLoop,
-    //   ...quizTimeline,
+      ...quizTimeline,
       ...mainTimeline
     ];
   
