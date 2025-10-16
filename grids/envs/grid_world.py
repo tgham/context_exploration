@@ -176,6 +176,7 @@ class GridEnv(gym.Env):
             self.path_states = []
             self.path_actions = []
             self.sampled_abstract_sequences = []
+            self.context_alignment = []
             self.path_actual_costs = []
             self.path_expected_costs = []
             self.o_trajs = []
@@ -223,15 +224,29 @@ class GridEnv(gym.Env):
                         self.path_actions.append(path_actions)
                         self.sampled_abstract_sequences.append(sampled_abstract_sequences)
 
-                        # determine the dominant axis - i.e. is the path more vertical or horizontal?
+                        ## more info on A and B wrt/ orientation and context
+                        
                         dominant_axis_list = [self.dominant_axis_A, self.dominant_axis_B, self.dominant_axis_C]
                         for si, s_a_s in enumerate(sampled_abstract_sequences):
+                            alignment_tmp = []
+                            
+                            # determine the dominant axis - i.e. is the path more vertical or horizontal?
                             if s_a_s[0]> s_a_s[1]:
                                 dominant_axis_list[si].append('vertical')
+                                if self.context == 'row':
+                                    alignment_tmp.append('orthogonal')
+                                elif self.context == 'column':
+                                    alignment_tmp.append('aligned')
                             elif s_a_s[0]< s_a_s[1]:
                                 dominant_axis_list[si].append('horizontal')
+                                if self.context == 'row':
+                                    alignment_tmp.append('aligned')
+                                elif self.context == 'column':
+                                    alignment_tmp.append('orthogonal')
                             elif s_a_s[0]==s_a_s[1]:
                                 dominant_axis_list[si].append('L-shaped')
+                                alignment_tmp.append('L-shaped')
+                            self.context_alignment.append(alignment_tmp)
                         SG_found = True
 
 
@@ -279,6 +294,8 @@ class GridEnv(gym.Env):
                     self.path_future_row_overlaps = np.zeros((self.n_trials, self.n_afc))
                     self.path_future_col_overlaps = np.zeros((self.n_trials, self.n_afc))
                     self.path_future_row_and_col_overlaps = np.zeros((self.n_trials, self.n_afc))
+                    self.path_future_rel_overlaps = np.zeros((self.n_trials, self.n_afc))
+                    self.path_future_irrel_overlaps = np.zeros((self.n_trials, self.n_afc))
 
                     self.path_future_rel_irrel = np.zeros((self.n_trials, self.n_trials, self.n_afc, self.n_afc)) + np.nan # trials, next_trials, A vs B, rel vs irrel
                     self.path_future_rel_irrel_ratios = np.zeros((self.n_trials, self.n_trials, self.n_afc)) + np.nan # trials, next_trials, rel vs irrel - i.e. what is the ratio of A vs B on rel trials and then irrel trials, per upcoming trial
@@ -370,12 +387,21 @@ class GridEnv(gym.Env):
                             # total_row_overlap = len(set(row_overlap)) ## if you don't want to count states twice
                             self.path_future_row_overlaps[t, p] = total_row_overlap
                             self.path_future_col_overlaps[t, p] = total_col_overlap
+                            if self.context == 'row':
+                                self.path_future_rel_overlaps[t, p] = total_row_overlap
+                                self.path_future_irrel_overlaps[t, p] = total_col_overlap
+                            elif self.context == 'column':
+                                self.path_future_rel_overlaps[t, p] = total_col_overlap
+                                self.path_future_irrel_overlaps[t, p] = total_row_overlap
 
                     ## trivially, the final trial has no future overlaps
                     self.path_future_overlaps.append([0 for a in range(self.n_afc)]) 
                     self.path_future_row_overlaps[-1, :] = np.zeros(self.n_afc)
                     self.path_future_col_overlaps[-1, :] = np.zeros(self.n_afc)
                     self.path_future_row_and_col_overlaps[-1, :] = np.zeros(self.n_afc)
+                    self.path_future_rel_overlaps[-1, :] = np.zeros(self.n_afc)
+                    self.path_future_irrel_overlaps[-1, :] = np.zeros(self.n_afc)
+                    
 
                     ## calculate overlap ratios
                     for t in range(self.n_trials-1):
@@ -419,7 +445,13 @@ class GridEnv(gym.Env):
                     #     init_done = True
 
                     ## or, very restrictive: the context-aligned path must have more relevant overlaps, BUT the other path must have more irrelevant overlaps?
-                    if (relevant_overlap_ratio >= overlap_ratio_tol) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]) & (irrelevant_overlap_ratio>=overlap_ratio_tol) & (irrelevant_first_overlaps[1]<irrelevant_first_overlaps[0]):
+                    # if (relevant_overlap_ratio >= overlap_ratio_tol) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]) & (irrelevant_overlap_ratio>=overlap_ratio_tol) & (irrelevant_first_overlaps[1]<irrelevant_first_overlaps[0]):
+                    #     self.same_overlaps = False
+                    #     self._trial = 0
+                    #     init_done = True
+
+                    ## as above, but no constraint on ordering - i.e. one of them must have more relevant overlaps, and the other must have more irrelevant overlaps
+                    if (relevant_overlap_ratio >= overlap_ratio_tol) & ((relevant_first_overlaps[1]>relevant_first_overlaps[0]) & (irrelevant_overlap_ratio>=overlap_ratio_tol) & (irrelevant_first_overlaps[1]<irrelevant_first_overlaps[0])) or ((relevant_first_overlaps[1]<relevant_first_overlaps[0]) & (irrelevant_overlap_ratio>=overlap_ratio_tol) & (irrelevant_first_overlaps[1]>irrelevant_first_overlaps[0])):
                         self.same_overlaps = False
                         self._trial = 0
                         init_done = True
@@ -943,12 +975,24 @@ class GridEnv(gym.Env):
                     #     diff_axes = True
 
                     ## or, one of each L, but for consistency let's keep the first one dominant in  the direction of the context
-                    if self.context == 'column':
-                        if ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
-                            diff_axes = True
-                    elif self.context == 'row':
-                        if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])):
-                            diff_axes = True
+                    # if self.context == 'column':
+                    #     if ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
+                    #         diff_axes = True
+                    # elif self.context == 'row':
+                    #     if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])):
+                    #         diff_axes = True
+
+                    ## or, as above, but no need to keep consistency - as long as one is dominant in each direction
+                    # one_vertical = False
+                    # one_horizontal = False
+                    # for s_a_s in sampled_abstract_sequences:
+                    #     if s_a_s[0] > s_a_s[1]:
+                    #         one_vertical = True
+                    #     elif s_a_s[0] < s_a_s[1]:
+                    #         one_horizontal = True
+                    # if one_vertical and one_horizontal:
+                    #     diff_axes = True
+                    
 
                     ## or, two Ls of the same kind, where each arm is the same length 
                     sampled_abstract_sequences = [abstract_sequences[len(abstract_sequences)//2], abstract_sequences[len(abstract_sequences)//2]]
