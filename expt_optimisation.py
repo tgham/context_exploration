@@ -112,6 +112,9 @@ df_expt = pd.DataFrame(columns=['participant', 'city', 'context', 'grid','trial'
                                 'dominant_axis_A','dominant_axis_B',
                                 'path_A_future_row_overlap', 'path_B_future_row_overlap',
                                 'path_A_future_col_overlap', 'path_B_future_col_overlap',
+                                'path_A_future_rel_overlap', 'path_B_future_rel_overlap',
+                                'path_A_future_irrel_overlap', 'path_B_future_irrel_overlap',
+                                
                                 'path_A_future_row_and_col_overlap', 'path_B_future_row_and_col_overlap'
                                 ])
 if n_afc==3:
@@ -120,6 +123,7 @@ if n_afc==3:
                         'path_C_future_overlap', 'abstract_sequence_C', 
                         'dominant_axis_C',
                         'path_C_future_row_overlap', 'path_C_future_col_overlap',
+                        'path_C_future_rel_overlap', 'path_C_future_irrel_overlap',
                         'path_C_future_row_and_col_overlap'
                         ]))
     

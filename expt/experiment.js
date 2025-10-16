@@ -60,7 +60,7 @@ if (test) {
     var ppt_data = jsPsych.data.get().json();
     send_incomplete(subject_id, ppt_data);
     console.log('debugging with subject_id 1');
-    fetch('assets/trial_sequences/expt_info_1.json')
+    fetch('assets/trial_sequences/expt_2/expt_info/expt_2_info_1.json')
     .then(response => response.json())
     .then(data => {
         grid = new Grid(data); // Initialize the Grid class with the loaded data        
@@ -171,8 +171,8 @@ let zoomFactor;
 function applyScreenScaling() {
     
     // Define the reference dimensions (MacBook Pro 16" M2)
-    const baseWidth = 3456/2;
-    const baseHeight = 2234/2;
+    const baseWidth = 3456 / 2;
+    const baseHeight = 2234 / 2;
 
     const screenWidth = window.screen.width;
     const screenHeight = window.screen.height;
@@ -180,14 +180,18 @@ function applyScreenScaling() {
     const widthRatio = screenWidth / baseWidth;
     const heightRatio = screenHeight / baseHeight;
 
-    zoomFactor = Math.min(widthRatio, heightRatio);
+    // Start with a base zoom factor of 80% (0.8)
+    const baseZoomFactor = 0.9;
+
+    // Adjust the zoom factor based on the screen proportions
+    zoomFactor = baseZoomFactor * Math.min(widthRatio, heightRatio);
 
     document.body.style.zoom = zoomFactor;
     
     console.log(`User screen: ${screenWidth}x${screenHeight}`);
     console.log(`Reference screen: ${baseWidth}x${baseHeight}`);
+    console.log(`Base zoom factor: ${baseZoomFactor}`);
     console.log(`Applied scaling factor: ${zoomFactor.toFixed(3)}`);
-  
 }
 
 
@@ -1011,10 +1015,10 @@ function initPractice() {
     practice4TrialIndex = 0;
 
     return Promise.all([
-        loadPracticeGrid('assets/trial_sequences/practice_sequence1.json', 'practice1Grid').then(grid => practice1Grid = grid),
-        loadPracticeGrid('assets/trial_sequences/practice_sequence2.json', 'practice2Grid').then(grid => practice2Grid = grid),
-        loadPracticeGrid('assets/trial_sequences/practice_sequence3.json', 'practice3Grid').then(grid => practice3Grid = grid),
-        loadPracticeGrid('assets/trial_sequences/practice_sequence4.json', 'practice4Grid').then(grid => practice4Grid = grid)
+        loadPracticeGrid('assets/trial_sequences/expt_2/practice/expt_info/expt_2_info_1.json', 'practice1Grid').then(grid => practice1Grid = grid),
+        loadPracticeGrid('assets/trial_sequences/expt_2/practice/expt_info/expt_2_info_2.json', 'practice2Grid').then(grid => practice2Grid = grid),
+        loadPracticeGrid('assets/trial_sequences/expt_2/practice/expt_info/expt_2_info_3.json', 'practice3Grid').then(grid => practice3Grid = grid),
+        loadPracticeGrid('assets/trial_sequences/expt_2/practice/expt_info/expt_2_info_4.json', 'practice4Grid').then(grid => practice4Grid = grid)
     ]).then(() => {
         console.log('All practice grids loaded successfully.');
     }).catch(error => {
@@ -1181,53 +1185,50 @@ function mergeCosts(trialCost, callback) {
             const originalContent = totalCostElement.textContent;
             const originalColor = totalCostElement.style.color;
             
-            totalCostElement.textContent = `You ran out of time! -$${trialCost}`;
-            totalCostElement.style.color = "#f87171";
+            trialCostElement.textContent = `You ran out of time! -$${trialCost}`;
+            trialCostElement.style.color = "#f87171";
+            trialCostElement.classList.remove("hidden");
             
-            // Wait n seconds before continuing
-            setTimeout(() => {
-                totalCostElement.style.color = originalColor;
-                
-                // Continue with normal animation flow after showing the message
-                if (totalCostElement && trialCostElement) {
-                    // Add warning animation to cost display
-                    if (trialCost > 0) {
-                        trialCostElement.classList.add("cost-animate");
-                    }
-                    
-                    trialCostElement.style.transition = "transform 0.5s ease-in-out";
-                    trialCostElement.style.transform = "translateY(-20px)";
-
-                    setTimeout(() => {
-                        totalCost += trialCost;
-                        
-                        // Animated counter for total cost
-                        const startCost = totalCost - trialCost;
-                        const duration = 500;
-                        const frameDuration = 1000 / 60;
-                        const totalFrames = Math.round(duration / frameDuration);
-                        let frame = 0;
-                        
-                        const counter = setInterval(() => {
-                            frame++;
-                            const progress = frame / totalFrames;
-                            const currentCount = Math.floor(startCost + progress * trialCost);
-                            totalCostElement.textContent = `-$${currentCount}`;
-                            
-                            if (frame === totalFrames) {
-                                clearInterval(counter);
-                                totalCostElement.textContent = `-$${totalCost}`;
-
-                                // Reset trial cost display with animation
-                                trialCostElement.textContent = `-$0`;
-                                trialCostElement.classList.remove("cost-animate");
-                                trialCostElement.style.transform = "translateY(0)";
-                                trialCostElement.classList.add("hidden");
-                            }
-                        }, frameDuration);
-                    }, 100);
+            // setTimeout(() => {
+            totalCostElement.style.color = originalColor;
+            
+            // Continue with normal animation flow after showing the message
+            if (totalCostElement && trialCostElement) {
+                // Add warning animation to cost display
+                if (trialCost > 0) {
+                    trialCostElement.classList.add("cost-animate");
                 }
-            }, 1000);
+                
+                // trialCostElement.style.transition = "transform 0.5s ease-in-out";
+                // trialCostElement.style.transform = "translateY(-20px)";
+
+                setTimeout(() => {
+                totalCost += trialCost;
+            
+                const startCost = totalCost - trialCost;
+                const duration = 1000;
+                const startTime = performance.now();
+            
+                function animate(now) {
+                    const elapsed = now - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+                    const currentCount = Math.floor(startCost + progress * trialCost);
+                    totalCostElement.textContent = `-$${currentCount}`;
+            
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    } else {
+                        totalCostElement.textContent = `-$${totalCost}`;
+                        // trialCostElement.textContent = `-$0`;
+                        // trialCostElement.classList.remove("cost-animate");
+                        trialCostElement.style.transform = "translateY(0)";
+                    }
+                }
+            
+                requestAnimationFrame(animate);
+            }, 100);
+            }
+            // }, 500);
         }
     } else {
         trialFine = false;
@@ -1244,31 +1245,28 @@ function mergeCosts(trialCost, callback) {
 
             setTimeout(() => {
                 totalCost += trialCost;
-                
-                // Animated counter for total cost
+            
                 const startCost = totalCost - trialCost;
-                const duration = 500;
-                const frameDuration = 1000 / 60;
-                const totalFrames = Math.round(duration / frameDuration);
-                let frame = 0;
-                
-                const counter = setInterval(() => {
-                    frame++;
-                    const progress = frame / totalFrames;
+                const duration = 1000;
+                const startTime = performance.now();
+            
+                function animate(now) {
+                    const elapsed = now - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
                     const currentCount = Math.floor(startCost + progress * trialCost);
                     totalCostElement.textContent = `-$${currentCount}`;
-                    
-                    if (frame === totalFrames) {
-                        clearInterval(counter);
+            
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    } else {
                         totalCostElement.textContent = `-$${totalCost}`;
-
-                        // Reset trial cost display with animation
-                        trialCostElement.textContent = `-$0`;
-                        trialCostElement.classList.remove("cost-animate");
+                        // trialCostElement.textContent = `-$0`;
+                        // trialCostElement.classList.remove("cost-animate");
                         trialCostElement.style.transform = "translateY(0)";
-                        trialCostElement.classList.add("hidden");
                     }
-                }, frameDuration);
+                }
+            
+                requestAnimationFrame(animate);
             }, 100);
         }
     }
@@ -1356,10 +1354,12 @@ const pathPreSelectionTrial = {
 const pathSelectionTrial = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
-        // Randomly assign F and J to blue and green paths
+        // Randomly assign letters to blue and green paths
         const keyAssignment = Math.random() < 0.5 ? 
-            { blue: 'F', green: 'J' } : 
-            { blue: 'J', green: 'F' };
+            // { blue: 'F', green: 'J' } : 
+            // { blue: 'J', green: 'F' };
+            { blue: 'Q', green: 'P' } : 
+            { blue: 'P', green: 'Q' };
         
         // Store the assignment for this trial
         jsPsych.data.addProperties({
@@ -1375,7 +1375,8 @@ const pathSelectionTrial = {
             </div>
         `;
     },
-    choices: ['f', 'j'], 
+    // choices: ['f', 'j'], 
+    choices: ['q', 'p'], 
     trial_duration: 8000, // Automatically ends after 5 seconds
     on_finish: function(data) {
         // Get the key assignment for this trial
@@ -1385,11 +1386,20 @@ const pathSelectionTrial = {
         };
         
         // Determine the chosen path based on the key pressed
+        // let choice;
+        // if (data.response === 'f') {
+        //     choice = keyAssignment.blue === 'F' ? 'blue' : 'green';
+        // } else if (data.response === 'j') {
+        //     choice = keyAssignment.blue === 'J' ? 'blue' : 'green';
+        // } else {
+        //     choice = 'nan'; // Log as 'nan' if no response is made
+        //     nTimeouts++;
+        // }
         let choice;
-        if (data.response === 'f') {
-            choice = keyAssignment.blue === 'F' ? 'blue' : 'green';
-        } else if (data.response === 'j') {
-            choice = keyAssignment.blue === 'J' ? 'blue' : 'green';
+        if (data.response === 'q') {
+            choice = keyAssignment.blue === 'Q' ? 'blue' : 'green';
+        } else if (data.response === 'p') {
+            choice = keyAssignment.blue === 'P' ? 'blue' : 'green';
         } else {
             choice = 'nan'; // Log as 'nan' if no response is made
             nTimeouts++;
@@ -1809,7 +1819,8 @@ const end = {
                 <p>Great job, Dispatcher!</p>
                 <p>You've successfully completed all taxi assignments.</p>
                 <p>Your performance data has been recorded for evaluation.</p>
-                <p>Press spacebar to see if you received your bonus.</p>
+                <p>Before we check if you received your bonus, we have a few questions that we would like to ask you about your experience of the task - we would love to hear your thoughts.</p>
+                <p>Press spacebar to continue.</p>
             </div>
         `;
     },
@@ -1831,7 +1842,7 @@ const bonus = {
         return `
             <div class="new-day-text">
                 <h2>${bonusMessage}</h2>
-                <p>Press spacebar to continue.</p>
+                <p>Press spacebar to return to Prolific.</p>
             </div>
         `;
     },
@@ -1850,7 +1861,7 @@ const preQuestionnaire = {
             <div class="new-day-text">
                 <h2>Final survey</h2>
                 <p>We would now like to ask you a few survey questions. Press respond to every question you feel comfortable answering.</p>
-                <p>Once you are done, you will be returned to Prolific.</p>
+                <p>Once you are done, you will find out if you received your bonus, and you will then be returned to Prolific.</p>
                 <p>Press spacebar to continue.</p>
             </div>
         `;
@@ -1997,7 +2008,8 @@ const practice1SelectionTrial = {
         
 
         // Determine the key assignment based on the trial index
-        const keyAssignment = { blue: 'F', green: 'J' };
+        // const keyAssignment = { blue: 'F', green: 'J' };
+        const keyAssignment = { blue: 'Q', green: 'P' };
         const instruction = practice1TrialIndex === 0 
             ? `<h3>Please select the <span style="color: #5dadec; font-weight: bold;">BLUE</span> path by pressing the <span style="font-weight: bold;">${keyAssignment.blue}</span> key.</h3>`
             : `<h3>Please select the <span style="color:  #4ade80; font-weight: bold;">GREEN</span> path by pressing the <span style="font-weight: bold;">${keyAssignment.green}</span> key.</h3>`;
@@ -2039,7 +2051,8 @@ const practice1SelectionTrial = {
         // `;
     },
     choices: function() {
-        return practice1TrialIndex === 0 ? ['f'] : ['j'];
+        // return practice1TrialIndex === 0 ? ['f'] : ['j'];
+        return practice1TrialIndex === 0 ? ['q'] : ['p'];
     },
     on_load: function() {
     },
@@ -2052,11 +2065,17 @@ const practice1SelectionTrial = {
         };
         
         // Determine the choice based on the key pressed
+        // let choice;
+        // if (data.response === 'f') {
+        //     choice = keyAssignment.blue === 'F' ? 'blue' : 'green';
+        // } else if (data.response === 'j') {
+        //     choice = keyAssignment.green === 'J' ? 'green' : 'blue';
+        // }
         let choice;
-        if (data.response === 'f') {
-            choice = keyAssignment.blue === 'F' ? 'blue' : 'green';
-        } else if (data.response === 'j') {
-            choice = keyAssignment.green === 'J' ? 'green' : 'blue';
+        if (data.response === 'q') {
+            choice = keyAssignment.blue === 'Q' ? 'blue' : 'green';
+        } else if (data.response === 'p') {
+            choice = keyAssignment.green === 'P' ? 'green' : 'blue';
         }
         
         // Record their choice
@@ -2153,13 +2172,14 @@ const instructions3 = {
             <p style="font-size: ${fontSize};">All ${n} pairs of jobs will be presented on screen at once, side-by-side. Each dispatch takes place at a different time of the day and is marked with one of the following clock icons, displayed above the dispatch:</p>
             <p style="font-family: golemClocks; text-align: center; font-size: ${fontSize};">&#x00E6; &#x00DD; &#x0026; &#x263A;</p>
             <p style="font-size: ${fontSize};">You will move through these dispatches from left- to right-hand side of the screen. Your current dispatch is highlighted in <span style="color: #ece75d;">yellow</span>, while your past dispatches are <span style="color: rgb(138, 138, 184);">greyed out</span>.</p>
-            <p style="font-size: ${fontSize};">You will first have a couple of seconds to think about which job you would like to select. You can select your desired job once the dispatch grid turns yellow and the keys have been assigned to the paths - i.e. once 'F' or 'J' has been assigned to the green or blue job in your current dispatch.</p>
+            <p style="font-size: ${fontSize};">You will first have a couple of seconds to think about which job you would like to select. You can select your desired job once the dispatch grid turns yellow and the keys have been assigned to the paths - i.e. once 'Q' or 'P' has been assigned to the green or blue job in your current dispatch.</p>
             <p style="font-size: ${fontSize};">You will have 8 seconds to select a job once the dispatch grid has turned yellow. If you fail to make a choice within this time limit, you will pay a fine of <span style="color: #f87171;">$10</span>.</p>
         </div>
         <div class="instruction-section">
             <h1>Toll Locations:</h1>
             <p style="font-size: ${fontSize};">The locations of tolls remain fixed throughout the day. Once you visit an intersection, you find out how busy it is, and hence whether or not you have to pay a toll whenever you reach that intersection again on the same day. This information is reflected in your upcoming dispatches, too.</p>
-            <p style="font-size: ${fontSize};">This information may help you for the rest of the day by allowing you to select jobs where you don’t have to pay any tolls.</p>
+            <p style="font-size: ${fontSize};">This information may help you for the rest of the day by allowing you to select jobs where you don’t have to pay any tolls. </p>
+            <p style="font-size: ${fontSize};">Note that the rows and columns of the cities are labelled with numbers and letters respectively to improve readability.</p>
         </div>
         <div class="instruction-section">
             <h2 style="font-size: ${fontSize};">Press spacebar to practise your first full day.</h2>
@@ -2216,10 +2236,13 @@ const practice2PreSelectionTrial = {
 const practice2SelectionTrial = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
-        // Randomly assign F and J to blue and green paths
+        // Randomly assign letters to blue and green paths
+        // const keyAssignment = Math.random() < 0.5 ? 
+        //     { blue: 'F', green: 'J' } : 
+        //     { blue: 'J', green: 'F' };
         const keyAssignment = Math.random() < 0.5 ? 
-            { blue: 'F', green: 'J' } : 
-            { blue: 'J', green: 'F' };
+            { blue: 'Q', green: 'P' } : 
+            { blue: 'P', green: 'Q' };
         
         // Store the assignment for this trial
         jsPsych.data.addProperties({
@@ -2244,7 +2267,8 @@ const practice2SelectionTrial = {
             </div>
         `;
     },
-    choices: ['f', 'j'], 
+    // choices: ['f', 'j'], 
+    choices: ['q', 'p'], 
     trial_duration: 8000, // Automatically ends after 5 seconds
     on_finish: function(data) {
         // Get the key assignment for this trial
@@ -2255,10 +2279,10 @@ const practice2SelectionTrial = {
         
         // Determine the chosen path based on the key pressed
         let choice;
-        if (data.response === 'f') {
-            choice = keyAssignment.blue === 'F' ? 'blue' : 'green';
-        } else if (data.response === 'j') {
-            choice = keyAssignment.blue === 'J' ? 'blue' : 'green';
+        if (data.response === 'q') {
+            choice = keyAssignment.blue === 'Q' ? 'blue' : 'green';
+        } else if (data.response === 'p') {
+            choice = keyAssignment.blue === 'P' ? 'blue' : 'green';
         } else {
             choice = 'nan'; // Log as 'nan' if no response is made
         }
@@ -2703,7 +2727,7 @@ const instructionsReview = {
 const instructions9 = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
-        const nDays = grid.nGrids; // Retrieve the number of days from grid.nGrids
+        const nGrids = grid.nGrids; // Retrieve the number of days from grid.nGrids
         return `
             <div class="instruction-section">
                 <h1>Bonus Payment</h1>
@@ -2723,6 +2747,87 @@ const instructions9 = {
     },
     on_finish: function(data) {
     }
+};
+
+// Freetext feedback trial
+const feedback_trial1 = {
+    type: jsPsychSurveyText,
+    preamble: `
+        <div class="instruction-section">
+            <h1>Q1: What strategy did you use to learn about the cities?</h1>
+        </div>
+    `,
+    questions: [
+        {
+            prompt: `
+            `,
+            name: 'strategy',
+            rows: 5,
+            columns: 60,
+            required: true
+        },
+    ],
+    button_label: 'Submit'
+};
+
+const feedback_trial2 = {
+    type: jsPsychSurveyText,
+    preamble: `
+        <div class="instruction-section">
+            <h1>Q2: Did your strategy differ depending on whether you were in a row city or a column city?</h1>
+        </div>
+    `,
+    questions: [
+        {
+            prompt: `
+            `,
+            name: 'observations',
+            rows: 5,
+            columns: 60,
+            required: false
+        },
+    ],
+    button_label: 'Submit'
+};
+
+const feedback_trial3 = {
+    type: jsPsychSurveyText,
+    preamble: `
+        <div class="instruction-section">
+            <h1>Q3: When choosing each job, how far ahead did you look at the upcoming jobs to make your decision?</h1>
+        </div>
+    `,
+    questions: [
+        {
+            prompt: `
+            `,
+            name: 'lookahead',
+            rows: 5,
+            columns: 60,
+            required: false
+        }
+    ],
+    button_label: 'Submit'
+};
+
+const feedback_trial4 = {
+    type: jsPsychSurveyText,
+    preamble: `
+        <div class="instruction-section">
+            <h1>Q4: Any other comments or feedback about the experiment?</h1>
+        </div>
+    `,
+    questions: [
+        {
+            prompt: `
+            `,
+            name: 'other_comments',
+            rows: 5,
+            columns: 60,
+            required: false
+        }
+    ],
+    button_label: 'Submit'
 };
 
 function create_need_for_cognition(){
@@ -2905,7 +3010,7 @@ function createInstructionsTimeline() {
     }
     timeline.push(practiceGridFeedback);
 
-    // Animation to show grid resetting, and then another day
+    // // Animation to show grid resetting, and then another day
     timeline.push(instructions4);
     timeline.push(practiceFirstDayTrial);
     for (let i = 0; i < grid.nTrials; i++) {
@@ -2918,6 +3023,7 @@ function createInstructionsTimeline() {
     // New city animation
     timeline.push(instructions5);
 
+    // illustrate contexts
     for (let i = 1; i <= grid.nGrids; i++) {
         timeline.push(instructions6);
     }
@@ -2928,6 +3034,11 @@ function createInstructionsTimeline() {
 
     // Add the option to review the instructions
     timeline.push(instructionsReview);
+
+    // timeline.push(feedback_trial1);
+    // timeline.push(feedback_trial2);
+    // timeline.push(feedback_trial3);
+    // timeline.push(feedback_trial4);
     
     return timeline
 }
@@ -2970,20 +3081,25 @@ function createMainTimeline() {
 
     // Add the end and bonus message
     timeline.push(end);
-    timeline.push(bonus);
+    timeline.push(feedback_trial1);
+    timeline.push(feedback_trial2);
+    timeline.push(feedback_trial3);
+    timeline.push(feedback_trial4);
     
     // questionnaire
     timeline.push(preQuestionnaire);
     var NFC_timeline = {
         timeline: create_need_for_cognition(),  
-      } 
+    } 
     timeline.push(NFC_timeline);
+    timeline.push(bonus);
 
     return timeline;
 }
 
 // Start experiment when the page loads
 function initializeExperiment() {
+    
     // ethics timeline
     const ethicsTimeline = createEthicsTimeline();
   

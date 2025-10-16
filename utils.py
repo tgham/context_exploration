@@ -722,6 +722,8 @@ def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params,
                     'path_A_future_row_overlap': env.path_future_row_overlaps[e][0], 'path_B_future_row_overlap': env.path_future_row_overlaps[e][1],
                     'path_A_future_col_overlap': env.path_future_col_overlaps[e][0], 'path_B_future_col_overlap': env.path_future_col_overlaps[e][1],
                     'path_A_future_row_and_col_overlap': env.path_future_row_and_col_overlaps[e][0], 'path_B_future_row_and_col_overlap': env.path_future_row_and_col_overlaps[e][1],
+                    'path_A_future_rel_overlap': env.path_future_rel_overlaps[e][0], 'path_B_future_rel_overlap': env.path_future_rel_overlaps[e][1],
+                    'path_A_future_irrel_overlap': env.path_future_irrel_overlaps[e][0], 'path_B_future_irrel_overlap': env.path_future_irrel_overlaps[e][1],
 
                 }
 
@@ -739,6 +741,7 @@ def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params,
                         'abstract_sequence_C': [env.sampled_abstract_sequences[e][2]],
                         'dominant_axis_C': env.dominant_axis_C[e],
                         'path_C_future_row_overlap': env.path_future_row_overlaps[e][2], 'path_C_future_col_overlap': env.path_future_col_overlaps[e][2],
+                        'path_C_future_rel_overlap': env.path_future_rel_overlaps[e][2], 'path_C_future_irrel_overlap': env.path_future_irrel_overlaps[e][2],
                         'path_C_future_row_and_col_overlap': env.path_future_row_and_col_overlaps[e][2],
                         'better_path': ['a','b','c'][np.argmax(env.path_actual_costs[e])],
                     }
@@ -981,7 +984,7 @@ def load_data(path):
     df_all = pd.DataFrame(columns=fieldnames)
 
     # Load id mapping (for later simulation)
-    with open('expt/assets/trial_sequences/id_mapping.pkl', 'rb') as f:
+    with open('expt/assets/trial_sequences/expt_1/id_mapping.pkl', 'rb') as f:
         id_mapping = pickle.load(f)
     all_expt_info_ids = []
 
@@ -1287,10 +1290,10 @@ def load_data(path):
             raise KeyError(f'No id mapping for participant {pid}')
         try:
             try:
-                with open('expt/assets/trial_sequences/env_objects/env_objects_{}.pkl'.format(id), 'rb') as f:
+                with open('expt/assets/trial_sequences/expt_1/env_objects/env_objects_{}.pkl'.format(id), 'rb') as f:
                     envs = pickle.load(f)
             except:
-                with open('expt/assets/trial_sequences/rotated_env_objects/env_objects_{}.pkl'.format(id), 'rb') as f:
+                with open('expt/assets/trial_sequences/expt_1/rotated_env_objects/env_objects_{}.pkl'.format(id), 'rb') as f:
                     envs = pickle.load(f)
         except FileNotFoundError:
             raise FileNotFoundError(f'No env objects found for participant {pid} with id {id}')
