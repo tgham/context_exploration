@@ -1819,7 +1819,8 @@ const end = {
                 <p>Great job, Dispatcher!</p>
                 <p>You've successfully completed all taxi assignments.</p>
                 <p>Your performance data has been recorded for evaluation.</p>
-                <p>Press spacebar to see if you received your bonus.</p>
+                <p>Before we check if you received your bonus, we have a few questions that we would like to ask you about your experience of the task - we would love to hear your thoughts.</p>
+                <p>Press spacebar to continue.</p>
             </div>
         `;
     },
@@ -1841,7 +1842,7 @@ const bonus = {
         return `
             <div class="new-day-text">
                 <h2>${bonusMessage}</h2>
-                <p>Press spacebar to continue.</p>
+                <p>Press spacebar to return to Prolific.</p>
             </div>
         `;
     },
@@ -1860,7 +1861,7 @@ const preQuestionnaire = {
             <div class="new-day-text">
                 <h2>Final survey</h2>
                 <p>We would now like to ask you a few survey questions. Press respond to every question you feel comfortable answering.</p>
-                <p>Once you are done, you will be returned to Prolific.</p>
+                <p>Once you are done, you will find out if you received your bonus, and you will then be returned to Prolific.</p>
                 <p>Press spacebar to continue.</p>
             </div>
         `;
@@ -2177,7 +2178,8 @@ const instructions3 = {
         <div class="instruction-section">
             <h1>Toll Locations:</h1>
             <p style="font-size: ${fontSize};">The locations of tolls remain fixed throughout the day. Once you visit an intersection, you find out how busy it is, and hence whether or not you have to pay a toll whenever you reach that intersection again on the same day. This information is reflected in your upcoming dispatches, too.</p>
-            <p style="font-size: ${fontSize};">This information may help you for the rest of the day by allowing you to select jobs where you don’t have to pay any tolls. Note that the rows and columns of the cities are labelled with numbers and letters respectively to improve readability.</p>
+            <p style="font-size: ${fontSize};">This information may help you for the rest of the day by allowing you to select jobs where you don’t have to pay any tolls. </p>
+            <p style="font-size: ${fontSize};">Note that the rows and columns of the cities are labelled with numbers and letters respectively to improve readability.</p>
         </div>
         <div class="instruction-section">
             <h2 style="font-size: ${fontSize};">Press spacebar to practise your first full day.</h2>
@@ -2747,6 +2749,87 @@ const instructions9 = {
     }
 };
 
+// Freetext feedback trial
+const feedback_trial1 = {
+    type: jsPsychSurveyText,
+    preamble: `
+        <div class="instruction-section">
+            <h1>Q1: What strategy did you use to learn about the cities?</h1>
+        </div>
+    `,
+    questions: [
+        {
+            prompt: `
+            `,
+            name: 'strategy',
+            rows: 5,
+            columns: 60,
+            required: true
+        },
+    ],
+    button_label: 'Submit'
+};
+
+const feedback_trial2 = {
+    type: jsPsychSurveyText,
+    preamble: `
+        <div class="instruction-section">
+            <h1>Q2: Did your strategy differ depending on whether you were in a row city or a column city?</h1>
+        </div>
+    `,
+    questions: [
+        {
+            prompt: `
+            `,
+            name: 'observations',
+            rows: 5,
+            columns: 60,
+            required: false
+        },
+    ],
+    button_label: 'Submit'
+};
+
+const feedback_trial3 = {
+    type: jsPsychSurveyText,
+    preamble: `
+        <div class="instruction-section">
+            <h1>Q3: When choosing each job, how far ahead did you look at the upcoming jobs to make your decision?</h1>
+        </div>
+    `,
+    questions: [
+        {
+            prompt: `
+            `,
+            name: 'lookahead',
+            rows: 5,
+            columns: 60,
+            required: false
+        }
+    ],
+    button_label: 'Submit'
+};
+
+const feedback_trial4 = {
+    type: jsPsychSurveyText,
+    preamble: `
+        <div class="instruction-section">
+            <h1>Q4: Any other comments or feedback about the experiment?</h1>
+        </div>
+    `,
+    questions: [
+        {
+            prompt: `
+            `,
+            name: 'other_comments',
+            rows: 5,
+            columns: 60,
+            required: false
+        }
+    ],
+    button_label: 'Submit'
+};
+
 function create_need_for_cognition(){
 
     const space_bar_message = "<p>[Press the space bar to continue.]</p>";
@@ -2912,13 +2995,13 @@ function createInstructionsTimeline() {
     // Practice selection
     timeline.push(instructions2);
     timeline.push(instructions2_5);
-    timeline.push(practice1SelectionTrial);
-    timeline.push(practice1AnimationTrial);
-    timeline.push(practice1SelectionTrial);
-    timeline.push(practice1AnimationTrial);
+    // timeline.push(practice1SelectionTrial);
+    // timeline.push(practice1AnimationTrial);
+    // timeline.push(practice1SelectionTrial);
+    // timeline.push(practice1AnimationTrial);
 
     // Practice a full day
-    // timeline.push(instructions3);
+    timeline.push(instructions3);
     // timeline.push(practiceFirstDayTrial);
     // for (let i = 0; i < grid.nTrials; i++) {
     //     timeline.push(practice2PreSelectionTrial);
@@ -2951,6 +3034,11 @@ function createInstructionsTimeline() {
 
     // Add the option to review the instructions
     timeline.push(instructionsReview);
+
+    timeline.push(feedback_trial1);
+    timeline.push(feedback_trial2);
+    timeline.push(feedback_trial3);
+    timeline.push(feedback_trial4);
     
     return timeline
 }
@@ -2993,14 +3081,18 @@ function createMainTimeline() {
 
     // Add the end and bonus message
     timeline.push(end);
-    timeline.push(bonus);
+    timeline.push(feedback_trial1);
+    timeline.push(feedback_trial2);
+    timeline.push(feedback_trial3);
+    timeline.push(feedback_trial4);
     
     // questionnaire
     timeline.push(preQuestionnaire);
     var NFC_timeline = {
         timeline: create_need_for_cognition(),  
-      } 
+    } 
     timeline.push(NFC_timeline);
+    timeline.push(bonus);
 
     return timeline;
 }
