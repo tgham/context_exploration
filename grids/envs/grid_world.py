@@ -401,7 +401,7 @@ class GridEnv(gym.Env):
                     self.path_future_row_and_col_overlaps[-1, :] = np.zeros(self.n_afc)
                     self.path_future_rel_overlaps[-1, :] = np.zeros(self.n_afc)
                     self.path_future_irrel_overlaps[-1, :] = np.zeros(self.n_afc)
-                    
+
 
                     ## calculate overlap ratios
                     for t in range(self.n_trials-1):
@@ -451,7 +451,7 @@ class GridEnv(gym.Env):
                     #     init_done = True
 
                     ## as above, but no constraint on ordering - i.e. one of them must have more relevant overlaps, and the other must have more irrelevant overlaps
-                    if (relevant_overlap_ratio >= overlap_ratio_tol) & ((relevant_first_overlaps[1]>relevant_first_overlaps[0]) & (irrelevant_overlap_ratio>=overlap_ratio_tol) & (irrelevant_first_overlaps[1]<irrelevant_first_overlaps[0])) or ((relevant_first_overlaps[1]<relevant_first_overlaps[0]) & (irrelevant_overlap_ratio>=overlap_ratio_tol) & (irrelevant_first_overlaps[1]>irrelevant_first_overlaps[0])):
+                    if (relevant_overlap_ratio >= overlap_ratio_tol) & (irrelevant_overlap_ratio>=overlap_ratio_tol) & (((relevant_first_overlaps[0]<relevant_first_overlaps[1]) & (irrelevant_first_overlaps[0]>irrelevant_first_overlaps[1])) or ((relevant_first_overlaps[0]>relevant_first_overlaps[1]) & (irrelevant_first_overlaps[0]<irrelevant_first_overlaps[1]))):
                         self.same_overlaps = False
                         self._trial = 0
                         init_done = True
