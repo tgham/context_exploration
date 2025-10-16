@@ -10,6 +10,7 @@
     <script src="https://unpkg.com/@jspsych/plugin-fullscreen@1.1.2"></script>
     <script src="https://unpkg.com/@jspsych/plugin-survey-multi-choice@1.1.1"></script>
     <script src="https://unpkg.com/@jspsych/plugin-html-button-response@1.1.1"></script>
+    <script src="https://unpkg.com/@jspsych/plugin-survey-text@1.1.1"></script>
     
 
     <style>
@@ -52,9 +53,11 @@
             margin: 20px auto;
             transition: opacity 0.2s ease-in-out;
             background-color: rgb(208, 208, 210); /* Semi-transparent background */
-            padding: 15px;
+            padding: 32px; /* Increased from 15px */
             border-radius: 10px;
             box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+            position: relative; /* enable absolute labels */
+            contain: layout paint;
         }
 
         .cost-display-container, .choice-container, .instruction-section {
@@ -260,12 +263,14 @@
             grid-gap: 13px; /* Increased from 11px */
             margin: 0 auto;
             background-color: rgb(208, 208, 210);
-            padding: 17px; /* Increased from 14px */
+            padding: 32px; /* Increased from 17px */
             border-radius: 10px; /* Increased from 8px */
             grid-template-columns: repeat(auto-fit, 43px); /* Increased from 36px */
             grid-auto-rows: 43px; /* Increased from 36px */
             justify-content: center;
             align-content: center;
+            position: relative; /* enable absolute labels */
+            contain: layout paint;
         }
 
         .upcoming-cell {
@@ -309,12 +314,14 @@
             grid-gap: 13px; /* Increased from 11px */
             margin: 0 auto;
             background-color: rgba(208, 208, 210, 0.6); /* Slightly more transparent */
-            padding: 17px; /* Increased from 14px */
+            padding: 32px; /* Increased from 17px */
             border-radius: 10px; /* Increased from 8px */
             grid-template-columns: repeat(auto-fit, 43px); /* Increased from 36px */
             grid-auto-rows: 43px; /* Increased from 36px */
             justify-content: center;
             align-content: center;
+            position: relative; /* enable absolute labels */
+            contain: layout paint;
         }
 
         .upcoming-cell-done {
@@ -687,7 +694,29 @@
         margin-right: 30px;
         }
 
-
+        /* New: chess-style grid labels */
+        .row-label, .col-label {
+            position: absolute;
+            color: #000000;
+            font-size: 18px;
+            font-weight: bold;
+            z-index: 50;
+            line-height: 1;
+            user-select: none;
+            /* Center content inside the label boxes */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            pointer-events: none;
+        }
+        .row-label {
+            transform: translateY(-50%);
+        }
+        .col-label {
+            transform: translateX(-50%);
+            white-space: nowrap;
+        }
 
     </style>
 </head>
@@ -699,6 +728,159 @@
             return new jsPsychModule.JsPsych(options);
         }
     </script>
+
+    <!-- Auto-label grids (left: numbers, bottom: letters) based on cell positions -->
+    <script>
+        (function () {
+            const GRID_SELECTORS = ['.grid-container', '.upcoming-grid', '.upcoming-grid-done'];
+            const GRID_QUERY = GRID_SELECTORS.join(',');
+
+            function toLetters(idx) {
+                let n = idx + 1, s = '';
+                while (n > 0) {
+                    const m = (n - 1) % 26;
+                    s = String.fromCharCode(65 + m) + s;
+                    n = Math.floor((n - 1) / 26);
+                }
+                return s;
+            }
+
+            function labelGrid(grid) {
+                if (!grid || !grid.isConnected) return;
+
+                grid.querySelectorAll('.row-label, .col-label').forEach(el => el.remove());
+
+                const cell = grid.querySelector('.grid-cell, .upcoming-cell, .upcoming-cell-done');
+                if (!cell) return;
+
+                let cellSelector = '.grid-cell';
+                if (cell.classList.contains('upcoming-cell')) cellSelector = '.upcoming-cell';
+                if (cell.classList.contains('upcoming-cell-done')) cellSelector = '.upcoming-cell-done';
+
+                const cells = Array.from(grid.querySelectorAll(cellSelector));
+                if (!cells.length) return;
+
+                const eps = 1;
+                const data = cells.map(el => ({
+                    el,
+                    left: el.offsetLeft,
+                    top: el.offsetTop,
+                    w: el.offsetWidth,
+                    h: el.offsetHeight
+                }));
+
+                const rowTops = [];
+                const colLefts = [];
+                for (const d of data) {
+                    if (!rowTops.some(v => Math.abs(v - d.top) <= eps)) rowTops.push(d.top);
+                    if (!colLefts.some(v => Math.abs(v - d.left) <= eps)) colLefts.push(d.left);
+                }
+                rowTops.sort((a,b)=>a-b);
+                colLefts.sort((a,b)=>a-b);
+
+                const ROW_LABEL_GAP = 30;
+                const COL_LABEL_GAP = 9;
+
+                rowTops.forEach((rowTop, rIdx) => {
+                    const rowCells = data.filter(d => Math.abs(d.top - rowTop) <= eps);
+                    if (!rowCells.length) return;
+                    const leftmost = rowCells.reduce((a,b)=> (a.left < b.left ? a : b));
+                    const y = leftmost.top + leftmost.h / 2;
+                    const x = leftmost.left - ROW_LABEL_GAP;
+                    const lbl = document.createElement('div');
+                    lbl.className = 'row-label';
+                    lbl.textContent = String(rIdx + 1);
+                    lbl.style.top = y + 'px';
+                    lbl.style.left = x + 'px';
+                    lbl.style.width = ROW_LABEL_GAP + 'px';
+                    grid.appendChild(lbl);
+                });
+
+                colLefts.forEach((colLeft, cIdx) => {
+                    const colCells = data.filter(d => Math.abs(d.left - colLeft) <= eps);
+                    if (!colCells.length) return;
+                    const bottommost = colCells.reduce((a,b)=> (a.top > b.top ? a : b));
+                    const x = bottommost.left + bottommost.w / 2;
+                    const y = bottommost.top + bottommost.h + COL_LABEL_GAP;
+                    const lbl = document.createElement('div');
+                    lbl.className = 'col-label';
+                    lbl.textContent = toLetters(cIdx);
+                    lbl.style.left = x + 'px';
+                    lbl.style.top = y + 'px';
+                    lbl.style.height = COL_LABEL_GAP + 'px';
+                    grid.appendChild(lbl);
+                });
+            }
+
+            // Batch labeling requests to one rAF per frame
+            const pending = new Set();
+            let rafId = 0;
+            function schedule(grid) {
+                if (!grid || !grid.matches || !grid.matches(GRID_QUERY)) return;
+                pending.add(grid);
+                if (rafId) return;
+                rafId = requestAnimationFrame(() => {
+                    pending.forEach(g => labelGrid(g));
+                    pending.clear();
+                    rafId = 0;
+                });
+            }
+
+            function labelAllExisting() {
+                document.querySelectorAll(GRID_QUERY).forEach(schedule);
+            }
+
+            // Watch grids for size/layout changes only (not every class/style toggle on the page)
+            const resizeObserver = new ResizeObserver(entries => {
+                for (const entry of entries) schedule(entry.target);
+            });
+            const watched = new WeakSet();
+            function watchGrid(grid) {
+                if (!watched.has(grid)) {
+                    resizeObserver.observe(grid);
+                    watched.add(grid);
+                }
+            }
+
+            function findGridsIn(node, out = []) {
+                if (!(node instanceof Element)) return out;
+                if (node.matches(GRID_QUERY)) out.push(node);
+                node.querySelectorAll?.(GRID_QUERY).forEach(el => out.push(el));
+                return out;
+            }
+
+            // Observe only additions/removals, not attributes, to avoid relabel storms during animations
+            const mutationObserver = new MutationObserver(mutations => {
+                for (const m of mutations) {
+                    for (const n of m.addedNodes) {
+                        const grids = findGridsIn(n);
+                        grids.forEach(g => { watchGrid(g); schedule(g); });
+                    }
+                    // No action needed for removed nodes; labels are inside the grid and go away with it
+                }
+            });
+
+            document.addEventListener('DOMContentLoaded', () => {
+                labelAllExisting();
+                document.querySelectorAll(GRID_QUERY).forEach(watchGrid);
+
+                mutationObserver.observe(document.body, { childList: true, subtree: true });
+                window.addEventListener('resize', () => {
+                    document.querySelectorAll(GRID_QUERY).forEach(schedule);
+                }, { passive: true });
+            });
+
+            window.addEventListener('beforeunload', () => {
+                mutationObserver.disconnect();
+                resizeObserver.disconnect();
+                if (rafId) cancelAnimationFrame(rafId);
+            });
+
+            // Optional: manual hook if needed elsewhere
+            window.relabelGrids = () => labelAllExisting();
+        })();
+    </script>
+
     <script type="module" src="experiment.js"></script>
 </body>
 </html>
