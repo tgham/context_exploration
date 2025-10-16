@@ -76,7 +76,7 @@ def save_sim(sim_out):
 
 
 ## env inits
-N = 12
+N = 9
 metric = 'cityblock'
 beta_params = {
     'alpha_row':0.25,
@@ -90,7 +90,7 @@ beta_params = {
     }
 
 ## trial info
-n_sim_participants = 50
+n_sim_participants = 70
 n_cities = 8
 n_days = 5
 n_trials = 4

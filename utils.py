@@ -762,7 +762,7 @@ def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params,
         # with open('useful_saves/expt_optimisation/simulated_env_objects/expt_2_env_objects_' + str(p) + '.pkl', 'wb') as f:
         #     pickle.dump(env_objects, f)
         # return df_expt
-        save_path = 'useful_saves/expt_optimisation/'
+        save_path = 'useful_saves/expt_optimisation/simulated_envs'
     
     # i.e. actual ppt sequences for online testing
     # else:
