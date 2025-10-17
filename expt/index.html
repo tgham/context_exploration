@@ -123,6 +123,13 @@
             border-color: #4ade80;
         }
 
+        /* .half-half-path {
+            border-width: 2px;
+            border-style: solid;
+            border-image: linear-gradient(to right, #4ade80 50%, #5dadec 50%);
+            border-image-slice: 1;
+        } */
+
         .observed-cost {
             background-color: #f87171;
             transition: background-color 0.5s;
@@ -299,6 +306,27 @@
             border-color: #4ade80; /* Green border for green path */
         }
 
+        .upcoming-cell.half-half-blue-green {
+            border-image: linear-gradient(to right, #5dadec 50%, #4ade80 50%);
+            border-image-slice: 1;
+            border-image-width: 1;
+            border-image-repeat: stretch;
+            border-color: transparent;
+        }
+
+        .upcoming-cell.half-half-green-blue {
+            border-image: linear-gradient(to right, #4ade80 50%, #5dadec 50%);
+            border-image-slice: 1;
+            border-image-width: 1;
+            border-image-repeat: stretch;
+            border-color: transparent;
+        }
+
+        /* Disable old overlay for upcoming cells */
+        .upcoming-cell.half-half-path::after {
+            content: none;
+        }
+
         /* Shared styles for observed costs */
         .upcoming-cell.observed-cost {
             background-color: #f87171;
@@ -473,11 +501,13 @@
         .blue-text {
             color: #5dadec;
             font-weight: bold;
+            text-shadow: 0 1px 2px #1a1a1a33; /* subtle dark shadow */
         }
 
         .green-text {
             color: #4ade80;
             font-weight: bold;
+            text-shadow: 0 1px 2px #1a1a1a33; /* subtle dark shadow */
         }
 
         .red-text {

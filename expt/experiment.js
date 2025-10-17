@@ -10,8 +10,41 @@ const jsPsych = initJsPsych({
         `;
 
         // Get participant data and send it
-        var ppt_data = jsPsych.data.get().json();
-        console.log('experiment complete');
+        // var ppt_data = jsPsych.data.get().json();
+        // console.log('experiment complete');
+
+        // Define the variables you want to keep
+        // var keep_vars = [
+        //     "pid", "trial", "city", "path_chosen", "button_pressed", "reaction_time_ms","html-keyboard-response","choice",
+        //     "context", "grid", "path_A_expected_cost", "path_B_expected_cost",
+        //     "path_A_actual_cost", "path_B_actual_cost", "path_A", "path_B",
+        //     "path_A_future_overlap", "path_B_future_overlap",
+        //     "path_A_future_row_overlap", "path_B_future_row_overlap",
+        //     "path_A_future_col_overlap", "path_B_future_col_overlap",
+        //     "path_A_future_row_and_col_overlap", "path_B_future_row_and_col_overlap",
+        //     "path_A_future_rel_overlap", "path_B_future_rel_overlap",
+        //     "path_A_future_irrel_overlap", "path_B_future_irrel_overlap",
+        //     "abstract_sequence_A", "abstract_sequence_B",
+        //     "dominant_axis_A", "dominant_axis_B",
+        //     "better_path", "chose_better_path", "bonusAchieved", "expt_info_filename"
+        // ];
+
+        // Filter the jsPsych data down to just those variables
+        // var ppt_data = jsPsych.data.get().filterColumns(keep_vars).json();
+        // console.log('experiment complete (filtered dataset)');
+        // var ppt_data = jsPsych.data.get()
+        //     .filter({ trial_type: 'html-keyboard-response' }) // only keep choice trials
+        //     .json();
+        // console.log('experiment complete (filtered dataset)');
+
+        var ppt_data = JSON.stringify(
+            jsPsych.data.get()
+            .filter({ trial_type: 'html-keyboard-response' })
+            .values()
+            .map(({ stimulus, ...rest }) => rest)
+        );
+        console.log('experiment complete (filtered dataset)');
+        
         
         send_complete(subject_id, ppt_data)
             .then(() => {
@@ -439,12 +472,12 @@ class Grid {
 
                         // for simplicity, let's just keep it consistent
                         pathClass = 'blue-path';
-                        content = `<span class="green-text">⚝</span>`;
+                        content = `<span class="green-text">+</span>`;
 
                         // random 
                         // const randomChoice = Math.random() < 0.5;
                         // pathClass = randomChoice ? 'blue-path' : 'green-path';
-                        // content = randomChoice ? `<span class="green-text">⚝</span>` : `<span class="blue-text">⚝</span>`;
+                        // content = randomChoice ? `<span class="green-text">+</span>` : `<span class="blue-text">+</span>`;
 
                     } else if (isPathA) {
                         pathClass = 'blue-path';
@@ -458,13 +491,13 @@ class Grid {
                     if (isOverlap) {
                         const randomChoice = Math.random() < 0.5;
                         pathClass = randomChoice ? 'blue-path' : 'green-path';
-                        content = randomChoice ? '<span class="green-text">⚝</span>' : '<span class="blue-text">⚝</span>';
+                        content = randomChoice ? '<span class="green-text">+</span>' : '<span class="blue-text">+</span>';
                     } else if (isPathA) {
                         pathClass = 'blue-path';
-                        content = '⚝';
+                        content = '+';
                     } else if (isPathB) {
                         pathClass = 'green-path';
-                        content = '⚝';
+                        content = '+';
                     }
                 }
     
@@ -694,13 +727,13 @@ class Grid {
                     if (isOverlap) {
                         const randomChoice = Math.random() < 0.5;
                         pathClass = randomChoice ? 'blue-path' : 'green-path';
-                        content = randomChoice ? '<span class="green-text">⚝</span>' : '<span class="blue-text">⚝</span>';
+                        content = randomChoice ? '<span class="green-text">+</span>' : '<span class="blue-text">+</span>';
                     } else if (isPathA) {
                         pathClass = 'blue-path';
-                        content = '⚝';
+                        content = '+';
                     } else if (isPathB) {
                         pathClass = 'green-path';
-                        content = '⚝';
+                        content = '+';
                     }
 
                     if (isStartA) {
@@ -899,14 +932,27 @@ class Grid {
 
                     // Use key assignment if previewIndex matches currentTrialIndex
                     if (previewIndex === currentTrialIndex && keyAssignment) {
+                        // if (isOverlap) {
+                            //     if (previewIndex % 2 === 0) {
+                                //         pathClass = 'blue-path';
+                                //         content = `<span class="green-text">+</span>`;
+                                //     } else {
+                                    //         pathClass = 'green-path';
+                                    //         content = `<span class="blue-text">+</span>`;
+                                    //     }
                         if (isOverlap) {
-                            if (previewIndex % 2 === 0) {
-                                pathClass = 'blue-path';
-                                content = `<span class="green-text">⚝</span>`;
-                            } else {
-                                pathClass = 'green-path';
-                                content = `<span class="blue-text">⚝</span>`;
-                            }
+                            const colorOfP = getColorForKey(keyAssignment, 'P') || 'blue';
+                            const colorOfQ = getColorForKey(keyAssignment, 'Q') || (colorOfP === 'blue' ? 'green' : 'blue');
+                        
+                            content = `<span class="${colorOfP === 'blue' ? 'blue-text' : 'green-text'}">P</span>` +
+                                        `<span class="${colorOfQ === 'blue' ? 'blue-text' : 'green-text'}">Q</span>`;
+                        
+                            // Left-to-right should be P then Q
+                            pathClass = colorOfP === 'blue' && colorOfQ === 'green'
+                                ? 'half-half-blue-green'
+                                : colorOfP === 'green' && colorOfQ === 'blue'
+                                ? 'half-half-green-blue'
+                                : (colorOfP === 'blue' ? 'blue-path' : 'green-path'); // fallback if same
                         } else if (isPathA) {
                             pathClass = 'blue-path';
                             content = keyAssignment.blue;
@@ -919,17 +965,17 @@ class Grid {
                         if (isOverlap) {
                             if (i % 2 === 0) {
                                 pathClass = 'blue-path';
-                                content = '<span class="green-text">⚝</span>';
+                                content = '<span class="green-text">+</span>';
                             } else {
                                 pathClass = 'green-path';
-                                content = '<span class="blue-text">⚝</span>';
+                                content = '<span class="blue-text">+</span>';
                             }
                         } else if (isPathA) {
                             pathClass = 'blue-path';
-                            content = '⚝';
+                            content = '+';
                         } else if (isPathB) {
                             pathClass = 'green-path';
-                            content = '⚝';
+                            content = '+';
                         }
                     }
 
@@ -997,6 +1043,17 @@ function loadPracticeGrid(filePath, gridVariableName) {
         return practiceGrid;
     })
     .catch(error => console.error(`Error loading ${gridVariableName} JSON:`, error));
+}
+
+// Resolve the color assigned to a key ('P' or 'Q').
+function getColorForKey(assignments, key) {
+    if (!assignments) return null;
+    if (assignments[key] === 'blue' || assignments[key] === 'green') {
+        return assignments[key]; // key -> color
+    }
+    if (assignments.blue === key) return 'blue';   // color -> key
+    if (assignments.green === key) return 'green';
+    return null;
 }
 
 // Declare global variables for practice grids and trial indices
@@ -1676,8 +1733,42 @@ const timeoutCheck = {
         if (nTimeouts <= Math.floor(0.3 * grid.nTrials * grid.nGrids)) {
             jsPsych.finishTrial();
         } else {
+            
             // If the participant failed, send the data and redirect
-            const ppt_data = jsPsych.data.get().json();
+            // const ppt_data = jsPsych.data.get().json();
+
+            // Define the variables you want to keep
+            // var keep_vars = [
+            //     "pid", "trial", "city", "path_chosen", "button_pressed", "reaction_time_ms","html-keyboard-response","choice",
+            //     "context", "grid", "path_A_expected_cost", "path_B_expected_cost",
+            //     "path_A_actual_cost", "path_B_actual_cost", "path_A", "path_B",
+            //     "path_A_future_overlap", "path_B_future_overlap",
+            //     "path_A_future_row_overlap", "path_B_future_row_overlap",
+            //     "path_A_future_col_overlap", "path_B_future_col_overlap",
+            //     "path_A_future_row_and_col_overlap", "path_B_future_row_and_col_overlap",
+            //     "path_A_future_rel_overlap", "path_B_future_rel_overlap",
+            //     "path_A_future_irrel_overlap", "path_B_future_irrel_overlap",
+            //     "abstract_sequence_A", "abstract_sequence_B",
+            //     "dominant_axis_A", "dominant_axis_B",
+            //     "better_path", "chose_better_path", "bonusAchieved", "expt_info_filename"
+            // ];
+
+            // Filter the jsPsych data down to just those variables
+            // var ppt_data = jsPsych.data.get().filterColumns(keep_vars).json();
+            // console.log('experiment complete (filtered dataset)');
+            // var ppt_data = jsPsych.data.get()
+            //     .filter({ trial_type: 'html-keyboard-response' }) // only keep choice trials
+            //     .json();
+            // console.log('experiment complete (filtered dataset)');
+            
+            var ppt_data = JSON.stringify(
+                jsPsych.data.get()
+                .filter({ trial_type: 'html-keyboard-response' })
+                .values()
+                .map(({ stimulus, ...rest }) => rest)
+            );
+            console.log('experiment complete (filtered dataset)');
+            
             
             send_complete(subject_id, ppt_data)
                 .then(() => {
@@ -3128,9 +3219,9 @@ function initializeExperiment() {
   
     // Combine everything into a single timeline
     const fullTimeline = [
-      ...ethicsTimeline,
-      instructionsLoop,
-      ...quizTimeline,
+    //   ...ethicsTimeline,
+    //   instructionsLoop,
+    //   ...quizTimeline,
       ...mainTimeline
     ];
   
