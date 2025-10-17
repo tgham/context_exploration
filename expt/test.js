@@ -21,7 +21,7 @@ export const quizQuestions = [
   {
     question: "How can previous tolls help you make smarter decisions later in the day?",
     options: [
-      "If visit an intersection again, you will not pay a toll there.",
+      "If you visit an intersection again, you will not pay a toll there.",
       "The toll cost decreases if you use the same route multiple times.",
       "You can avoid jobs that pass through expensive intersections.",
     ],

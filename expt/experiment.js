@@ -1377,7 +1377,7 @@ const pathSelectionTrial = {
     },
     // choices: ['f', 'j'], 
     choices: ['q', 'p'], 
-    trial_duration: 8000, // Automatically ends after 5 seconds
+    trial_duration: 8000, // Automatically ends after 8 seconds
     on_finish: function(data) {
         // Get the key assignment for this trial
         const keyAssignment = {
@@ -1955,10 +1955,10 @@ const instructions2 = {
             <div class="instruction-section" style="font-size: 20px;">
                 <h1>Dispatch Instructions</h1>
                 <p style="font-size: ${fontSize};">For each dispatch, you'll see two possible jobs marked in <span class="blue-text">blue</span> and <span class="green-text">green</span>. Each job has a passenger <img src="assets/people/blue_person.png" alt="Blue Passenger" width="23" height="23"> or <img src="assets/people/green_person.png" alt="Green Passenger" width="23" height="23"> at a pickup point, and a drop-off destination 🏠. The route of each job is marked with one of two letters:</p>
-                <p style="font-size: ${fontSize};">- The letter <strong>F</strong> marks one job</p>
-                <p style="font-size: ${fontSize};">- The letter <strong>J</strong> marks the other job</p>
+                <p style="font-size: ${fontSize};">- The letter <strong>P</strong> marks one job</p>
+                <p style="font-size: ${fontSize};">- The letter <strong>Q</strong> marks the other job</p>
                 <p style="font-size: ${fontSize};">On each dispatch, these letters are randomly assigned to each job. To send out a taxi to one of these jobs, you need to press the corresponding key on your keyboard.</p>
-                <p style="font-size: ${fontSize};">For any given choice, the lengths of the two possible jobs are the same, and you are paid the same wage by the company each day. However, some jobs are more costly than others, which you must pay yourself. This is because of tolls in the city...</p>
+                <p style="font-size: ${fontSize};">For any given choice, the lengths of the two possible jobs are the same, and you are paid the same wage by the company each day. However, some jobs are more costly than others, which you must pay for yourself. This is because of tolls in the city...</p>
             </div>
             <div class="instruction-section" style="font-size: 20px;">
                 <h2>Press spacebar to continue.</h2>
@@ -2269,7 +2269,7 @@ const practice2SelectionTrial = {
     },
     // choices: ['f', 'j'], 
     choices: ['q', 'p'], 
-    trial_duration: 8000, // Automatically ends after 5 seconds
+    trial_duration: 8000, // Automatically ends after 8 seconds
     on_finish: function(data) {
         // Get the key assignment for this trial
         const keyAssignment = {
