@@ -830,6 +830,15 @@ class Grid {
             <div class="upcoming-jobs-actual-container">
         `;
         
+        // Collect all upcoming paths for the current trial
+        const upcomingPaths = new Set();
+        if (!feedback) {
+            for (let i = currentTrialIndex + 1; i <= currentGridEndIndex; i++) {
+                const upcomingTrial = this.getTrialInfo(i);
+                upcomingTrial.path_A.forEach(coord => upcomingPaths.add(`${coord[0]}-${coord[1]}`));
+                upcomingTrial.path_B.forEach(coord => upcomingPaths.add(`${coord[0]}-${coord[1]}`));
+            }
+        }
 
         for (let i = 0; i < totalTrialsInGrid; i++) {
             const previewIndex = currentGridStartIndex + i;
@@ -891,7 +900,9 @@ class Grid {
                     const cellId = `cell-${row}-${col}-trial-${trial.trial}`;
                     let isStartA, isStartB, isGoalA, isGoalB, isPathA, isPathB;
 
-                    // if (previewIndex !== currentTrialIndex) {
+                    // Check if this cell is in upcoming paths (only for current trial)
+                    const isUpcomingPath = previewIndex === currentTrialIndex && upcomingPaths.has(`${row}-${col}`);
+
                     if (previewIndex > currentTrialIndex) {
                         isStartA = row === trial.start_A[0] && col === trial.start_A[1];
                         isStartB = row === trial.start_B[0] && col === trial.start_B[1];
@@ -915,12 +926,6 @@ class Grid {
                         isPathB = selectedPath !== 'blue' && selectedPath !== 'none' && trial.path_B.some(coord => coord[0] === row && coord[1] === col);
                     } 
                     
-                    // plot observed costs in every grid
-                    // const observedCost = this.observedCosts[`${row}-${col}`];
-                    // const observedClass = observedCost !== undefined ? 
-                    // (observedCost === -1 ? 'observed-cost' : 'observed-no-cost') : '';
-
-                    // or, only plot costs observed up to the current trial, i.e. use this.observedCostsT to get the observed costs
                     const observedCost = this[`observedCosts${i}`][`${row}-${col}`];
                     const observedClass = observedCost !== undefined ?
                         (observedCost === -1 ? 'observed-cost' : 'observed-no-cost') : '';
@@ -930,46 +935,110 @@ class Grid {
                     let pathClass = '';
                     let content = '';
 
-                    // Use key assignment if previewIndex matches currentTrialIndex
-                    if (previewIndex === currentTrialIndex && keyAssignment) {
-                        // if (isOverlap) {
-                            //     if (previewIndex % 2 === 0) {
-                                //         pathClass = 'blue-path';
-                                //         content = `<span class="green-text">+</span>`;
-                                //     } else {
-                                    //         pathClass = 'green-path';
-                                    //         content = `<span class="blue-text">+</span>`;
-                                    //     }
-                        if (isOverlap) {
-                            const colorOfP = getColorForKey(keyAssignment, 'P') || 'blue';
-                            const colorOfQ = getColorForKey(keyAssignment, 'Q') || (colorOfP === 'blue' ? 'green' : 'blue');
+                    // Determine border class based on path combinations (for current trial only)
+                    // if (previewIndex === currentTrialIndex && !isStartA && !isStartB && !isGoalA && !isGoalB) {
+                    if (previewIndex === currentTrialIndex) {
+                        // Determine which paths this cell is on
+                        const onBlue = isPathA;
+                        const onGreen = isPathB;
+                        const onUpcoming = isUpcomingPath;
                         
-                            content = `<span class="${colorOfP === 'blue' ? 'blue-text' : 'green-text'}">P</span>` +
-                                        `<span class="${colorOfQ === 'blue' ? 'blue-text' : 'green-text'}">Q</span>`;
-                        
-                            // Left-to-right should be P then Q
-                            pathClass = colorOfP === 'blue' && colorOfQ === 'green'
-                                ? 'half-half-blue-green'
-                                : colorOfP === 'green' && colorOfQ === 'blue'
-                                ? 'half-half-green-blue'
-                                : (colorOfP === 'blue' ? 'blue-path' : 'green-path'); // fallback if same
-                        } else if (isPathA) {
+                        // Generate random order for borders when there are multiple paths
+                        if (onBlue && onGreen && onUpcoming) {
+                            // All three paths - randomize order
+                            const orders = [
+                                // 'blue-green-orange',
+                                // 'blue-orange-green',
+                                // 'green-blue-orange',
+                                // 'green-orange-blue',
+                                'orange-blue-green',
+                                'orange-green-blue'
+                            ];
+                            pathClass = orders[Math.floor(Math.random() * orders.length)];
+                        } else if (onBlue && onGreen) {
+                            // Blue and green only
+                            // pathClass = Math.random() < 0.5 ? 'half-half-blue-green' : 'half-half-green-blue';
+                            if (i % 2 === 0) {
+                                pathClass = 'half-half-blue-green';
+                            } else {
+                                pathClass = 'half-half-green-blue';
+                            }
+                        } else if (onBlue && onUpcoming) {
+                            // Blue and orange
+                            // pathClass = Math.random() < 0.5 ? 'half-half-blue-orange' : 'half-half-orange-blue';
+                            if (i % 2 === 0) {
+                                pathClass = 'half-half-blue-orange';
+                            } else {
+                                pathClass = 'half-half-orange-blue';
+                            }
+                        } else if (onGreen && onUpcoming) {
+                            // Green and orange
+                            // pathClass = Math.random() < 0.5 ? 'half-half-green-orange' : 'half-half-orange-green';
+                            if (i % 2 === 0) {
+                                pathClass = 'half-half-green-orange';
+                            } else {
+                                pathClass = 'half-half-orange-green';
+                            }
+                        } else if (onBlue) {
                             pathClass = 'blue-path';
-                            content = keyAssignment.blue;
-                        } else if (isPathB) {
+                        } else if (onGreen) {
                             pathClass = 'green-path';
-                            content = keyAssignment.green;
+                        } else if (onUpcoming) {
+                            pathClass = 'orange-path';
+                        }
+                    }
+
+                    // Determine content (key assignments or default symbols)
+                    if (previewIndex === currentTrialIndex) {
+                        if (keyAssignment) {
+                            // With key assignment: show keys with colored text
+                            if (isOverlap) {
+                                const colorOfP = getColorForKey(keyAssignment, 'P') || 'blue';
+                                const colorOfQ = getColorForKey(keyAssignment, 'Q') || (colorOfP === 'blue' ? 'green' : 'blue');
+                            
+                                content =    `<span class="${colorOfP === 'blue' ? 'blue-text' : 'green-text'}" style="font-size: 1.2rem;">P</span>` +
+                                             `<span class="${colorOfQ === 'blue' ? 'blue-text' : 'green-text'}" style="font-size: 1.2rem;">Q</span>`;
+                            } else if (isPathA && isUpcomingPath) {
+                                // Blue path that's also on upcoming path
+                                content = `<span class="blue-text">${keyAssignment.blue}</span>`;
+                            } else if (isPathB && isUpcomingPath) {
+                                // Green path that's also on upcoming path
+                                content = `<span class="green-text">${keyAssignment.green}</span>`;
+                            } else if (isPathA) {
+                                content = keyAssignment.blue;
+                            } else if (isPathB) {
+                                content = keyAssignment.green;
+                            }
+                        } else {
+                            // Without key assignment: show default symbols
+                            if (isOverlap) {
+                                if (i % 2 === 0) {
+                                    // was: two pluses
+                                    // content = '<span class="blue-text">+</span><span class="green-text">+</span>';
+                                    content = '<span class="plus-split blue-green">+</span>';
+                                } else {
+                                    // content = '<span class="green-text">+</span><span class="blue-text">+</span>';
+                                    content = '<span class="plus-split green-blue">+</span>';
+                                }
+                            } else if (isPathA || isPathB) {
+                                // content = '+';
+                                content = '<span class="' + (isPathA ? 'blue-text' : 'green-text') + '">+</span>';
+                            }
                         }
                     } else {
-                        // Default behavior for other previews
+                        // Default behavior for other previews (non-current trials)
                         if (isOverlap) {
                             if (i % 2 === 0) {
-                                pathClass = 'blue-path';
-                                content = '<span class="green-text">+</span>';
+                                pathClass = 'half-half-blue-green';
+                                // was: two pluses
+                                // content = '<span class="blue-text">+</span><span class="green-text">+</span>';
+                                content = '<span class="plus-split blue-green">+</span>';
                             } else {
-                                pathClass = 'green-path';
-                                content = '<span class="blue-text">+</span>';
+                                pathClass = 'half-half-green-blue';
+                                // content = '<span class="green-text">+</span><span class="blue-text">+</span>';
+                                content = '<span class="plus-split green-blue">+</span>';
                             }
+                        // ...existing code...
                         } else if (isPathA) {
                             pathClass = 'blue-path';
                             content = '+';
@@ -981,32 +1050,55 @@ class Grid {
 
                     if (previewIndex < currentTrialIndex || feedback) {
                         if (isStartA) {
-                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass} blue-path" id="${cellId}" data-row="${row}" data-col="${col}">`;
-                            upcomingHTML += bluePerson.outerHTML; // Use the preloaded blue person image
+                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass} blue-path" id="${cellId}" data-row="${row}" data-col="${col}"  style="font-size: 1.0rem;" >`;
+                            upcomingHTML += bluePerson.outerHTML;
                             upcomingHTML += `</div>`;
                         } else if (isStartB) {
-                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass} green-path" id="${cellId}" data-row="${row}" data-col="${col}">`;
-                            upcomingHTML += greenPerson.outerHTML; // Use the preloaded green person image
+                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass} green-path" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.0rem;" >`;
+                            upcomingHTML += greenPerson.outerHTML;
                             upcomingHTML += `</div>`;
-                        } else if (isGoalA || isGoalB || isPathA || isPathB || isOverlap) {
+                        } else if (isGoalA) {
+                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass} blue-path" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 0.8rem;" >🏠</div>`;
+                        } else if (isGoalB) {
+                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass} green-path" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 0.8rem;" >🏠</div>`;
+                        } else if (isPathA || isPathB || isOverlap) {
                             upcomingHTML += `<div class="upcoming-cell-done ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.5rem;">`;
-                            upcomingHTML += isGoalA || isGoalB ? '🏠' : content;
+                            upcomingHTML += content;
                             upcomingHTML += `</div>`;
                         } else {
                             upcomingHTML += `<div class="upcoming-cell-done ${observedClass}" id="${cellId}" data-row="${row}" data-col="${col}"></div>`;
                         }
                     } else {
                         if (isStartA) {
-                            upcomingHTML += `<div class="upcoming-cell ${observedClass} blue-path" id="${cellId}" data-row="${row}" data-col="${col}">`;
-                            upcomingHTML += bluePerson.outerHTML; // Use the preloaded blue person image
+                            upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.0rem;" >`;
+                            upcomingHTML += bluePerson.outerHTML;
                             upcomingHTML += `</div>`;
                         } else if (isStartB) {
-                            upcomingHTML += `<div class="upcoming-cell ${observedClass} green-path" id="${cellId}" data-row="${row}" data-col="${col}">`;
-                            upcomingHTML += greenPerson.outerHTML; // Use the preloaded green person image
+                            upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.0rem;" >`;
+                            upcomingHTML += greenPerson.outerHTML;
                             upcomingHTML += `</div>`;
-                        } else if (isGoalA || isGoalB || isPathA || isPathB || isOverlap) {
-                            upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.5rem;">`;
-                            upcomingHTML += isGoalA || isGoalB ? '🏠' : content;
+                        } else if (isGoalA) {
+                            upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 0.8rem;" >🏠</div>`
+                        } else if (isGoalB) {
+                            upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 0.8rem;" >🏠</div>`
+                        } else if (isPathA || isPathB || isOverlap || isUpcomingPath) {
+
+                            // just shadow for letters?
+                            // if (keyAssignment && previewIndex === currentTrialIndex) {
+                            //     upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.5rem; 
+                            //     -webkit-text-stroke: 0.5px black; text-shadow: 1px 1px 1px black;">`;
+                            //     upcomingHTML += content;
+                            //     upcomingHTML += `</div>`;
+                            // } else {
+                            //     upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.5rem;">`;
+                            //     upcomingHTML += content;
+                            //     upcomingHTML += `</div>`;
+                            // }
+                            
+                            // or shadow for letters and '+' symbol
+                            upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.5rem; 
+                            -webkit-text-stroke: 0.5px black; text-shadow: 1px 1px 1px black;">`;
+                            upcomingHTML += content;
                             upcomingHTML += `</div>`;
                         } else {
                             upcomingHTML += `<div class="upcoming-cell ${observedClass}" id="${cellId}" data-row="${row}" data-col="${col}"></div>`;
