@@ -90,7 +90,7 @@ beta_params = {
     }
 
 ## trial info
-n_sim_participants = 100
+n_sim_participants = 101
 n_cities = 8
 n_days = 5
 n_trials = 4
@@ -114,7 +114,6 @@ df_expt = pd.DataFrame(columns=['participant', 'city', 'context', 'grid','trial'
                                 'path_A_future_col_overlap', 'path_B_future_col_overlap',
                                 'path_A_future_rel_overlap', 'path_B_future_rel_overlap',
                                 'path_A_future_irrel_overlap', 'path_B_future_irrel_overlap',
-                                
                                 'path_A_future_row_and_col_overlap', 'path_B_future_row_and_col_overlap'
                                 ])
 if n_afc==3:
@@ -243,7 +242,7 @@ df_sim = pd.DataFrame(all_sim_out)
 
 
 ## save simulated grids + results
-df_sim.to_csv('useful_saves/expt_optimisation/{}AFC_{}x{}_env_{}-{}-{}-{}_beta_{}_sim_ppts_{}_cities_{}_days_{}_trials_{}_sims_results.csv'.format(n_afc,N,N,
+df_sim.to_csv('useful_saves/expt_optimisation/sim_results/{}AFC_{}x{}_env_{}-{}-{}-{}_beta_{}_sim_ppts_{}_cities_{}_days_{}_trials_{}_sims_results.csv'.format(n_afc,N,N,
                                                                                        beta_params['alpha_row'], beta_params['beta_row'], beta_params['alpha_col'], beta_params['beta_col'],
                                                                                        n_sim_participants, 
                                                                                        n_cities, n_days, n_trials,hyperparams['n_sims']))

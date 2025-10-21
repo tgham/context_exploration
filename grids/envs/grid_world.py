@@ -1183,9 +1183,8 @@ class GridEnv(gym.Env):
             ## or, absolute difference
             t = len(self.starts)
             path_costs = [np.sum([self.costss[t][x, y] for x, y in path]) for path in path_states]
-            cost_tol = self.N/4
+            cost_tol = self.N/3
             vals_diff = np.abs(max(path_costs) - min(path_costs)) >= cost_tol
-            print(np.abs(max(path_costs) - min(path_costs)))
 
 
         return sampled_abstract_sequences, path_actions, path_states, starts, goals
