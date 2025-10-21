@@ -146,7 +146,15 @@ all_sim_out = {
         'Q_c':[],
         'leaf_visits_a':[],
         'leaf_visits_b':[],
-        'leaf_visits_c':[]
+        'leaf_visits_c':[],
+        'CE_actions':[],
+        'CE_Q_a':[],
+        'CE_Q_b':[],
+        'CE_Q_c':[],
+        'CE_p_choice_A':[],
+        'CE_p_choice_B':[],
+        'CE_p_choice_C':[],
+        'CE_p_correct':[],
     }
 parallel = True
 n_cores = 128
