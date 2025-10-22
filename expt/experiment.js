@@ -505,11 +505,11 @@ class Grid {
     
                 if (isStartA) {
                     gridHTML += `<div class="grid-cell start blue-path ${observedClass}" id="${cellId}">`;
-                    gridHTML += bluePerson.outerHTML; // Use the HTML string representation of the preloaded blue person image
+                    gridHTML += bluePerson; 
                     gridHTML += `</div>`;
                 } else if (isStartB) {
                     gridHTML += `<div class="grid-cell start green-path ${observedClass}" id="${cellId}">`;
-                    gridHTML += greenPerson.outerHTML; // Use the HTML string representation of the preloaded green person image
+                    gridHTML += greenPerson; 
                     gridHTML += `</div>`;
                 } else if (isGoalA) {
                     gridHTML += `<div class="grid-cell goal blue-path ${observedClass}" id="${cellId}">🏠</div>`;
@@ -2181,7 +2181,7 @@ const instructions2 = {
         return `
             <div class="instruction-section" style="font-size: 20px;">
                 <h1>Dispatch Instructions</h1>
-                <p style="font-size: ${fontSize};">For each dispatch, you'll see two possible jobs marked in <span class="blue-text">blue</span> and <span class="green-text">green</span>. Each job has a passenger <img src="assets/people/blue_person.png" alt="Blue Passenger" width="23" height="23"> or <img src="assets/people/green_person.png" alt="Green Passenger" width="23" height="23"> at a pickup point, and a drop-off destination 🏠. The route of each job is marked with one of two letters:</p>
+                <p style="font-size: ${fontSize};">For each dispatch, you'll see two possible jobs marked in <span class="blue-text">blue</span> and <span class="green-text">green</span>. Each job has a passenger ✋ at a pickup point, and a drop-off destination 🏠. The route of each job is marked with one of two letters:</p>
                 <p style="font-size: ${fontSize};">- The letter <strong>P</strong> marks one job</p>
                 <p style="font-size: ${fontSize};">- The letter <strong>Q</strong> marks the other job</p>
                 <p style="font-size: ${fontSize};">On each dispatch, these letters are randomly assigned to each job. To send out a taxi to one of these jobs, you need to press the corresponding key on your keyboard.</p>
@@ -2630,8 +2630,9 @@ const instructions4 = {
     stimulus: `
         <div class="instruction-section" style="z-index: 2001; position: relative;">
             <h1>New Day</h1>
-            <p>At the start of a new day, the traffic in the city resets, meaning that the intersections where you do (or do not) have to pay a toll have reset.</p>
-            <p>Watch the grid reset for the next day.</p>
+            <p>At the start of a new day, the traffic in the city resets, meaning that the intersections where you do (or do not) have to pay a toll have reset. You are also given a new set of dispatches.</p>
+            <p>Watch the grid reset for the next day below.</p>
+            <p>Remember: it helps to think about which intersections you might visit later on in the day, as highlighted in <span style="color: #ea2aff;">pink</span>, and shown in your upcoming dispatches.</p>
             <p id="continue-text" style="display: none;">Press spacebar to continue dispatching.</p>
         </div>
         <div class="jobs-layout" style="z-index: 2001; position: relative;">
@@ -2907,7 +2908,7 @@ const instructions8 = {
 };
 
 
-const fullscreenTrial = {
+const fullscreenTrial = { 
     type: jsPsychHtmlKeyboardResponse,
     stimulus: `
         <div class="instruction-section">
@@ -2923,6 +2924,7 @@ const fullscreenTrial = {
         document.documentElement.requestFullscreen(); // Forces full-screen mode
     }
 };
+
 
 // instructions review - i.e. ask participants if they want to review the instructions pages (instructions1-instructions8, without the practices)
 const instructionsReview = {
@@ -2963,6 +2965,7 @@ const instructions9 = {
             <div class="instruction-section">
                 <h1>Bonus Payment</h1>
                 <p>Remember: your aim is to minimise the total cost paid each day by predicting which intersections will incur a toll, and hence by selecting jobs that you think will be least costly.</p>
+                <p>This means that when choosing a job, it helps to think about which intersections you might visit later on in that day, as highlighted in <span style="color: #ea2aff;">pink</span>, and shown in your upcoming dispatches.</p>
                 <p>At the end of the experiment, we will assess your performance by assessing how well you chose jobs that were the least costly on a randomly selected set of days and cities. This will determine whether you receive a bonus payment.</p>
                 <p>So, you should pay attention throughout the experiment - i.e. on every day, and in every city.</p>
                 <p>Remember also: you will have 8 seconds to select a job once the current dispatch turns yellow, otherwise the trial will timeout. If you timeout too many times, the experiment will end and you will return to Prolific.</p>
@@ -3226,10 +3229,10 @@ function createInstructionsTimeline() {
     // Practice selection
     timeline.push(instructions2);
     timeline.push(instructions2_5);
-    // timeline.push(practice1SelectionTrial);
-    // timeline.push(practice1AnimationTrial);
-    // timeline.push(practice1SelectionTrial);
-    // timeline.push(practice1AnimationTrial);
+    timeline.push(practice1SelectionTrial);
+    timeline.push(practice1AnimationTrial);
+    timeline.push(practice1SelectionTrial);
+    timeline.push(practice1AnimationTrial);
 
     // Practice a full day
     timeline.push(instructions3);
@@ -3359,7 +3362,7 @@ function initializeExperiment() {
   
     // Combine everything into a single timeline
     const fullTimeline = [
-    //   ...ethicsTimeline,
+      ...ethicsTimeline,
       instructionsLoop,
       ...quizTimeline,
       ...mainTimeline
