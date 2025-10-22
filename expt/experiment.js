@@ -947,18 +947,18 @@ class Grid {
                         if (onBlue && onGreen && onUpcoming) {
                             // All three paths - randomize order
                             // const orders = [
-                            //     // 'blue-green-orange',
-                            //     // 'blue-orange-green',
-                            //     // 'green-blue-orange',
-                            //     // 'green-orange-blue',
-                            //     'orange-blue-green',
-                            //     'orange-green-blue'
+                            //     // 'blue-green-magenta',
+                            //     // 'blue-magenta-green',
+                            //     // 'green-blue-magenta',
+                            //     // 'green-magenta-blue',
+                            //     'magenta-blue-green',
+                            //     'magenta-green-blue'
                             // ];
                             // pathClass = orders[Math.floor(Math.random() * orders.length)];
                             if (i % 2 === 0) {
-                                pathClass = 'orange-blue-green'
+                                pathClass = 'magenta-blue-green'
                             } else {
-                                pathClass = 'orange-green-blue'
+                                pathClass = 'magenta-green-blue'
                             }
                         } else if (onBlue && onGreen) {
                             // Blue and green only
@@ -969,27 +969,27 @@ class Grid {
                                 pathClass = 'half-half-green-blue';
                             }
                         } else if (onBlue && onUpcoming) {
-                            // Blue and orange
-                            // pathClass = Math.random() < 0.5 ? 'half-half-blue-orange' : 'half-half-orange-blue';
+                            // Blue and magenta
+                            // pathClass = Math.random() < 0.5 ? 'half-half-blue-magenta' : 'half-half-magenta-blue';
                             if (i % 2 === 0) {
-                                pathClass = 'half-half-blue-orange';
+                                pathClass = 'half-half-blue-magenta';
                             } else {
-                                pathClass = 'half-half-orange-blue';
+                                pathClass = 'half-half-magenta-blue';
                             }
                         } else if (onGreen && onUpcoming) {
-                            // Green and orange
-                            // pathClass = Math.random() < 0.5 ? 'half-half-green-orange' : 'half-half-orange-green';
+                            // Green and magenta
+                            // pathClass = Math.random() < 0.5 ? 'half-half-green-magenta' : 'half-half-magenta-green';
                             if (i % 2 === 0) {
-                                pathClass = 'half-half-green-orange';
+                                pathClass = 'half-half-green-magenta';
                             } else {
-                                pathClass = 'half-half-orange-green';
+                                pathClass = 'half-half-magenta-green';
                             }
                         } else if (onBlue) {
                             pathClass = 'blue-path';
                         } else if (onGreen) {
                             pathClass = 'green-path';
                         } else if (onUpcoming) {
-                            pathClass = 'orange-path';
+                            pathClass = 'magenta-path';
                         }
                     }
 

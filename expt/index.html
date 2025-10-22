@@ -22,6 +22,25 @@
             /* Prevent scrolling */
         }
 
+        :root {
+            --c-blue: rgb(47, 164, 253);
+            --c-green: #29da6a;
+            --c-magenta: #ea2aff;
+            --c-cost: #ff5a5a;
+            --c-cost-past:  rgba(248, 113, 113, 0.8);
+            --c-no-cost: #b8b8d9;
+            --c-no-cost-past: rgba(184, 184, 217, 0.8);
+
+
+            /* Optional: reusable half-and-half gradients */
+            --g-blue-green: linear-gradient(to bottom right, var(--c-blue) 50%, var(--c-green) 50%);
+            --g-green-blue: linear-gradient(to bottom right, var(--c-green) 50%, var(--c-blue) 50%);
+            --g-blue-magenta: linear-gradient(to bottom right, var(--c-blue) 50%, var(--c-magenta) 50%);
+            --g-magenta-blue: linear-gradient(to bottom right, var(--c-magenta) 50%, var(--c-blue) 50%);
+            --g-green-magenta: linear-gradient(to bottom right, var(--c-green) 50%, var(--c-magenta) 50%);
+            --g-magenta-green: linear-gradient(to bottom right, var(--c-magenta) 50%, var(--c-green) 50%);
+        }
+
         body {
             font-family: Arial, sans-serif;
             background-color: #0c0c1d;
@@ -84,11 +103,11 @@
         }
 
         .grid-cell.start.observed-cost {
-            background-color: #f87171; /* Red background for observed cost */
+            background-color: var(--c-cost); /* Red background for observed cost */
         }
 
         .grid-cell.start.observed-no-cost {
-            background-color: #b8b8d9; /* Grey background for observed no cost */
+            background-color: var(--c-no-cost); /* Grey background for observed no cost */
         }
 
         .grid-cell.goal {
@@ -97,11 +116,11 @@
         }
 
         .grid-cell.goal.observed-cost {
-            background-color: #f87171; /* Red background for observed cost */
+            background-color: var(--c-cost); /* Red background for observed cost */
         }
 
         .grid-cell.goal.observed-no-cost {
-            background-color: #b8b8d9; /* Grey background for observed no cost */
+            background-color: var(--c-no-cost); /* Grey background for observed no cost */
         }
 
         .grid-cell.avatar {
@@ -114,29 +133,31 @@
         }
 
         .blue-path {
-            color: #5dadec;
-            border-color: #5dadec;
+            /* color: var(--c-blue);
+            border-color: var(--c-blue); */
+            color: var(--c-blue);
+            border-color: var(--c-blue);
         }
 
         .green-path {
-            color: #4ade80;
-            border-color: #4ade80;
+            color: var(--c-green);
+            border-color: var(--c-green);
         }
 
         /* .half-half-path {
             border-width: 2px;
             border-style: solid;
-            border-image: linear-gradient(to right, #4ade80 50%, #5dadec 50%);
+            border-image: linear-gradient(to right, var(--c-green) 50%, var(--c-blue) 50%);
             border-image-slice: 1;
         } */
 
         .observed-cost {
-            background-color: #f87171;
+            background-color: var(--c-cost);
             transition: background-color 0.5s;
         }
 
         .observed-no-cost {
-            background-color: #b8b8d9; /* Much lighter grey for better visibility */
+            background-color: var(--c-no-cost); /* Much lighter grey for better visibility */
             transition: background-color 0.5s;
         }
 
@@ -159,7 +180,7 @@
         }
 
         .cost-trial {
-            color: #f87171;
+            color: var(--c-cost);
             font-size: 20px;
             margin: 5px 0;
             font-weight: bold;
@@ -196,7 +217,7 @@
         }
 
         .jobs-header {
-            color: #5dadec;
+            color: var(--c-blue);
             text-align: center;
             margin-top: 10px;
             margin-bottom: 15px;
@@ -300,19 +321,19 @@
         }
 
         .upcoming-cell.blue-path {
-            border-color: #5dadec; /* Blue border for blue path */
+            border-color: var(--c-blue); /* Blue border for blue path */
         }
         
-        .upcoming-cell.orange-path {
-            border-color: orange;
+        .upcoming-cell.magenta-path {
+            border-color: var(--c-magenta);
         }
 
         .upcoming-cell.green-path {
-            border-color: #4ade80; /* Green border for green path */
+            border-color: var(--c-green); /* Green border for green path */
         }
 
         .upcoming-cell.half-half-blue-green {
-            border-image: linear-gradient(to bottom right, #5dadec 50%, #4ade80 50%);
+            border-image: linear-gradient(to bottom right, var(--c-blue) 50%, var(--c-green) 50%);
             border-image-slice: 1;
             border-image-width: 1;
             border-image-repeat: stretch;
@@ -320,39 +341,39 @@
         }
 
         .upcoming-cell.half-half-green-blue {
-            border-image: linear-gradient(to bottom right, #4ade80 50%, #5dadec 50%);
+            border-image: linear-gradient(to bottom right, var(--c-green) 50%, var(--c-blue) 50%);
             border-image-slice: 1;
             border-image-width: 1;
             border-image-repeat: stretch;
             border-color: transparent;
         }
 
-        .upcoming-cell.half-half-blue-orange {
-            border-image: linear-gradient(to bottom right, #5dadec 50%, #fb923c 50%);
+        .upcoming-cell.half-half-blue-magenta {
+            border-image: linear-gradient(to bottom right, var(--c-blue) 50%, var(--c-magenta) 50%);
             border-image-slice: 1;
             border-image-width: 1;
             border-image-repeat: stretch;
             border-color: transparent;
         }
 
-        .upcoming-cell.half-half-orange-blue {
-            border-image: linear-gradient(to bottom right, #fb923c 50%, #5dadec 50%);
+        .upcoming-cell.half-half-magenta-blue {
+            border-image: linear-gradient(to bottom right, var(--c-magenta) 50%, var(--c-blue) 50%);
             border-image-slice: 1;
             border-image-width: 1;
             border-image-repeat: stretch;
             border-color: transparent;
         }
 
-        .upcoming-cell.half-half-green-orange {
-            border-image: linear-gradient(to bottom right, #4ade80 50%, #fb923c 50%);
+        .upcoming-cell.half-half-green-magenta {
+            border-image: linear-gradient(to bottom right, var(--c-green) 50%, var(--c-magenta) 50%);
             border-image-slice: 1;
             border-image-width: 1;
             border-image-repeat: stretch;
             border-color: transparent;
         }
 
-        .upcoming-cell.half-half-orange-green {
-            border-image: linear-gradient(to bottom right, #fb923c 50%, #4ade80 50%);
+        .upcoming-cell.half-half-magenta-green {
+            border-image: linear-gradient(to bottom right, var(--c-magenta) 50%, var(--c-green) 50%);
             border-image-slice: 1;
             border-image-width: 1;
             border-image-repeat: stretch;
@@ -360,12 +381,12 @@
         }
 
         /* Three-way combinations */
-        .upcoming-cell.orange-blue-green {
+        .upcoming-cell.magenta-blue-green {
             border-image: conic-gradient(
                 from 120deg,
-                #fb923c 0% 33.333%,   /* bottom edge */
-                #5dadec 33.333% 66.666%, /* bottom-left -> top-center */
-                #4ade80 66.666% 100%  /* top-center -> bottom-right */
+                var(--c-magenta) 0% 33.333%,   /* bottom edge */
+                var(--c-blue) 33.333% 66.666%, /* bottom-left -> top-center */
+                var(--c-green) 66.666% 100%  /* top-center -> bottom-right */
             ) 1;
             border-image-slice: 1;
             border-image-width: 1;
@@ -373,13 +394,13 @@
             border-color: transparent;
             }
 
-            /* Orange on bottom edge, Green from bottom-left -> top-center, Blue from top-center -> bottom-right */
-            .upcoming-cell.orange-green-blue {
+            /* magenta on bottom edge, Green from bottom-left -> top-center, Blue from top-center -> bottom-right */
+            .upcoming-cell.magenta-green-blue {
             border-image: conic-gradient(
                 from 120deg,
-                #fb923c 0% 33.333%,   /* bottom edge */
-                #4ade80 33.333% 66.666%, /* bottom-left -> top-center */
-                #5dadec 66.666% 100%  /* top-center -> bottom-right */
+                var(--c-magenta) 0% 33.333%,   /* bottom edge */
+                var(--c-green) 33.333% 66.666%, /* bottom-left -> top-center */
+                var(--c-blue) 66.666% 100%  /* top-center -> bottom-right */
             ) 1;
             border-image-slice: 1;
             border-image-width: 1;
@@ -394,11 +415,11 @@
 
         /* Shared styles for observed costs */
         .upcoming-cell.observed-cost {
-            background-color: #f87171;
+            background-color: var(--c-cost);
         }
 
         .upcoming-cell.observed-no-cost {
-            background-color: #b8b8d9;
+            background-color: var(--c-no-cost);
         }
 
         /* Grid styling for completed upcoming jobs - slightly more transparent */
@@ -445,11 +466,11 @@
 
         /* Shared styles for observed costs */
         .upcoming-cell-done.observed-cost {
-            background-color: rgba(248, 113, 113, 0.8); /* Slightly more transparent red */
+            background-color: var(--c-cost-past); /* Slightly more transparent red */
         }
 
         .upcoming-cell-done.observed-no-cost {
-            background-color: rgba(184, 184, 217, 0.8); /* Slightly more transparent grey */
+            background-color: var(--c-no-cost-past); /* Slightly more transparent grey */
         }
 
         @keyframes pulse {
@@ -463,7 +484,7 @@
 
         .cost-burst {
             position: absolute;
-            color: #f87171;
+            color: var(--c-cost);
             font-weight: bold;
             animation: burst 0.6s ease-out forwards;
             z-index: 20;
@@ -471,7 +492,7 @@
 
         .free-burst {
             position: absolute;
-            color: #4ade80;
+            color: var(--c-green);
             font-weight: bold;
             animation: burst 0.6s ease-out forwards;
             z-index: 20;
@@ -560,16 +581,16 @@
             font-size: 22px;
             text-align: center;
             margin: 10px 0;
-            color: #4ade80;
+            color: var(--c-green);
         }
 
         .blue-text {
-            color: #5dadec;
+            color: var(--c-blue);
             font-weight: bold;
         }
 
         .green-text {
-            color: #4ade80;
+            color: var(--c-green);
             font-weight: bold;
         }
 
@@ -589,16 +610,16 @@
 
         /* Keep your directional gradients */
         .plus-split.blue-green {
-        background-image: linear-gradient(to bottom right, #5dadec 50%, #4ade80 50%);
+        background-image: linear-gradient(to bottom right, var(--c-blue) 50%, var(--c-green) 50%);
         }
         .plus-split.green-blue {
-            background-image: linear-gradient(to bottom right, #4ade80 50%, #5dadec 50%);
+            background-image: linear-gradient(to bottom right, var(--c-green) 50%, var(--c-blue) 50%);
         }
-        /* Optional orange combos if needed later:
-        .plus-split.blue-orange { background-image: linear-gradient(to bottom right, #5dadec 50%, #fb923c 50%); }
-        .plus-split.orange-blue { background-image: linear-gradient(to bottom right, #fb923c 50%, #5dadec 50%); }
-        .plus-split.green-orange { background-image: linear-gradient(to bottom right, #4ade80 50%, #fb923c 50%); }
-        .plus-split.orange-green { background-image: linear-gradient(to bottom right, #fb923c 50%, #4ade80 50%); }
+        /* Optional magenta combos if needed later:
+        .plus-split.blue-magenta { background-image: linear-gradient(to bottom right, var(--c-blue) 50%, var(--c-magenta) 50%); }
+        .plus-split.magenta-blue { background-image: linear-gradient(to bottom right, var(--c-magenta) 50%, var(--c-blue) 50%); }
+        .plus-split.green-magenta { background-image: linear-gradient(to bottom right, var(--c-green) 50%, var(--c-magenta) 50%); }
+        .plus-split.magenta-green { background-image: linear-gradient(to bottom right, var(--c-magenta) 50%, var(--c-green) 50%); }
         */
 
         .white-text {
@@ -607,7 +628,7 @@
         }
 
         .red-text {
-            color: #f87171;
+            color: var(--c-cost);
             font-weight: bold;
         }
 
@@ -620,7 +641,7 @@
             font-size: 18px;
             margin-top: 30px;
             text-align: center;
-            color: #4ade80;
+            color: var(--c-green);
         }
 
         .fade-transition {
@@ -765,12 +786,12 @@
         }
 
         .quiz-answer.correct {
-            background-color: #4ade80; /* Green for correct answers */
+            background-color: var(--c-green); /* Green for correct answers */
             color: #ffffff;
         }
 
         .quiz-answer.incorrect {
-            background-color: #f87171; /* Red for incorrect answers */
+            background-color: var(--c-cost); /* Red for incorrect answers */
             color: #ffffff;
         }
 
