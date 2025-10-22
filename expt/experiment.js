@@ -946,15 +946,20 @@ class Grid {
                         // Generate random order for borders when there are multiple paths
                         if (onBlue && onGreen && onUpcoming) {
                             // All three paths - randomize order
-                            const orders = [
-                                // 'blue-green-orange',
-                                // 'blue-orange-green',
-                                // 'green-blue-orange',
-                                // 'green-orange-blue',
-                                'orange-blue-green',
-                                'orange-green-blue'
-                            ];
-                            pathClass = orders[Math.floor(Math.random() * orders.length)];
+                            // const orders = [
+                            //     // 'blue-green-orange',
+                            //     // 'blue-orange-green',
+                            //     // 'green-blue-orange',
+                            //     // 'green-orange-blue',
+                            //     'orange-blue-green',
+                            //     'orange-green-blue'
+                            // ];
+                            // pathClass = orders[Math.floor(Math.random() * orders.length)];
+                            if (i % 2 === 0) {
+                                pathClass = 'orange-blue-green'
+                            } else {
+                                pathClass = 'orange-green-blue'
+                            }
                         } else if (onBlue && onGreen) {
                             // Blue and green only
                             // pathClass = Math.random() < 0.5 ? 'half-half-blue-green' : 'half-half-green-blue';
@@ -991,13 +996,30 @@ class Grid {
                     // Determine content (key assignments or default symbols)
                     if (previewIndex === currentTrialIndex) {
                         if (keyAssignment) {
-                            // With key assignment: show keys with colored text
-                            if (isOverlap) {
-                                const colorOfP = getColorForKey(keyAssignment, 'P') || 'blue';
-                                const colorOfQ = getColorForKey(keyAssignment, 'Q') || (colorOfP === 'blue' ? 'green' : 'blue');
                             
-                                content =    `<span class="${colorOfP === 'blue' ? 'blue-text' : 'green-text'}" style="font-size: 1.2rem;">P</span>` +
-                                             `<span class="${colorOfQ === 'blue' ? 'blue-text' : 'green-text'}" style="font-size: 1.2rem;">Q</span>`;
+                            // With key assignment: 
+                            if (isOverlap) {
+                                
+                                // show both keys in each of their colours
+                                // const colorOfP = getColorForKey(keyAssignment, 'P') || 'blue';
+                                // const colorOfQ = getColorForKey(keyAssignment, 'Q') || (colorOfP === 'blue' ? 'green' : 'blue');
+                            
+                                // // can also change font size of 'PQ' if needed - style="font-size: 1.2rem;"
+                                // content =    `<span class="${colorOfP === 'blue' ? 'blue-text' : 'green-text'}" 
+                                //             >P</span>` +
+                                //              `<span class="${colorOfQ === 'blue' ? 'blue-text' : 'green-text'}" 
+                                //              >Q</span>`;
+
+                                // or, show single '+' symbol without P/Q labels
+                                if (i % 2 === 0) {
+                                    // was: two pluses
+                                    // content = '<span class="blue-text">+</span><span class="green-text">+</span>';
+                                    content = '<span class="plus-split blue-green">+</span>';
+                                } else {
+                                    // content = '<span class="green-text">+</span><span class="blue-text">+</span>';
+                                    content = '<span class="plus-split green-blue">+</span>';
+                                }
+                                
                             } else if (isPathA && isUpcomingPath) {
                                 // Blue path that's also on upcoming path
                                 content = `<span class="blue-text">${keyAssignment.blue}</span>`;
@@ -1058,9 +1080,9 @@ class Grid {
                             upcomingHTML += greenPerson.outerHTML;
                             upcomingHTML += `</div>`;
                         } else if (isGoalA) {
-                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass} blue-path" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 0.8rem;" >🏠</div>`;
+                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass} blue-path" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.0rem;" >🏠</div>`;
                         } else if (isGoalB) {
-                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass} green-path" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 0.8rem;" >🏠</div>`;
+                            upcomingHTML += `<div class="upcoming-cell-done ${observedClass} green-path" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.0rem;" >🏠</div>`;
                         } else if (isPathA || isPathB || isOverlap) {
                             upcomingHTML += `<div class="upcoming-cell-done ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.5rem;">`;
                             upcomingHTML += content;
@@ -1078,9 +1100,9 @@ class Grid {
                             upcomingHTML += greenPerson.outerHTML;
                             upcomingHTML += `</div>`;
                         } else if (isGoalA) {
-                            upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 0.8rem;" >🏠</div>`
+                            upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.0rem;" >🏠</div>`
                         } else if (isGoalB) {
-                            upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 0.8rem;" >🏠</div>`
+                            upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.0rem;" >🏠</div>`
                         } else if (isPathA || isPathB || isOverlap || isUpcomingPath) {
 
                             // just shadow for letters?
