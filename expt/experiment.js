@@ -213,8 +213,8 @@ function applyScreenScaling() {
     const widthRatio = screenWidth / baseWidth;
     const heightRatio = screenHeight / baseHeight;
 
-    // Start with a base zoom factor of 80% (0.8)
-    const baseZoomFactor = 0.9;
+    // Start with a base zoom factor
+    const baseZoomFactor = 0.85;
 
     // Adjust the zoom factor based on the screen proportions
     zoomFactor = baseZoomFactor * Math.min(widthRatio, heightRatio);
@@ -442,8 +442,10 @@ class Grid {
         `;
 
         // preload avatars
-        const bluePerson = preloadedImages['assets/people/blue_person.png'];
-        const greenPerson = preloadedImages['assets/people/green_person.png'];
+        // const bluePerson = preloadedImages['assets/people/blue_person.png'];
+        // const greenPerson = preloadedImages['assets/people/green_person.png'];
+        const bluePerson = '✋';
+        const greenPerson = '✋';
 
     
         for (let row = 0; row < gridSize; row++) {
@@ -471,33 +473,33 @@ class Grid {
                     if (isOverlap) {
 
                         // for simplicity, let's just keep it consistent
-                        pathClass = 'blue-path';
-                        content = `<span class="green-text" style="font-size: 2rem;">+</span>`;
+                        pathClass = 'half-half-blue-green';
 
-                        // random 
-                        // const randomChoice = Math.random() < 0.5;
-                        // pathClass = randomChoice ? 'blue-path' : 'green-path';
-                        // content = randomChoice ? `<span class="green-text" style="font-size: 2rem;">+</span>` : `<span class="blue-text" style="font-size: 2rem;">+</span>`;
+                        // show both keys in each of their colours
+                        const colorOfP = getColorForKey(keyAssignment, 'P') || 'blue';
+                        const colorOfQ = getColorForKey(keyAssignment, 'Q') || (colorOfP === 'blue' ? 'green' : 'blue');
+                        content =    `<span class="${colorOfP === 'blue' ? 'blue-text' : 'green-text'}"  style="font-size: 1.5rem;"
+                                    >P</span>` +
+                                     `<span class="${colorOfQ === 'blue' ? 'blue-text' : 'green-text'}"  style="font-size: 1.5rem;"
+                                     >Q</span>`;                        
 
                     } else if (isPathA) {
                         pathClass = 'blue-path';
-                        content = keyAssignment.blue;
+                        content = `<span class="blue-text">${keyAssignment.blue}</span>`;
                     } else if (isPathB) {
                         pathClass = 'green-path';
-                        content = keyAssignment.green;
+                        content = `<span class="green-text">${keyAssignment.green}</span>`;
                     }
                 } else {
                     // Fall back to stars if no key assignment provided
                     if (isOverlap) {
-                        const randomChoice = Math.random() < 0.5;
-                        pathClass = randomChoice ? 'blue-path' : 'green-path';
-                        content = randomChoice ? '<span class="green-text" style="font-size: 2rem;">+</span>' : '<span class="blue-text" style="font-size: 2rem;">+</span>';
-                    } else if (isPathA) {
-                        pathClass = 'blue-path';
-                        content = '+';
-                    } else if (isPathB) {
-                        pathClass = 'green-path';
-                        content = '+';
+                        // const randomChoice = Math.random() < 0.5;
+                        // pathClass = randomChoice ? 'blue-path' : 'green-path';
+                        // content = randomChoice ? '<span class="green-text" style="font-size: 2rem;">+</span>' : '<span class="blue-text" style="font-size: 2rem;">+</span>';
+                        content = '<span class="plus-split blue-green" style="font-size: 2rem;">+</span>';
+                    } else if (isPathA || isPathB) {
+                        // content = '+';
+                        content = '<span class="' + (isPathA ? 'blue-text' : 'green-text') + '" style="font-size: 2rem;">+</span>';
                     }
                 }
     
@@ -514,9 +516,9 @@ class Grid {
                 } else if (isGoalB) {
                     gridHTML += `<div class="grid-cell goal green-path ${observedClass}" id="${cellId}">🏠</div>`;
                 } else if (isPathA || isPathB || isOverlap) {
-                    gridHTML += `<div class="grid-cell ${observedClass} ${pathClass}" id="${cellId}" style="font-size: 2rem;">${content}</div>`;
+                    gridHTML += `<div class="grid-cell ${observedClass} ${pathClass}" id="${cellId}" style="font-size: 2rem;-webkit-text-stroke: 0.5px black; text-shadow: 1px 1px 1px black;">${content}</div>`;
                 } else {
-                    gridHTML += `<div class="grid-cell ${observedClass}" id="${cellId}"></div>`;
+                    gridHTML += `<div class="grid-cell ${observedClass} ${pathClass}" id="${cellId}"></div>`;
                 }
             }
         }   
@@ -892,8 +894,11 @@ class Grid {
             }
 
             // preload avatars
-            const bluePerson = preloadedImages['assets/people/blue_person.png'];
-            const greenPerson = preloadedImages['assets/people/green_person.png'];
+            // const bluePerson = preloadedImages['assets/people/blue_person.png'];
+            // const greenPerson = preloadedImages['assets/people/green_person.png'];
+            const bluePerson = '✋';
+            const greenPerson = '✋';
+
 
             for (let row = 0; row < this.gridSize; row++) {
                 for (let col = 0; col < this.gridSize; col++) {
@@ -1006,25 +1011,24 @@ class Grid {
                             if (isOverlap) {
                                 
                                 // show both keys in each of their colours
-                                // const colorOfP = getColorForKey(keyAssignment, 'P') || 'blue';
-                                // const colorOfQ = getColorForKey(keyAssignment, 'Q') || (colorOfP === 'blue' ? 'green' : 'blue');
-
+                                const colorOfP = getColorForKey(keyAssignment, 'P') || 'blue';
+                                const colorOfQ = getColorForKey(keyAssignment, 'Q') || (colorOfP === 'blue' ? 'green' : 'blue');
                             
-                                // // can also change font size of 'PQ' if needed - style="font-size: 1.2rem;"
-                                // content =    `<span class="${colorOfP === 'blue' ? 'blue-text' : 'green-text'}" 
-                                //             >P</span>` +
-                                //              `<span class="${colorOfQ === 'blue' ? 'blue-text' : 'green-text'}" 
-                                //              >Q</span>`;
+                                // can also change font size of 'PQ' if needed - style="font-size: 1.2rem;"
+                                content =    `<span class="${colorOfP === 'blue' ? 'blue-text' : 'green-text'}"  style="font-size: 1.2rem;"
+                                            >P</span>` +
+                                             `<span class="${colorOfQ === 'blue' ? 'blue-text' : 'green-text'}"  style="font-size: 1.2rem;"
+                                             >Q</span>`;
 
                                 // or, show single '+' symbol without P/Q labels
-                                if (i % 2 === 0) {
-                                    // was: two pluses
-                                    // content = '<span class="blue-text" style="font-size: 2rem;">+</span><span class="green-text" style="font-size: 2rem;">+</span>';
-                                    content = '<span class="plus-split blue-green" style="font-size: 2rem;">+</span>';
-                                } else {
-                                    // content = '<span class="green-text" style="font-size: 2rem;">+</span><span class="blue-text" style="font-size: 2rem;">+</span>';
-                                    content = '<span class="plus-split green-blue" style="font-size: 2rem;">+</span>';
-                                }
+                                // if (i % 2 === 0) {
+                                //     // was: two pluses
+                                //     // content = '<span class="blue-text" style="font-size: 2rem;">+</span><span class="green-text" style="font-size: 2rem;">+</span>';
+                                //     content = '<span class="plus-split blue-green" style="font-size: 2rem;">+</span>';
+                                // } else {
+                                //     // content = '<span class="green-text" style="font-size: 2rem;">+</span><span class="blue-text" style="font-size: 2rem;">+</span>';
+                                //     content = '<span class="plus-split green-blue" style="font-size: 2rem;">+</span>';
+                                // }
                                 
                             } else if (isPathA && isUpcomingPath) {
                                 // Blue path that's also on upcoming path
@@ -1079,11 +1083,13 @@ class Grid {
                     if (previewIndex < currentTrialIndex || feedback) {
                         if (isStartA) {
                             upcomingHTML += `<div class="upcoming-cell-done ${observedClass} blue-path" id="${cellId}" data-row="${row}" data-col="${col}"  style="font-size: 1.0rem;" >`;
-                            upcomingHTML += bluePerson.outerHTML;
+                            // upcomingHTML += bluePerson.outerHTML;
+                            upcomingHTML += bluePerson;
                             upcomingHTML += `</div>`;
                         } else if (isStartB) {
                             upcomingHTML += `<div class="upcoming-cell-done ${observedClass} green-path" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.0rem;" >`;
-                            upcomingHTML += greenPerson.outerHTML;
+                            // upcomingHTML += greenPerson.outerHTML;
+                            upcomingHTML += greenPerson;
                             upcomingHTML += `</div>`;
                         } else if (isGoalA) {
                             upcomingHTML += `<div class="upcoming-cell-done ${observedClass} blue-path" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.0rem;" >🏠</div>`;
@@ -1099,11 +1105,13 @@ class Grid {
                     } else {
                         if (isStartA) {
                             upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.0rem;" >`;
-                            upcomingHTML += bluePerson.outerHTML;
+                            // upcomingHTML += bluePerson.outerHTML;
+                            upcomingHTML += bluePerson;
                             upcomingHTML += `</div>`;
                         } else if (isStartB) {
                             upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.0rem;" >`;
-                            upcomingHTML += greenPerson.outerHTML;
+                            // upcomingHTML += greenPerson.outerHTML;
+                            upcomingHTML += greenPerson;
                             upcomingHTML += `</div>`;
                         } else if (isGoalA) {
                             upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.0rem;" >🏠</div>`
@@ -1283,7 +1291,7 @@ function animateAgent(path, binaryCosts, callback) {
 
                     // Ensure start and goal cells update their color when observed
                     if (cellElement.classList.contains("start") || cellElement.classList.contains("goal")) {
-                        cellElement.style.backgroundColor = cost === -1 ? "#f87171" : "#b8b8d9"; // Red for toll, grey for free
+                        cellElement.style.backgroundColor = cost === -1 ? "#ff5a5a" : "#b8b8d9"; // Red for toll, grey for free NEED TO MAKE SURE THESE MATCH HTML SHADES
                     }
 
                     if (cost === -1) {
@@ -2203,7 +2211,7 @@ const instructions2_5 = {
                 <h1>Toll Intersections:</h1>
                 <p style="font-size: ${fontSize};">Traffic in some parts of the city is busier than in others. This means that tolls apply at busy intersections. Visiting an intersection reveals whether or not you have to pay a toll there.</p>
                 <p style="font-size: ${fontSize};">- <strong><span style="color: rgb(114, 114, 150);">Dark grey intersections</span></strong> have not been visited yet</p>
-                <p style="font-size: ${fontSize};">- <strong><span style="color: #f87171;">Red intersections</span></strong> cost a $1 toll to pass through</p>
+                <p style="font-size: ${fontSize};">- <strong><span style="color: #ff5a5a;">Red intersections</span></strong> cost a $1 toll to pass through</p>
                 <p style="font-size: ${fontSize};">- <strong><span style="color:rgb(194, 194, 229);">Light grey intersections</span></strong> are free with no tolls</p>
                 <p style="font-size: ${fontSize};">Your goal is to complete all taxi jobs while minimizing the total tolls paid out.</p>
             </div>
@@ -2230,8 +2238,8 @@ const practice1SelectionTrial = {
         // const keyAssignment = { blue: 'F', green: 'J' };
         const keyAssignment = { blue: 'Q', green: 'P' };
         const instruction = practice1TrialIndex === 0 
-            ? `<h3>Please select the <span style="color: #5dadec; font-weight: bold;">BLUE</span> path by pressing the <span style="font-weight: bold;">${keyAssignment.blue}</span> key.</h3>`
-            : `<h3>Please select the <span style="color:  #4ade80; font-weight: bold;">GREEN</span> path by pressing the <span style="font-weight: bold;">${keyAssignment.green}</span> key.</h3>`;
+            ? `<h3>Please select the <span style="color: rgb(47, 164, 253); font-weight: bold;">BLUE</span> path by pressing the <span style="font-weight: bold;">${keyAssignment.blue}</span> key.</h3>`
+            : `<h3>Please select the <span style="color:  #29da6a; font-weight: bold;">GREEN</span> path by pressing the <span style="font-weight: bold;">${keyAssignment.green}</span> key.</h3>`;
         
         // Store the assignment for this trial
         jsPsych.data.addProperties({
@@ -2384,6 +2392,8 @@ const instructions3 = {
     stimulus: function() {
         const n = grid.nTrials;
         const fontSize = "20px"; // Define font size as a variable
+        const zoomTmp = zoomFactor * 0.9
+        document.body.style.zoom = zoomTmp;
         return `
         <div class="instruction-section">
             <h1>Daily Shift:</h1>
@@ -2391,8 +2401,9 @@ const instructions3 = {
             <p style="font-size: ${fontSize};">All ${n} pairs of jobs will be presented on screen at once, side-by-side. Each dispatch takes place at a different time of the day and is marked with one of the following clock icons, displayed above the dispatch:</p>
             <p style="font-family: golemClocks; text-align: center; font-size: ${fontSize};">&#x00E6; &#x00DD; &#x0026; &#x263A;</p>
             <p style="font-size: ${fontSize};">You will move through these dispatches from left- to right-hand side of the screen. Your current dispatch is highlighted in <span style="color: #ece75d;">yellow</span>, while your past dispatches are <span style="color: rgb(138, 138, 184);">greyed out</span>.</p>
-            <p style="font-size: ${fontSize};">You will first have a couple of seconds to think about which job you would like to select. You can select your desired job once the dispatch grid turns yellow and the keys have been assigned to the paths - i.e. once 'Q' or 'P' has been assigned to the green or blue job in your current dispatch.</p>
-            <p style="font-size: ${fontSize};">You will have 8 seconds to select a job once the dispatch grid has turned yellow. If you fail to make a choice within this time limit, you will pay a fine of <span style="color: #f87171;">$10</span>.</p>
+            <p style="font-size: ${fontSize};">As well as seeing your upcoming dispatches individually, you will also see in your <span style="color: #ece75d;">current dispatch</span> the intersections that you may possibly visit on one of your upcoming dispatches. These are highlighted in <span style="color: #ea2aff;">pink</span>.</p>
+            <p style="font-size: ${fontSize};">You will first have a couple of seconds to think about which job you would like to select. You can select your desired job once the dispatch grid turns <span style="color: #ece75d;">yellow</span> and the keys have been assigned to the paths - i.e. once 'P' or 'Q' has been assigned to the green or blue job in your current dispatch.</p>
+            <p style="font-size: ${fontSize};">You will have 8 seconds to select a job once the dispatch grid has turned <span style="color: #ece75d;">yellow</span>. If you fail to make a choice within this time limit, you will pay a fine of <span style="color: #f87171;">$10</span>.</p>
         </div>
         <div class="instruction-section">
             <h1>Toll Locations:</h1>
@@ -2415,6 +2426,7 @@ const instructions3 = {
 const practiceFirstDayTrial = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
+        document.body.style.zoom = zoomFactor;
         return `
             <div class="jobs-layout">
             <div class="upcoming-jobs-container grid ${practice2TrialIndex % practice2Grid.nTrials === 0 ? 'grid-fade-in' : ''}">
@@ -3214,10 +3226,10 @@ function createInstructionsTimeline() {
     // Practice selection
     timeline.push(instructions2);
     timeline.push(instructions2_5);
-    timeline.push(practice1SelectionTrial);
-    timeline.push(practice1AnimationTrial);
-    timeline.push(practice1SelectionTrial);
-    timeline.push(practice1AnimationTrial);
+    // timeline.push(practice1SelectionTrial);
+    // timeline.push(practice1AnimationTrial);
+    // timeline.push(practice1SelectionTrial);
+    // timeline.push(practice1AnimationTrial);
 
     // Practice a full day
     timeline.push(instructions3);
@@ -3348,8 +3360,8 @@ function initializeExperiment() {
     // Combine everything into a single timeline
     const fullTimeline = [
     //   ...ethicsTimeline,
-    //   instructionsLoop,
-    //   ...quizTimeline,
+      instructionsLoop,
+      ...quizTimeline,
       ...mainTimeline
     ];
   
