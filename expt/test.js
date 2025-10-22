@@ -40,6 +40,15 @@ export const quizQuestions = [
     correct: 2
   },
   {
+    question: "Why might it be useful to know about your upcoming dispatches?", // What does it mean if an intersection is highlighted in pink?",
+    options: [
+      "Because they tell you which intersections might be visited later on in the day.",
+      "Because they tell you which intersections are costly.",
+      "Because they tell you whether you are in a row city or a column city.",
+    ],
+    correct: 0
+  },
+  {
     question: "What happens to tolls at the end of the day?",
     options: [
       "They remain in the same locations.",
@@ -76,9 +85,9 @@ export const quizQuestions = [
     correct: 1
   },
   {
-    question: "Suppose you observe a toll at an intersection. How can this information help you predict other toll locations?",
+    question: "Suppose you observe a toll at an intersection. How can this information help you predict other toll locations on that day?",
     options: [
-      "Nothing—tolls are randomly placed each day.",
+      "Nothing—intersections are not related to one another.",
       "Other tolls are likely to be in the same row or column, depending on the city pattern.",
       "This intersection will have a toll for the rest of the experiment."
     ],
@@ -199,7 +208,7 @@ export const quizQuestions = [
     stimulus: `
       <div class="instruction-section">
         <h2>Knowledge Check Quiz</h2>
-        <p>You will be presented with 10 questions about the taxi coordination task.</p>
+        <p>You will be presented with 11 questions about the taxi coordination task.</p>
         <p>For each question:</p>
         <p>
           <p>- Click on the answer you believe is correct.</p>
