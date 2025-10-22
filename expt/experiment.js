@@ -472,12 +472,12 @@ class Grid {
 
                         // for simplicity, let's just keep it consistent
                         pathClass = 'blue-path';
-                        content = `<span class="green-text">+</span>`;
+                        content = `<span class="green-text" style="font-size: 2rem;">+</span>`;
 
                         // random 
                         // const randomChoice = Math.random() < 0.5;
                         // pathClass = randomChoice ? 'blue-path' : 'green-path';
-                        // content = randomChoice ? `<span class="green-text">+</span>` : `<span class="blue-text">+</span>`;
+                        // content = randomChoice ? `<span class="green-text" style="font-size: 2rem;">+</span>` : `<span class="blue-text" style="font-size: 2rem;">+</span>`;
 
                     } else if (isPathA) {
                         pathClass = 'blue-path';
@@ -491,7 +491,7 @@ class Grid {
                     if (isOverlap) {
                         const randomChoice = Math.random() < 0.5;
                         pathClass = randomChoice ? 'blue-path' : 'green-path';
-                        content = randomChoice ? '<span class="green-text">+</span>' : '<span class="blue-text">+</span>';
+                        content = randomChoice ? '<span class="green-text" style="font-size: 2rem;">+</span>' : '<span class="blue-text" style="font-size: 2rem;">+</span>';
                     } else if (isPathA) {
                         pathClass = 'blue-path';
                         content = '+';
@@ -727,7 +727,7 @@ class Grid {
                     if (isOverlap) {
                         const randomChoice = Math.random() < 0.5;
                         pathClass = randomChoice ? 'blue-path' : 'green-path';
-                        content = randomChoice ? '<span class="green-text">+</span>' : '<span class="blue-text">+</span>';
+                        content = randomChoice ? '<span class="green-text" style="font-size: 2rem;">+</span>' : '<span class="blue-text" style="font-size: 2rem;">+</span>';
                     } else if (isPathA) {
                         pathClass = 'blue-path';
                         content = '+';
@@ -962,28 +962,33 @@ class Grid {
                             }
                         } else if (onBlue && onGreen) {
                             // Blue and green only
-                            // pathClass = Math.random() < 0.5 ? 'half-half-blue-green' : 'half-half-green-blue';
                             if (i % 2 === 0) {
                                 pathClass = 'half-half-blue-green';
                             } else {
                                 pathClass = 'half-half-green-blue';
                             }
                         } else if (onBlue && onUpcoming) {
-                            // Blue and magenta
-                            // pathClass = Math.random() < 0.5 ? 'half-half-blue-magenta' : 'half-half-magenta-blue';
-                            if (i % 2 === 0) {
-                                pathClass = 'half-half-blue-magenta';
-                            } else {
-                                pathClass = 'half-half-magenta-blue';
-                            }
+                            
+                            // Blue and magenta, with corner ordering depending on trial index
+                            // if (i % 2 === 0) {
+                            //     pathClass = 'half-half-blue-magenta';
+                            // } else {
+                            //     pathClass = 'half-half-magenta-blue';
+                            // }
+
+                            // or, just keep magenta in bottom corner
+                            pathClass = 'half-half-blue-magenta';
                         } else if (onGreen && onUpcoming) {
-                            // Green and magenta
-                            // pathClass = Math.random() < 0.5 ? 'half-half-green-magenta' : 'half-half-magenta-green';
-                            if (i % 2 === 0) {
-                                pathClass = 'half-half-green-magenta';
-                            } else {
-                                pathClass = 'half-half-magenta-green';
-                            }
+                            
+                            // Green and magenta, with corner ordering depending on trial index
+                            // if (i % 2 === 0) {
+                            //     pathClass = 'half-half-green-magenta';
+                            // } else {
+                            //     pathClass = 'half-half-magenta-green';
+                            // }
+
+                            // or, just keep magenta in bottom corner
+                            pathClass = 'half-half-green-magenta';
                         } else if (onBlue) {
                             pathClass = 'blue-path';
                         } else if (onGreen) {
@@ -1003,6 +1008,7 @@ class Grid {
                                 // show both keys in each of their colours
                                 // const colorOfP = getColorForKey(keyAssignment, 'P') || 'blue';
                                 // const colorOfQ = getColorForKey(keyAssignment, 'Q') || (colorOfP === 'blue' ? 'green' : 'blue');
+
                             
                                 // // can also change font size of 'PQ' if needed - style="font-size: 1.2rem;"
                                 // content =    `<span class="${colorOfP === 'blue' ? 'blue-text' : 'green-text'}" 
@@ -1013,11 +1019,11 @@ class Grid {
                                 // or, show single '+' symbol without P/Q labels
                                 if (i % 2 === 0) {
                                     // was: two pluses
-                                    // content = '<span class="blue-text">+</span><span class="green-text">+</span>';
-                                    content = '<span class="plus-split blue-green">+</span>';
+                                    // content = '<span class="blue-text" style="font-size: 2rem;">+</span><span class="green-text" style="font-size: 2rem;">+</span>';
+                                    content = '<span class="plus-split blue-green" style="font-size: 2rem;">+</span>';
                                 } else {
-                                    // content = '<span class="green-text">+</span><span class="blue-text">+</span>';
-                                    content = '<span class="plus-split green-blue">+</span>';
+                                    // content = '<span class="green-text" style="font-size: 2rem;">+</span><span class="blue-text" style="font-size: 2rem;">+</span>';
+                                    content = '<span class="plus-split green-blue" style="font-size: 2rem;">+</span>';
                                 }
                                 
                             } else if (isPathA && isUpcomingPath) {
@@ -1036,15 +1042,15 @@ class Grid {
                             if (isOverlap) {
                                 if (i % 2 === 0) {
                                     // was: two pluses
-                                    // content = '<span class="blue-text">+</span><span class="green-text">+</span>';
-                                    content = '<span class="plus-split blue-green">+</span>';
+                                    // content = '<span class="blue-text" style="font-size: 2rem;">+</span><span class="green-text" style="font-size: 2rem;">+</span>';
+                                    content = '<span class="plus-split blue-green" style="font-size: 2rem;">+</span>';
                                 } else {
-                                    // content = '<span class="green-text">+</span><span class="blue-text">+</span>';
-                                    content = '<span class="plus-split green-blue">+</span>';
+                                    // content = '<span class="green-text" style="font-size: 2rem;">+</span><span class="blue-text" style="font-size: 2rem;">+</span>';
+                                    content = '<span class="plus-split green-blue" style="font-size: 2rem;">+</span>';
                                 }
                             } else if (isPathA || isPathB) {
                                 // content = '+';
-                                content = '<span class="' + (isPathA ? 'blue-text' : 'green-text') + '">+</span>';
+                                content = '<span class="' + (isPathA ? 'blue-text' : 'green-text') + '" style="font-size: 2rem;">+</span>';
                             }
                         }
                     } else {
@@ -1053,12 +1059,12 @@ class Grid {
                             if (i % 2 === 0) {
                                 pathClass = 'half-half-blue-green';
                                 // was: two pluses
-                                // content = '<span class="blue-text">+</span><span class="green-text">+</span>';
-                                content = '<span class="plus-split blue-green">+</span>';
+                                // content = '<span class="blue-text" style="font-size: 2rem;">+</span><span class="green-text" style="font-size: 2rem;">+</span>';
+                                content = '<span class="plus-split blue-green" style="font-size: 2rem;">+</span>';
                             } else {
                                 pathClass = 'half-half-green-blue';
-                                // content = '<span class="green-text">+</span><span class="blue-text">+</span>';
-                                content = '<span class="plus-split green-blue">+</span>';
+                                // content = '<span class="green-text" style="font-size: 2rem;">+</span><span class="blue-text" style="font-size: 2rem;">+</span>';
+                                content = '<span class="plus-split green-blue" style="font-size: 2rem;">+</span>';
                             }
                         // ...existing code...
                         } else if (isPathA) {
@@ -1117,11 +1123,19 @@ class Grid {
                             //     upcomingHTML += `</div>`;
                             // }
                             
-                            // or shadow for letters and '+' symbol
-                            upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.5rem; 
-                            -webkit-text-stroke: 0.5px black; text-shadow: 1px 1px 1px black;">`;
-                            upcomingHTML += content;
-                            upcomingHTML += `</div>`;
+                            // or shadow for letters and '+' symbol (need bigger font for '+')
+                            if (keyAssignment && previewIndex === currentTrialIndex) {
+                                upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 1.5rem; 
+                                -webkit-text-stroke: 0.5px black; text-shadow: 1px 1px 1px black;">`;
+                                upcomingHTML += content;
+                                upcomingHTML += `</div>`;
+                            } else {
+                                upcomingHTML += `<div class="upcoming-cell ${observedClass} ${pathClass}" id="${cellId}" data-row="${row}" data-col="${col}" style="font-size: 2rem; 
+                                -webkit-text-stroke: 0.5px black; text-shadow: 1px 1px 1px black;">`;
+                                upcomingHTML += content;
+                                upcomingHTML += `</div>`;
+                            }
+
                         } else {
                             upcomingHTML += `<div class="upcoming-cell ${observedClass}" id="${cellId}" data-row="${row}" data-col="${col}"></div>`;
                         }
