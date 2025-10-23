@@ -941,8 +941,11 @@ class GridEnv(gym.Env):
         # else:
         #     path_len = np.random.randint(min_path_len, max_path_len)
 
-        ## or, just set to some value
-        path_len = self.N-1
+        ## or, just set to some value, ensuring that it is even
+        if self.N%2==1:
+            path_len = self.N-1
+        else:
+            path_len = self.N-2
 
         abstract_sequences = self.generate_abstract_sequences(path_len, max_turns)
 
@@ -1062,7 +1065,7 @@ class GridEnv(gym.Env):
             starts = []
             goals = []
             
-            ## if placing in opposite corners, determine which of four pairings to use (i.e. top left and bottom right, top right and bottom left, bottom left and top right, bottom right and top left)
+            ## if placing in opposite corners, determine which of diagonal pairing to use (i.e. top left and bottom right, top right and bottom left, bottom left and top right, bottom right and top left)
             if len(self.starts)==0:
                 corner_pairing = np.random.choice([0,1,2,3])
 
@@ -1070,7 +1073,11 @@ class GridEnv(gym.Env):
                 in_grid = False
                 
                 while not in_grid:
-                    transformation = np.random.choice(['none', 'x', 'y'])
+                    transformation = np.random.choice(['none', 'x', 'y', 'xy']) ## i.e. reflect along an axis
+                    reverse = np.random.choice([True, False]) ## i.e. start and goal are reversed
+
+                    ## optional: force Ls to slot right into the corner?
+                    slot = True
 
                     ## randomly place the start location
                     # start = np.random.randint(0, self.N-1, size=2)
@@ -1078,35 +1085,52 @@ class GridEnv(gym.Env):
 
                     ## or, if first trial, put them in either top left and bottom right, or top right and bottom left corners
                     if len(self.starts)==0:
+                        # transformation = 'xy'
+                        # reverse = False
                         if corner_pairing == 0:
                             if s_a_s_i==0:
                                 start = np.array([0, 0])
+                                if slot:
+                                    transformation = 'x' 
                             elif s_a_s_i==1:
                                 start = np.array([self.N-1, self.N-1])
-
+                                if slot:
+                                    transformation = 'y' 
                         elif corner_pairing == 1:
                             if s_a_s_i==0:
                                 start = np.array([0, self.N-1])
+                                if slot:
+                                    transformation = 'xy' 
                             elif s_a_s_i==1:
                                 start = np.array([self.N-1, 0])
+                                if slot:
+                                    transformation = 'none' 
                         elif corner_pairing == 2:
                             if s_a_s_i==0:
                                 start = np.array([self.N-1, 0])
+                                if slot:
+                                    transformation = 'none' 
                             elif s_a_s_i==1:
                                 start = np.array([0, self.N-1])
+                                if slot:
+                                    transformation = 'xy' 
                         elif corner_pairing == 3:
                             if s_a_s_i==0:
                                 start = np.array([self.N-1, self.N-1])
+                                if slot:
+                                    transformation = 'y' 
                             elif s_a_s_i==1:
                                 start = np.array([0, 0])
-                        path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation=transformation)
+                                if slot:
+                                    transformation = 'x' 
+                        path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation=transformation, reverse=reverse)
 
                         # print('s:',s_a_s_i,', transformation: ',transformation, 'start:', start, 'path:', path, 'corner_pairing:', corner_pairing)
 
                     ## otherwise, random location
                     else:
                         start = np.random.randint(0, self.N-1, size=2)
-                        path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation=transformation)
+                        path, actions = self.generate_concrete_sequence(s_a_s[0], s_a_s[1], start=start, transformation=transformation, reverse=reverse)
                     
                     ## sanity check: in the corner!
                     # if len(self.starts)==0:
@@ -1165,9 +1189,31 @@ class GridEnv(gym.Env):
                                     break
                 
 
-            ## check overlap between paths
+            ## check overlap between paths across/within trials
             path_states = [tuple(map(tuple, path)) for path in path_states]
             n_common_within_trial, n_common_across_trials = self.check_overlap(path_states,0)
+
+            
+            ### optional: prevent overlaps with t1
+
+            ## no t2-t1 overlaps
+            # if len(self.starts)==1:
+            #     if n_common_across_trials>0:
+            #         n_common_across_trials = np.inf ## i.e. force failure unless there are 0 overlaps
+
+            ## no overlaps with t1 on any trial
+            if len(self.starts)>0:
+                common_with_t1 = 0
+                for path_t1 in self.path_states[0]:
+                    for path_tn in path_states:
+                        common_with_t1 += len(set(path_t1).intersection(path_tn))
+                if common_with_t1>0:
+                    n_common_across_trials = np.inf ## i.e. force failure unless there are 0 overlaps
+
+
+
+
+                    
 
             
             ### check that the costs of the paths are sufficiently different
@@ -1183,9 +1229,8 @@ class GridEnv(gym.Env):
             ## or, absolute difference
             t = len(self.starts)
             path_costs = [np.sum([self.costss[t][x, y] for x, y in path]) for path in path_states]
-            cost_tol = self.N/4
+            cost_tol = self.N/3
             vals_diff = np.abs(max(path_costs) - min(path_costs)) >= cost_tol
-            print(np.abs(max(path_costs) - min(path_costs)))
 
 
         return sampled_abstract_sequences, path_actions, path_states, starts, goals
@@ -1271,7 +1316,7 @@ class GridEnv(gym.Env):
 
         return abstract_structures
 
-    def generate_concrete_sequence(self, num_right, num_up, start = np.array([0,0]),transformation='none'):
+    def generate_concrete_sequence(self, num_right, num_up, start = np.array([0,0]),transformation='none', reverse=False):
         """Convert an abstract sequence into a concrete state sequence."""
         if transformation == 'none':
             moves = [(1, 0)] * num_right + [(0, 1)] * num_up
@@ -1279,6 +1324,8 @@ class GridEnv(gym.Env):
             moves = [(-1, 0)] * num_right + [(0, 1)] * num_up
         elif transformation == 'y':
             moves = [(1, 0)] * num_right + [(0, -1)] * num_up
+        elif transformation =='xy':
+            moves = [(-1, 0)] * num_right + [(0, -1)] * num_up
         else:
             raise ValueError("Invalid transformation")
         # random.shuffle(moves)  # Randomize order while preserving counts
@@ -1288,6 +1335,13 @@ class GridEnv(gym.Env):
         for move in moves:
             state += np.array(move)
             path.append(state.copy())
+
+        ## if reverse, flip the path round
+        if reverse:
+            path = path[::-1]
+            moves = moves[::-1]
+            moves = [(-m[0], -m[1]) for m in moves]
+
 
         ## convert moves from tuples to integers
         moves = [self.direction_to_action[tuple(m)] for m in moves]
