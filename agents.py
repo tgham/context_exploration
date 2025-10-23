@@ -501,10 +501,10 @@ class Farmer:
         self.p_correct = np.zeros((n_cities, n_days, n_trials))
         self.Q_vals = np.zeros((n_cities, n_days, n_trials, self.n_afc))
         self.actions = np.zeros((n_cities, n_days, n_trials))
-        self.CE_actions = np.zeros((n_cities, n_days, n_trials))
-        self.CE_p_choice = np.zeros((n_cities, n_days, n_trials, self.n_afc))
-        self.CE_p_correct = np.zeros((n_cities, n_days, n_trials))
-        self.CE_Q_vals = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.CE_actions = np.zeros((n_cities, n_days, n_trials)) + np.nan
+        self.CE_p_choice = np.zeros((n_cities, n_days, n_trials, self.n_afc)) + np.nan
+        self.CE_p_correct = np.zeros((n_cities, n_days, n_trials)) + np.nan
+        self.CE_Q_vals = np.zeros((n_cities, n_days, n_trials, self.n_afc)) + np.nan
         self.context_priors = np.zeros((n_cities, n_days, n_trials))
         self.context_posteriors = np.zeros((n_cities, n_days, n_trials))
         self.leaf_visits = np.zeros((n_cities, n_days, n_trials, self.n_afc))
@@ -664,21 +664,21 @@ class Farmer:
                         ### let's also calculate CE choice under BAMCP's knowledge 
 
                         ## get the cost of each path under the posterior mean
-                        path_costs = []
+                        CE_path_costs = []
                         for path_id in range(env_copy.n_afc):
                             path_states = env_copy.path_states[t][path_id]
-                            path_cost = 0
+                            CE_path_cost = 0
                             for state in path_states:
                                 # path_cost += env_copy.get_pred_cost(state) ## i.e. sample binary costs from the posterior pqs
-                                path_cost += self.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost ## or, use expected costs
-                            path_costs.append(path_cost)
+                                CE_path_cost += self.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost ## or, use expected costs
+                            CE_path_costs.append(CE_path_cost)
 
                         ## CE chooses the path with the lowest total cost
-                        max_cost = np.max(path_costs)
-                        action = argm(path_costs, max_cost)
-                        self.CE_actions[city, day, t] = action
-                        self.CE_Q_vals[city, day, t] = np.array(path_costs)
-                        self.CE_p_choice[city, day, t] = self.softmax(np.array(path_costs))
+                        max_cost = np.max(CE_path_costs)
+                        CE_action = argm(CE_path_costs, max_cost)
+                        self.CE_actions[city, day, t] = CE_action
+                        self.CE_Q_vals[city, day, t] = np.array(CE_path_costs)
+                        self.CE_p_choice[city, day, t] = self.softmax(np.array(CE_path_costs))
                         self.CE_p_correct[city, day, t] = self.CE_p_choice[city, day, t][correct_path]
 
 
@@ -839,6 +839,7 @@ class Farmer:
                 'trial':[],
                 'context':[],
                 'actions':[],
+                'CE_actions':[],
                 'p_choice_A':[],
                 'p_choice_B':[],
                 'p_choice_C':[],
@@ -866,6 +867,7 @@ class Farmer:
                         sim_out['day'].append(d+1)
                         sim_out['trial'].append(t+1)
                         sim_out['actions'].append(self.actions[c][d][t])
+                        sim_out['CE_actions'].append(self.CE_actions[c][d][t])
                         sim_out['context'].append(self.true_context[c])
                         sim_out['p_correct'].append(self.p_correct[c][d][t])
                         sim_out['p_choice_A'].append(self.p_choice[c][d][t][0])
@@ -881,14 +883,14 @@ class Farmer:
                         sim_out['CE_Q_b'].append(self.CE_Q_vals[c][d][t][1])
                         if self.n_afc==3:
                             sim_out['p_choice_C'].append(self.p_choice[c][d][t][2])
-                            sim_out['Q_c'].append(self.Q_vals[c][d][t][2])
                             sim_out['leaf_visits_c'].append(self.leaf_visits[c][d][t][2])
+                            sim_out['Q_c'].append(self.Q_vals[c][d][t][2])
                             sim_out['CE_p_choice_C'].append(self.CE_p_choice[c][d][t][2])
                             sim_out['CE_Q_c'].append(self.CE_Q_vals[c][d][t][2])
                         else:
                             sim_out['p_choice_C'].append(np.nan)
-                            sim_out['Q_c'].append(np.nan)
                             sim_out['leaf_visits_c'].append(np.nan)
+                            sim_out['Q_c'].append(np.nan)
                             sim_out['CE_p_choice_C'].append(np.nan)
                             sim_out['CE_Q_c'].append(np.nan)
             return sim_out
