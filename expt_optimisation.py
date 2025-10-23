@@ -157,7 +157,7 @@ all_sim_out = {
     }
 parallel = True
 n_cores = 128
-create=True
+create=False
 
 ## init agent and expt
 agent_params = [
@@ -202,7 +202,6 @@ if create:
                                                                                                     hyperparams['n_sims']))
 
     elif not parallel:
-        ppt_envs = {}
         print('Generating {} experiment sequences serially'.format(n_sim_participants))
         for p in tqdm(range(1,n_sim_participants+1)):
 
@@ -224,10 +223,9 @@ if __name__ == '__main__':
     if not parallel:
         # for p in tqdm(range(1, n_participants+1)):
         for p in tqdm(range(1, n_sim_participants)):
-            env_objects = ppt_envs[p]
 
             ## loop through agents
-            sim_out = agent_loop(agent_params, hyperparams, agents, env_objects)
+            sim_out = agent_loop(p, agent_params, hyperparams, agents)
             save_sim(sim_out)
 
     elif parallel:
