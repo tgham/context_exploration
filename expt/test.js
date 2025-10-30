@@ -26,7 +26,7 @@ export const quizQuestions = [
       // "This intersection appears on one of the jobs you might choose in an upcoming dispatch.",
       "You can't know which intersections might be visited later in the day.",
       "They are shown in your upcoming dispatches.",
-      "They are shown in your upcoming dispatches, and highlighted in your current dispatch in pink.",
+      "They are shown in your upcoming dispatches, and also highlighted in your current dispatch in pink.",
     ],
     correct: 2
   },

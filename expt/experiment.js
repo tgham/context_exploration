@@ -1302,7 +1302,7 @@ function animateAgent(path, binaryCosts, callback) {
                         setTimeout(() => {
                             const burst = cellElement.querySelector('.cost-burst');
                             if (burst) burst.remove();
-                        }, 600);
+                        }, 500);
 
                         // Play toll sound
                         // costSound.play();
@@ -1321,7 +1321,7 @@ function animateAgent(path, binaryCosts, callback) {
                         setTimeout(() => {
                             const burst = cellElement.querySelector('.free-burst');
                             if (burst) burst.remove();
-                        }, 600);
+                        }, 500);
                     }
 
                     const trialCostElement = document.getElementById("trial-cost");
@@ -1354,12 +1354,11 @@ function animateAgent(path, binaryCosts, callback) {
         }
         
         // Start the animation sequence after a short delay
-        setTimeout(step, 600);
+        setTimeout(step, 500);
     } else {
         // If there's no path, just merge costs and execute callback
         mergeCosts(null, callback);
     }
-    // Remove this line: setTimeout(step, 600);
 }
 
 // 4. Add animated transitions between trials
@@ -1710,7 +1709,7 @@ function setCityBackground(cityId) {
     body.style.backgroundRepeat = '';
 
     // Apply the new background
-    body.style.backgroundImage = `url('assets/cities/cropped/${mappedCityId}.png')`;
+    body.style.backgroundImage = `url('assets/cities/cropped2/${mappedCityId}.png')`;
     body.style.backgroundSize = 'cover';
     body.style.backgroundPosition = 'center';
     body.style.backgroundRepeat = 'no-repeat';
@@ -1737,7 +1736,7 @@ function animateCityChange(oldCityId, newCityId) {
     oldCity.style.width = '50%'; // Half of the container
     oldCity.style.height = '100%';
     oldCityMapping = cityMapping[oldCityId];
-    oldCity.style.backgroundImage = `url('assets/cities/cropped/${oldCityMapping}.png')`;
+    oldCity.style.backgroundImage = `url('assets/cities/cropped2/${oldCityMapping}.png')`;
     oldCity.style.backgroundSize = 'cover';
     oldCity.style.backgroundPosition = 'center';
     transitionContainer.appendChild(oldCity);
@@ -1748,7 +1747,7 @@ function animateCityChange(oldCityId, newCityId) {
     newCity.style.width = '50%'; // Half of the container
     newCity.style.height = '100%';
     newCityMapping = cityMapping[newCityId];
-    newCity.style.backgroundImage = `url('assets/cities/cropped/${newCityMapping}.png')`;
+    newCity.style.backgroundImage = `url('assets/cities/cropped2/${newCityMapping}.png')`;
     newCity.style.backgroundSize = 'cover';
     newCity.style.backgroundPosition = 'center';
     transitionContainer.appendChild(newCity);
@@ -2184,7 +2183,7 @@ const instructions2 = {
                 <p style="font-size: ${fontSize};">For each dispatch, you'll see two possible jobs marked in <span class="blue-text">blue</span> and <span class="green-text">green</span>. Each job has a passenger ✋ at a pickup point, and a drop-off destination 🏠. The route of each job is marked with one of two letters:</p>
                 <p style="font-size: ${fontSize};">- The letter <strong>P</strong> marks one job</p>
                 <p style="font-size: ${fontSize};">- The letter <strong>Q</strong> marks the other job</p>
-                <p style="font-size: ${fontSize};">On each dispatch, these letters are randomly assigned to each job. To send out a taxi to one of these jobs, you need to press the corresponding key on your keyboard.</p>
+                <p style="font-size: ${fontSize};">On each dispatch, these letters are randomly assigned to each job. To send out a taxi to one of these jobs, you need to press the corresponding key on your keyboard. Note that if an intersection appears on both paths, it will contain both P and Q.</p>
                 <p style="font-size: ${fontSize};">For any given choice, the lengths of the two possible jobs are the same, and you are paid the same wage by the company each day. However, some jobs are more costly than others, which you must pay for yourself. This is because of tolls in the city...</p>
             </div>
             <div class="instruction-section" style="font-size: 20px;">
@@ -2214,6 +2213,7 @@ const instructions2_5 = {
                 <p style="font-size: ${fontSize};">- <strong><span style="color: #ff5a5a;">Red intersections</span></strong> cost a $1 toll to pass through</p>
                 <p style="font-size: ${fontSize};">- <strong><span style="color:rgb(194, 194, 229);">Light grey intersections</span></strong> are free with no tolls</p>
                 <p style="font-size: ${fontSize};">Your goal is to complete all taxi jobs while minimizing the total tolls paid out.</p>
+                <p style="font-size: ${fontSize};">Note that the rows and columns of the city are labelled with numbers and letters, respectively, to improve readability.</p>
             </div>
 
             <div class="instruction-section" style="font-size: 20px;">
@@ -2409,7 +2409,6 @@ const instructions3 = {
             <h1>Toll Locations:</h1>
             <p style="font-size: ${fontSize};">The locations of tolls remain fixed throughout the day. Once you visit an intersection, you find out how busy it is, and hence whether or not you have to pay a toll whenever you reach that intersection again on the same day. This information is reflected in your upcoming dispatches, too.</p>
             <p style="font-size: ${fontSize};">This information may help you for the rest of the day by allowing you to select jobs where you don’t have to pay any tolls. </p>
-            <p style="font-size: ${fontSize};">Note that the rows and columns of the cities are labelled with numbers and letters respectively to improve readability.</p>
         </div>
         <div class="instruction-section">
             <h2 style="font-size: ${fontSize};">Press spacebar to practise your first full day.</h2>
@@ -2727,7 +2726,7 @@ const instructions5 = {
         let oldCity = document.createElement('div');
         oldCity.style.width = '50%'; // Half of the container
         oldCity.style.height = '100%';
-        oldCity.style.backgroundImage = `url('assets/cities/cropped/practice1.png')`;
+        oldCity.style.backgroundImage = `url('assets/cities/cropped2/practice1.png')`;
         oldCity.style.backgroundSize = 'cover';
         oldCity.style.backgroundPosition = 'center';
         transitionContainer.appendChild(oldCity);
@@ -2736,7 +2735,7 @@ const instructions5 = {
         let newCity = document.createElement('div');
         newCity.style.width = '50%'; // Half of the container
         newCity.style.height = '100%';
-        newCity.style.backgroundImage = `url('assets/cities/cropped/practice2.png')`;
+        newCity.style.backgroundImage = `url('assets/cities/cropped2/practice2.png')`;
         newCity.style.backgroundSize = 'cover';
         newCity.style.backgroundPosition = 'center';
         transitionContainer.appendChild(newCity);
@@ -2841,7 +2840,7 @@ const instructions7 = {
         let oldCity = document.createElement('div');
         oldCity.style.width = '50%'; // Half of the container
         oldCity.style.height = '100%';
-        oldCity.style.backgroundImage = `url('assets/cities/cropped/practice2.png')`;
+        oldCity.style.backgroundImage = `url('assets/cities/cropped2/practice2.png')`;
         oldCity.style.backgroundSize = 'cover';
         oldCity.style.backgroundPosition = 'center';
         transitionContainer.appendChild(oldCity);
@@ -2850,7 +2849,7 @@ const instructions7 = {
         let newCity = document.createElement('div');
         newCity.style.width = '50%'; // Half of the container
         newCity.style.height = '100%';
-        newCity.style.backgroundImage = `url('assets/cities/cropped/practice3.png')`;
+        newCity.style.backgroundImage = `url('assets/cities/cropped2/practice3.png')`;
         newCity.style.backgroundSize = 'cover';
         newCity.style.backgroundPosition = 'center';
         transitionContainer.appendChild(newCity);
@@ -2950,8 +2949,8 @@ const instructionsReview = {
     },
     on_finish: function(data) {
         // if (data.response === 'backspace') {
-            // Restart the experiment by reloading the page
-            // location.reload();
+        //     // Restart the experiment by reloading the page
+        //     location.reload();
         // }
     }
 };
@@ -3229,10 +3228,10 @@ function createInstructionsTimeline() {
     // Practice selection
     timeline.push(instructions2);
     timeline.push(instructions2_5);
-    timeline.push(practice1SelectionTrial);
-    timeline.push(practice1AnimationTrial);
-    timeline.push(practice1SelectionTrial);
-    timeline.push(practice1AnimationTrial);
+    // timeline.push(practice1SelectionTrial);
+    // timeline.push(practice1AnimationTrial);
+    // timeline.push(practice1SelectionTrial);
+    // timeline.push(practice1AnimationTrial);
 
     // Practice a full day
     timeline.push(instructions3);
@@ -3246,12 +3245,12 @@ function createInstructionsTimeline() {
 
     // // Animation to show grid resetting, and then another day
     timeline.push(instructions4);
-    timeline.push(practiceFirstDayTrial);
-    for (let i = 0; i < grid.nTrials; i++) {
-        timeline.push(practice2PreSelectionTrial);
-        timeline.push(practice2SelectionTrial);
-        timeline.push(practice2AnimationTrial);
-    }
+    // timeline.push(practiceFirstDayTrial);
+    // for (let i = 0; i < grid.nTrials; i++) {
+    //     timeline.push(practice2PreSelectionTrial);
+    //     timeline.push(practice2SelectionTrial);
+    //     timeline.push(practice2AnimationTrial);
+    // }
     timeline.push(practiceGridFeedback);
 
     // New city animation
