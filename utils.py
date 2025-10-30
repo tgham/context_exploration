@@ -1192,6 +1192,7 @@ def load_data(path):
         #     print('n_nan for participant', p, ':', n_nan)
 
     # Label path IDs and aligned path info
+    df_all['colour_chosen'] = df_all['path_chosen']
     df_all['path_chosen'] = df_all['path_chosen'].map({'blue': 'a', 'green': 'b'})
     df_all = df_all[df_all['trial'].notna()]
     df_all['chose_aligned'] = np.nan
