@@ -1500,7 +1500,13 @@ function mergeCosts(trialCost, callback, pauseAtEnd=false) {
             }, 500);
         } else if (pauseAtEnd) {
             // Show the "Press spacebar to continue" text
-            document.getElementById("continue-text").style.display = "block";
+            // document.getElementById("continue-text").style.display = "block";
+
+            // also need to get rid of the line breaks
+            // document.getElementById("line-break1").style.display = "none";
+            // document.getElementById("line-break2").style.display = "none";
+            // document.getElementById("line-break3").style.display = "none";
+            // document.getElementById("line-break4").style.display = "none";
 
             // Enable spacebar input
             jsPsych.pluginAPI.getKeyboardResponse({
@@ -2442,7 +2448,7 @@ const instructions3_1 = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         const n = grid.nTrials;
-        const fontSize = "20px"; // Define font size as a variable
+        const fontSize = "22px"; // Define font size as a variable
         const selectedPath = null;
         const keyAssignment = null;
         const feedback=false;
@@ -2450,7 +2456,7 @@ const instructions3_1 = {
         const showPink=false;
         const showUpcoming=false;
         return `
-        <div class="instruction-section">
+        <div class="cost-display-container">
             <h1>Daily Shift:</h1>
             <p style="font-size: ${fontSize};">Each day, you will manage ${n} dispatches, meaning you have ${n} jobs to select.</p>
             <p style="font-size: ${fontSize};">All ${n} pairs of jobs will be presented on screen at once, side-by-side. Each dispatch takes place at a different time of the day and is marked with a clock icon, displayed above the dispatch.</p>
@@ -2459,14 +2465,12 @@ const instructions3_1 = {
             <br>
             <br>
             <br>
+            <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
         </div>
         <div class="jobs-layout">
             <div class="upcoming-jobs-container grid">
                 ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay,showPink, showUpcoming).replace(/<div id="cost-message".*?<\/div>/s, '')} 
             </div>
-        </div>
-        <div class="instruction-section">
-            <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
         </div>
         `;
     },
@@ -2481,7 +2485,7 @@ const instructions3_2 = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         const n = grid.nTrials;
-        const fontSize = "20px"; // Define font size as a variable
+        const fontSize = "22px"; // Define font size as a variable
         const selectedPath = null;
         const keyAssignment = null;
         const feedback=false;
@@ -2489,9 +2493,9 @@ const instructions3_2 = {
         const showPink=false;
         const showUpcoming=true;
         return `
-        <div class="instruction-section">
+        <div class="cost-display-container">
             <h1>Daily Shift:</h1>
-            <p style="font-size: ${fontSize};">You will also be able to see details about your upcoming dispatches - that is, you will be able to see the jobs that you will have to choose between later in the day. See below how your upcoming dispatches are displayed on screen.</p>
+            <p style="font-size: ${fontSize};">You will also be able to see details about your upcoming dispatches - that is, you will be able to see the jobs that you will have to choose between later in the day.</p>
             <p style="font-size: ${fontSize};">See below how your upcoming dispatches are displayed on screen to the right of your current dispatch.</p>
             <br>
             <br>
@@ -2500,14 +2504,13 @@ const instructions3_2 = {
             <br>
             <br>
             <br>
+            <br>
+            <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
         </div>
         <div class="jobs-layout">
             <div class="upcoming-jobs-container grid">
             ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay, showPink, showUpcoming).replace(/<div id="cost-message".*?<\/div>/s, '')} 
             </div>
-        </div>
-        <div class="instruction-section">
-            <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
         </div>
         `;
     },
@@ -2522,7 +2525,7 @@ const instructions3_3 = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         const n = grid.nTrials;
-        const fontSize = "20px"; // Define font size as a variable
+        const fontSize = "22px"; // Define font size as a variable
         const selectedPath = null;
         const keyAssignment = null;
         const feedback=false;
@@ -2530,7 +2533,7 @@ const instructions3_3 = {
         const showPink=true;
         const showUpcoming=true;
         return `
-        <div class="instruction-section">
+        <div class="cost-display-container">
             <h1>Daily Shift:</h1>
             <p style="font-size: ${fontSize};">As well as being shown individually, information about your upcoming dispatches will also be highlighted in your <span style="color: #ece75d;">current dispatch</span>.</p>
             <p style="font-size: ${fontSize};">Specifically, the intersections that you may possibly visit later in the day are highlighted in <span style="color: #ea2aff;">pink</span>.</p>
@@ -2539,15 +2542,12 @@ const instructions3_3 = {
             <br>
             <br>
             <br>
+            <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
         </div>
         <div class="jobs-layout">
             <div class="upcoming-jobs-container grid">
             ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay, showPink, showUpcoming).replace(/<div id="cost-message".*?<\/div>/s, '')} 
             </div>
-        </div>
-        <div class="instruction-section">
-            <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
-        </div>
         `;
     },
     choices: [' '], // Spacebar to continue
@@ -2561,7 +2561,7 @@ const instructions3_4 = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         const n = grid.nTrials;
-        const fontSize = "20px"; // Define font size as a variable
+        const fontSize = "22px"; // Define font size as a variable
         const selectedPath = null;
         const keyAssignment = Math.random() < 0.5 ? 
             { blue: 'Q', green: 'P' } : 
@@ -2575,23 +2575,21 @@ const instructions3_4 = {
         const showPink=true;
         const showUpcoming=true;
         return `
-        <div class="instruction-section">
+        <div class="cost-display-container">
             <h1>Daily Shift:</h1>
-            <p style="font-size: ${fontSize};">You will first have a couple of seconds to think about which job you would like to select. You can select your desired job once the dispatch grid turns yellow and the keys have been assigned to the paths - i.e. once 'P' or 'Q' has been assigned to the green or blue job in your current dispatch.</p>
+            <p style="font-size: ${fontSize};">You will first have a couple of seconds to think about which job you would like to select. </p>
+            <p style="font-size: ${fontSize};">You can select your desired job once the dispatch grid turns yellow and the keys have been assigned to the paths - i.e. once 'P' or 'Q' has been assigned to the green or blue job in your current dispatch.</p>
             <p style="font-size: ${fontSize};">You will have 8 seconds to select a job once the dispatch grid has turned <span style="color: #ece75d;">yellow</span>. If you fail to make a choice within this time limit, you will pay a fine of <span style="color: #f87171;">$10</span>.</p>
             <br>
             <br>
             <br>
             <br>
-            <br>
+            <h2 style="font-size: ${fontSize};">Press P or Q to select one of the jobs.</h2>
         </div>
         <div class="jobs-layout">
             <div class="upcoming-jobs-container grid">
             ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay, showPink, showUpcoming).replace(/<div id="cost-message".*?<\/div>/s, '')} 
             </div>
-        </div>
-        <div class="instruction-section">
-            <h2 style="font-size: ${fontSize};">Press P or Q to select one of the jobs.</h2>
         </div>
         `;
     },
@@ -2684,25 +2682,23 @@ const instructions3_5 = {
         const selectedPath = lastTrialData.choice;
         console.log('selectedPath', selectedPath, 'keyAssignment', keyAssignment);
 
-        const fontSize = "20px"; // Define font size as a variable
+        const fontSize = "22px"; // Define font size as a variable
         return `
-        <div class="instruction-section">
+        <div class="cost-display-container">
             <h1>Daily Shift:</h1>
-            <p style="font-size: ${fontSize};">You will first have a couple of seconds to think about which job you would like to select. You can select your desired job once the dispatch grid turns yellow and the keys have been assigned to the paths - i.e. once 'P' or 'Q' has been assigned to the green or blue job in your current dispatch.</p>
+            <p style="font-size: ${fontSize};">You will first have a couple of seconds to think about which job you would like to select. </p>
+            <p style="font-size: ${fontSize};">You can select your desired job once the dispatch grid turns yellow and the keys have been assigned to the paths - i.e. once 'P' or 'Q' has been assigned to the green or blue job in your current dispatch.</p>
             <p style="font-size: ${fontSize};">You will have 8 seconds to select a job once the dispatch grid has turned <span style="color: #ece75d;">yellow</span>. If you fail to make a choice within this time limit, you will pay a fine of <span style="color: #f87171;">$10</span>.</p>
             <br>
             <br>
             <br>
             <br>
-            <br>
+            <h2 style="font-size: ${fontSize};">Once the job is complete, press spacebar to continue.</h2>
         </div>
         <div class="jobs-layout">
             <div class="upcoming-jobs-container grid">
             ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment).replace(/<div id="cost-message".*?<\/div>/s, '')} 
             </div>
-        </div>
-        <div class="instruction-section">
-            <h2 id="continue-text" style="display: none;">Press spacebar to continue.</h2>
         </div>
         `;
     },
@@ -2767,7 +2763,7 @@ const instructions3_6 = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         const n = grid.nTrials;
-        const fontSize = "20px"; // Define font size as a variable
+        const fontSize = "22px"; // Define font size as a variable
         const selectedPath = null;
         const keyAssignment = Math.random() < 0.5 ? 
             { blue: 'Q', green: 'P' } : 
@@ -2781,20 +2777,18 @@ const instructions3_6 = {
         const showPink=true;
         const showUpcoming=true;
         return `
-        <div class="instruction-section">
+        <div class="cost-display-container">
             <h1>Daily Shift:</h1>
             <p style="font-size: ${fontSize};">As you move through the day’s dispatches from left to right, past dispatches are <span style="color: rgb(138, 138, 184);">greyed out</span>.</p>
             <p style="font-size: ${fontSize};">The locations of tolls remain fixed throughout the day. Once you visit an intersection, you find out how busy it is, and hence whether or not you have to pay a toll whenever you reach that intersection again on the same day.</p>
             <p style="font-size: ${fontSize};">Notice how, whenever you visit an intersection, information about whether it contains a toll or not also becomes available in your upcoming dispatches.</p>
             <p style="font-size: ${fontSize};">Hence, finding out about the intersections will help you for the rest of the day, since it allows you to select jobs where you don’t have to pay any tolls.</p>
+            <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
         </div>
         <div class="jobs-layout">
             <div class="upcoming-jobs-container grid">
             ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay, showPink, showUpcoming).replace(/<div id="cost-message".*?<\/div>/s, '')} 
             </div>
-        </div>
-        <div class="instruction-section">
-            <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
         </div>
         `;
     },
@@ -2812,18 +2806,48 @@ const instructions3_7 = {
         const fontSize = "20px"; // Define font size as a variable
         return `
             <div class="instruction-section" style="font-size: 20px;">
+                <h1>Practice Shift:</h1>
                 <p>You will now practise a full day of dispatches.</p>
                 <p>The total amount of tolls paid over the course of the day will be shown at the top of your screen.</p>
-                <p>Press spacebar to continue.</p>
+                <p>Before this practice, you have the opportunity to review the most recent instructions.</p>
+                <p>Press backspace to review, or spacebar to continue.</p>
             </div>
         `;
     },
-    choices: [' '], // Spacebar to continue
+    choices: [' ', 'backspace'], // allow both
     on_load: function() {
     },
-    on_finish: function() {
+    on_finish: function(data) {
+    data.restart_instructions = (data.response === 'backspace');
+
+    // if restarting instructions, need to clear practice2TrialIndex and practice2Grid
+    if (data.restart_instructions) {
+        // practice2TrialIndex = 0;
+        // loadPracticeGrid('assets/trial_sequences/expt_2/practice/expt_info/expt_2_info_2.json', 'practice2Grid').then(grid => practice2Grid = grid);
+        initPractice(); // Initialize the grid for practice1
+
+        //check that grid has no observed costs in it
+        for (let i = 0; i < practice2Grid.nTrials; i++) {
+            practice2Grid[`observedCosts${i}`] = {};
+        }
     }
-    
+}   
+};
+
+const instructions3_node = {
+  timeline: [
+    instructions3_1,
+    instructions3_2,
+    instructions3_3,
+    instructions3_4,
+    instructions3_5,
+    instructions3_6,
+    instructions3_7,
+  ],
+  loop_function: function(data) {
+    const last = data.values().slice(-1)[0];      
+    return !!(last.restart_instructions || last.response === 'backspace');
+  }
 };
 
 const practiceFirstDayTrial = {
@@ -3639,13 +3663,14 @@ function createInstructionsTimeline() {
 
     // Practice a full day
     // timeline.push(instructions3);
-    timeline.push(instructions3_1);
-    timeline.push(instructions3_2);
-    timeline.push(instructions3_3);
-    timeline.push(instructions3_4);
-    timeline.push(instructions3_5);
-    timeline.push(instructions3_6);
-    timeline.push(instructions3_7);
+    // timeline.push(instructions3_1);
+    // timeline.push(instructions3_2);
+    // timeline.push(instructions3_3);
+    // timeline.push(instructions3_4);
+    // timeline.push(instructions3_5);
+    // timeline.push(instructions3_6);
+    // timeline.push(instructions3_7);
+    timeline.push(instructions3_node);
     timeline.push(practiceFirstDayTrial);
     for (let i = 0; i < grid.nTrials; i++) {
         timeline.push(practice3PreSelectionTrial);
