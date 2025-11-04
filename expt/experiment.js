@@ -437,7 +437,7 @@ class Grid {
         }
 
         gridHTML += `
-                <div class="grid-container" style="grid-template-columns: repeat(${gridSize}, 40px); background-color: #ece75d;">
+                <div class="grid-container" style="grid-template-columns: repeat(${gridSize}, 40px);">
         `;
 
         // preload avatars
@@ -859,10 +859,10 @@ class Grid {
                     } else if (previewIndex === currentTrialIndex) {
                         upcomingHTML += `
                             <div class="upcoming-job">
-                                <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; color:#ece75d;">
+                                <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; color:${keyAssignment ? '' :'#ece75d'}; background-color: ${keyAssignment ? '#ece75d' : ''};">
                                     ${clockCharacter}
                                 </div>
-                                <div class="upcoming-grid" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px; background-color: ${keyAssignment ? '#ece75d' : ''};">
+                                <div class="upcoming-grid" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
                         `;
                     } else {
                         upcomingHTML += `
@@ -2422,10 +2422,9 @@ const instructions3_1 = {
         <div class="cost-display-container">
             <h1>Daily Shift:</h1>
             <p style="font-size: ${fontSize};">Each day, you will manage ${n} dispatches, meaning you have ${n} jobs to select.</p>
-            <p style="font-size: ${fontSize};">All ${n} pairs of jobs will be presented on screen at once, side-by-side. Each dispatch takes place at a different time of the day and is marked with one of the following clock icons, displayed above the dispatch:</p>
+            <p style="font-size: ${fontSize};">Each dispatch takes place at a different time of the day and is marked with one of the following clock icons, displayed above the dispatch:</p>
             <p style="font-family: golemClocks; text-align: center; font-size: ${fontSize};">&#x00E6; &#x00DD; &#x0026; &#x263A;</p>
             <p style="font-size: ${fontSize};">You will move through these dispatches from the left- to the right-hand side of the screen. The clock above your current dispatch is highlighted in <span style="color: #ece75d;">yellow</span>.</p>
-            <br>
             <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
         </div>
         <div class="jobs-layout">
@@ -2456,12 +2455,9 @@ const instructions3_2 = {
         return `
         <div class="cost-display-container">
             <h1>Daily Shift:</h1>
-            <p style="font-size: ${fontSize};">You will also be able to see details about your upcoming dispatches - that is, you will be able to see the jobs that you will have to choose between later in the day.</p>
+            <p style="font-size: ${fontSize};">All ${n} pairs of jobs will be presented on screen at once, side-by-side.</p>
+            <p style="font-size: ${fontSize};">This means you will also be able to see details about your upcoming dispatches - that is, you will be able to see the jobs that you will have to choose between later in the day.</p>
             <p style="font-size: ${fontSize};">See below how your upcoming dispatches are displayed on screen to the right of your current dispatch.</p>
-            <br>
-            <br>
-            <br>
-            <br>
             <br>
             <br>
             <br>
@@ -2498,7 +2494,7 @@ const instructions3_3 = {
             <h1>Daily Shift:</h1>
             <p style="font-size: ${fontSize};">As well as being shown individually, information about your upcoming dispatches will also be highlighted in your <span style="color: #ece75d;">current dispatch</span>.</p>
             <p style="font-size: ${fontSize};">Specifically, the intersections that you may possibly visit later in the day are highlighted in <span style="color: rgb(240, 110, 254);">pink</span>.</p>
-            <p style="font-size: ${fontSize};">See below how the intersections that may be visited later in the day are also displayed in your current dispatch.</p>
+            <p style="font-size: ${fontSize};">See below how the intersections that may be visited later in the day are also displayed in your <span style="color: #ece75d;">current dispatch</span>.</p>
             <br>
             <br>
             <br>
@@ -3616,11 +3612,11 @@ function createInstructionsTimeline() {
 
     // Practice selection
     timeline.push(instructions2);
-    timeline.push(instructions2_5);
-    timeline.push(practice1SelectionTrial);
-    timeline.push(practice1AnimationTrial);
-    timeline.push(practice1SelectionTrial);
-    timeline.push(practice1AnimationTrial);
+    // timeline.push(instructions2_5);
+    // timeline.push(practice1SelectionTrial);
+    // timeline.push(practice1AnimationTrial);
+    // timeline.push(practice1SelectionTrial);
+    // timeline.push(practice1AnimationTrial);
 
     // Practice a full day
     // timeline.push(instructions3);
@@ -3759,7 +3755,7 @@ function initializeExperiment() {
   
     // Combine everything into a single timeline
     const fullTimeline = [
-      ...ethicsTimeline,
+    //   ...ethicsTimeline,
       instructionsLoop,
       ...quizTimeline,
       ...mainTimeline
