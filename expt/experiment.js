@@ -438,7 +438,7 @@ class Grid {
         }
 
         gridHTML += `
-                <div class="grid-container" style="grid-template-columns: repeat(${gridSize}, 40px); background-color: #ece75d;">
+                <div class="grid-container" style="grid-template-columns: repeat(${gridSize}, 40px); background-color: rgb(212, 208, 103);">
         `;
 
         // preload avatars
@@ -860,15 +860,15 @@ class Grid {
                     } else if (previewIndex === currentTrialIndex) {
                         upcomingHTML += `
                             <div class="upcoming-job">
-                                <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; color: #ece75d;">
+                                <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; color:rgb(212, 208, 103);">
                                     ${clockCharacter}
                                 </div>
-                                <div class="upcoming-grid" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px; background-color: ${keyAssignment ? '#ece75d' : ''};">
+                                <div class="upcoming-grid" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px; background-color: ${keyAssignment ? 'rgb(212, 208, 103)' : ''};">
                         `;
                     } else {
                         upcomingHTML += `
                             <div class="upcoming-job">  
-                                <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; color: ${previewIndex === currentTrialIndex ? '#ece75d' : 'inherit'};">
+                                <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; color: ${previewIndex === currentTrialIndex ? 'rgb(212, 208, 103)' : 'inherit'};">
                                     ${clockCharacter}
                                 </div>
                                 <div class="upcoming-grid" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
@@ -2198,15 +2198,14 @@ const instructions1 = {
 const instructions2 = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
-        const fontSize = "20px"; // Define font size as a variable
         return `
             <div class="instruction-section" style="font-size: 20px;">
-                <h1>Dispatch Instructions</h1>
-                <p style="font-size: ${fontSize};">For each dispatch, you'll see two possible jobs marked in <span class="blue-text">blue</span> and <span class="green-text">green</span>. Each job has a passenger ✋ at a pickup point, and a drop-off destination 🏠. The route of each job is marked with one of two letters:</p>
-                <p style="font-size: ${fontSize};">- The letter <strong>P</strong> marks one job</p>
-                <p style="font-size: ${fontSize};">- The letter <strong>Q</strong> marks the other job</p>
-                <p style="font-size: ${fontSize};">On each dispatch, these letters are randomly assigned to each job. To send out a taxi to one of these jobs, you need to press the corresponding key on your keyboard. Note that if an intersection appears on both paths, it will contain both P and Q.</p>
-                <p style="font-size: ${fontSize};">For any given choice, the lengths of the two possible jobs are the same, and you are paid the same wage by the company each day. However, some jobs are more costly than others, which you must pay for yourself. This is because of tolls in the city...</p>
+                <h1>Dispatch Instructions:</h1>
+                <p>For each dispatch, you'll see two possible jobs marked in <span class="blue-text">blue</span> and <span class="green-text">green</span>. Each job has a passenger ✋ at a pickup point, and a drop-off destination 🏠. The route of each job is marked with one of two letters:</p>
+                <p>- The letter <strong>P</strong> marks one job</p>
+                <p>- The letter <strong>Q</strong> marks the other job</p>
+                <p>On each dispatch, these letters are randomly assigned to each job. To send out a taxi to one of these jobs, you need to press the corresponding key on your keyboard. Note that if an intersection appears on both paths, it will contain both P and Q.</p>
+                <p>For any given choice, the lengths of the two possible jobs are the same, and you are paid the same wage by the company each day. However, some jobs are more costly than others, which you must pay for yourself. This is because of tolls in the city...</p>
             </div>
             <div class="instruction-section" style="font-size: 20px;">
                 <h2>Press spacebar to continue.</h2>
@@ -2230,12 +2229,12 @@ const instructions2_5 = {
         return `
             <div class="instruction-section" style="font-size: 20px;">
                 <h1>Toll Intersections:</h1>
-                <p style="font-size: ${fontSize};">Traffic in some parts of the city is busier than in others. This means that tolls apply at busy intersections. Visiting an intersection reveals whether or not you have to pay a toll there.</p>
-                <p style="font-size: ${fontSize};">- <strong><span style="color: rgb(114, 114, 150);">Dark grey intersections</span></strong> have not been visited yet</p>
-                <p style="font-size: ${fontSize};">- <strong><span style="color: #ff5a5a;">Red intersections</span></strong> cost a $1 toll to pass through</p>
-                <p style="font-size: ${fontSize};">- <strong><span style="color:rgb(194, 194, 229);">Light grey intersections</span></strong> are free with no tolls</p>
-                <p style="font-size: ${fontSize};">Your goal is to complete all taxi jobs while minimizing the total tolls paid out.</p>
-                <p style="font-size: ${fontSize};">Note that the rows and columns of the city are labelled with numbers and letters, respectively, to improve readability.</p>
+                <p>Traffic in some parts of the city is busier than in others. This means that tolls apply at busy intersections. Visiting an intersection reveals whether or not you have to pay a toll there.</p>
+                <p>- <strong><span style="color: rgb(114, 114, 150);">Dark grey intersections</span></strong> have not been visited yet</p>
+                <p>- <strong><span style="color: #ff5a5a;">Red intersections</span></strong> cost a $1 toll to pass through</p>
+                <p>- <strong><span style="color:rgb(194, 194, 229);">Light grey intersections</span></strong> are free with no tolls</p>
+                <p>Your goal is to complete all taxi jobs while minimising the total tolls paid out.</p>
+                <p>Note that the rows and columns of the city are labelled with numbers and letters, respectively, to improve readability.</p>
             </div>
 
             <div class="instruction-section" style="font-size: 20px;">
@@ -2409,41 +2408,6 @@ const practice1AnimationTrial = {
     }
 };
 
-const instructions3 = {
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: function() {
-        const n = grid.nTrials;
-        const fontSize = "20px"; // Define font size as a variable
-        const zoomTmp = zoomFactor * 0.9
-        document.body.style.zoom = zoomTmp;
-        return `
-        <div class="instruction-section">
-            <h1>Daily Shift:</h1>
-            <p style="font-size: ${fontSize};">Each day, you will manage ${n} dispatches, meaning you have ${n} jobs to select.</p>
-            <p style="font-size: ${fontSize};">All ${n} pairs of jobs will be presented on screen at once, side-by-side. Each dispatch takes place at a different time of the day and is marked with one of the following clock icons, displayed above the dispatch:</p>
-            <p style="font-family: golemClocks; text-align: center; font-size: ${fontSize};">&#x00E6; &#x00DD; &#x0026; &#x263A;</p>
-            <p style="font-size: ${fontSize};">You will move through these dispatches from the left- to the right-hand side of the screen. Your current dispatch is highlighted in <span style="color: #ece75d;">yellow</span>, while your past dispatches are <span style="color: rgb(138, 138, 184);">greyed out</span>.</p>
-            <p style="font-size: ${fontSize};">As well as seeing your upcoming dispatches individually, you will also see in your <span style="color: #ece75d;">current dispatch</span> the intersections that you may possibly visit on one of your upcoming dispatches. These are highlighted in <span style="color: #ea2aff;">pink</span>.</p>
-            <p style="font-size: ${fontSize};">You will first have a couple of seconds to think about which job you would like to select. You can select your desired job once the dispatch grid turns <span style="color: #ece75d;">yellow</span> and the keys have been assigned to the paths - i.e. once 'P' or 'Q' has been assigned to the green or blue job in your current dispatch.</p>
-            <p style="font-size: ${fontSize};">You will have 8 seconds to select a job once the dispatch grid has turned <span style="color: #ece75d;">yellow</span>. If you fail to make a choice within this time limit, you will pay a fine of <span style="color: #f87171;">$10</span>.</p>
-        </div>
-        <div class="instruction-section">
-            <h1>Toll Locations:</h1>
-            <p style="font-size: ${fontSize};">The locations of tolls remain fixed throughout the day. Once you visit an intersection, you find out how busy it is, and hence whether or not you have to pay a toll whenever you reach that intersection again on the same day. This information is reflected in your upcoming dispatches, too.</p>
-            <p style="font-size: ${fontSize};">This information may help you for the rest of the day by allowing you to select jobs where you don’t have to pay any tolls. </p>
-        </div>
-        <div class="instruction-section">
-            <h2 style="font-size: ${fontSize};">Press spacebar to practise your first full day.</h2>
-        </div>
-        `;
-    },
-    choices: [' '], // Spacebar to continue
-    on_load: function() {
-    },
-    on_finish: function() {
-    }
-};
-
 const instructions3_1 = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
@@ -2460,7 +2424,7 @@ const instructions3_1 = {
             <h1>Daily Shift:</h1>
             <p style="font-size: ${fontSize};">Each day, you will manage ${n} dispatches, meaning you have ${n} jobs to select.</p>
             <p style="font-size: ${fontSize};">All ${n} pairs of jobs will be presented on screen at once, side-by-side. Each dispatch takes place at a different time of the day and is marked with a clock icon, displayed above the dispatch.</p>
-            <p style="font-size: ${fontSize};">You will move through these dispatches from the left- to the right-hand side of the screen. The clock above your current dispatch is highlighted in <span style="color: #ece75d;">yellow</span>.</p>
+            <p style="font-size: ${fontSize};">You will move through these dispatches from the left- to the right-hand side of the screen. The clock above your current dispatch is highlighted in <span style="color: rgb(212, 208, 103);">yellow</span>.</p>
             <br>
             <br>
             <br>
@@ -2535,9 +2499,9 @@ const instructions3_3 = {
         return `
         <div class="cost-display-container">
             <h1>Daily Shift:</h1>
-            <p style="font-size: ${fontSize};">As well as being shown individually, information about your upcoming dispatches will also be highlighted in your <span style="color: #ece75d;">current dispatch</span>.</p>
+            <p style="font-size: ${fontSize};">As well as being shown individually, information about your upcoming dispatches will also be highlighted in your <span style="color: rgb(212, 208, 103);">current dispatch</span>.</p>
             <p style="font-size: ${fontSize};">Specifically, the intersections that you may possibly visit later in the day are highlighted in <span style="color: #ea2aff;">pink</span>.</p>
-            <p style="font-size: ${fontSize};">See below how the intersections that may be visited in any your upcoming dispatches are displayed in your current dispatch.</p>
+            <p style="font-size: ${fontSize};">See below how the intersections that may be visited later in the day are also displayed in your current dispatch.</p>
             <br>
             <br>
             <br>
@@ -2578,8 +2542,8 @@ const instructions3_4 = {
         <div class="cost-display-container">
             <h1>Daily Shift:</h1>
             <p style="font-size: ${fontSize};">You will first have a couple of seconds to think about which job you would like to select. </p>
-            <p style="font-size: ${fontSize};">You can select your desired job once the dispatch grid turns yellow and the keys have been assigned to the paths - i.e. once 'P' or 'Q' has been assigned to the green or blue job in your current dispatch.</p>
-            <p style="font-size: ${fontSize};">You will have 8 seconds to select a job once the dispatch grid has turned <span style="color: #ece75d;">yellow</span>. If you fail to make a choice within this time limit, you will pay a fine of <span style="color: #f87171;">$10</span>.</p>
+            <p style="font-size: ${fontSize};">You can select your desired job once the dispatch grid turns <span style="color: rgb(212, 208, 103);">yellow</span> and the keys have been assigned to the paths - i.e. once 'P' or 'Q' has been assigned to the green or blue job in your current dispatch.</p>
+            <p style="font-size: ${fontSize};">You will have 8 seconds to select a job once the dispatch grid has turned <span style="color: rgb(212, 208, 103);">yellow</span>. If you fail to make a choice within this time limit, you will pay a fine of <span style="color: #f87171;">$10</span>.</p>
             <br>
             <br>
             <br>
@@ -2687,8 +2651,8 @@ const instructions3_5 = {
         <div class="cost-display-container">
             <h1>Daily Shift:</h1>
             <p style="font-size: ${fontSize};">You will first have a couple of seconds to think about which job you would like to select. </p>
-            <p style="font-size: ${fontSize};">You can select your desired job once the dispatch grid turns yellow and the keys have been assigned to the paths - i.e. once 'P' or 'Q' has been assigned to the green or blue job in your current dispatch.</p>
-            <p style="font-size: ${fontSize};">You will have 8 seconds to select a job once the dispatch grid has turned <span style="color: #ece75d;">yellow</span>. If you fail to make a choice within this time limit, you will pay a fine of <span style="color: #f87171;">$10</span>.</p>
+            <p style="font-size: ${fontSize};">You can select your desired job once the dispatch grid turns <span style="color: rgb(212, 208, 103);">yellow</span> and the keys have been assigned to the paths - i.e. once 'P' or 'Q' has been assigned to the green or blue job in your current dispatch.</p>
+            <p style="font-size: ${fontSize};">You will have 8 seconds to select a job once the dispatch grid has turned <span style="color: rgb(212, 208, 103);">yellow</span>. If you fail to make a choice within this time limit, you will pay a fine of <span style="color: #f87171;">$10</span>.</p>
             <br>
             <br>
             <br>
@@ -2780,7 +2744,7 @@ const instructions3_6 = {
         <div class="cost-display-container">
             <h1>Daily Shift:</h1>
             <p style="font-size: ${fontSize};">As you move through the day’s dispatches from left to right, past dispatches are <span style="color: rgb(138, 138, 184);">greyed out</span>.</p>
-            <p style="font-size: ${fontSize};">The locations of tolls remain fixed throughout the day. Once you visit an intersection, you find out how busy it is, and hence whether or not you have to pay a toll whenever you reach that intersection again on the same day.</p>
+            <p style="font-size: ${fontSize};">The locations of tolls remain fixed throughout the day. Once you visit an intersection, you find out whether or not you have to pay a toll whenever you reach that intersection again on the same day.</p>
             <p style="font-size: ${fontSize};">Notice how, whenever you visit an intersection, information about whether it contains a toll or not also becomes available in your upcoming dispatches.</p>
             <p style="font-size: ${fontSize};">Hence, finding out about the intersections will help you for the rest of the day, since it allows you to select jobs where you don’t have to pay any tolls.</p>
             <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
@@ -3059,13 +3023,13 @@ const instructions4 = {
             <h1>New Day</h1>
             <p>At the start of a new day, the traffic in the city resets, meaning that the intersections where you do (or do not) have to pay a toll have reset. You are also given a new set of dispatches.</p>
             <p>Watch the grid reset for the next day below.</p>
-            <p>Remember: it helps to think about which intersections you might visit later on in the day, as highlighted in <span style="color: #ea2aff;">pink</span>, and shown in your upcoming dispatches.</p>
             <p id="continue-text" style="display: none;">Press spacebar to continue dispatching.</p>
         </div>
         <div class="jobs-layout" style="z-index: 2001; position: relative;">
             <div id="grid-container" class="current-job-section"></div>
         </div>
     `,
+    // <p>Remember: it helps to think about which intersections you might visit later on in the day, as highlighted in <span style="color: #ea2aff;">pink</span>, and shown in your upcoming dispatches.</p>
     choices: "NO_KEYS", // Initially disable keypresses
     on_load: function() {
 
@@ -3202,7 +3166,7 @@ const instructions5 = {
 const instructions6 = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
-        const fontSize = "25px"; // Define font size as a variable
+        const fontSize = "28px"; // Define font size as a variable
         const zoomTmp = zoomFactor * 0.75
         document.body.style.zoom = zoomTmp;
         // document.body.style.zoom = "75%";
@@ -3215,12 +3179,12 @@ const instructions6 = {
             <h1>'Column cities'</h1>
             <p style="font-size: ${fontSize};">In column cities, traffic tends to run from north to south every day, meaning that tolls tend to be clustered in columns.</p>
             <p style="font-size: ${fontSize};">That is, a column may have a lot of tolls, or not many tolls.</p>
-            <p style="font-size: ${fontSize};">The locations of these busy columns may change each day, but the city will always have this column-dependent feature.</p>
+            <p style="font-size: ${fontSize};">The particular locations of these busy columns may change each day, but the city will always have this column-dependent feature.</p>
             <p style="font-size: ${fontSize};">Press spacebar to continue.</p>
             </div>
             <div class="jobs-layout" >
             <div class="instruction-section" style="text-align: center; font-size: 20px; color: #3a3a3a; margin: 10px;">
-            <h3><strong>Example day ${practice4TrialIndex + 1}</strong><h3>
+            <h3><strong>Example day ${practice4TrialIndex + 1} tolls</strong><h3>
             </div>
             <div id="grid-container" class="current-job-section"></div>
         `;
@@ -3242,7 +3206,7 @@ const instructions6 = {
 const instructions7 = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
-        const fontSize = "25px"; // Define font size as a variable
+        const fontSize = "28px"; // Define font size as a variable
         return `
             <div class="instruction-section" style="z-index: 2000; position: relative;">
             <h1>How can you predict which intersections have tolls (or no tolls)?</h1>
@@ -3302,7 +3266,7 @@ const instructions7 = {
 const instructions8 = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
-        const fontSize = "25px"; // Define font size as a variable
+        const fontSize = "28px"; // Define font size as a variable
         return `
             <div class="instruction-section" style="z-index: 2000; position: relative;">
                 <h1>How can you predict which intersections have tolls (or no tolls)?</h1>
@@ -3312,12 +3276,12 @@ const instructions8 = {
                 <h1>'Row cities'</h1>
                 <p style="font-size: ${fontSize};">In row cities, the opposite is true: traffic tends to run from east to west every day, meaning that tolls tend to be clustered in rows.</p>
                 <p style="font-size: ${fontSize};">That is, a row may have a lot of tolls, or not many tolls.</p>
-                <p style="font-size: ${fontSize};">The locations of these busy rows may change each day, but the city will always have this row-dependent feature.</p>
+                <p style="font-size: ${fontSize};">The particular locations of these busy rows may change each day, but the city will always have this row-dependent feature.</p>
                 <p style="font-size: ${fontSize};">Press spacebar to continue.</p>
             </div>
             <div class="jobs-layout">
                 <div class="instruction-section" style="text-align: center;  font-size: 20px; color: #3a3a3a;">
-                    <h3><strong>Example day ${practice5TrialIndex + 1}</strong><h3>
+                    <h3><strong>Example day ${practice5TrialIndex + 1} tolls</strong><h3>
                 </div>
                 <div id="grid-container" class="current-job-section"></div>
             </div>
@@ -3392,7 +3356,7 @@ const instructions9 = {
             <div class="instruction-section">
                 <h1>Bonus Payment</h1>
                 <p>Remember: your aim is to minimise the total cost paid each day by predicting which intersections will incur a toll, and hence by selecting jobs that you think will be least costly.</p>
-                <p>This means that when choosing a job, it helps to think about which intersections you might visit later on in that day, as highlighted in <span style="color: #ea2aff;">pink</span>, and shown in your upcoming dispatches.</p>
+                <p>This means that when choosing a job, it helps to think about which intersections you might visit later on in that day. These are highlighted in <span style="color: #ea2aff;">pink</span>, and shown in your upcoming dispatches.</p>
                 <p>At the end of the experiment, we will assess your performance by assessing how well you chose jobs that were the least costly on a randomly selected set of days and cities. This will determine whether you receive a bonus payment.</p>
                 <p>So, you should pay attention throughout the experiment - i.e. on every day, and in every city.</p>
                 <p>Remember also: you will have 8 seconds to select a job once the current dispatch turns yellow, otherwise the trial will timeout. If you timeout too many times, the experiment will end and you will return to Prolific.</p>
@@ -3497,8 +3461,8 @@ function create_need_for_cognition(){
   
     const NFC_instructs = `
         <div class="jspsych-survey-multi-choice-question">
-        <h2 style="font-size: 30;"> <span style="color: #ece75d;">For each of the statements below, please indicate whether or not the statement is characteristic of you or of what you believe.</span></h2>
-        <h2 style="font-size: 30;"> <span style="color: #ece75d;">Note: you may need to scroll to see all of the questions.</span></h2>
+        <h2 style="font-size: 30;"> <span style="color: rgb(212, 208, 103);">For each of the statements below, please indicate whether or not the statement is characteristic of you or of what you believe.</span></h2>
+        <h2 style="font-size: 30;"> <span style="color: rgb(212, 208, 103);">Note: you may need to scroll to see all of the questions.</span></h2>
         </div>`;
 
   
@@ -3656,10 +3620,10 @@ function createInstructionsTimeline() {
     // Practice selection
     timeline.push(instructions2);
     timeline.push(instructions2_5);
-    // timeline.push(practice1SelectionTrial);
-    // timeline.push(practice1AnimationTrial);
-    // timeline.push(practice1SelectionTrial);
-    // timeline.push(practice1AnimationTrial);
+    timeline.push(practice1SelectionTrial);
+    timeline.push(practice1AnimationTrial);
+    timeline.push(practice1SelectionTrial);
+    timeline.push(practice1AnimationTrial);
 
     // Practice a full day
     // timeline.push(instructions3);
@@ -3670,6 +3634,7 @@ function createInstructionsTimeline() {
     // timeline.push(instructions3_5);
     // timeline.push(instructions3_6);
     // timeline.push(instructions3_7);
+
     timeline.push(instructions3_node);
     timeline.push(practiceFirstDayTrial);
     for (let i = 0; i < grid.nTrials; i++) {
@@ -3798,8 +3763,8 @@ function initializeExperiment() {
     // Combine everything into a single timeline
     const fullTimeline = [
     //   ...ethicsTimeline,
-      instructionsLoop,
-      ...quizTimeline,
+    //   instructionsLoop,
+    //   ...quizTimeline,
       ...mainTimeline
     ];
   
