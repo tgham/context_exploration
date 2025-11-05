@@ -771,7 +771,7 @@ class Grid {
 
 
     // Add createUpcomingJobsHTML as a method of the Grid class
-    createAllJobsHTML(currentTrialIndex, selectedPath=null, keyAssignment=null, feedback=false, firstDay=false, showPink=true, showUpcoming=true) {
+    createAllJobsHTML(currentTrialIndex, selectedPath=null, keyAssignment=null, feedback=false, firstDay=false, showPink=true, restrictPink=null) {
         const trial = this.getTrialInfo(currentTrialIndex);
         const currentGridNumber = Math.floor(currentTrialIndex / this.nTrials);
         const currentGridStartIndex = currentGridNumber * this.nTrials;
@@ -834,7 +834,8 @@ class Grid {
         // Collect all upcoming paths for the current trial
         const upcomingPaths = new Set();
         if (!feedback && showPink) {
-            for (let i = currentTrialIndex + 1; i <= currentGridEndIndex; i++) {
+            let pinkEndIndex = restrictPink === null ? currentGridEndIndex : currentGridStartIndex + restrictPink;
+            for (let i = currentTrialIndex + 1; i <= pinkEndIndex; i++) {
                 const upcomingTrial = this.getTrialInfo(i);
                 upcomingTrial.path_A.forEach(coord => upcomingPaths.add(`${coord[0]}-${coord[1]}`));
                 upcomingTrial.path_B.forEach(coord => upcomingPaths.add(`${coord[0]}-${coord[1]}`));
@@ -848,7 +849,8 @@ class Grid {
             
             if (!firstDay) {
                 if (!feedback) {
-                    if (previewIndex < currentTrialIndex) {
+                    // if (previewIndex < currentTrialIndex || (restrictPink !== null && i !== restrictPink && i !== 0)) {
+                    if (previewIndex < currentTrialIndex || (restrictPink !== null && i > restrictPink)) {
                         upcomingHTML += `
                             <div class="upcoming-job">
                                 <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; color: transparent;">
@@ -907,7 +909,7 @@ class Grid {
                     // Check if this cell is in upcoming paths (only for current trial)
                     const isUpcomingPath = previewIndex === currentTrialIndex && upcomingPaths.has(`${row}-${col}`);
 
-                    if (previewIndex > currentTrialIndex && showUpcoming) {
+                    if (previewIndex > currentTrialIndex) {
                         isStartA = row === trial.start_A[0] && col === trial.start_A[1];
                         isStartB = row === trial.start_B[0] && col === trial.start_B[1];
                         isGoalA = row === trial.goal_A[0] && col === trial.goal_A[1];
@@ -1549,24 +1551,6 @@ const firstDayTrial = {
 const pathPreSelectionTrial = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
-        return `
-            <div class="jobs-layout">
-            <div class="upcoming-jobs-container grid">
-                ${grid.createAllJobsHTML(currentTrialIndex, null, null)} 
-            </div>
-            </div>
-        `;
-    },
-    choices: "NO_KEYS",
-    trial_duration: 2000, 
-    on_finish: function() {
-    }
-};
-
-// 5. Update the path selection trial to include taxi theme elements
-const pathSelectionTrial = {
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: function() {
         // Randomly assign letters to blue and green paths
         const keyAssignment = Math.random() < 0.5 ? 
             // { blue: 'F', green: 'J' } : 
@@ -1579,6 +1563,43 @@ const pathSelectionTrial = {
             blue_key: keyAssignment.blue,
             green_key: keyAssignment.green
         });
+        return `
+            <div class="jobs-layout">
+            <div class="upcoming-jobs-container grid">
+                ${grid.createAllJobsHTML(currentTrialIndex, null, keyAssignment)} 
+            </div>
+            </div>
+        `;
+    },
+    choices: "NO_KEYS",
+    trial_duration: 500, 
+    on_finish: function() {
+    }
+};
+
+// 5. Update the path selection trial to include taxi theme elements
+const pathSelectionTrial = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        
+        // Randomly assign letters to blue and green paths
+        const keyAssignment = Math.random() < 0.5 ? 
+            // { blue: 'F', green: 'J' } : 
+            // { blue: 'J', green: 'F' };
+            { blue: 'Q', green: 'P' } : 
+            { blue: 'P', green: 'Q' };
+        
+        // Store the assignment for this trial
+        jsPsych.data.addProperties({
+            blue_key: keyAssignment.blue,
+            green_key: keyAssignment.green
+        });
+
+        // or, get the key assignment from the last trial if we did preselection
+        // const keyAssignment = {
+        //     blue: jsPsych.data.get().last(1).values()[0].blue_key,
+        //     green: jsPsych.data.get().last(1).values()[0].green_key
+        // };
         
         return `
             <div class="jobs-layout">
@@ -1824,7 +1845,7 @@ const gridFeedback = {
         const todayTolls = totalCost; // Assuming totalCost tracks the tolls paid so far
         return `
             <div class="new-day-text">
-                <h3>You paid a total of <strong style="color:  #f87171;">$${todayTolls}</strong> in tolls today.</h3>
+                <h3>You paid a total of <strong style="color:rgb(203, 43, 43);">$${todayTolls}</strong> in tolls today.</h3>
                 <h3>Press spacebar to continue.</h3>
             </div>
         `;
@@ -1842,7 +1863,7 @@ const practiceGridFeedback = {
         const todayTolls = totalCost; // Assuming totalCost tracks the tolls paid so far
         return `
             <div class="new-day-text">
-                <h3>You would have paid a total of <strong style="color:  #f87171;">$${todayTolls}</strong> in tolls today.</h3>
+                <h3>You would have paid a total of <strong style="color:  rgb(203, 43, 43);">$${todayTolls}</strong> in tolls today.</h3>
                 <h3>Press spacebar to continue.</h3>
             </div>
         `;
@@ -2421,7 +2442,6 @@ const instructions3_1 = {
         const feedback=false;
         const firstDay=false;
         const showPink=false;
-        const showUpcoming=true;
         return `
         <div class="cost-display-container">
             <h1>Daily Shift:</h1>
@@ -2433,7 +2453,7 @@ const instructions3_1 = {
         </div>
         <div class="jobs-layout">
             <div class="upcoming-jobs-container grid">
-                ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay,showPink, showUpcoming).replace(/<div id="cost-message".*?<\/div>/s, '')} 
+                ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay,showPink).replace(/<div id="cost-message".*?<\/div>/s, '')} 
             </div>
         </div>
         `;
@@ -2455,7 +2475,6 @@ const instructions3_2 = {
         const feedback=false;
         const firstDay=false;
         const showPink=false;
-        const showUpcoming=true;
         return `
         <div class="cost-display-container">
             <h1>Daily Shift:</h1>
@@ -2470,7 +2489,7 @@ const instructions3_2 = {
         </div>
         <div class="jobs-layout">
             <div class="upcoming-jobs-container grid">
-            ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay, showPink, showUpcoming).replace(/<div id="cost-message".*?<\/div>/s, '')} 
+            ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay, showPink).replace(/<div id="cost-message".*?<\/div>/s, '')} 
             </div>
         </div>
         `;
@@ -2482,7 +2501,7 @@ const instructions3_2 = {
     }
 };
 
-const instructions3_3 = {
+const instructions3_3_1 = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         const n = grid.nTrials;
@@ -2496,13 +2515,13 @@ const instructions3_3 = {
         const feedback=false;
         const firstDay=false;
         const showPink=true;
-        const showUpcoming=true;
+        const restrictPink=1;
         return `
         <div class="cost-display-container">
             <h1>Daily Shift:</h1>
             <p style="font-size: ${fontSize};">As well as being shown individually, information about your upcoming dispatches will also be highlighted in your <span style="color: #ece75d;">current dispatch</span>.</p>
             <p style="font-size: ${fontSize};">Specifically, the intersections that you may possibly visit later in the day are highlighted in <span style="color: rgb(240, 110, 254);">pink</span>.</p>
-            <p style="font-size: ${fontSize};">See below how the intersections that may be visited later in the day are also displayed in your <span style="color: #ece75d;">current dispatch</span>.</p>
+            <p style="font-size: ${fontSize};">See below how the intersections that may be visited in your <strong>second</strong> dispatch are also displayed in your <span style="color: #ece75d;">current dispatch</span>.</p>
             <br>
             <br>
             <br>
@@ -2511,7 +2530,84 @@ const instructions3_3 = {
         </div>
         <div class="jobs-layout">
             <div class="upcoming-jobs-container grid">
-            ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay, showPink, showUpcoming).replace(/<div id="cost-message".*?<\/div>/s, '')} 
+            ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay, showPink, restrictPink).replace(/<div id="cost-message".*?<\/div>/s, '')} 
+            </div>
+        `;
+    },
+    choices: [' '], // Spacebar to continue
+    on_load: function() {
+    },
+    on_finish: function() {
+    }
+};
+const instructions3_3_2 = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        const n = grid.nTrials;
+        const fontSize = "22px"; // Define font size as a variable
+        const selectedPath = null;
+        const keyAssignment = { blue: 'Q', green: 'P' }
+        jsPsych.data.addProperties({
+            blue_key: keyAssignment.blue,
+            green_key: keyAssignment.green
+        });
+        const feedback=false;
+        const firstDay=false;
+        const showPink=true;
+        const restrictPink=2;
+        return `
+        <div class="cost-display-container">
+            <h1>Daily Shift:</h1>
+            <p style="font-size: ${fontSize};">As well as being shown individually, information about your upcoming dispatches will also be highlighted in your <span style="color: #ece75d;">current dispatch</span>.</p>
+            <p style="font-size: ${fontSize};">Specifically, the intersections that you may possibly visit later in the day are highlighted in <span style="color: rgb(240, 110, 254);">pink</span>.</p>
+            <p style="font-size: ${fontSize};">See below how the intersections that may be visited in your <strong>second or third</strong> dispatch are also displayed in your <span style="color: #ece75d;">current dispatch</span>.</p>
+            <br>
+            <br>
+            <br>
+            <br>
+            <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
+        </div>
+        <div class="jobs-layout">
+            <div class="upcoming-jobs-container grid">
+            ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay, showPink, restrictPink).replace(/<div id="cost-message".*?<\/div>/s, '')} 
+            </div>
+        `;
+    },
+    choices: [' '], // Spacebar to continue
+    on_load: function() {
+    },
+    on_finish: function() {
+    }
+};
+const instructions3_3_3 = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        const n = grid.nTrials;
+        const fontSize = "22px"; // Define font size as a variable
+        const selectedPath = null;
+        const keyAssignment = { blue: 'Q', green: 'P' }
+        jsPsych.data.addProperties({
+            blue_key: keyAssignment.blue,
+            green_key: keyAssignment.green
+        });
+        const feedback=false;
+        const firstDay=false;
+        const showPink=true;
+        return `
+        <div class="cost-display-container">
+            <h1>Daily Shift:</h1>
+            <p style="font-size: ${fontSize};">As well as being shown individually, information about your upcoming dispatches will also be highlighted in your <span style="color: #ece75d;">current dispatch</span>.</p>
+            <p style="font-size: ${fontSize};">Specifically, the intersections that you may possibly visit later in the day are highlighted in <span style="color: rgb(240, 110, 254);">pink</span>.</p>
+            <p style="font-size: ${fontSize};">See below how the intersections that may be visited in <strong>any</strong> of your upcoming dispatches are also displayed in your <span style="color: #ece75d;">current dispatch</span>.</p>
+            <br>
+            <br>
+            <br>
+            <br>
+            <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
+        </div>
+        <div class="jobs-layout">
+            <div class="upcoming-jobs-container grid">
+            ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay, showPink).replace(/<div id="cost-message".*?<\/div>/s, '')} 
             </div>
         `;
     },
@@ -2535,8 +2631,7 @@ const instructions3_4 = {
         });
         const feedback=false;
         const firstDay=false;
-        const showPink=true;
-        const showUpcoming=true;
+        const showPink=2;
         return `
         <div class="cost-display-container">
             <h1>Daily Shift:</h1>
@@ -2548,13 +2643,11 @@ const instructions3_4 = {
             <br>
             <br>
             <br>
-            <br>
-            <br>
             <h2 style="font-size: ${fontSize};">Press P or Q to select one of the jobs.</h2>
         </div>
         <div class="jobs-layout">
             <div class="upcoming-jobs-container grid">
-            ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay, showPink, showUpcoming).replace(/<div id="cost-message".*?<\/div>/s, '')} 
+            ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay, showPink).replace(/<div id="cost-message".*?<\/div>/s, '')} 
             </div>
         </div>
         `;
@@ -2660,8 +2753,6 @@ const instructions3_5 = {
             <br>
             <br>
             <br>
-            <br>
-            <br>
             <h2 style="font-size: ${fontSize};">Once the job is complete, press spacebar to continue.</h2>
         </div>
         <div class="jobs-layout">
@@ -2743,8 +2834,7 @@ const instructions3_6 = {
         });
         const feedback=false;
         const firstDay=false;
-        const showPink=true;
-        const showUpcoming=true;
+        const showPink=n;
         return `
         <div class="cost-display-container">
             <h1>Daily Shift:</h1>
@@ -2756,7 +2846,7 @@ const instructions3_6 = {
         </div>
         <div class="jobs-layout">
             <div class="upcoming-jobs-container grid">
-            ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay, showPink, showUpcoming).replace(/<div id="cost-message".*?<\/div>/s, '')} 
+            ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay, showPink).replace(/<div id="cost-message".*?<\/div>/s, '')} 
             </div>
         </div>
         `;
@@ -2807,7 +2897,9 @@ const instructions3_node = {
   timeline: [
     instructions3_1,
     // instructions3_2,
-    instructions3_3,
+    instructions3_3_1,
+    instructions3_3_2,
+    instructions3_3_3,
     instructions3_4,
     instructions3_5,
     instructions3_6,
@@ -2846,27 +2938,8 @@ const practice3PreSelectionTrial = {
         if (practice3TrialIndex === 0) {
             totalCost = 0;
         }
-        return `
-            <div class="jobs-layout">
-            <div class="upcoming-jobs-container grid">
-                ${practice3Grid.createAllJobsHTML(practice3TrialIndex, null, null)} 
-            </div>
-            </div>
-        `;
-    },
-    choices: "NO_KEYS",
-    trial_duration: 2000, // Ends after 2 seconds
-    on_finish: function() {
-    }
-};
 
-const practice3SelectionTrial = {
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: function() {
         // Randomly assign letters to blue and green paths
-        // const keyAssignment = Math.random() < 0.5 ? 
-        //     { blue: 'F', green: 'J' } : 
-        //     { blue: 'J', green: 'F' };
         const keyAssignment = Math.random() < 0.5 ? 
             { blue: 'Q', green: 'P' } : 
             { blue: 'P', green: 'Q' };
@@ -2876,6 +2949,40 @@ const practice3SelectionTrial = {
             blue_key: keyAssignment.blue,
             green_key: keyAssignment.green
         });
+        return `
+            <div class="jobs-layout">
+            <div class="upcoming-jobs-container grid">
+                ${practice3Grid.createAllJobsHTML(practice3TrialIndex, null, keyAssignment)} 
+            </div>
+            </div>
+        `;
+    },
+    choices: "NO_KEYS",
+    trial_duration: 500, // Ends after 500ms
+    on_finish: function() {
+    }
+};
+
+const practice3SelectionTrial = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+
+        // randomly assign keys
+        const keyAssignment = Math.random() < 0.5 ? 
+            { blue: 'Q', green: 'P' } : 
+            { blue: 'P', green: 'Q' };
+        
+        // Store the assignment for this trial
+        jsPsych.data.addProperties({
+            blue_key: keyAssignment.blue,
+            green_key: keyAssignment.green
+        });
+
+        // or get the key assignment for this trial if we did preselection trial
+        // const keyAssignment = {
+        //     blue: jsPsych.data.get().last(1).values()[0].blue_key,
+        //     green: jsPsych.data.get().last(1).values()[0].green_key
+        // };
 
         // Reset total cost for practice if first practice trial
         if (practice3TrialIndex === 0) {
