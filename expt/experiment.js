@@ -2540,9 +2540,12 @@ const instructions3_4 = {
         return `
         <div class="cost-display-container">
             <h1>Daily Shift:</h1>
-            <p style="font-size: ${fontSize};">You will first have a couple of seconds to think about which job you would like to select. </p>
-            <p style="font-size: ${fontSize};">You can select your desired job once the dispatch grid turns <span style="color: #ece75d;">yellow</span> and the keys have been assigned to the paths - i.e. once 'P' or 'Q' has been assigned to the green or blue job in your current dispatch.</p>
-            <p style="font-size: ${fontSize};">You will have 8 seconds to select a job once the dispatch grid has turned <span style="color: #ece75d;">yellow</span>. If you fail to make a choice within this time limit, you will pay a fine of <span style="color: #f87171;">$10</span>.</p>
+            <p style="font-size: ${fontSize};">You can select your desired job once the clock above your current dispatch turns <span style="color: #ece75d;">yellow</span>.</p>
+            <p style="font-size: ${fontSize};">You will have 10 seconds to select a job by pressing either P or Q. If you fail to make a choice within this time limit, you will pay a fine of <span style="color: #f87171;">$10</span>.</p>
+            <br>
+            <br>
+            <br>
+            <br>
             <br>
             <br>
             <br>
@@ -2649,9 +2652,12 @@ const instructions3_5 = {
         return `
         <div class="cost-display-container">
             <h1>Daily Shift:</h1>
-            <p style="font-size: ${fontSize};">You will first have a couple of seconds to think about which job you would like to select. </p>
-            <p style="font-size: ${fontSize};">You can select your desired job once the dispatch grid turns <span style="color: #ece75d;">yellow</span> and the keys have been assigned to the paths - i.e. once 'P' or 'Q' has been assigned to the green or blue job in your current dispatch.</p>
-            <p style="font-size: ${fontSize};">You will have 8 seconds to select a job once the dispatch grid has turned <span style="color: #ece75d;">yellow</span>. If you fail to make a choice within this time limit, you will pay a fine of <span style="color: #f87171;">$10</span>.</p>
+            <p style="font-size: ${fontSize};">You can select your desired job once the clock above your current dispatch turns <span style="color: #ece75d;">yellow</span>.</p>
+            <p style="font-size: ${fontSize};">You will have 10 seconds to select a job by pressing either P or Q. If you fail to make a choice within this time limit, you will pay a fine of <span style="color: #f87171;">$10</span>.</p>
+            <br>
+            <br>
+            <br>
+            <br>
             <br>
             <br>
             <br>
