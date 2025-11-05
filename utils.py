@@ -786,6 +786,7 @@ def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params,
     path_2 = save_path + '/env_objects/expt_2_env_objects_' + str(p) + '.pkl'
     with open(path_2, 'wb') as f:
         pickle.dump(env_objects, f)
+
     
     return df_expt
 
