@@ -17,7 +17,7 @@ from utils import *
 from scipy.stats import rankdata, truncnorm
 from scipy.linalg import cholesky
 from base_kernels import *
-from itertools import permutations
+from itertools import permutations, combinations
 
 
 # from PIL import image
@@ -221,7 +221,7 @@ class GridEnv(gym.Env):
                     ## AFC
                     elif self.expt=='AFC':
                         max_turns=1
-                        sampled_abstract_sequences, path_actions, path_states, starts, goals = self.sample_paths_and_SGs()
+                        sampled_abstract_sequences, path_actions, path_states, starts, goals = self.sample_paths()
                         self.starts.append(starts)
                         self.goals.append(goals)
                         self.path_states.append(path_states)
@@ -714,213 +714,9 @@ class GridEnv(gym.Env):
 
         return agent_location, goal_location
     
-    ## sample a pair of manhattan paths from the set of all possible manhattan paths
-    def sample_paths(self, start, goal, max_turns=1):
-
-        ## get info about manhattan
-        dx = goal[0] - start[0]
-        dy = goal[1] - start[1]
-        x_actions = np.repeat(0, abs(dx)) if dx > 0 else np.repeat(2, abs(dx))
-        y_actions = np.repeat(1, abs(dy)) if dy > 0 else np.repeat(3, abs(dy))
-        total_manhattan = len(x_actions) + len(y_actions)
-
-        def build_path(order):
-            path = [tuple(start)]
-            for move in order:
-                path.append(tuple(get_next_state(path[-1], self.action_to_direction[move], self.N)))
-            return path
-
-        ## if only one turn allowed, then only possible paths: all x then y, or all y then x
-        if max_turns == 1:
-            moves_1 = np.concatenate([x_actions, y_actions])
-            moves_2 = np.concatenate([y_actions, x_actions])
-        
-        ## otheriwse, allow for more turns
-        else:
-            moves = np.concatenate([x_actions, y_actions])
-
-            ## set path criteria
-            rel_cost_diff_tol = 1
-            rel_cost_diff = 1
-            n_common_within_trial = np.inf
-            if len(self.path_states)>0:
-                n_common_across_trials = np.inf
-            else:
-                n_common_across_trials = 0
-            max_common_within_trial = 1
-            max_common_across_trials = (len(moves)-1)/2
-
-            ## sanity check: remove all these constraints
-            # rel_cost_diff_tol = 1
-            # max_common_within_trial = np.inf
-            max_common_across_trials = np.inf
-
-            t=0
-            while (rel_cost_diff >= rel_cost_diff_tol) or (n_common_within_trial >= max_common_within_trial) or (n_common_across_trials >= max_common_across_trials):
-
-                ## generate random permutations of the moves
-                moves_1 = np.random.permutation(moves)
-                moves_2 = np.random.permutation(moves)
-
-                ## on first trial, paths are the mirrored simplest manhattan paths
-                if len(self.starts)==0:
-                    moves_1 = np.concatenate([x_actions, y_actions])
-                    moves_2 = np.concatenate([y_actions, x_actions])
-
-                ## sanity check 1: always define path_1 as one of the simplest manhattan paths
-                # moves_1 = np.concatenate([x_actions, y_actions])
-
-                ## sanity check 2: at least the first n moves in x_direction of both paths are the same, and then otherwise shuffled
-                # n_min_same = 2
-                # if len(self.starts)>0:
-                #     n_same = np.random.randint(n_min_same, len(x_actions)-1)
-                #     first_moves = x_actions[:n_same] ## IN THE UNKNOWN CONTEXT VERSION, WE WOULD RANDOMLY SELECT X OR Y
-                #     remaining_moves = np.concatenate([x_actions[n_same:], y_actions])
-                #     moves_1 = np.concatenate([first_moves, np.random.permutation(remaining_moves)])
-
-                #     n_same = np.random.randint(n_min_same, len(x_actions)-1)
-                #     first_moves = x_actions[:n_same]
-                #     remaining_moves = np.concatenate([x_actions[n_same:], y_actions])
-                #     moves_2 = np.concatenate([first_moves, np.random.permutation(remaining_moves)])
-                
-                    ## additional restriction: the final move cannot be the same as the initial move (i.e. preventing excessive overlap with the distal row/column path_2[0])
-                    # if (moves_1[-1] == moves_1[0]) or (moves_2[-1] == moves_2[0]):
-                    #     continue
-                
-                
-                ## or,  as above but with the last n moves in the opposite direction
-                # n_min_same = 2
-                # if len(self.starts)>0:
-                #     n_same = np.random.randint(n_min_same, len(y_actions)-1)
-                #     last_moves = y_actions[:n_same] ## IN THE UNKNOWN CONTEXT VERSION, WE WOULD RANDOMLY SELECT X OR Y
-                #     remaining_moves = np.concatenate([y_actions[n_same:], x_actions])
-                #     moves_1 = np.concatenate([np.random.permutation(remaining_moves), last_moves])
-
-                #     n_same = np.random.randint(n_min_same, len(y_actions)-1)
-                #     last_moves = y_actions[:n_same]
-                #     remaining_moves = np.concatenate([y_actions[n_same:], x_actions])
-                #     moves_2 = np.concatenate([np.random.permutation(remaining_moves), last_moves])
-
-                #     ## additional restriction: the final move cannot be the same as the initial move (i.e. preventing excessive overlap with the distal row/column path_2[0])
-                #     if (moves_1[-1] == moves_1[0]) or (moves_2[-1] == moves_2[0]):
-                #         continue
-
-
-                ## or, combination of the above two options: randomly select whether it is the first n moves in the x direction or the last n moves in the y direction
-                # n_min_same = 2
-                # if len(self.starts)>0:
-                #     movess = []
-                #     for p in range(2):
-                #         if np.random.rand() > 0.5: ## first moves overlap with x_actions of path A1
-                #             n_same = np.random.randint(n_min_same, len(x_actions)-1)
-                #             first_moves = x_actions[:n_same] 
-                #             remaining_moves = np.concatenate([x_actions[n_same:], y_actions])
-                #             movess.append(np.concatenate([first_moves, np.random.permutation(remaining_moves)]))
-                #         else: ## last moves overlap with y_actions of path A1
-                #             n_same = np.random.randint(n_min_same, len(y_actions)-1)
-                #             last_moves = y_actions[:n_same]
-                #             remaining_moves = np.concatenate([y_actions[n_same:], x_actions])
-                #             movess.append(np.concatenate([np.random.permutation(remaining_moves), last_moves]))
-                #     moves_1, moves_2 = movess
-
-                ## sanity check 3: path A is always the same simplest manhattan as path A1; path B takes a random number of steps in y direction, then all of its x steps, then the remaining y steps
-                n_min_same = 1
-                moves_1 = np.concatenate([x_actions, y_actions])
-                if len(self.starts)>0:
-                    movess = []
-                    for p in range(2):
-                        if np.random.rand() > 0.5: ## first moves overlap with x_actions of path A1
-                            n_same = np.random.randint(n_min_same, len(x_actions)-1)
-                            first_moves = x_actions[:n_same] 
-                            remaining_moves = np.concatenate([x_actions[n_same:], y_actions])
-                            movess.append(np.concatenate([first_moves, np.random.permutation(remaining_moves)]))
-                        else: ## last moves overlap with y_actions of path A1
-                            n_same = np.random.randint(n_min_same, len(y_actions)-1)
-                            last_moves = y_actions[:n_same]
-                            remaining_moves = np.concatenate([y_actions[n_same:], x_actions])
-                            movess.append(np.concatenate([np.random.permutation(remaining_moves), last_moves]))
-                    moves_1, moves_2 = movess
-
-                ## sanity check 3: both paths have a total of N=nA + nB overlap, where nA is the overlap with the initial x_actions of path A, and nB is the overlap with the final x_actions of path B
-                # max_overlap = len(x_actions)
-                # if len(self.starts)>0:
-
-                #     ## random split of max_overlap into nA and nB
-                #     nA = np.random.randint(2, max_overlap-1)
-                #     nB = max_overlap - nA
-
-                #     ## first nA moves of path 1 are in the x direction, and last nB moves of path 2 are in the x direction
-                #     first_moves = x_actions[:nA]
-                #     last_moves = x_actions[:nB]
-                #     remaining_moves = y_actions.copy()
-                #     moves_1 = np.concatenate([first_moves, remaining_moves, last_moves])
-
-                #     first_moves = x_actions[:nB]
-                #     last_moves = x_actions[:nA]
-                #     remaining_moves = y_actions.copy()
-                #     moves_2 = np.concatenate([first_moves, remaining_moves, last_moves])
-
-
-                ## sanity check 4: for path 1, the first n moves are in the x direction, whereas for path 2, both the first n and last n moves are in the x direction
-                # n_min_same = 2
-                # n_same = np.random.randint(n_min_same, len(x_actions)-1)
-                # if len(self.starts)>0:
-                #     first_moves = x_actions[:n_same]
-                #     remaining_moves = np.concatenate([x_actions[n_same:], y_actions])
-                #     moves_1 = np.concatenate([first_moves, np.random.permutation(remaining_moves)])
-
-                #     last_moves = first_moves.copy()
-                #     # remaining_moves = np.concatenate([x_actions[n_same:], y_actions])
-                #     # moves_2 = np.concatenate([np.random.permutation(remaining_moves), last_moves])
-                #     remaining_moves = np.concatenate([x_actions[n_same*2:], y_actions])
-                #     moves_2 = np.concatenate([first_moves, np.random.permutation(remaining_moves), last_moves])
-
-                #     ## additional restriction: the final move cannot be the same as the initial move (i.e. preventing excessive overlap with the distal row/column path_2[0])
-                #     # if (moves_1[-1] == moves_1[0]) or (moves_2[-1] == moves_2[0]):
-                #     #     continue
-
-                if len(moves_1) != len(moves_2):
-                    print('moves_1 and moves_2 are not the same length: %s, %s' % (len(moves_1), len(moves_2)))
-
-
-                if self.count_turns(moves_1) <= max_turns and self.count_turns(moves_2) <= max_turns:
-                    
-                    path_1 = build_path(moves_1)
-                    path_2 = build_path(moves_2)
-
-
-                    ## check against criteria
-                    path_1_cost = np.sum([self.p_costs[x, y] for x, y in path_1])
-                    path_2_cost = np.sum([self.p_costs[x, y] for x, y in path_2])
-                    rel_cost_diff = min(path_1_cost, path_2_cost) / max(path_1_cost, path_2_cost)
-                    # print('rel cost diff:', rel_cost_diff, rel_cost_diff_tol)
-
-                    ## check if too much overlap within or across trials
-                    n_common_across_trials, n_common_within_trial = self.check_overlap(path_1, path_2,2)
-                    # print('n_common_within_trial:', n_common_within_trial, max_common_within_trial)
-                    
-                            
-                t+=1
-                if t>100:
-                    raise ValueError('cant find paths')
-
-
-        ## reorder the pairs of moves and paths so that the first in the pair is always the one with the higher cost
-        # if path_1_cost < path_2_cost:
-        #     path_states = [build_path(moves_1), build_path(moves_2)]
-        #     path_actions = [moves_1, moves_2]
-        # else:
-        #     path_states = [build_path(moves_2), build_path(moves_1)]
-        #     path_actions = [moves_2, moves_1]
-        path_states = [build_path(moves_1), build_path(moves_2)]
-        path_actions = [moves_1, moves_2]
-
-
-        return path_actions, path_states
-    
 
     ## sample paths and SGs for AFC expt
-    def sample_paths_and_SGs(self):
+    def sample_paths(self):
         diff_axes = False
         while not diff_axes:
 
@@ -1016,7 +812,7 @@ class GridEnv(gym.Env):
             n_common_across_trials = np.inf
         else:
             n_common_across_trials = 0
-        max_common_within_trial = (self.path_len-1)/2
+        max_common_within_trial = 1
         max_common_across_trials = (self.path_len-1)/2
         vals_diff = False
         
@@ -1028,7 +824,7 @@ class GridEnv(gym.Env):
         ### get the concrete sequences
         max_attempts = 1000
         attempt=0
-        while (not diff_starts) or (n_common_within_trial >= max_common_within_trial) or (n_common_across_trials >= max_common_across_trials) or (not vals_diff):
+        while (not diff_starts) or (n_common_within_trial > max_common_within_trial) or (n_common_across_trials > max_common_across_trials) or (not vals_diff):
             attempt+=1
             if attempt>max_attempts:
                 raise RuntimeError(f"Exceeded maximum attempts ({max_attempts}) while generating paths and start-goal pairs for trial {len(self.starts)}. Failed using sequences {sampled_abstract_sequences}; paths {path_states};\n criteria: diff starts: {diff_starts}, n common within trial: {n_common_within_trial}, n common across trials: {n_common_across_trials}, max common within trial: {max_common_within_trial}, max common across trials: {max_common_across_trials}")
@@ -1186,9 +982,8 @@ class GridEnv(gym.Env):
 
         ## within trial
         n_common_within_trial = 0
-        for i in range(len(paths)):
-            for j in range(i+1, len(paths)):
-                n_common_within_trial += len(set(paths[i]).intersection(set(paths[j])))-minus
+        for path1, path2 in combinations(paths, 2):  # Generate all unique pairs of paths
+            n_common_within_trial += len(set(path1).intersection(set(path2))) - minus
 
         ## across trials
         if len(self.path_states)>0:
