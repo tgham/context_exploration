@@ -859,7 +859,7 @@ class Grid {
                     } else if (previewIndex === currentTrialIndex) {
                         upcomingHTML += `
                             <div class="upcoming-job">
-                                <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; color:${keyAssignment ? '' :'#ece75d'}; background-color: ${keyAssignment ? '#ece75d' : ''};">
+                                <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; background-color: #ece75d;">
                                     ${clockCharacter}
                                 </div>
                                 <div class="upcoming-grid" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
@@ -1590,7 +1590,7 @@ const pathSelectionTrial = {
     },
     // choices: ['f', 'j'], 
     choices: ['q', 'p'], 
-    trial_duration: 8000, // Automatically ends after 8 seconds
+    trial_duration: 10000, // Automatically ends after 10 seconds
     on_finish: function(data) {
         // Get the key assignment for this trial
         const keyAssignment = {
@@ -2413,15 +2413,19 @@ const instructions3_1 = {
         const n = grid.nTrials;
         const fontSize = "22px"; // Define font size as a variable
         const selectedPath = null;
-        const keyAssignment = null;
+        const keyAssignment = { blue: 'Q', green: 'P' }
+        jsPsych.data.addProperties({
+            blue_key: keyAssignment.blue,
+            green_key: keyAssignment.green
+        });
         const feedback=false;
         const firstDay=false;
         const showPink=false;
-        const showUpcoming=false;
+        const showUpcoming=true;
         return `
         <div class="cost-display-container">
             <h1>Daily Shift:</h1>
-            <p style="font-size: ${fontSize};">Each day, you will manage ${n} dispatches, meaning you have ${n} jobs to select.</p>
+            <p style="font-size: ${fontSize};">Each day, you will manage ${n} dispatches, meaning you have ${n} jobs to select. All ${n} pairs of jobs will be presented on screen at once, side-by-side.</p>
             <p style="font-size: ${fontSize};">Each dispatch takes place at a different time of the day and is marked with one of the following clock icons, displayed above the dispatch:</p>
             <p style="font-family: golemClocks; text-align: center; font-size: ${fontSize};">&#x00E6; &#x00DD; &#x0026; &#x263A;</p>
             <p style="font-size: ${fontSize};">You will move through these dispatches from the left- to the right-hand side of the screen. The clock above your current dispatch is highlighted in <span style="color: #ece75d;">yellow</span>.</p>
@@ -2484,7 +2488,11 @@ const instructions3_3 = {
         const n = grid.nTrials;
         const fontSize = "22px"; // Define font size as a variable
         const selectedPath = null;
-        const keyAssignment = null;
+        const keyAssignment = { blue: 'Q', green: 'P' }
+        jsPsych.data.addProperties({
+            blue_key: keyAssignment.blue,
+            green_key: keyAssignment.green
+        });
         const feedback=false;
         const firstDay=false;
         const showPink=true;
@@ -2520,9 +2528,7 @@ const instructions3_4 = {
         const n = grid.nTrials;
         const fontSize = "22px"; // Define font size as a variable
         const selectedPath = null;
-        const keyAssignment = Math.random() < 0.5 ? 
-            { blue: 'Q', green: 'P' } : 
-            { blue: 'P', green: 'Q' };
+        const keyAssignment = { blue: 'Q', green: 'P' }
         jsPsych.data.addProperties({
             blue_key: keyAssignment.blue,
             green_key: keyAssignment.green
@@ -2794,7 +2800,7 @@ const instructions3_7 = {
 const instructions3_node = {
   timeline: [
     instructions3_1,
-    instructions3_2,
+    // instructions3_2,
     instructions3_3,
     instructions3_4,
     instructions3_5,
@@ -2884,7 +2890,7 @@ const practice3SelectionTrial = {
     },
     // choices: ['f', 'j'], 
     choices: ['q', 'p'], 
-    trial_duration: 8000, // Automatically ends after 8 seconds
+    trial_duration: 10000, // Automatically ends after 10 seconds
     on_finish: function(data) {
         // Get the key assignment for this trial
         const keyAssignment = {
@@ -3612,7 +3618,7 @@ function createInstructionsTimeline() {
 
     // Practice selection
     timeline.push(instructions2);
-    // timeline.push(instructions2_5);
+    timeline.push(instructions2_5);
     // timeline.push(practice1SelectionTrial);
     // timeline.push(practice1AnimationTrial);
     // timeline.push(practice1SelectionTrial);
@@ -3631,7 +3637,7 @@ function createInstructionsTimeline() {
     timeline.push(instructions3_node);
     timeline.push(practiceFirstDayTrial);
     for (let i = 0; i < grid.nTrials; i++) {
-        timeline.push(practice3PreSelectionTrial);
+        // timeline.push(practice3PreSelectionTrial);
         timeline.push(practice3SelectionTrial);
         timeline.push(practice3AnimationTrial);
     }
@@ -3641,7 +3647,7 @@ function createInstructionsTimeline() {
     timeline.push(instructions4);
     timeline.push(practiceFirstDayTrial);
     for (let i = 0; i < grid.nTrials; i++) {
-        timeline.push(practice3PreSelectionTrial);
+        // timeline.push(practice3PreSelectionTrial);
         timeline.push(practice3SelectionTrial);
         timeline.push(practice3AnimationTrial);
     }
@@ -3701,7 +3707,7 @@ function createMainTimeline() {
             }
             timeline.push(firstDayTrial)
         }
-        timeline.push(pathPreSelectionTrial);
+        // timeline.push(pathPreSelectionTrial);
         timeline.push(pathSelectionTrial);
         timeline.push(pathAnimationTrial);
     }
