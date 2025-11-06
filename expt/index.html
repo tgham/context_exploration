@@ -22,6 +22,25 @@
             /* Prevent scrolling */
         }
 
+        :root {
+            --c-blue: rgb(47, 164, 253);
+            --c-green:rgb(0, 199, 73);
+            --c-magenta:rgb(240, 110, 254);
+            --c-cost:rgb(203, 43, 43);
+            --c-cost-past:  rgba(210, 54, 54, 0.8);
+            --c-no-cost: #b8b8d9;
+            --c-no-cost-past: rgba(184, 184, 217, 0.8);
+
+
+            /* Optional: reusable half-and-half gradients */
+            --g-blue-green: linear-gradient(to bottom right, var(--c-blue) 50%, var(--c-green) 50%);
+            --g-green-blue: linear-gradient(to bottom right, var(--c-green) 50%, var(--c-blue) 50%);
+            --g-blue-magenta: linear-gradient(to bottom right, var(--c-blue) 50%, var(--c-magenta) 50%);
+            --g-magenta-blue: linear-gradient(to bottom right, var(--c-magenta) 50%, var(--c-blue) 50%);
+            --g-green-magenta: linear-gradient(to bottom right, var(--c-green) 50%, var(--c-magenta) 50%);
+            --g-magenta-green: linear-gradient(to bottom right, var(--c-magenta) 50%, var(--c-green) 50%);
+        }
+
         body {
             font-family: Arial, sans-serif;
             background-color: #0c0c1d;
@@ -48,14 +67,15 @@
 
         .grid-container {
             display: grid;
-            grid-template-columns: repeat(11, 40px);
-            grid-gap: 15px;
-            margin: 20px auto;
-            transition: opacity 0.2s ease-in-out;
-            background-color: rgb(208, 208, 210); /* Semi-transparent background */
-            padding: 32px; /* Increased from 15px */
-            border-radius: 10px;
-            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+            grid-gap: 13px; /* Increased from 11px */
+            margin: 0 auto;
+            background-color: rgb(208, 208, 210);
+            padding: 36px; /* Increased from 17px */
+            border-radius: 10px; /* Increased from 8px */
+            grid-template-columns: repeat(auto-fit, 43px); /* Increased from 36px */
+            grid-auto-rows: 43px; /* Increased from 36px */
+            justify-content: center;
+            align-content: center;
             position: relative; /* enable absolute labels */
             contain: layout paint;
         }
@@ -69,7 +89,7 @@
             width: 34px;
             height: 34px;
             background-color: rgba(51, 51, 77, 0.8); /* Semi-transparent background for better visibility */
-            border: 5px solid rgba(51, 51, 77, 0);
+            border: 7px solid rgba(51, 51, 77, 0);
             display: flex;
             justify-content: center;
             align-items: center;
@@ -84,11 +104,11 @@
         }
 
         .grid-cell.start.observed-cost {
-            background-color: #f87171; /* Red background for observed cost */
+            background-color: var(--c-cost); /* Red background for observed cost */
         }
 
         .grid-cell.start.observed-no-cost {
-            background-color: #b8b8d9; /* Grey background for observed no cost */
+            background-color: var(--c-no-cost); /* Grey background for observed no cost */
         }
 
         .grid-cell.goal {
@@ -97,11 +117,11 @@
         }
 
         .grid-cell.goal.observed-cost {
-            background-color: #f87171; /* Red background for observed cost */
+            background-color: var(--c-cost); /* Red background for observed cost */
         }
 
         .grid-cell.goal.observed-no-cost {
-            background-color: #b8b8d9; /* Grey background for observed no cost */
+            background-color: var(--c-no-cost); /* Grey background for observed no cost */
         }
 
         .grid-cell.avatar {
@@ -114,22 +134,47 @@
         }
 
         .blue-path {
-            color: #5dadec;
-            border-color: #5dadec;
+            /* color: var(--c-blue);
+            border-color: var(--c-blue); */
+            color: var(--c-blue);
+            border-color: var(--c-blue);
         }
 
         .green-path {
-            color: #4ade80;
-            border-color: #4ade80;
+            color: var(--c-green);
+            border-color: var(--c-green);
         }
 
+        .half-half-blue-green {
+            border-image: linear-gradient(to bottom right, var(--c-blue) 50%, var(--c-green) 50%);
+            border-image-slice: 1;
+            border-image-width: 1;
+            border-image-repeat: stretch;
+            border-color: transparent;
+        }
+
+        .half-half-green-blue {
+            border-image: linear-gradient(to bottom right, var(--c-green) 50%, var(--c-blue) 50%);
+            border-image-slice: 1;
+            border-image-width: 1;
+            border-image-repeat: stretch;
+            border-color: transparent;
+        }
+
+        /* .half-half-path {
+            border-width: 2px;
+            border-style: solid;
+            border-image: linear-gradient(to right, var(--c-green) 50%, var(--c-blue) 50%);
+            border-image-slice: 1;
+        } */
+
         .observed-cost {
-            background-color: #f87171;
+            background-color: var(--c-cost);
             transition: background-color 0.5s;
         }
 
         .observed-no-cost {
-            background-color: #b8b8d9; /* Much lighter grey for better visibility */
+            background-color: var(--c-no-cost); /* Much lighter grey for better visibility */
             transition: background-color 0.5s;
         }
 
@@ -152,7 +197,7 @@
         }
 
         .cost-trial {
-            color: #f87171;
+            color: var(--c-cost);
             font-size: 20px;
             margin: 5px 0;
             font-weight: bold;
@@ -189,7 +234,7 @@
         }
 
         .jobs-header {
-            color: #5dadec;
+            color: var(--c-blue);
             text-align: center;
             margin-top: 10px;
             margin-bottom: 15px;
@@ -257,13 +302,13 @@
             padding: 7px; /* Increased from 6px */
         }
 
-        /* Grid styling for upcoming jobs - increase size by ~20% */
+        /* Grid styling for upcoming jobs - make sure any changes to size etc. match upcoming-grid-done!!!*/
         .upcoming-grid {
             display: grid;
             grid-gap: 13px; /* Increased from 11px */
             margin: 0 auto;
             background-color: rgb(208, 208, 210);
-            padding: 32px; /* Increased from 17px */
+            padding: 36px; /* Increased from 17px */
             border-radius: 10px; /* Increased from 8px */
             grid-template-columns: repeat(auto-fit, 43px); /* Increased from 36px */
             grid-auto-rows: 43px; /* Increased from 36px */
@@ -272,40 +317,126 @@
             position: relative; /* enable absolute labels */
             contain: layout paint;
         }
-
+        
+        /* as above - make sure changes match, but also .grid-cell (used in practice) */
         .upcoming-cell {
-            width: 34px; /* Increased from 32px */
-            height: 34px; /* Increased from 32px */
+            width: 40px; /* Increased from 32px */
+            height: 40px; /* Increased from 32px */
             background-color: rgba(51, 51, 77, 0.8);
-            border: 4px solid transparent; /* Increased from 4px */
+            border: 7px solid transparent; /* Increased from 4px */
             display: flex;
             justify-content: center;
             align-items: center;
-            font-size: 1.8rem; /* Increased from 1.5rem */
+            font-size: 1.5rem; /* Increased from 1.5rem */
             font-weight: bold;
             position: relative;
             box-sizing: border-box;
         }
 
         .upcoming-cell.start, .upcoming-cell.goal {
-            font-size: 1.44rem; /* Increased from 1.2rem */
+            font-size: 1.2rem;
         }
 
         .upcoming-cell.blue-path {
-            border-color: #5dadec; /* Blue border for blue path */
+            border-color: var(--c-blue); /* Blue border for blue path */
+        }
+        
+        .upcoming-cell.magenta-path {
+            border-color: var(--c-magenta);
         }
 
         .upcoming-cell.green-path {
-            border-color: #4ade80; /* Green border for green path */
+            border-color: var(--c-green); /* Green border for green path */
+        }
+
+        .upcoming-cell.half-half-blue-green {
+            border-image: linear-gradient(to bottom right, var(--c-blue) 50%, var(--c-green) 50%);
+            border-image-slice: 1;
+            border-image-width: 1;
+            border-image-repeat: stretch;
+            border-color: transparent;
+        }
+
+        .upcoming-cell.half-half-green-blue {
+            border-image: linear-gradient(to bottom right, var(--c-green) 50%, var(--c-blue) 50%);
+            border-image-slice: 1;
+            border-image-width: 1;
+            border-image-repeat: stretch;
+            border-color: transparent;
+        }
+
+        .upcoming-cell.half-half-blue-magenta {
+            border-image: linear-gradient(to bottom right, var(--c-blue) 50%, var(--c-magenta) 50%);
+            border-image-slice: 1;
+            border-image-width: 1;
+            border-image-repeat: stretch;
+            border-color: transparent;
+        }
+
+        .upcoming-cell.half-half-magenta-blue {
+            border-image: linear-gradient(to bottom right, var(--c-magenta) 50%, var(--c-blue) 50%);
+            border-image-slice: 1;
+            border-image-width: 1;
+            border-image-repeat: stretch;
+            border-color: transparent;
+        }
+
+        .upcoming-cell.half-half-green-magenta {
+            border-image: linear-gradient(to bottom right, var(--c-green) 50%, var(--c-magenta) 50%);
+            border-image-slice: 1;
+            border-image-width: 1;
+            border-image-repeat: stretch;
+            border-color: transparent;
+        }
+
+        .upcoming-cell.half-half-magenta-green {
+            border-image: linear-gradient(to bottom right, var(--c-magenta) 50%, var(--c-green) 50%);
+            border-image-slice: 1;
+            border-image-width: 1;
+            border-image-repeat: stretch;
+            border-color: transparent;
+        }
+
+        /* Three-way combinations */
+        .upcoming-cell.magenta-blue-green {
+            border-image: conic-gradient(
+                from 120deg,
+                var(--c-magenta) 0% 33.333%,   /* bottom edge */
+                var(--c-blue) 33.333% 66.666%, /* bottom-left -> top-center */
+                var(--c-green) 66.666% 100%  /* top-center -> bottom-right */
+            ) 1;
+            border-image-slice: 1;
+            border-image-width: 1;
+            border-image-repeat: stretch;
+            border-color: transparent;
+            }
+
+            /* magenta on bottom edge, Green from bottom-left -> top-center, Blue from top-center -> bottom-right */
+            .upcoming-cell.magenta-green-blue {
+            border-image: conic-gradient(
+                from 120deg,
+                var(--c-magenta) 0% 33.333%,   /* bottom edge */
+                var(--c-green) 33.333% 66.666%, /* bottom-left -> top-center */
+                var(--c-blue) 66.666% 100%  /* top-center -> bottom-right */
+            ) 1;
+            border-image-slice: 1;
+            border-image-width: 1;
+            border-image-repeat: stretch;
+            border-color: transparent;
+            }
+
+        /* Disable old overlay for upcoming cells */
+        .upcoming-cell.half-half-path::after {
+            content: none;
         }
 
         /* Shared styles for observed costs */
         .upcoming-cell.observed-cost {
-            background-color: #f87171;
+            background-color: var(--c-cost);
         }
 
         .upcoming-cell.observed-no-cost {
-            background-color: #b8b8d9;
+            background-color: var(--c-no-cost);
         }
 
         /* Grid styling for completed upcoming jobs - slightly more transparent */
@@ -314,7 +445,7 @@
             grid-gap: 13px; /* Increased from 11px */
             margin: 0 auto;
             background-color: rgba(208, 208, 210, 0.6); /* Slightly more transparent */
-            padding: 32px; /* Increased from 17px */
+            padding: 36px; /* Increased from 17px */
             border-radius: 10px; /* Increased from 8px */
             grid-template-columns: repeat(auto-fit, 43px); /* Increased from 36px */
             grid-auto-rows: 43px; /* Increased from 36px */
@@ -325,14 +456,14 @@
         }
 
         .upcoming-cell-done {
-            width: 34px; /* Increased from 32px */
-            height: 34px; /* Increased from 32px */
+            width: 40px; /* Increased from 32px */
+            height: 40px; /* Increased from 32px */
             background-color: rgba(51, 51, 77, 0.4); /* Slightly more transparent */
-            border: 4px solid transparent; /* Increased from 4px */
+            border: 7px solid transparent; /* Increased from 4px */
             display: flex;
             justify-content: center;
             align-items: center;
-            font-size: 1.8rem; /* Increased from 1.5rem */
+            font-size: 1.5rem; /* Increased from 1.5rem */
             font-weight: bold;
             position: relative;
             box-sizing: border-box;
@@ -352,11 +483,11 @@
 
         /* Shared styles for observed costs */
         .upcoming-cell-done.observed-cost {
-            background-color: rgba(248, 113, 113, 0.8); /* Slightly more transparent red */
+            background-color: var(--c-cost-past); /* Slightly more transparent red */
         }
 
         .upcoming-cell-done.observed-no-cost {
-            background-color: rgba(184, 184, 217, 0.8); /* Slightly more transparent grey */
+            background-color: var(--c-no-cost-past); /* Slightly more transparent grey */
         }
 
         @keyframes pulse {
@@ -370,7 +501,7 @@
 
         .cost-burst {
             position: absolute;
-            color: #f87171;
+            color: var(--c-cost);
             font-weight: bold;
             animation: burst 0.6s ease-out forwards;
             z-index: 20;
@@ -378,7 +509,7 @@
 
         .free-burst {
             position: absolute;
-            color: #4ade80;
+            color: var(--c-green);
             font-weight: bold;
             animation: burst 0.6s ease-out forwards;
             z-index: 20;
@@ -467,21 +598,54 @@
             font-size: 22px;
             text-align: center;
             margin: 10px 0;
-            color: #4ade80;
+            color: var(--c-green);
         }
 
         .blue-text {
-            color: #5dadec;
+            color: var(--c-blue);
             font-weight: bold;
         }
 
         .green-text {
-            color: #4ade80;
+            color: var(--c-green);
+            font-weight: bold;
+        }
+
+        .glyph-outline {
+        -webkit-text-stroke: 0.5px black;
+        text-shadow: 1px 1px 1px black;
+        }
+
+        /* Gradient + uses background-clip and must NOT have outline/shadow */
+        .plus-split {
+        color: transparent;
+        background-clip: text;
+        -webkit-background-clip: text;
+        -webkit-text-stroke: 0; /* prevent double stroke */
+        text-shadow: none;      /* prevent double shadow */
+        }
+
+        /* Keep your directional gradients */
+        .plus-split.blue-green {
+        background-image: linear-gradient(to bottom right, var(--c-blue) 50%, var(--c-green) 50%);
+        }
+        .plus-split.green-blue {
+            background-image: linear-gradient(to bottom right, var(--c-green) 50%, var(--c-blue) 50%);
+        }
+        /* Optional magenta combos if needed later:
+        .plus-split.blue-magenta { background-image: linear-gradient(to bottom right, var(--c-blue) 50%, var(--c-magenta) 50%); }
+        .plus-split.magenta-blue { background-image: linear-gradient(to bottom right, var(--c-magenta) 50%, var(--c-blue) 50%); }
+        .plus-split.green-magenta { background-image: linear-gradient(to bottom right, var(--c-green) 50%, var(--c-magenta) 50%); }
+        .plus-split.magenta-green { background-image: linear-gradient(to bottom right, var(--c-magenta) 50%, var(--c-green) 50%); }
+        */
+
+        .white-text {
+            color: #ffffff;
             font-weight: bold;
         }
 
         .red-text {
-            color: #f87171;
+            color: var(--c-cost);
             font-weight: bold;
         }
 
@@ -494,7 +658,7 @@
             font-size: 18px;
             margin-top: 30px;
             text-align: center;
-            color: #4ade80;
+            color: var(--c-green);
         }
 
         .fade-transition {
@@ -639,12 +803,12 @@
         }
 
         .quiz-answer.correct {
-            background-color: #4ade80; /* Green for correct answers */
+            background-color: var(--c-green); /* Green for correct answers */
             color: #ffffff;
         }
 
         .quiz-answer.incorrect {
-            background-color: #f87171; /* Red for incorrect answers */
+            background-color: var(--c-cost); /* Red for incorrect answers */
             color: #ffffff;
         }
 
@@ -664,6 +828,7 @@
             width: 100%;
             padding: 10px 0;
             color: #ffffff;
+            border-radius: 15px;
         }
 
         /* Wrapper around each question */
