@@ -280,14 +280,8 @@
                     6
                 ]
             ],
-            "abstract_sequence_B": [
-                [
-                    5,
-                    3
-                ]
-            ],
-            "dominant_axis_A": "horizontal",
-            "dominant_axis_B": "vertical",
+            "dominant_axis_A": "vertical",
+            "dominant_axis_B": "horizontal",
             "path_A_future_row_overlap": 0.0,
             "path_B_future_row_overlap": 0.0,
             "path_A_future_col_overlap": 0.0,
@@ -323,9 +317,6 @@
                 -1,
                 -1,
                 -1,
-                -1
-            ],
-            [
                 0,
                 0,
                 0,
@@ -348,6 +339,10 @@
                 -1
             ],
             [
+                -1,
+                -1,
+                -1,
+                -1,
                 0,
                 0,
                 0,
@@ -362,6 +357,14 @@
                 0,
                 0,
                 0,
+                -1,
+                -1,
+                0,
+                0
+            ],
+            [
+                -1,
+                -1,
                 0,
                 -1,
                 -1,

@@ -19,16 +19,37 @@ export const quizQuestions = [
     correct: 0
   },
   {
-    question: "How can previous tolls help you make smarter decisions later in the day?",
+    question: "How do you know which intersections might be visited later in the day?", // What does it mean if an intersection is highlighted in pink?",
     options: [
-      "If visit an intersection again, you will not pay a toll there.",
-      "The toll cost decreases if you use the same route multiple times.",
-      "You can avoid jobs that pass through expensive intersections.",
+      // "You will pay a toll if you visit this intersection.",
+      // "You have already visited this intersection.",
+      // "This intersection appears on one of the jobs you might choose in an upcoming dispatch.",
+      "You can't know which intersections might be visited later in the day.",
+      "They are shown in your upcoming dispatches.",
+      "They are shown in your upcoming dispatches, and also highlighted in your current dispatch in pink.",
     ],
     correct: 2
   },
   {
-    question: "What happens to tolls at the end of the day?",
+    question: "How can previous tolls help you make smarter decisions later in the day?",
+    options: [
+      "If you visit an intersection again, you will not have to pay a toll there.",
+      "The toll cost decreases if you use the same route multiple times.",
+      "You can avoid jobs that pass through intersections that contain tolls.",
+    ],
+    correct: 2
+  },
+  {
+    question: "Why might it be useful to know about your upcoming dispatches?", // What does it mean if an intersection is highlighted in pink?",
+    options: [
+      "Because they tell you which intersections might be visited later on in the day.",
+      "Because they tell you which intersections are costly.",
+      "Because they tell you whether you are in a row city or a column city.",
+    ],
+    correct: 0
+  },
+  {
+    question: "What happens to tolls at the start of a new day?",
     options: [
       "They remain in the same locations.",
       "They reset to new locations.",
@@ -58,15 +79,15 @@ export const quizQuestions = [
     question: "How can you figure out what type of city you are in (i.e. a column city or a row city)?",
     options: [
       "By checking the city background color.",
-      "By noticing whether tolls tend to appear in columns or rows.",
+      "By noticing whether tolls tend to be clustered in columns or rows.",
       "By counting how many jobs you complete each day.",
     ],
     correct: 1
   },
   {
-    question: "Suppose you observe a toll at an intersection. How can this information help you predict other toll locations?",
+    question: "Suppose you observe a toll at an intersection. How can this information help you predict other toll locations on that day?",
     options: [
-      "Nothing—tolls are randomly placed each day.",
+      "Nothing—intersections are not related to one another.",
       "Other tolls are likely to be in the same row or column, depending on the city pattern.",
       "This intersection will have a toll for the rest of the experiment."
     ],
@@ -75,18 +96,18 @@ export const quizQuestions = [
   {
     question: "At the start of a new day within the same city, what pattern will the new set of tolls have?",
     options: [
-      "The same pattern as previous days in that city (clustered in columns or rows).",
+      "The same pattern as previous days in that city (i.e. clustered in columns or rows).",
       "A completely random pattern with no relation to previous days.",
       "A pattern that depends on the jobs you selected.",
     ],
     correct: 0
   }
-];
-
-// Function to create quiz trials
-export function createQuizTrials(jsPsych) {
+ ];
+ 
+ // Function to create quiz trials
+ export function createQuizTrials(jsPsych) {
   const quizTrials = [];
-    
+   
   // Add CSS styles for vertical stacking with fixed width buttons
   const styleElement = document.createElement('style');
   styleElement.textContent = `
@@ -99,26 +120,26 @@ export function createQuizTrials(jsPsych) {
       align-items: center;
       padding: 20px;
     }
-    
+   
     .quiz-question {
       font-size: 28px;
       margin-bottom: 40px;
       text-align: center;
       width: 90%;
     }
-    
+   
     .quiz-options-container {
       width: 700px;
       display: flex;
       flex-direction: column;
       align-items: center;
     }
-    
+   
     .jspsych-html-button-response-button {
       margin: 8px 0;
       width: 100%;
     }
-    
+   
     .quiz-answer {
       width: 100%;
       min-height: 70px;
@@ -134,46 +155,46 @@ export function createQuizTrials(jsPsych) {
       display: flex;
       align-items: center;
     }
-    
+   
     .quiz-answer:hover {
       background-color: #e9e9e9;
     }
-    
+   
     .correct {
       background-color: #dff0d8 !important;
       border-color: #d6e9c6 !important;
       color: #3c763d !important;
     }
-    
+   
     .incorrect {
       background-color: #f2dede !important;
       border-color: #ebccd1 !important;
       color: #a94442 !important;
     }
-    
+   
     .spacebar-container {
       margin-top: 40px;
       text-align: center;
       font-size: 22px;
     }
-    
+   
     .quiz-section {
       width: 90%;
       max-width: 800px;
       margin: 0 auto;
       text-align: center;
     }
-    
+   
     .quiz-section h2 {
       font-size: 32px;
       margin-bottom: 20px;
     }
-    
+   
     .quiz-section p, .quiz-section li {
       font-size: 22px;
       line-height: 1.5;
     }
-    
+   
     .quiz-section ul {
       text-align: left;
       margin: 20px auto;
@@ -181,14 +202,13 @@ export function createQuizTrials(jsPsych) {
     }
   `;
   document.head.appendChild(styleElement);
-  
-  // Welcome screen
+   // Welcome screen
   const welcomeTrial = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: `
       <div class="instruction-section">
         <h2>Knowledge Check Quiz</h2>
-        <p>You will be presented with 9 questions about the taxi coordination task.</p>
+        <p>You will be presented with 11 questions about the Taxi Coordination task.</p>
         <p>For each question:</p>
         <p>
           <p>- Click on the answer you believe is correct.</p>
@@ -202,10 +222,8 @@ export function createQuizTrials(jsPsych) {
     `,
     choices: [' ']
   };
-  
-  quizTrials.push(welcomeTrial);
-  
-  // Create a trial for each question
+   quizTrials.push(welcomeTrial);
+   // Create a trial for each question
   quizQuestions.forEach((questionData, questionIndex) => {
     quizTrials.push({
       type: jsPsychHtmlButtonResponse,
@@ -226,11 +244,11 @@ export function createQuizTrials(jsPsych) {
         // Move buttons into options container for better positioning
         const optionsContainer = document.getElementById(`options-container-${questionIndex}`);
         const buttons = document.querySelectorAll('.jspsych-html-button-response-button');
-        
+       
         buttons.forEach((button) => {
           optionsContainer.appendChild(button);
         });
-        
+       
         // Add event listeners to answer buttons
         document.querySelectorAll('.quiz-answer').forEach((button, index) => {
           button.addEventListener('click', function() {
@@ -245,7 +263,7 @@ export function createQuizTrials(jsPsych) {
               // Highlight the correct answer
               document.querySelectorAll('.quiz-answer')[questionData.correct].classList.add('correct');
             }
-            
+           
             // Add instruction to press spacebar
             const quizContainer = document.querySelector('.quiz-container');
             const nextInstructions = document.createElement('div');
@@ -254,7 +272,7 @@ export function createQuizTrials(jsPsych) {
               <div>Press spacebar to continue to the next question.</div>
             `;
             quizContainer.appendChild(nextInstructions);
-            
+           
             // Set up spacebar listener to progress
             const proceedListener = function(e) {
               if (e.code === 'Space') {
@@ -263,7 +281,7 @@ export function createQuizTrials(jsPsych) {
               }
             };
             document.addEventListener('keydown', proceedListener);
-            
+           
             // Disable all buttons after selection
             document.querySelectorAll('.quiz-answer').forEach(btn => {
               btn.style.pointerEvents = 'none';
@@ -275,8 +293,7 @@ export function createQuizTrials(jsPsych) {
       response_ends_trial: false
     });
   });
-  
-  // Final feedback screen
+   // Final feedback screen
   const finalTrial = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
@@ -284,13 +301,13 @@ export function createQuizTrials(jsPsych) {
       const correctCount = jsPsych.data.get().last(1).values()[0]?.correctCount || 0;
       const percentage = Math.round((correctCount / quizQuestions.length) * 100);
       const passed = percentage >= 70;
-      
+     
       return `
         <div class="instruction-section">
           <h2>Quiz Complete!</h2>
           <p>You answered ${correctCount} out of ${quizQuestions.length} questions correctly (${percentage}%).</p>
-          ${passed 
-            ? '<p>Congratulations! You passed the quiz. Press the spacebar to continue with the experiment.</p>' 
+          ${passed
+            ? '<p>Congratulations! You passed the quiz. Press the spacebar to continue with the experiment.</p>'
             : '<p>Unfortunately, you did not pass the quiz. Please return to Prolific.</p>'}
         </div>
       `;
@@ -300,13 +317,13 @@ export function createQuizTrials(jsPsych) {
       const correctCount = jsPsych.data.get().last(1).values()[0]?.correctCount || 0;
       const percentage = Math.round((correctCount / quizQuestions.length) * 100);
       return percentage >= 70 ? [' '] : [];
-    
+   
     },
     on_finish: function() {
       const correctCount = jsPsych.data.get().last(1).values()[0]?.correctCount || 0;
       const percentage = Math.round((correctCount / quizQuestions.length) * 100);
       const passed = percentage >= 70;
-    
+   
       if (!passed) {
         const ppt_data = jsPsych.data.get().json();
         send_complete(id, ppt_data)
@@ -329,8 +346,9 @@ export function createQuizTrials(jsPsych) {
       }
     }
   };
-
+ 
+ 
   quizTrials.push(finalTrial);
-  
-  return quizTrials;
-}
+   return quizTrials;
+ }
+ 
