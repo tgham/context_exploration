@@ -33,9 +33,9 @@ export const quizQuestions = [
   {
     question: "How can previous tolls help you make smarter decisions later in the day?",
     options: [
-      "If you visit an intersection again, you will not pay a toll there.",
+      "If you visit an intersection again, you will not have to pay a toll there.",
       "The toll cost decreases if you use the same route multiple times.",
-      "You can avoid jobs that pass through expensive intersections.",
+      "You can avoid jobs that pass through intersections that contain tolls.",
     ],
     correct: 2
   },
@@ -49,7 +49,7 @@ export const quizQuestions = [
     correct: 0
   },
   {
-    question: "What happens to tolls at the end of the day?",
+    question: "What happens to tolls at the start of a new day?",
     options: [
       "They remain in the same locations.",
       "They reset to new locations.",
@@ -79,7 +79,7 @@ export const quizQuestions = [
     question: "How can you figure out what type of city you are in (i.e. a column city or a row city)?",
     options: [
       "By checking the city background color.",
-      "By noticing whether tolls tend to appear in columns or rows.",
+      "By noticing whether tolls tend to be clustered in columns or rows.",
       "By counting how many jobs you complete each day.",
     ],
     correct: 1
@@ -96,7 +96,7 @@ export const quizQuestions = [
   {
     question: "At the start of a new day within the same city, what pattern will the new set of tolls have?",
     options: [
-      "The same pattern as previous days in that city (clustered in columns or rows).",
+      "The same pattern as previous days in that city (i.e. clustered in columns or rows).",
       "A completely random pattern with no relation to previous days.",
       "A pattern that depends on the jobs you selected.",
     ],

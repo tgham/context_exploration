@@ -795,22 +795,26 @@ class Grid {
                 </div>
                 `;
             } else {
+                // const contextMessage = trial.grid === 1 
+                //     ? 'Which kind of city do you think you have been in today?' 
+                //     : `Which kind of city do you think you have been in the last ${trial.grid} days?`;
+                const contextMessage = "Which kind of city do you think you are working in? Press 'R' for a row city, or 'C' for a column city.";
                 if (trial.grid === this.nGrids) {
                     upcomingHTML += `
                     <div id="cost-message" class="cost-display-container">
                     <h2 class="day-display">Day ${trial.grid}/${this.nGrids} Complete</h2>
-                    <h2 class="cost-total">You paid a total of <strong style="color:  #f87171;">$${totalCost}</strong> today.</h2>
-                    <p id="total-cost" class="cost-total">Press spacebar to continue.</p>
-                    <p id="trial-cost" class="cost-trial hidden">-$0</p> 
+                    <h2 class="cost-total">You paid a total of <strong style="color:  rgb(203, 43, 43);">$${totalCost}</strong> today.</h2>
+                    <h2 class="cost-total">${contextMessage}</h2>
+                    <h2 class="cost-total">Once you have made your choice, you will continue to the next city.</h2>
                     </div>
                     `;
                 } else {
                     upcomingHTML += `
                     <div id="cost-message" class="cost-display-container">
                     <h2 class="day-display">Day ${trial.grid}/${this.nGrids} Complete</h2>
-                    <h2 class="cost-total">You paid a total of <strong style="color:  #f87171;">$${totalCost}</strong> today.</h2>
-                    <p id="total-cost" class="cost-total">Tolls will now reset for the next day in this city. Press spacebar to continue.</p>
-                    <p id="trial-cost" class="cost-trial hidden">-$0</p> 
+                    <h2 class="cost-total">You paid a total of <strong style="color:  rgb(203, 43, 43);">$${totalCost}</strong> today. Tolls will now reset for the next day in this city.</h2>
+                    <h2 class="cost-total">${contextMessage}</h2>
+                    <h2 class="cost-total">Once you have made your choice, you will continue to the next day in this city.</h2>
                     </div>
                     `;
                 }
@@ -820,8 +824,8 @@ class Grid {
             <div id="cost-message" class="cost-display-container">
             <h2 class="day-display">Day ${trial.grid}/${this.nGrids}</h2>
             <h2 class="cost-total">Here are your dispatches for the day.</h2>
-            <p id="total-cost" class="cost-total">Get ready to select your jobs!</p>
-            <p id="trial-cost" class="cost-trial hidden">-$0</p> 
+            <h2 id="total-cost" class="cost-total">Get ready to select your jobs!</h2>
+            <h2 id="trial-cost" class="cost-trial hidden">-$0</h2> 
             </div>
             `;
         }
@@ -2021,10 +2025,11 @@ const newCityMessage = {
     }
 };
 
-const newDayMessage = {
+const newDayMessage = { 
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         const feedback = true;
+        console.log('new day message...')
         return `
             <div class="jobs-layout">
                 <div class="upcoming-jobs-container grid">
@@ -2033,8 +2038,9 @@ const newDayMessage = {
             </div>
         `;
     },
-    choices: [' '], // Spacebar to continue
-    on_finish: function() {
+    choices: ['r', 'c'], 
+    on_finish: function(data) {
+        data.city_guess = data.response; // 'r' for row city, 'c' for column city
         grid.resetGrid(); // Reset the grid for the new set of trials
         var ppt_data = jsPsych.data.get().json();
         send_incomplete(subject_id, ppt_data);
@@ -2525,7 +2531,6 @@ const instructions3_3_1 = {
             <br>
             <br>
             <br>
-            <br>
             <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
         </div>
         <div class="jobs-layout">
@@ -2561,7 +2566,6 @@ const instructions3_3_2 = {
             <p style="font-size: ${fontSize};">As well as being shown individually, information about your upcoming dispatches will also be highlighted in your <span style="color: #ece75d;">current dispatch</span>.</p>
             <p style="font-size: ${fontSize};">Specifically, the intersections that you may possibly visit later in the day are highlighted in <span style="color: rgb(240, 110, 254);">pink</span>.</p>
             <p style="font-size: ${fontSize};">See below how the intersections that may be visited in your <strong>second or third</strong> dispatch are also displayed in your <span style="color: #ece75d;">current dispatch</span>.</p>
-            <br>
             <br>
             <br>
             <br>
@@ -2602,7 +2606,6 @@ const instructions3_3_3 = {
             <br>
             <br>
             <br>
-            <br>
             <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
         </div>
         <div class="jobs-layout">
@@ -2637,6 +2640,7 @@ const instructions3_4 = {
             <h1>Daily Shift:</h1>
             <p style="font-size: ${fontSize};">You can select your desired job once the clock above your current dispatch turns <span style="color: #ece75d;">yellow</span>.</p>
             <p style="font-size: ${fontSize};">You will have 10 seconds to select a job by pressing either P or Q. If you fail to make a choice within this time limit, you will pay a fine of <span style="color: #f87171;">$10</span>.</p>
+            <br>
             <br>
             <br>
             <br>
@@ -2747,6 +2751,7 @@ const instructions3_5 = {
             <h1>Daily Shift:</h1>
             <p style="font-size: ${fontSize};">You can select your desired job once the clock above your current dispatch turns <span style="color: #ece75d;">yellow</span>.</p>
             <p style="font-size: ${fontSize};">You will have 10 seconds to select a job by pressing either P or Q. If you fail to make a choice within this time limit, you will pay a fine of <span style="color: #f87171;">$10</span>.</p>
+            <br>
             <br>
             <br>
             <br>
@@ -3410,21 +3415,76 @@ const instructions8 = {
     }
 };
 
-
-const fullscreenTrial = { 
+const instructions9 = { 
     type: jsPsychHtmlKeyboardResponse,
-    stimulus: `
-        <div class="instruction-section">
-            <h1>Enter Full Screen</h1>
-            <p>The experiment will switch to full screen mode when you press the Enter key.</p>
-            <p>Please also ensure the sound on your browser is turned on.</p>
-            <p>This ensures the best experience during the experiment.</p>
-        </div>
-    `,
-    choices: ["Enter"], // Listens for the Enter key
-    on_finish: function() {
-        window.scrollTo(0, 0); // Scrolls to the top of the page
-        document.documentElement.requestFullscreen(); // Forces full-screen mode
+    stimulus: function() {
+        document.body.style.zoom = zoomFactor;
+        const feedback = true;
+        const n_days = grid.nGrids;
+        const n_trials = grid.nTrials;
+        const selectedPath = 'none';
+        const keyAssignment = null;
+        const fontSize = "30px"; // Define font size as a variable
+        const trial = practice3Grid.getTrialInfo(practice3TrialIndex - 1);
+        console.log('trial:', trial);
+        const correctContext = trial.context;
+        console.log('correctContext:', correctContext);
+        return `
+            <div class="cost-display-container">
+                <h1>City Check:</h1>
+                <p style="font-size: ${fontSize};">At the end of each day, you will be asked which kind of city you think you are working in.</p>
+                <p style="font-size: ${fontSize};">This means you need to check the intersections you have observed, and see whether the tolls tend to be clustered in rows or columns.</p>
+                <p style="font-size: ${fontSize};">For example, here are your ${n_trials} choices on one of the days that you practised.</p>
+                <h2 style="font-size: ${fontSize};">Press 'R' if you think you were in a row city, and 'C' if you think you were in a column city.</h2>
+            </div>
+            <div class="jobs-layout">
+                <div class="upcoming-jobs-container grid">
+                    ${practice3Grid.createAllJobsHTML(practice3TrialIndex - 1, selectedPath, keyAssignment, feedback).replace(/<div id="cost-message".*?<\/div>/s, '')} 
+                </div>
+            </div>
+        `;
+    },
+    choices: ['r', 'c'], 
+    on_finish: function(data) {
+        data.city_guess = data.response; // 'r' for row city, 'c' for column city
+        // grid.resetGrid(); // Reset the grid for the new set of trials
+        var ppt_data = jsPsych.data.get().json();
+        send_incomplete(subject_id, ppt_data);
+    }
+};
+const instructions10 = { 
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        const feedback = true;
+        const n_days = grid.nGrids;
+        const n_trials = grid.nTrials;
+        const selectedPath = 'none';
+        const keyAssignment = null;
+        const fontSize = "30px"; // Define font size as a variable
+        const trial = practice3Grid.getTrialInfo(practice3TrialIndex - 1);
+        const correctContext = trial.context;
+        const lastChoice = jsPsych.data.get().last(1).values()[0].city_guess;
+        const choseCorrectContext  = (lastChoice === 'r' && correctContext === 'row') || (lastChoice === 'c' && correctContext === 'column');
+        const contextMessage = choseCorrectContext ?
+            `In this practice trial, you chose the correct city type - you were indeed in a <strong>${correctContext}</strong> city!` :
+            `In this practice trial, you chose the wrong city type - you were actually in a <strong>${correctContext}</strong> city.`;
+        return `
+            <div class="cost-display-container">
+                <h1>City Check:</h1>
+                <p style="font-size: ${fontSize};">${contextMessage}</p>
+                <p style="font-size: ${fontSize};">Note that in the actual task phase, you will not find out if you have correctly identified the city you are in after making your choice.</p>
+                <p style="font-size: ${fontSize};">Remember also: although the locations of the tolls reset each day, the city type you are in remains constant for all ${n_days} days you work in that city.</p>
+                <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
+            </div>
+            <div class="jobs-layout">
+                <div class="upcoming-jobs-container grid">
+                    ${practice3Grid.createAllJobsHTML(practice3TrialIndex - 1, selectedPath, keyAssignment, feedback).replace(/<div id="cost-message".*?<\/div>/s, '')} 
+                </div>
+            </div>
+        `;
+    },
+    choices: [' '], // Wait for spacebar to continue
+    on_finish: function(data) {
     }
 };
 
@@ -3434,7 +3494,7 @@ const instructionsReview = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         // document.body.style.zoom = "100%";
-        document.body.style.zoom = zoomFactor;
+        // document.body.style.zoom = zoomFactor;
         return `
             <div class="instruction-section">
                 <h1>Review Instructions</h1>
@@ -3459,8 +3519,27 @@ const instructionsReview = {
     }
 };
 
+
+const fullscreenTrial = { 
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `
+        <div class="instruction-section">
+            <h1>Enter Full Screen</h1>
+            <p>The experiment will switch to full screen mode when you press the Enter key.</p>
+            <p>Please also ensure the sound on your browser is turned on.</p>
+            <p>This ensures the best experience during the experiment.</p>
+        </div>
+    `,
+    choices: ["Enter"], // Listens for the Enter key
+    on_finish: function() {
+        window.scrollTo(0, 0); // Scrolls to the top of the page
+        document.documentElement.requestFullscreen(); // Forces full-screen mode
+    }
+};
+
+
 // Explanation of bonus
-const instructions9 = {
+const instructions11 = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         const nGrids = grid.nGrids; // Retrieve the number of days from grid.nGrids
@@ -3757,14 +3836,14 @@ function createInstructionsTimeline() {
     timeline.push(practiceGridFeedback);
 
     // // Animation to show grid resetting, and then another day
-    timeline.push(instructions4);
-    timeline.push(practiceFirstDayTrial);
-    for (let i = 0; i < grid.nTrials; i++) {
-        // timeline.push(practice3PreSelectionTrial);
-        timeline.push(practice3SelectionTrial);
-        timeline.push(practice3AnimationTrial);
-    }
-    timeline.push(practiceGridFeedback);
+    // timeline.push(instructions4);
+    // timeline.push(practiceFirstDayTrial);
+    // for (let i = 0; i < grid.nTrials; i++) {
+    //     // timeline.push(practice3PreSelectionTrial);
+    //     timeline.push(practice3SelectionTrial);
+    //     timeline.push(practice3AnimationTrial);
+    // }
+    // timeline.push(practiceGridFeedback);
 
     // New city animation
     timeline.push(instructions5);
@@ -3777,6 +3856,8 @@ function createInstructionsTimeline() {
     for (let i = 1; i <= grid.nGrids; i++) {
         timeline.push(instructions8);
     }
+    timeline.push(instructions9);
+    timeline.push(instructions10);
 
     // Add the option to review the instructions
     timeline.push(instructionsReview);
@@ -3795,7 +3876,7 @@ function createQuizTimeline() {
     const timeline = [];
     const quizTrials = createQuizTrials(jsPsych);
     timeline.push(...quizTrials);
-    timeline.push(instructions9)
+    timeline.push(instructions11)
     return timeline
 }
 
