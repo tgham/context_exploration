@@ -428,7 +428,7 @@ class Grid {
         if (feedback) {
             gridHTML += `
             <div class="cost-display-container">
-                <h2>You paid <strong style="color: #f87171;">$${totalCost}</strong> today.</h2>
+                <h2>You paid <strong style="color: rgb(203, 43, 43);">$${totalCost}</strong> today.</h2>
                 <p id="trial-cost" class="cost-trial hidden">-$0</p> 
                 <p id="total-cost" class="cost-total">A new day has begun.</p>
                 <p id="total-cost" class="cost-total">Tolls in this city have been reset.</p>
@@ -539,7 +539,7 @@ class Grid {
         if (feedback){
             gridHTML += `
             <div class="cost-display-container">
-                <h2>You paid <strong style="color:  #f87171;">$${totalCost}</strong> today.</h2>
+                <h2>You paid <strong style="color:  rgb(203, 43, 43);">$${totalCost}</strong> today.</h2>
                 <p id="trial-cost" class="cost-trial hidden">-$0</p> 
                 <p id="total-cost" class="cost-total">A new day has begun.</p>
                 <p id="total-cost" class="cost-total">Tolls in this city have been reset.</p>
@@ -786,9 +786,10 @@ class Grid {
 
         if (!firstDay) {
             if (!feedback) {
+                const dayType = this.nGrids === 2 ? 'Practice Day' : 'Day';
                 upcomingHTML += `
                 <div id="cost-message" class="cost-display-container">
-                <h2 class="day-display">Day ${trial.grid}/${this.nGrids}</h2>
+                <h2 class="day-display">${dayType} ${trial.grid}/${this.nGrids}</h2>
                 <h2 class="cost-total">Total Tolls Paid Today:</h2>
                 <p id="total-cost" class="cost-total">-$${totalCost}</p>
                 <p id="trial-cost" class="cost-trial hidden">-$0</p> 
@@ -820,9 +821,10 @@ class Grid {
                 }
             }
         } else if (firstDay) {
+            const dayType = this.nGrids === 2 ? 'Practice Day' : 'Day';
             upcomingHTML += `
             <div id="cost-message" class="cost-display-container">
-            <h2 class="day-display">Day ${trial.grid}/${this.nGrids}</h2>
+            <h2 class="day-display">${dayType} ${trial.grid}/${this.nGrids}</h2>
             <h2 class="cost-total">Here are your dispatches for the day.</h2>
             <h2 id="total-cost" class="cost-total">Get ready to select your jobs!</h2>
             <h2 id="trial-cost" class="cost-trial hidden">-$0</h2> 
@@ -1384,7 +1386,7 @@ function mergeCosts(trialCost, callback, pauseAtEnd=false) {
             const originalColor = totalCostElement.style.color;
             
             trialCostElement.textContent = `You ran out of time! -$${trialCost}`;
-            trialCostElement.style.color = "#f87171";
+            trialCostElement.style.color = "rgb(203, 43, 43)";
             trialCostElement.classList.remove("hidden");
             
             // setTimeout(() => {
@@ -1991,9 +1993,9 @@ const newCityMessage = {
                 <h2>City ${currentCityId}/${nCities} complete.</h2>
                 <h2>New City!</h2>
                 <p>Your taxi company is now operating in a new city.</p>
-                <p>Note: this may (or may not) be a different type of city - i.e. the traffic either tends to run from north-south, or east-west.</p>
+                <p>Note: this may (or may not) be a different type of city - i.e. it might be a row city, or it might be a column city.</p>
                 <p>Prepare for your first day in this new city.</p>
-                <p id="continue-text" style="display: none;">Press spacebar to continue dispatching.</p>
+                <h2 id="continue-text" style="display: none;">Press spacebar to continue dispatching.</h2>
             </div>
         </div>
         `;
@@ -2029,7 +2031,6 @@ const newDayMessage = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         const feedback = true;
-        console.log('new day message...')
         return `
             <div class="jobs-layout">
                 <div class="upcoming-jobs-container grid">
@@ -2069,7 +2070,7 @@ const firstGridMessage = {
                 <h2>Ready?</h2>
                 <p>Your taxi company is starting operations in its first city.</p>
                 <p>Remember: your goal is to minimise the total tolls paid each day.</p>
-                <p>Press spacebar to begin dispatching.</p>
+                <h2>Press spacebar to begin dispatching.</h2>
             </div>
         `;
     },
@@ -2094,7 +2095,7 @@ const end = {
                 <p>You've successfully completed all taxi assignments.</p>
                 <p>Your performance data has been recorded for evaluation.</p>
                 <p>Before we check if you received your bonus, we have a few questions that we would like to ask you about your experience of the task - we would love to hear your thoughts.</p>
-                <p>Press spacebar to continue.</p>
+                <h2>Press spacebar to continue.</h2>
             </div>
         `;
     },
@@ -2136,7 +2137,7 @@ const preQuestionnaire = {
                 <h2>Final survey</h2>
                 <p>We would now like to ask you a few survey questions. Press respond to every question you feel comfortable answering.</p>
                 <p>Once you are done, you will find out if you received your bonus, and you will then be returned to Prolific.</p>
-                <p>Press spacebar to continue.</p>
+                <h2>Press spacebar to continue.</h2>
             </div>
         `;
     },
@@ -2297,7 +2298,7 @@ const practice1SelectionTrial = {
         
         return `
             <div class="instruction-section" style="text-align: center; margin-bottom: 20px; font-size: 18px; color: #3a3a3a;">
-                <h3><strong>PRACTICE TRIAL:</strong><h3>
+                <h2><strong>PRACTICE TRIAL:</strong><h2>
                 ${instruction}
             </div>
             <div class="jobs-layout">
@@ -2398,7 +2399,7 @@ const practice1AnimationTrial = {
         
         return `
             <div class="instruction-section" style="text-align: center; margin-bottom: 20px; font-size: 18px; color: #3a3a3a;">
-                <h3><strong>PRACTICE TRIAL:</strong><h3>
+                <h2><strong>PRACTICE TRIAL:</strong><h2>
                 <h3>Watch the taxi follow the selected path.</h3>
             </div>
             <div class="jobs-layout">
@@ -2454,7 +2455,7 @@ const instructions3_1 = {
             <p style="font-size: ${fontSize};">Each day, you will manage ${n} dispatches, meaning you have ${n} jobs to select. All ${n} pairs of jobs will be presented on screen at once, side-by-side.</p>
             <p style="font-size: ${fontSize};">Each dispatch takes place at a different time of the day and is marked with one of the following clock icons, displayed above the dispatch:</p>
             <p style="font-family: golemClocks; text-align: center; font-size: ${fontSize};">&#x00E6; &#x00DD; &#x0026; &#x263A;</p>
-            <p style="font-size: ${fontSize};">You will move through these dispatches from the left- to the right-hand side of the screen. The clock above your current dispatch is highlighted in <span style="color: #ece75d;">yellow</span>.</p>
+            <p style="font-size: ${fontSize};">You will move through these dispatches from the left- to the right-hand side of the screen. The clock icon above your current dispatch is highlighted in <span style="color: #ece75d;">yellow</span>.</p>
             <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
         </div>
         <div class="jobs-layout">
@@ -2638,8 +2639,8 @@ const instructions3_4 = {
         return `
         <div class="cost-display-container">
             <h1>Daily Shift:</h1>
-            <p style="font-size: ${fontSize};">You can select your desired job once the clock above your current dispatch turns <span style="color: #ece75d;">yellow</span>.</p>
-            <p style="font-size: ${fontSize};">You will have 10 seconds to select a job by pressing either P or Q. If you fail to make a choice within this time limit, you will pay a fine of <span style="color: #f87171;">$10</span>.</p>
+            <p style="font-size: ${fontSize};">You can select your desired job once the clock icon above your current dispatch turns <span style="color: #ece75d;">yellow</span>.</p>
+            <p style="font-size: ${fontSize};">You will have 10 seconds to select a job by pressing either P or Q. If you fail to make a choice within this time limit, you will pay a fine of <span style="color: rgb(203, 43, 43);">$10</span>.</p>
             <br>
             <br>
             <br>
@@ -2749,8 +2750,8 @@ const instructions3_5 = {
         return `
         <div class="cost-display-container">
             <h1>Daily Shift:</h1>
-            <p style="font-size: ${fontSize};">You can select your desired job once the clock above your current dispatch turns <span style="color: #ece75d;">yellow</span>.</p>
-            <p style="font-size: ${fontSize};">You will have 10 seconds to select a job by pressing either P or Q. If you fail to make a choice within this time limit, you will pay a fine of <span style="color: #f87171;">$10</span>.</p>
+            <p style="font-size: ${fontSize};">You can select your desired job once the clock icon above your current dispatch turns <span style="color: #ece75d;">yellow</span>.</p>
+            <p style="font-size: ${fontSize};">You will have 10 seconds to select a job by pressing either P or Q. If you fail to make a choice within this time limit, you will pay a fine of <span style="color: rgb(203, 43, 43);">$10</span>.</p>
             <br>
             <br>
             <br>
@@ -2871,8 +2872,8 @@ const instructions3_7 = {
         return `
             <div class="instruction-section" style="font-size: 20px;">
                 <h1>Practice Shift:</h1>
-                <p>You will now practise a full day of dispatches.</p>
-                <p>The total amount of tolls paid over the course of the day will be shown at the top of your screen.</p>
+                <p>You will now practise two full days of dispatches.</p>
+                <p>The total amount of tolls paid over the course of each day will be shown at the top of your screen.</p>
                 <p>Before this practice, you have the opportunity to review the most recent instructions.</p>
                 <p>Press backspace to review, or spacebar to continue.</p>
             </div>
@@ -3140,7 +3141,7 @@ const instructions4 = {
             <h1>New Day</h1>
             <p>At the start of a new day, the traffic in the city resets, meaning that the intersections where you do (or do not) have to pay a toll have reset. You are also given a new set of dispatches.</p>
             <p>Watch the grid reset for the next day below.</p>
-            <p id="continue-text" style="display: none;">Press spacebar to continue dispatching.</p>
+            <h2 id="continue-text" style="display: none;">Press spacebar to continue dispatching.</h2>
         </div>
         <div class="jobs-layout" style="z-index: 2001; position: relative;">
             <div id="grid-container" class="current-job-section"></div>
@@ -3297,7 +3298,7 @@ const instructions6 = {
             <p style="font-size: ${fontSize};">In column cities, traffic tends to run from north to south every day, meaning that tolls tend to be clustered in columns.</p>
             <p style="font-size: ${fontSize};">That is, a column may have a lot of tolls, or not many tolls.</p>
             <p style="font-size: ${fontSize};">The particular locations of these busy columns may change each day, but the city will always have this column-dependent feature.</p>
-            <p style="font-size: ${fontSize};">Press spacebar to continue.</p>
+            <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
             </div>
             <div class="jobs-layout" >
             <div class="instruction-section" style="text-align: center; font-size: 20px; color: #3a3a3a; margin: 10px;">
@@ -3394,7 +3395,7 @@ const instructions8 = {
                 <p style="font-size: ${fontSize};">In row cities, the opposite is true: traffic tends to run from east to west every day, meaning that tolls tend to be clustered in rows.</p>
                 <p style="font-size: ${fontSize};">That is, a row may have a lot of tolls, or not many tolls.</p>
                 <p style="font-size: ${fontSize};">The particular locations of these busy rows may change each day, but the city will always have this row-dependent feature.</p>
-                <p style="font-size: ${fontSize};">Press spacebar to continue.</p>
+                <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
             </div>
             <div class="jobs-layout">
                 <div class="instruction-section" style="text-align: center;  font-size: 20px; color: #3a3a3a;">
@@ -3424,11 +3425,14 @@ const instructions9 = {
         const n_trials = grid.nTrials;
         const selectedPath = 'none';
         const keyAssignment = null;
-        const fontSize = "30px"; // Define font size as a variable
+        const fontSize = "28px"; // Define font size as a variable
         const trial = practice3Grid.getTrialInfo(practice3TrialIndex - 1);
         console.log('trial:', trial);
         const correctContext = trial.context;
-        console.log('correctContext:', correctContext);
+        
+        //revert back to first practice background 
+        setCityBackground('practice1');
+
         return `
             <div class="cost-display-container">
                 <h1>City Check:</h1>
@@ -3460,7 +3464,7 @@ const instructions10 = {
         const n_trials = grid.nTrials;
         const selectedPath = 'none';
         const keyAssignment = null;
-        const fontSize = "30px"; // Define font size as a variable
+        const fontSize = "28px"; // Define font size as a variable
         const trial = practice3Grid.getTrialInfo(practice3TrialIndex - 1);
         const correctContext = trial.context;
         const lastChoice = jsPsych.data.get().last(1).values()[0].city_guess;
@@ -3546,11 +3550,12 @@ const instructions11 = {
         return `
             <div class="instruction-section">
                 <h1>Bonus Payment</h1>
-                <p>Remember: your aim is to minimise the total cost paid each day by predicting which intersections will incur a toll, and hence by selecting jobs that you think will be least costly.</p>
+                <p>Remember: your aim is to minimise the total cost paid each day by predicting which intersections will (or will not) incur a toll, and hence by selecting jobs that you think will be least costly.</p>
                 <p>This means that when choosing a job, it helps to think about which intersections you might visit later on in that day. These are highlighted in <span style="color: rgb(240, 110, 254);">pink</span>, and shown in your upcoming dispatches.</p>
-                <p>At the end of the experiment, we will assess your performance by assessing how well you chose jobs that were the least costly on a randomly selected set of days and cities. This will determine whether you receive a bonus payment.</p>
+                <p>At the end of the experiment, we will assess how well you chose jobs that were the least costly. This will determine whether you receive a bonus payment.</p>
                 <p>So, you should pay attention throughout the experiment - i.e. on every day, and in every city.</p>
-                <p>Remember also: you will have 8 seconds to select a job once the current dispatch turns yellow, otherwise the trial will timeout. If you timeout too many times, the experiment will end and you will return to Prolific.</p>
+                <p>Remember also: you will have 10 seconds to select a job once the clock icon above your current dispatch is highlighted in <span style="color: #ece75d;">yellow</span>, otherwise the trial will timeout.</p>
+                <p>If you timeout too many times, the experiment will end and you will return to Prolific.</p>
             </div>
 
             <div class="instruction-section">
@@ -3811,22 +3816,15 @@ function createInstructionsTimeline() {
     // Practice selection
     timeline.push(instructions2);
     timeline.push(instructions2_5);
-    // timeline.push(practice1SelectionTrial);
-    // timeline.push(practice1AnimationTrial);
-    // timeline.push(practice1SelectionTrial);
-    // timeline.push(practice1AnimationTrial);
+    timeline.push(practice1SelectionTrial);
+    timeline.push(practice1AnimationTrial);
+    timeline.push(practice1SelectionTrial);
+    timeline.push(practice1AnimationTrial);
+
+    // Explain days
+    timeline.push(instructions3_node);
 
     // Practice a full day
-    // timeline.push(instructions3);
-    // timeline.push(instructions3_1);
-    // timeline.push(instructions3_2);
-    // timeline.push(instructions3_3);
-    // timeline.push(instructions3_4);
-    // timeline.push(instructions3_5);
-    // timeline.push(instructions3_6);
-    // timeline.push(instructions3_7);
-
-    timeline.push(instructions3_node);
     timeline.push(practiceFirstDayTrial);
     for (let i = 0; i < grid.nTrials; i++) {
         // timeline.push(practice3PreSelectionTrial);
@@ -3835,15 +3833,15 @@ function createInstructionsTimeline() {
     }
     timeline.push(practiceGridFeedback);
 
-    // // Animation to show grid resetting, and then another day
-    // timeline.push(instructions4);
-    // timeline.push(practiceFirstDayTrial);
-    // for (let i = 0; i < grid.nTrials; i++) {
-    //     // timeline.push(practice3PreSelectionTrial);
-    //     timeline.push(practice3SelectionTrial);
-    //     timeline.push(practice3AnimationTrial);
-    // }
-    // timeline.push(practiceGridFeedback);
+    // Animation to show grid resetting, and then another day
+    timeline.push(instructions4);
+    timeline.push(practiceFirstDayTrial);
+    for (let i = 0; i < grid.nTrials; i++) {
+        // timeline.push(practice3PreSelectionTrial);
+        timeline.push(practice3SelectionTrial);
+        timeline.push(practice3AnimationTrial);
+    }
+    timeline.push(practiceGridFeedback);
 
     // New city animation
     timeline.push(instructions5);
@@ -3861,11 +3859,6 @@ function createInstructionsTimeline() {
 
     // Add the option to review the instructions
     timeline.push(instructionsReview);
-
-    // timeline.push(feedback_trial1);
-    // timeline.push(feedback_trial2);
-    // timeline.push(feedback_trial3);
-    // timeline.push(feedback_trial4);
     
     return timeline
 }
@@ -3955,7 +3948,7 @@ function initializeExperiment() {
   
     // Combine everything into a single timeline
     const fullTimeline = [
-    //   ...ethicsTimeline,
+      ...ethicsTimeline,
       instructionsLoop,
       ...quizTimeline,
       ...mainTimeline
