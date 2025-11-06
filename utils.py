@@ -709,6 +709,8 @@ def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params,
                     'goal_B': env.path_states[e][1][-1],
                     'path_A': env.path_states[e][0],
                     'path_B': env.path_states[e][1],
+                    'path_A_actions': env.path_actions[e][0],
+                    'path_B_actions': env.path_actions[e][1],
                     'path_A_actual_cost': env.path_actual_costs[e][0],
                     'path_B_actual_cost': env.path_actual_costs[e][1],
                     'path_A_expected_cost': env.path_expected_costs[e][0],
@@ -722,6 +724,8 @@ def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params,
                     'path_A_future_row_overlap': env.path_future_row_overlaps[e][0], 'path_B_future_row_overlap': env.path_future_row_overlaps[e][1],
                     'path_A_future_col_overlap': env.path_future_col_overlaps[e][0], 'path_B_future_col_overlap': env.path_future_col_overlaps[e][1],
                     'path_A_future_row_and_col_overlap': env.path_future_row_and_col_overlaps[e][0], 'path_B_future_row_and_col_overlap': env.path_future_row_and_col_overlaps[e][1],
+                    'path_A_future_rel_overlap': env.path_future_rel_overlaps[e][0], 'path_B_future_rel_overlap': env.path_future_rel_overlaps[e][1],
+                    'path_A_future_irrel_overlap': env.path_future_irrel_overlaps[e][0], 'path_B_future_irrel_overlap': env.path_future_irrel_overlaps[e][1],
 
                 }
 
@@ -733,12 +737,14 @@ def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params,
                         'start_C': env.path_states[e][2][0],
                         'goal_C': env.path_states[e][2][-1],
                         'path_C': env.path_states[e][2],
+                        'path_C_actions': env.path_actions[e][2],
                         'path_C_actual_cost': env.path_actual_costs[e][2],
                         'path_C_expected_cost': env.path_expected_costs[e][2],
                         'path_C_future_overlap': env.path_future_overlaps[e][2],
                         'abstract_sequence_C': [env.sampled_abstract_sequences[e][2]],
                         'dominant_axis_C': env.dominant_axis_C[e],
                         'path_C_future_row_overlap': env.path_future_row_overlaps[e][2], 'path_C_future_col_overlap': env.path_future_col_overlaps[e][2],
+                        'path_C_future_rel_overlap': env.path_future_rel_overlaps[e][2], 'path_C_future_irrel_overlap': env.path_future_irrel_overlaps[e][2],
                         'path_C_future_row_and_col_overlap': env.path_future_row_and_col_overlaps[e][2],
                         'better_path': ['a','b','c'][np.argmax(env.path_actual_costs[e])],
                     }
@@ -762,7 +768,7 @@ def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params,
         # with open('useful_saves/expt_optimisation/simulated_env_objects/expt_2_env_objects_' + str(p) + '.pkl', 'wb') as f:
         #     pickle.dump(env_objects, f)
         # return df_expt
-        save_path = 'useful_saves/expt_optimisation/'
+        save_path = 'useful_saves/expt_optimisation/simulated_envs'
     
     # i.e. actual ppt sequences for online testing
     # else:
@@ -780,6 +786,7 @@ def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params,
     path_2 = save_path + '/env_objects/expt_2_env_objects_' + str(p) + '.pkl'
     with open(path_2, 'wb') as f:
         pickle.dump(env_objects, f)
+
     
     return df_expt
 
@@ -972,16 +979,23 @@ def load_data(path):
         "pid", 
         "trial", "city", "path_chosen", "button_pressed", "reaction_time_ms", 
         "context", "grid", "path_A_expected_cost", "path_B_expected_cost", 
-        "path_A_actual_cost", "path_B_actual_cost", "path_A_future_overlap", 
-        "path_B_future_overlap", "abstract_sequence_A", "abstract_sequence_B", 
+        "path_A_actual_cost", "path_B_actual_cost", 
+        "path_A", "path_B",
+        "path_A_future_overlap", "path_B_future_overlap", 
+        "path_A_future_row_overlap", "path_B_future_row_overlap",
+        "path_A_future_col_overlap", "path_B_future_col_overlap",
+        "path_A_future_row_and_col_overlap", "path_B_future_row_and_col_overlap",
+        "path_A_future_rel_overlap", "path_B_future_rel_overlap",
+        "path_A_future_irrel_overlap", "path_B_future_irrel_overlap",
+        "abstract_sequence_A", "abstract_sequence_B", 
         "dominant_axis_A", "dominant_axis_B", "better_path", "chose_better_path",
         "bonusAchieved",
-        'expt_info_filename'
+        'expt_info_filename',
     ]
     df_all = pd.DataFrame(columns=fieldnames)
 
     # Load id mapping (for later simulation)
-    with open('expt/assets/trial_sequences/id_mapping.pkl', 'rb') as f:
+    with open('expt/assets/trial_sequences/expt_1/id_mapping.pkl', 'rb') as f:
         id_mapping = pickle.load(f)
     all_expt_info_ids = []
 
@@ -1094,12 +1108,24 @@ def load_data(path):
                         'reaction_time_ms': np.nan,
                         'context': np.nan,
                         'grid': 5,
+                        'path_A': np.nan,
+                        'path_B': np.nan,
                         'path_A_expected_cost': np.nan,
                         'path_B_expected_cost': np.nan,
                         'path_A_actual_cost': np.nan,
                         'path_B_actual_cost': np.nan,
                         'path_A_future_overlap': np.nan,
                         'path_B_future_overlap': np.nan,
+                        'path_A_future_row_overlap': np.nan,
+                        'path_B_future_row_overlap': np.nan,
+                        'path_A_future_col_overlap': np.nan,
+                        'path_B_future_col_overlap': np.nan,
+                        'path_A_future_row_and_col_overlap': np.nan,
+                        'path_B_future_row_and_col_overlap': np.nan,
+                        'path_A_future_rel_overlap': np.nan,
+                        'path_B_future_rel_overlap': np.nan,
+                        'path_A_future_irrel_overlap': np.nan,
+                        'path_B_future_irrel_overlap': np.nan,
                         'abstract_sequence_A': np.nan,
                         'abstract_sequence_B': np.nan,
                         'dominant_axis_A': np.nan,
@@ -1167,6 +1193,7 @@ def load_data(path):
         #     print('n_nan for participant', p, ':', n_nan)
 
     # Label path IDs and aligned path info
+    df_all['colour_chosen'] = df_all['path_chosen']
     df_all['path_chosen'] = df_all['path_chosen'].map({'blue': 'a', 'green': 'b'})
     df_all = df_all[df_all['trial'].notna()]
     df_all['chose_aligned'] = np.nan
@@ -1287,10 +1314,10 @@ def load_data(path):
             raise KeyError(f'No id mapping for participant {pid}')
         try:
             try:
-                with open('expt/assets/trial_sequences/env_objects/env_objects_{}.pkl'.format(id), 'rb') as f:
+                with open('expt/assets/trial_sequences/expt_1/env_objects/env_objects_{}.pkl'.format(id), 'rb') as f:
                     envs = pickle.load(f)
             except:
-                with open('expt/assets/trial_sequences/rotated_env_objects/env_objects_{}.pkl'.format(id), 'rb') as f:
+                with open('expt/assets/trial_sequences/expt_1/rotated_env_objects/env_objects_{}.pkl'.format(id), 'rb') as f:
                     envs = pickle.load(f)
         except FileNotFoundError:
             raise FileNotFoundError(f'No env objects found for participant {pid} with id {id}')
