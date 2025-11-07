@@ -3506,7 +3506,7 @@ const quizFeedback = {
           .finally(() => {
             window.location.replace("https://app.prolific.com/submissions/complete?cc=C37PLZK3");
           });
-      }, 4000);
+      }, 3000);
     }
   }
 };
@@ -3918,8 +3918,8 @@ function initializeExperiment() {
   
     // Combine everything into a single timeline
     const fullTimeline = [
-    //   ...ethicsTimeline,
-    //   instructionsLoop,
+      ...ethicsTimeline,
+      instructionsLoop,
       ...quizTimeline,
       ...mainTimeline
     ];
