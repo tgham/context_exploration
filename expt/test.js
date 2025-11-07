@@ -263,6 +263,7 @@ export const quizQuestions = [
               // Highlight the correct answer
               document.querySelectorAll('.quiz-answer')[questionData.correct].classList.add('correct');
             }
+            jsPsych.data.addProperties({ total_n_questions: quizQuestions.length });
            
             // Add instruction to press spacebar
             const quizContainer = document.querySelector('.quiz-container');
@@ -293,62 +294,54 @@ export const quizQuestions = [
       response_ends_trial: false
     });
   });
-   // Final feedback screen
-  const finalTrial = {
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: function() {
-      // Retrieve the correct answer count
-      const correctCount = jsPsych.data.get().last(1).values()[0]?.correctCount || 0;
-      const percentage = Math.round((correctCount / quizQuestions.length) * 100);
-      const passed = percentage >= 70;
-     
-      return `
-        <div class="instruction-section">
-          <h2>Quiz Complete!</h2>
-          <p>You answered ${correctCount} out of ${quizQuestions.length} questions correctly (${percentage}%).</p>
-          ${passed
-            ? '<p>Congratulations! You passed the quiz. Press the spacebar to continue with the experiment.</p>'
-            : '<p>Unfortunately, you did not pass the quiz. Please return to Prolific.</p>'}
-        </div>
-      `;
-    },
-    choices: function() {
-      // Allow spacebar only if participant passed
-      const correctCount = jsPsych.data.get().last(1).values()[0]?.correctCount || 0;
-      const percentage = Math.round((correctCount / quizQuestions.length) * 100);
-      return percentage >= 70 ? [' '] : [];
-   
-    },
-    on_finish: function() {
-      const correctCount = jsPsych.data.get().last(1).values()[0]?.correctCount || 0;
-      const percentage = Math.round((correctCount / quizQuestions.length) * 100);
-      const passed = percentage >= 70;
-   
-      if (!passed) {
-        const ppt_data = jsPsych.data.get().json();
-        send_complete(id, ppt_data)
-          .then(() => {
-            console.log('Data successfully sent to completion endpoint');
-            setTimeout(() => {
-              window.location.replace("https://app.prolific.com/submissions/complete?cc=C37PLZK3");
-            }, 2000); // Redirect after 2 seconds
-          })
-          .catch(error => {
-            console.error('Failed to send completion data:', error);
-            // Add a note about the error but still redirect after a delay
-            document.querySelector('.instruction-section').innerHTML += `
-              <p>Note: There might have been an issue saving your data, but you will still be redirected shortly.</p>
-            `;
-            setTimeout(() => {
-              window.location.replace("https://app.prolific.com/submissions/complete?cc=C37PLZK3");
-            }, 2000);
-          });
-      }
-    }
-  };
+
+  // const finalTrial = {
+  //   type: jsPsychHtmlKeyboardResponse,
+  //   stimulus: function() {
+  //     // Retrieve the correct answer count
+  //     const correctCount = jsPsych.data.get().last(1).values()[0]?.correctCount || 0;
+  //     const percentage = Math.round((correctCount / quizQuestions.length) * 100);
+  //     const passed = percentage >= 70;
+  //     jsPsych.data.addProperties({ quiz_passed: passed });
+      
+  //     return `
+  //       <div class="instruction-section">
+  //         <h2>Quiz Complete!</h2>
+  //         <p>You answered ${correctCount} out of ${quizQuestions.length} questions correctly (${percentage}%).</p>
+  //         ${passed
+  //           ? '<p>Congratulations! You passed the quiz. Press the spacebar to continue with the experiment.</p>'
+  //           : '<p>Unfortunately, you did not pass the quiz. Please return to Prolific.</p>'}
+  //       </div>
+  //     `;
+  //   },
+  //   choices: function() {
+  //     const correctCount = jsPsych.data.get().last(1).values()[0]?.correctCount || 0;
+  //     const percentage = Math.round((correctCount / quizQuestions.length) * 100);
+  //     return percentage >= 70 ? [' '] : 'NO_KEYS';
+  //   },
+  //   trial_duration: function() {
+  //     const correctCount = jsPsych.data.get().last(1).values()[0]?.correctCount || 0;
+  //     const percentage = Math.round((correctCount / quizQuestions.length) * 100);
+  //     // If failed, show message for 2s then end trial to trigger on_finish
+  //     return percentage >= 70 ? null : 2000;
+  //   },
+  //   on_finish: function() {
+  //     const passed = jsPsych.data.get().last(1).values()[0]?.quiz_passed;
+  //     if (!passed) {
+  //       const ppt_data = jsPsych.data.get().json();
+  //       send_complete(id, ppt_data)
+  //         .catch(error => {
+  //           console.error('Failed to send completion data:', error);
+  //         })
+  //         .finally(() => {
+  //           window.location.replace("https://app.prolific.com/submissions/complete?cc=C37PLZK3");
+  //         });
+  //     }
+  //   }
+  // };
  
  
-  quizTrials.push(finalTrial);
+  // quizTrials.push(finalTrial);
    return quizTrials;
  }
  

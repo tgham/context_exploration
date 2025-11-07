@@ -232,68 +232,17 @@ function applyScreenScaling() {
 // consent etc
 const informedConsentForm = `
     <div style="max-width: 800px; margin: auto; padding: 20px; font-family: Arial, sans-serif; line-height: 1.6; text-align: left;">
-        <h2 style="text-align: center; color:rgb(255, 255, 255);">Informed Consent Form for Online Experiments on Cognitive Control</h2>
-        <p>This is a psychology experiment being conducted by Dr. Peter Dayan, director of the Max Planck Institute for Biological Cybernetics, and the members of his lab. In order to consent to participate, you MUST meet the following criteria:</p>
-        <ul style="margin: 20px 0; padding-left: 20px;">
-            <li>18 years of age or older.</li>
-            <li>Fluent speaker of English.</li>
-            <li>Have not previously participated in this experiment.</li>
-        </ul>
-        <p>This study is designed to look at how people learn to make decisions to accomplish their goals. In this task, you will be asked to make choices, play games, and answer questions related to those games. The study will take about 40 minutes and will pay £6 plus a performance-dependent bonus of £2. The performance bonus is explained in more detail in the instructions that follow.</p>
-        <p>Your participation in this research is voluntary. You may refrain from answering any questions that make you uncomfortable and may withdraw your participation at any time without penalty by exiting this task and alerting the experimenter. You may choose not to complete certain parts of the task or answer certain questions. You may contact us at the address provided below if you have additional questions or concerns.</p>
-        <p>Other than monetary compensation, participating in this study will provide no direct benefits to you. But we hope that this research will benefit society at large by contributing towards establishing a scientific foundation for improving people’s learning and cognitive control abilities.</p>
-        <p>Your online username may be connected to your individual responses, but we will not be asking for any additional personally identifying information, and we will handle responses as confidentially as possible. We cannot however guarantee the confidentiality of information transmitted over the Internet. We will be keeping de-identified data collected as part of this experiment indefinitely. Data used in scientific publications will remain completely anonymous.</p>
-        <p>If you have any questions about the study, feel free to contact our lab. Dr. Dayan and his lab members can be reached at <a href="mailto:kyblab.tuebingen@gmail.com">kyblab.tuebingen@gmail.com</a>.</p>
-        <p>By selecting the “consent” option below, I acknowledge that I am 18 or older, that I am a fluent speaker of English, that I have read this consent form, and that I agree to take part in the research.</p>
+        <h2 style="text-align: center; color: rgb(255, 255, 255);">Participation in the Learning and Cognitive Control Study</h2>
+        <p>This is a psychology experiment conducted by Dr. Peter Dayan, director of the Max Planck Institute for Biological Cybernetics, and the members of his lab.</p>
+        <p>All data collected will be anonymous. We will not ask for any additional personally identifying information and will handle responses as confidentially as possible. However, we cannot guarantee the confidentiality of information transmitted over the Internet. We will keep de-identified data collected as part of this experiment indefinitely, and such data may be used as part of future studies and/or made available to the wider research community for follow-up analyses. Data used in scientific publications will remain completely anonymous.</p>
+        <p>Your participation in this research is voluntary. You may refrain from answering any questions that make you uncomfortable and may withdraw your participation at any time without penalty by exiting this task. You may choose not to complete certain parts of the task or answer certain questions.</p>
+        <p>Other than monetary compensation, participating in this study will provide no direct benefits to you. However, we hope that this research will benefit society at large by contributing towards establishing a scientific foundation for improving people’s learning and cognitive control abilities.</p>
+        <p>By selecting the “consent” button below, you consent to taking part in this study.</p>
         <div style="text-align: center; margin-top: 20px;">
             <button id="consent-given" style="background-color: #2C3E50; color: white; padding: 10px 20px; border: none; cursor: pointer; margin-right: 10px;">I consent to participate</button>
-            <button id="consent-rescinded" style="background-color: #E74C3C; color: white; padding: 10px 20px; border: none; cursor: pointer;">I do not consent to participate</button>
         </div>
     </div>
-`;
 
-const dataProtectionForm = `
-<div style="max-width: 800px; margin: auto; padding: 20px; font-family: Arial, sans-serif; line-height: 1.6; text-align: left;">
-    <h2 style="text-align: center; color:rgb(255, 255, 255);">Data Protection Form for Online Experiments on Cognitive Control</h2>
-    <p>Please click <a href="data-protection-form.pdf" target="_blank" style="color: #2980B9;">here</a> to view our Data Protection Information Sheet. It is yours to keep.</p>
-    <p>I have received and taken note of the Data Protection Information Sheet for this study. In doing so, I had sufficient time and opportunity to ask questions about data protection and reconsider my participation in the study. I am aware that:</p>
-    <ul style="margin: 20px 0; padding-left: 20px;">
-        <li>The processing and use of the collected data occurs in a pseudoanonymised form within the scope of the legally prescribed provisions. As a general rule, the storage occurs in the form of answered questionnaires, as well as electronic data, for a duration of 10 years or longer, if this is required by the purpose of the study.</li>
-        <li>By providing further personal data in pseudoanonymised form, collected personal data may be used for the preparation of anonymised scientific research work and may also be published and used in an anonymised form in medical journals and scientific publications, so that a direct assignment to my person cannot be established.</li>
-        <li>The information obtained during the course of this study may also be sent in an anonymised form to cooperation partners within the scope of the European General Data Protection Regulation for scientific purposes and to cooperation partners outside of the European Union, i.e. to countries with a lower data protection level (this also applies to the USA).</li>
-        <li>The data collected within the scope of the study can also be used and processed in the future inside of the Max Planck Institute.</li>
-    </ul>
-    <p>I was informed about my rights. In particular, that at any time:</p>
-    <ul style="margin: 20px 0; padding-left: 20px;">
-        <li>I can withdraw this declaration of consent.</li>
-        <li>I can request information about my stored data and request the correction or blocking of data.</li>
-        <li>If I choose to stop participating in this study, I can request that any of my personal data associated with this study are immediately deleted or anonymised.</li>
-        <li>I can request that my personal data are handed out to me or to third parties (if technically feasible).</li>
-    </ul>
-    <p>I hereby declare that:</p>
-    <ul style="margin: 20px 0; padding-left: 20px;">
-        <li>I have been adequately informed about the collection and processing of my personal data and rights.</li>
-        <li>I consent to the collection and processing of personal data within the scope of the study and its pseudoanonymised disclosure, so that only persons conducting the study can establish a link between the data and my person.</li>
-    </ul>
-    <p>Your online username may be connected to your individual responses, but we will not be asking for any additional personally identifying information, and we will handle responses as confidentially as possible.</p>
-    <p>We cannot however guarantee the confidentiality of information transmitted over the internet. We will keep de-identified data collected as part of this experiment indefinitely. Data used in scientific publications will remain completely anonymous.</p>
-    <div class="consent-checkboxes" style="margin-top: 20px;">
-        <input type="checkbox" id="checkbox-y" style="margin-right: 10px;">
-        <label for="checkbox-y" style="font-weight: normal;">I agree to participate in this experiment.</label>
-    </div>
-    <div class="consent-checkboxes" style="margin-top: 10px;">
-        <input type="checkbox" id="checkbox-z" style="margin-right: 10px;">
-        <label for="checkbox-z" style="font-weight: normal;">I consent to the use of my data as described in the Data Protection Information Sheet and confirm having received a copy of the Data Protection Sheet.</label>
-    </div>
-    <div class="consent-checkboxes" style="margin-top: 10px;">
-        <input type="checkbox" id="checkbox-x" style="margin-right: 10px;">
-        <label for="checkbox-x" style="font-weight: normal;">I consent to data transfer from the MPI for Biological Cybernetics encrypted database to the project-related collaborators: inside of the Max Planck Society and affiliated research institutes, or at partnering institutions like the University of Tuebingen and New York University.</label>
-    </div>
-    <div style="text-align: center; margin-top: 20px;">
-        <button id="submit-button" class="button small-button disabled" style="background-color: #2C3E50; color: white; padding: 10px 20px; border: none; cursor: pointer;" disabled>Submit</button>
-        <button id="data-consent-rescinded" style="background-color: #E74C3C; color: white; padding: 10px 20px; border: none; cursor: pointer; margin-left: 10px;">I do not consent to all of the above</button>
-    </div>
-</div>
 `;
 
 const informedConsentTrial = {
@@ -307,34 +256,6 @@ const informedConsentTrial = {
             jsPsych.finishTrial();
         });
         document.getElementById('consent-rescinded').addEventListener('click', function() {
-            alert('You chose not to consent to participate. Please return your submission on Prolific.');
-        });
-    }
-};
-
-const dataProtectionTrial = {
-    type: jsPsychHtmlKeyboardResponse, // This is correct for both v6 and v7
-    stimulus: dataProtectionForm,
-    response_ends_trial: false, // Prevents trial from ending with a key press
-    on_load: () => {
-        const submitButton = document.getElementById('submit-button');
-        const checkboxes = Array.from(document.querySelectorAll('.consent-checkboxes input'));
-
-        checkboxes.forEach(checkbox => {
-            checkbox.addEventListener('change', () => {
-                const allChecked = checkboxes.every(cb => cb.checked);
-                submitButton.disabled = !allChecked;
-                submitButton.classList.toggle('disabled', !allChecked);
-            });
-        });
-
-        submitButton.addEventListener('click', () => {
-            if (!submitButton.disabled) {
-                jsPsych.finishTrial(); // Ends the trial and proceeds
-            }
-        });
-
-        document.getElementById('data-consent-rescinded').addEventListener('click', () => {
             alert('You chose not to consent to participate. Please return your submission on Prolific.');
         });
     }
@@ -915,7 +836,7 @@ class Grid {
                     // Check if this cell is in upcoming paths (only for current trial)
                     const isUpcomingPath = previewIndex === currentTrialIndex && upcomingPaths.has(`${row}-${col}`);
 
-                    if (previewIndex > currentTrialIndex) {
+                    if (previewIndex > currentTrialIndex && (restrictPink === null || i <= restrictPink)) {
                         isStartA = row === trial.start_A[0] && col === trial.start_A[1];
                         isStartB = row === trial.start_B[0] && col === trial.start_B[1];
                         isGoalA = row === trial.goal_A[0] && col === trial.goal_A[1];
@@ -1870,7 +1791,7 @@ const practiceGridFeedback = {
         return `
             <div class="new-day-text">
                 <h3>You would have paid a total of <strong style="color:  rgb(203, 43, 43);">$${todayTolls}</strong> in tolls today.</h3>
-                <h3>Press spacebar to continue.</h3>
+                <h2>Press spacebar to continue.</h2>
             </div>
         `;
     },
@@ -2067,7 +1988,7 @@ const firstGridMessage = {
 
         return `
             <div class="new-day-text">
-                <h2>Ready?</h2>
+                <h1>Ready?</h1>
                 <p>Your taxi company is starting operations in its first city.</p>
                 <p>Remember: your goal is to minimise the total tolls paid each day.</p>
                 <h2>Press spacebar to begin dispatching.</h2>
@@ -2232,7 +2153,7 @@ const instructions2 = {
                 <p>- The letter <strong>P</strong> marks one job</p>
                 <p>- The letter <strong>Q</strong> marks the other job</p>
                 <p>On each dispatch, these letters are randomly assigned to each job. To send out a taxi to one of these jobs, you need to press the corresponding key on your keyboard. Note that if an intersection appears on both paths, it will contain both P and Q.</p>
-                <p>For any given choice, the lengths of the two possible jobs are the same, and you are paid the same wage by the company each day. However, some jobs are more costly than others, which you must pay for yourself. This is because of tolls in the city...</p>
+                <p>For any given choice, the lengths of the two possible jobs are the same, and you are paid the same wage by the company each day. However, some jobs are more costly than others, which you must pay for yourself. This is because of <span style="color: rgb(203, 43, 43);">tolls</span> in the city...</p>
             </div>
             <div class="instruction-section" style="font-size: 20px;">
                 <h2>Press spacebar to continue.</h2>
@@ -2875,7 +2796,7 @@ const instructions3_7 = {
                 <p>You will now practise two full days of dispatches.</p>
                 <p>The total amount of tolls paid over the course of each day will be shown at the top of your screen.</p>
                 <p>Before this practice, you have the opportunity to review the most recent instructions.</p>
-                <p>Press backspace to review, or spacebar to continue.</p>
+                <h2>Press backspace to review, or spacebar to continue.</h2>
             </div>
         `;
     },
@@ -3138,7 +3059,7 @@ const instructions4 = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: `
         <div class="instruction-section" style="z-index: 2001; position: relative;">
-            <h1>New Day</h1>
+            <h1>New Day:</h1>
             <p>At the start of a new day, the traffic in the city resets, meaning that the intersections where you do (or do not) have to pay a toll have reset. You are also given a new set of dispatches.</p>
             <p>Watch the grid reset for the next day below.</p>
             <h2 id="continue-text" style="display: none;">Press spacebar to continue dispatching.</h2>
@@ -3179,7 +3100,7 @@ const instructions4 = {
             gridContainer.innerHTML = practice3Grid.createBlankGridHTML(); // Render a blank grid
             gridContainer.style.opacity = "2";
             blackCover.style.opacity = '0'; // Fade back out
-        }, 1000);
+        }, 2000);
 
         // Remove the black cover after the transition is complete
         setTimeout(() => {
@@ -3194,7 +3115,7 @@ const instructions4 = {
                 persist: false,
                 allow_held_key: false
             });
-        }, 2000);
+        }, 3000);
     },
     on_finish: function() {
         practice3Grid.resetGrid(); // Reset the grid for the new set of trials
@@ -3208,7 +3129,7 @@ const instructions5 = {
         const n = grid.nGrids;
         return `
             <div class="instruction-section" style="z-index: 2000; position: relative;">
-                <h1>New City</h1>
+                <h1>New City:</h1>
                 <p>After ${n} days of working in one city, your taxi company starts operating in a new city.</p>
                 <p>When you move cities, the background changes.</p>
             </div>
@@ -3291,12 +3212,12 @@ const instructions6 = {
         return `
             <div class="instruction-section" style="margin: 10px;">
             <h1>How can you predict which intersections have tolls (or no tolls)?</h1>
-            <p style="font-size: ${fontSize};">Each city has particular traffic properties, such that the busy streets tend to be related to one another in one of two ways.</p>
+            <p style="font-size: ${fontSize};">Each city has particular traffic properties, such that the busy intersections tend to be related to one another in one of two ways.</p>
             </div>
             <div class="instruction-section" style="margin: 10px;">
             <h1>'Column cities'</h1>
             <p style="font-size: ${fontSize};">In column cities, traffic tends to run from north to south every day, meaning that tolls tend to be clustered in columns.</p>
-            <p style="font-size: ${fontSize};">That is, a column may have a lot of tolls, or not many tolls.</p>
+            <p style="font-size: ${fontSize};">That is, a column may have <strong>a lot of tolls</strong>, or <strong>not many tolls</strong>.</p>
             <p style="font-size: ${fontSize};">The particular locations of these busy columns may change each day, but the city will always have this column-dependent feature.</p>
             <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
             </div>
@@ -3328,7 +3249,7 @@ const instructions7 = {
         return `
             <div class="instruction-section" style="z-index: 2000; position: relative;">
             <h1>How can you predict which intersections have tolls (or no tolls)?</h1>
-            <p style="font-size: ${fontSize};">Each city has particular traffic properties, such that the busy streets tend to be related to one another in one of two ways.</p>
+            <p style="font-size: ${fontSize};">Each city has particular traffic properties, such that the busy intersections tend to be related to one another in one of two ways.</p>
         `;
     },
     choices: "NO_KEYS", // No keypress required
@@ -3388,12 +3309,12 @@ const instructions8 = {
         return `
             <div class="instruction-section" style="z-index: 2000; position: relative;">
                 <h1>How can you predict which intersections have tolls (or no tolls)?</h1>
-                <p style="font-size: ${fontSize};">Each city has particular traffic properties, such that the busy streets tend to be related to one another in one of two ways.</p>
+                <p style="font-size: ${fontSize};">Each city has particular traffic properties, such that the busy intersections tend to be related to one another in one of two ways.</p>
             </div>
             <div class="instruction-section"> 
                 <h1>'Row cities'</h1>
                 <p style="font-size: ${fontSize};">In row cities, the opposite is true: traffic tends to run from east to west every day, meaning that tolls tend to be clustered in rows.</p>
-                <p style="font-size: ${fontSize};">That is, a row may have a lot of tolls, or not many tolls.</p>
+                <p style="font-size: ${fontSize};">That is, a row may have <strong>a lot of tolls</strong>, or <strong>not many tolls</strong>.</p>
                 <p style="font-size: ${fontSize};">The particular locations of these busy rows may change each day, but the city will always have this row-dependent feature.</p>
                 <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
             </div>
@@ -3437,7 +3358,7 @@ const instructions9 = {
             <div class="cost-display-container">
                 <h1>City Check:</h1>
                 <p style="font-size: ${fontSize};">At the end of each day, you will be asked which kind of city you think you are working in.</p>
-                <p style="font-size: ${fontSize};">This means you need to check the intersections you have observed, and see whether the tolls tend to be clustered in rows or columns.</p>
+                <p style="font-size: ${fontSize};">This means you need to check the intersections you have observed, and see whether the tolls (or lack of tolls) tend to be clustered in rows or columns.</p>
                 <p style="font-size: ${fontSize};">For example, here are your ${n_trials} choices on one of the days that you practised.</p>
                 <h2 style="font-size: ${fontSize};">Press 'R' if you think you were in a row city, and 'C' if you think you were in a column city.</h2>
             </div>
@@ -3470,8 +3391,8 @@ const instructions10 = {
         const lastChoice = jsPsych.data.get().last(1).values()[0].city_guess;
         const choseCorrectContext  = (lastChoice === 'r' && correctContext === 'row') || (lastChoice === 'c' && correctContext === 'column');
         const contextMessage = choseCorrectContext ?
-            `In this practice trial, you chose the correct city type - you were indeed in a <strong>${correctContext}</strong> city!` :
-            `In this practice trial, you chose the wrong city type - you were actually in a <strong>${correctContext}</strong> city.`;
+            `In this practice trial, you chose the correct city type - you were indeed in a <strong>${correctContext} city</strong>!` :
+            `In this practice trial, you chose the wrong city type - you were actually in a <strong>${correctContext} city</strong>.`;
         return `
             <div class="cost-display-container">
                 <h1>City Check:</h1>
@@ -3501,7 +3422,7 @@ const instructionsReview = {
         // document.body.style.zoom = zoomFactor;
         return `
             <div class="instruction-section">
-                <h1>Review Instructions</h1>
+                <h1>Review Instructions:</h1>
                 <p>We will now ask you a few questions to check your understanding of the task. Before doing so, you have the opportunity to review the instructions...</p>
             </div>
 
@@ -3541,6 +3462,55 @@ const fullscreenTrial = {
     }
 };
 
+// check if they passed the quiz
+const quizFeedback = {
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: function() {
+    const last = jsPsych.data.get().last(1).values()[0] || {};
+    const correctCount = last.correctCount || 0;
+    const total_n_questions = last.total_n_questions || 1;
+    const percentage = Math.round((correctCount / total_n_questions) * 100);
+    const passed = percentage >= 70;
+    jsPsych.data.addProperties({ quiz_passed: passed });
+
+    return `
+      <div class="instruction-section">
+        <h2>Quiz Complete!</h2>
+        <p>You answered ${correctCount} out of ${total_n_questions} questions correctly (${percentage}%).</p>
+        ${passed
+          ? '<p>Congratulations! You passed the quiz. Press the spacebar to continue with the experiment.</p>'
+          : '<p>Unfortunately, you did not pass the quiz. You will be returned to Prolific shortly.</p>'}
+      </div>
+    `;
+  },
+  choices: function() {
+    const last = jsPsych.data.get().last(1).values()[0] || {};
+    const correctCount = last.correctCount || 0;
+    const total_n_questions = last.total_n_questions || 1;
+    const percentage = Math.round((correctCount / total_n_questions) * 100);
+    return percentage >= 70 ? [' '] : 'NO_KEYS';
+  },
+  trial_duration: null, // do not auto-end; we control redirect timing ourselves
+  on_load: function() {
+    const last = jsPsych.data.get().last(1).values()[0] || {};
+    const correctCount = last.correctCount || 0;
+    const total_n_questions = last.total_n_questions || 1;
+    const percentage = Math.round((correctCount / total_n_questions) * 100);
+    const passed = percentage >= 70;
+
+    if (!passed) {
+      setTimeout(() => {
+        const ppt_data = jsPsych.data.get().json();
+        send_complete(subject_id, ppt_data)
+          .catch(err => console.error('Failed to send completion data:', err))
+          .finally(() => {
+            window.location.replace("https://app.prolific.com/submissions/complete?cc=C37PLZK3");
+          });
+      }, 4000);
+    }
+  }
+};
+
 
 // Explanation of bonus
 const instructions11 = {
@@ -3549,7 +3519,7 @@ const instructions11 = {
         const nGrids = grid.nGrids; // Retrieve the number of days from grid.nGrids
         return `
             <div class="instruction-section">
-                <h1>Bonus Payment</h1>
+                <h1>Bonus Payment:</h1>
                 <p>Remember: your aim is to minimise the total cost paid each day by predicting which intersections will (or will not) incur a toll, and hence by selecting jobs that you think will be least costly.</p>
                 <p>This means that when choosing a job, it helps to think about which intersections you might visit later on in that day. These are highlighted in <span style="color: rgb(240, 110, 254);">pink</span>, and shown in your upcoming dispatches.</p>
                 <p>At the end of the experiment, we will assess how well you chose jobs that were the least costly. This will determine whether you receive a bonus payment.</p>
@@ -3796,7 +3766,6 @@ function createEthicsTimeline() {
     const timeline = [];
     // Informed consent
     timeline.push(informedConsentTrial);
-    timeline.push(dataProtectionTrial);
     timeline.push(fullscreenTrial);
 
     return timeline
@@ -3869,6 +3838,7 @@ function createQuizTimeline() {
     const timeline = [];
     const quizTrials = createQuizTrials(jsPsych);
     timeline.push(...quizTrials);
+    timeline.push(quizFeedback);
     timeline.push(instructions11)
     return timeline
 }
@@ -3948,8 +3918,8 @@ function initializeExperiment() {
   
     // Combine everything into a single timeline
     const fullTimeline = [
-      ...ethicsTimeline,
-      instructionsLoop,
+    //   ...ethicsTimeline,
+    //   instructionsLoop,
       ...quizTimeline,
       ...mainTimeline
     ];
