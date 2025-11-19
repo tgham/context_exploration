@@ -39,7 +39,7 @@ const jsPsych = initJsPsych({
 
         var ppt_data = JSON.stringify(
             jsPsych.data.get()
-            .filterCustom(trial => trial.trial_type === 'html-keyboard-response' || trial.trial_type === 'survey-text')
+            .filterCustom(trial => trial.trial_type === 'html-keyboard-response' || trial.trial_type === 'survey-text' || trial.trial_type === 'html-button-response')
             .values()
             .map(({ stimulus, ...rest }) => rest)
         );
