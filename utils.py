@@ -678,8 +678,10 @@ def get_next_state(current, direction, N):
 ## func for generating a single participant
 def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params, metric, n_afc, N, save_path=None):
 
+
     ## if real ppt sequences, ensure even split of contexts, otherwise if we're generating practice sequences, these are pre-determined
     if n_cities > 1:
+        np.random.seed(p + 1000)
         contexts = ['row']*int(n_cities/2) + ['column']*int(n_cities/2)
         np.random.shuffle(contexts)
     else:
@@ -991,11 +993,16 @@ def load_data(path):
         "dominant_axis_A", "dominant_axis_B", "better_path", "chose_better_path",
         "bonusAchieved",
         'expt_info_filename',
+        'city_guess',
     ]
     df_all = pd.DataFrame(columns=fieldnames)
 
+    ## get expt from path name e.g. 'expt/data/complete/expt_2'
+    expt = path.split('/')[-1]
+
     # Load id mapping (for later simulation)
-    with open('expt/assets/trial_sequences/expt_1/id_mapping.pkl', 'rb') as f:
+    # with open('expt/assets/trial_sequences/' + expt + '/id_mapping_' + expt + '.pkl', 'rb') as f:
+    with open('expt/data/complete/' + expt + '/id_mapping_' + expt + '.pkl', 'rb') as f:
         id_mapping = pickle.load(f)
     all_expt_info_ids = []
 
@@ -1006,6 +1013,13 @@ def load_data(path):
     for q in range(1, 18+1):
         questionnaire['NFC'+str(q)] = []
     questionnaire['screener'] = []
+
+    ## save data on context guesses
+    df_context_all = pd.DataFrame(columns=['pid','city','day','true_context','inferred_context','correct'])
+
+    ## save freetext responses
+    df_freetext = pd.DataFrame(columns=['pid','question','response'])
+
     
     for file in os.listdir(path):
         if not file.endswith('.json'):
@@ -1032,6 +1046,7 @@ def load_data(path):
         # if bonus:
         #     print('Bonus for participant', pid, ':', bonus[0])
 
+        
 
         # Filter for relevant trials
         trial_data = [
@@ -1041,6 +1056,58 @@ def load_data(path):
 
         if not trial_data:
             continue
+
+        
+        ### get context guesses
+
+        ## first, find the trials where city_guess is present, and then see how many trials back we need to go to find a trial with trial==4
+        # guess_trials_indices = [i for i, trial in enumerate(data) if trial.get('trial_type') == 'html-keyboard-response' and 'city_guess' in trial]
+        # for idx in guess_trials_indices:
+            
+        #     # look backwards to find the most recent trial with trial==4
+        #     for j in range(idx-1, -1, -1):
+        #         trial = data[j]
+        #         if trial.get('trial_type') == 'html-keyboard-response' and trial.get('trial') == 4:
+        #             print('Found matching trial 4 for city_guess at index', idx, 'by looking back to index', j)
+        #             city = trial.get('city')
+        #             day = trial.get('grid')
+        #             true_context = trial.get('context')
+        #             next_trial = data[idx]
+        #             inferred_context = next_trial.get('city_guess')
+        #             correct = (inferred_context == true_context)
+        #             df_context_all = pd.concat([df_context_all, pd.DataFrame([{
+        #                 'pid': pid,
+        #                 'city': city,
+        #                 'day': day,
+        #                 'true_context': true_context,
+        #                 'inferred_context': inferred_context,
+        #                 'correct': correct
+        #             }])], ignore_index=True)
+        #             break
+
+        ## (the above code tells us that the context guess is always 2 trial indices after the trial with trial==4, so let's just filter out the t4 trials)
+        for i, trial in enumerate(data):
+            if trial.get('trial_type') == 'html-keyboard-response' and trial.get('trial') == 4:
+                city = trial.get('city')
+                day = trial.get('grid')
+                true_context = trial.get('context')
+                # look two trials ahead for the city_guess
+                if i + 2 < len(data):
+                    next_trial = data[i + 2]
+                    if next_trial.get('trial_type') == 'html-keyboard-response' and 'city_guess' in next_trial:
+                        inferred_context = next_trial.get('city_guess')
+                        # correct = (inferred_context == true_context)
+                        df_context_all = pd.concat([df_context_all, pd.DataFrame([{
+                            'pid': pid,
+                            'city': city,
+                            'day': day,
+                            'true_context': true_context,
+                            'inferred_context': inferred_context,
+                            # 'correct': correct
+                        }])], ignore_index=True)
+        df_context_all.loc[df_context_all['inferred_context'] == 'r', 'inferred_context'] = 'row'
+        df_context_all.loc[df_context_all['inferred_context'] == 'c', 'inferred_context'] = 'column'
+        df_context_all['correct'] = df_context_all['true_context'] == df_context_all['inferred_context']
 
         ## save questionnaire data
         questionnaire['pid'].append(pid)
@@ -1056,40 +1123,68 @@ def load_data(path):
                 keep_keys.append(key[:-1])
             else:
                 keep_keys.append(key)
-
         for key in questionnaire.keys():
             if key in nfc_data_flat.keys():
                 questionnaire[key].append(nfc_data_flat[key])
             elif key != 'pid':
                 questionnaire[key].append(np.nan)
 
+        ## save freetext, i.e. all trials where type is survey-text
+        freetext_trials = [trial for trial in data if trial.get('trial_type') == 'survey-text']
+        for trial in freetext_trials:
+            question = list(trial['response'].keys())[0]
+            response = trial['response'][question]
+            df_freetext = pd.concat([df_freetext, pd.DataFrame([{
+                'pid': pid,
+                'question': question,
+                'response': response
+            }])], ignore_index=True)
+
         df_tmp = pd.DataFrame([{key: trial.get(key, '') for key in fieldnames} for trial in trial_data])
 
         # Check for completeness (8 cities)
         n_cities = df_tmp['city'].nunique()
-        if n_cities < 8:
+        if expt == 'expt_1':
+            n_cities_expected = 8
+        elif expt == 'expt_2':
+            n_cities_expected = 6
+        if n_cities < n_cities_expected:
             print('Incomplete dataset for participant:', file,'. Found only', n_cities, 'cities.')
             continue
 
         # Skip empty lines
         df_tmp = df_tmp[df_tmp['trial'] != ''].reset_index(drop=True)
 
-        # skip practice trials, i.e. check how many trials have city==1
+
+        ### skip practice trials
+
+        # check how many trials have city==1, and then skip the first few until we have n_days * n_trials
         n_city_1 = df_tmp[df_tmp['city'] == 1].shape[0]
-        if n_city_1==28:
-            df_tmp = df_tmp.iloc[8:].reset_index(drop=True)
-        elif n_city_1==36:
-            df_tmp = df_tmp.iloc[16:].reset_index(drop=True)
-        else:
-            print('city 1 trials:',n_city_1)
+        n_city_1_expected = 20
+        if n_city_1 > n_city_1_expected:
+            n_practice_trials = n_city_1 - n_city_1_expected
+            df_tmp = df_tmp.iloc[n_practice_trials:].reset_index(drop=True)
         assert (df_tmp.iloc[0]['city'] == 1) & (df_tmp.iloc[0]['trial'] == 1) \
             and (df_tmp.iloc[0]['grid'] == 1), 'First trial should be city 1, grid 1, trial 1. Instead got: ' \
             + str(df_tmp.iloc[0]['city']) + ', ' + str(df_tmp.iloc[0]['grid']) + ', ' + str(df_tmp.iloc[0]['trial'])
         
+        ## (above, but hacky for expt 1)
+        # n_city_1 = df_tmp[df_tmp['city'] == 1].shape[0]
+        # if n_city_1==28:
+        #     df_tmp = df_tmp.iloc[8:].reset_index(drop=True)
+        # elif n_city_1==36:
+        #     df_tmp = df_tmp.iloc[16:].reset_index(drop=True)
+        # else:
+        #     print('city 1 trials:',n_city_1)
+        
         ## check how many trials
         n_total_trials = len(df_tmp)
-        if n_total_trials != 160:
-            print('Expected 160 trials, but found:', n_total_trials, 'for participant:', pid)
+        if expt == 'expt_1':
+            expected_trials = 160
+        elif expt == 'expt_2':
+            expected_trials = 120
+        if n_total_trials != expected_trials:
+            print(f'Expected {expected_trials} trials, but found:', n_total_trials, 'for participant:', pid)
             display(df_tmp.tail())
 
             ## hacky fix for 'e248nl43jdfwg8bisl7sjezc' who is missing the final day of the final city: add four more trials with nans
@@ -1198,22 +1293,40 @@ def load_data(path):
     df_all = df_all[df_all['trial'].notna()]
     df_all['chose_aligned'] = np.nan
     df_all['aligned_path'] = np.nan
+    df_all['orthogonal_path'] = np.nan
     df_all['chose_vertical'] = np.nan # so we have a consistent reference frame
+    df_all['more_future_rel_overlap'] = np.nan
+    df_all['more_future_irrel_overlap'] = np.nan
+    df_all['chose_more_future_rel_overlap'] = np.nan
+    df_all['chose_more_future_irrel_overlap'] = np.nan
 
-    ## remove all non-choices?
-    # df_all = df_all[df_all['path_chosen'].notna()]
 
     df_all.loc[(df_all['context'] == 'column') & (df_all['dominant_axis_A'] == 'vertical'), 'aligned_path'] = 'a'
     df_all.loc[(df_all['context'] == 'column') & (df_all['dominant_axis_B'] == 'vertical'), 'aligned_path'] = 'b'
     df_all.loc[(df_all['context'] == 'row') & (df_all['dominant_axis_A'] == 'horizontal'), 'aligned_path'] = 'a'
     df_all.loc[(df_all['context'] == 'row') & (df_all['dominant_axis_B'] == 'horizontal'), 'aligned_path'] = 'b'
+    df_all.loc[df_all['aligned_path'] == 'a', 'orthogonal_path'] = 'b'
+    df_all.loc[df_all['aligned_path'] == 'b', 'orthogonal_path'] = 'a'
 
-    df_all['chose_aligned'] = (df_all['path_chosen'] == df_all['aligned_path']).astype(bool)
-    df_all['chose_orthogonal'] = (df_all['path_chosen'] != df_all['aligned_path']).astype(bool)
+    df_all.loc[df_all['path_chosen'] == df_all['aligned_path'], 'chose_aligned'] = True
+    df_all.loc[df_all['path_chosen'] == df_all['orthogonal_path'], 'chose_aligned'] = False
+    df_all.loc[df_all['path_chosen'] == df_all['orthogonal_path'], 'chose_orthogonal'] = True
+    df_all.loc[df_all['path_chosen'] == df_all['aligned_path'], 'chose_orthogonal'] = False
     df_all.loc[(df_all['context'] == 'column') & (df_all['chose_aligned'] == True), 'chose_vertical'] = True
     df_all.loc[(df_all['context'] == 'column') & (df_all['chose_aligned'] == False), 'chose_vertical'] = False
     df_all.loc[(df_all['context'] == 'row') & (df_all['chose_aligned'] == True), 'chose_vertical'] = False
     df_all.loc[(df_all['context'] == 'row') & (df_all['chose_aligned'] == False), 'chose_vertical'] = True
+
+    df_all.loc[df_all['path_A_future_rel_overlap'] > df_all['path_B_future_rel_overlap'], 'more_future_rel_overlap'] = 'a'
+    df_all.loc[df_all['path_A_future_rel_overlap'] < df_all['path_B_future_rel_overlap'], 'more_future_rel_overlap'] = 'b'
+    df_all.loc[df_all['path_A_future_irrel_overlap'] > df_all['path_B_future_irrel_overlap'], 'more_future_irrel_overlap'] = 'a'
+    df_all.loc[df_all['path_A_future_irrel_overlap'] < df_all['path_B_future_irrel_overlap'], 'more_future_irrel_overlap'] = 'b'
+    df_all.loc[df_all['path_chosen'] == df_all['more_future_rel_overlap'], 'chose_more_future_rel_overlap'] = True
+    df_all.loc[df_all['path_chosen'] != df_all['more_future_rel_overlap'], 'chose_more_future_rel_overlap'] = False
+    df_all.loc[df_all['path_chosen'] == df_all['more_future_irrel_overlap'], 'chose_more_future_irrel_overlap'] = True
+    df_all.loc[df_all['path_chosen'] != df_all['more_future_irrel_overlap'], 'chose_more_future_irrel_overlap'] = False
+
+
 
 
     ### get some additional data
@@ -1227,9 +1340,17 @@ def load_data(path):
     df_all['first_path_orthogonal'] = np.nan
     df_all['second_path_orthogonal'] = np.nan
     df_all['third_path_orthogonal'] = np.nan 
+    df_all['first_path_more_future_rel_overlap'] = np.nan
+    df_all['first_path_more_future_irrel_overlap'] = np.nan
+    df_all['second_path_more_future_rel_overlap'] = np.nan
+    df_all['second_path_more_future_irrel_overlap'] = np.nan
+    df_all['third_path_more_future_rel_overlap'] = np.nan
+    df_all['third_path_more_future_irrel_overlap'] = np.nan
     df_all['prev_chose_orthogonal'] = np.nan
     df_all['prev_chose_aligned'] = np.nan
     df_all['prev_chose_vertical'] = np.nan
+    df_all['prev_chose_more_future_rel_overlap'] = np.nan
+    df_all['prev_chose_more_future_irrel_overlap'] = np.nan
     df_all['prev_day_chose_aligned'] = np.nan ## i.e. for the same trial of the previous day
     df_all['prev_day_chose_orthogonal'] = np.nan
     df_all['prev_day_chose_vertical'] = np.nan
@@ -1247,6 +1368,8 @@ def load_data(path):
     df_all['day_cost'] = np.nan
     df_all['path_len'] = np.nan
     df_all['switched_axis'] = np.nan
+    df_all['aligned_path_long_edge'] = np.nan
+    df_all['orthogonal_path_long_edge'] = np.nan
     
     ## diffs, where this is always defined as vertical - horizontal
     df_all['past_overlaps_diff'] = np.nan 
@@ -1264,15 +1387,19 @@ def load_data(path):
                 try:
                     df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'first_path'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'path_chosen'].iloc[0]
                     df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'first_path_orthogonal'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'chose_orthogonal'].iloc[0]
+                    df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'first_path_more_future_rel_overlap'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'chose_more_future_rel_overlap'].iloc[0]
                     df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'second_path'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'path_chosen'].iloc[1]
                     df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'second_path_orthogonal'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'chose_orthogonal'].iloc[1]
+                    df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'second_path_more_future_rel_overlap'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'chose_more_future_rel_overlap'].iloc[1]
                     df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'third_path'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'path_chosen'].iloc[2]
                     df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'third_path_orthogonal'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'chose_orthogonal'].iloc[2]
+                    df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'third_path_more_future_rel_overlap'] = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['pid'] == pid), 'chose_more_future_rel_overlap'].iloc[2]
 
                     ## save previous day choice (only interested in t=1)
                     df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['trial']==1) & (df_all['pid'] == pid), 'prev_day_chose_aligned'] = prev_day_chose_aligned
                     df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['trial']==1) & (df_all['pid'] == pid), 'prev_day_chose_orthogonal'] = prev_day_chose_orthogonal
                     df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['trial']==1) & (df_all['pid'] == pid), 'prev_day_chose_vertical'] = prev_day_chose_vertical
+
 
                     ## save day choice for subsequent day...
                     prev_day_chose_aligned = df_all.loc[(df_all['city'] == city) & (df_all['day'] == day) & (df_all['trial']==1) & (df_all['pid'] == pid), 'chose_aligned'].iloc[0]
@@ -1287,6 +1414,8 @@ def load_data(path):
         prev_choice_aligned = None
         prev_choice_orthogonal = None
         prev_choice_vertical = None
+        prev_choice_more_future_rel_overlap = None
+        prev_choice_more_future_irrel_overlap = None
         for i, row in df_all.loc[df_all['pid'] == pid].iterrows():
             if pd.isna(row['path_chosen']): 
                 continue
@@ -1294,36 +1423,64 @@ def load_data(path):
                 df_all.at[i, 'prev_chose_aligned'] = np.nan
                 df_all.at[i, 'prev_chose_orthogonal'] = np.nan
                 df_all.at[i, 'prev_chose_vertical'] = np.nan
+                df_all.at[i, 'switched_axis'] = np.nan
+                df_all.at[i, 'prev_chose_more_future_rel_overlap'] = np.nan
+                df_all.at[i, 'prev_chose_more_future_irrel_overlap'] = np.nan
             else:
                 df_all.at[i, 'prev_chose_vertical'] = prev_choice_vertical
                 df_all.at[i, 'prev_chose_aligned'] = prev_choice_aligned
                 df_all.at[i, 'prev_chose_orthogonal'] = prev_choice_orthogonal
+                df_all.at[i, 'prev_chose_more_future_rel_overlap'] = prev_choice_more_future_rel_overlap
+                df_all.at[i, 'prev_chose_more_future_irrel_overlap'] = prev_choice_more_future_irrel_overlap
                 df_all.at[i, 'switched_axis'] = (prev_choice_aligned != row['chose_aligned']) or (prev_choice_orthogonal != row['chose_orthogonal'])
             prev_choice = row['path_chosen']
             prev_choice_aligned = row['chose_aligned']
             prev_choice_orthogonal = row['chose_orthogonal']
             prev_choice_vertical = row['chose_vertical']
+            prev_choice_more_future_rel_overlap = row['chose_more_future_rel_overlap']
+            prev_choice_more_future_irrel_overlap = row['chose_more_future_irrel_overlap']
+
+        ## get the length of the aligned or orthogonal path's long edge
+        df_all['aligned_path_long_edge'] = df_all.apply(
+            lambda row: np.max(row['abstract_sequence_A']) if row['aligned_path'] == 'a' else np.max(row['abstract_sequence_B']) if row['aligned_path'] == 'b' else np.nan,
+            axis=1
+        )
+        df_all['orthogonal_path_long_edge'] = df_all.apply(
+            lambda row: np.max(row['abstract_sequence_A']) if row['orthogonal_path'] == 'a' else np.max(row['abstract_sequence_B']) if row['orthogonal_path'] == 'b' else np.nan,
+            axis=1
+        )
+        # df_all['orthogonal_path_long_edge'] = df_all.apply([
+        #     lambda row['abstract_sequence_A'].max if row['orthogonal_path'] == 'a' else np.max(row['abstract_sequence_B']) if row['orthogonal_path'] == 'b' else np.nan
+        # ], axis=1 
+        # )
 
         
         ### simulate each participant's choices to extract the missing trial info
 
         ## get envs
         try:
-            id = id_mapping[pid][10:]
+            id = id_mapping[pid][12:]
+
         except KeyError:
             raise KeyError(f'No id mapping for participant {pid}')
         try:
+            base_path = 'expt/assets/trial_sequences/'+ expt
             try:
-                with open('expt/assets/trial_sequences/expt_1/env_objects/env_objects_{}.pkl'.format(id), 'rb') as f:
+                path = base_path + '/env_objects/'+ expt + '_env_objects_{}.pkl'.format(id)
+                with open(path, 'rb') as f:
                     envs = pickle.load(f)
             except:
-                with open('expt/assets/trial_sequences/expt_1/rotated_env_objects/env_objects_{}.pkl'.format(id), 'rb') as f:
+                with open(base_path + '/rotated_env_objects/env_objects_{}.pkl'.format(id), 'rb') as f:
                     envs = pickle.load(f)
         except FileNotFoundError:
             raise FileNotFoundError(f'No env objects found for participant {pid} with id {id}')
         
         ## simulate
-        agent = Farmer(N=8, context_prior=0.5)
+        if expt == 'expt_1':
+            N=8
+        elif expt == 'expt_2':
+            N=9
+        agent = Farmer(N=N, context_prior=0.5)
         agent.run(params = None, hyperparams=None, agent = 'human', df_trials= df_all.loc[df_all['pid'] == pid],envs=envs, fit=False)
 
         ## extract cost info
@@ -1350,7 +1507,15 @@ def load_data(path):
         df_all.loc[df_all['pid'] == pid, 'path_A_past_observed_no_costs'] = agent.path_past_observed_no_costs[:,:,:,0].flatten()
         df_all.loc[df_all['pid'] == pid, 'path_B_past_observed_no_costs'] = agent.path_past_observed_no_costs[:,:,:,1].flatten()
 
-        ## diffs (vertical - horizontal)
+        # diffs (A-B)
+        df_all.loc[(df_all['pid'] == pid)
+                   , 'past_overlaps_diff'] = df_all.loc[(df_all['pid'] == pid), 'path_A_past_overlaps'] - df_all.loc[(df_all['pid'] == pid), 'path_B_past_overlaps']
+        df_all.loc[(df_all['pid'] == pid)
+                     , 'observed_costs_diff'] = df_all.loc[(df_all['pid'] == pid), 'path_A_past_observed_costs'] - df_all.loc[(df_all['pid'] == pid), 'path_B_past_observed_costs']
+        df_all.loc[(df_all['pid'] == pid)
+                        , 'observed_no_costs_diff'] = df_all.loc[(df_all['pid'] == pid), 'path_A_past_observed_no_costs'] - df_all.loc[(df_all['pid'] == pid), 'path_B_past_observed_no_costs']
+        
+        # or, diffs (vertical - horizontal)
         # df_all.loc[(df_all['pid'] == pid)
         #            & (df_all['dominant_axis_A'] == 'vertical')
         #            , 'past_overlaps_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'vertical'), 'path_A_past_overlaps'] - df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'vertical'), 'path_B_past_overlaps']
@@ -1370,25 +1535,25 @@ def load_data(path):
         #                 & (df_all['dominant_axis_A'] == 'horizontal')
         #                 , 'observed_no_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'horizontal'), 'path_B_past_observed_no_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['dominant_axis_A'] == 'horizontal'), 'path_A_past_observed_no_costs']
         
-        ## or, diffs (orthogonal - aligned)
-        df_all.loc[(df_all['pid'] == pid)
-                   & (df_all['aligned_path'] == 'b')
-                   , 'past_overlaps_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'b'), 'path_A_past_overlaps'] - df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'b'), 'path_B_past_overlaps']
-        df_all.loc[(df_all['pid'] == pid)
-                     & (df_all['aligned_path'] == 'a')
-                     , 'past_overlaps_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'a'), 'path_B_past_overlaps'] - df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'a'), 'path_A_past_overlaps']
-        df_all.loc[(df_all['pid'] == pid)
-                     & (df_all['aligned_path'] == 'b')
-                     , 'observed_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'b'), 'path_A_past_observed_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'b'), 'path_B_past_observed_costs']
-        df_all.loc[(df_all['pid'] == pid)
-                        & (df_all['aligned_path'] == 'a')
-                        , 'observed_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'a'), 'path_B_past_observed_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'a'), 'path_A_past_observed_costs']
-        df_all.loc[(df_all['pid'] == pid)
-                        & (df_all['aligned_path'] == 'b')
-                        , 'observed_no_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'b'), 'path_A_past_observed_no_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'b'), 'path_B_past_observed_no_costs']
-        df_all.loc[(df_all['pid'] == pid)
-                        & (df_all['aligned_path'] == 'a')
-                        , 'observed_no_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'a'), 'path_B_past_observed_no_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'a'), 'path_A_past_observed_no_costs']
+        # ## or, diffs (orthogonal - aligned)
+        # df_all.loc[(df_all['pid'] == pid)
+        #            & (df_all['aligned_path'] == 'b')
+        #            , 'past_overlaps_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'b'), 'path_A_past_overlaps'] - df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'b'), 'path_B_past_overlaps']
+        # df_all.loc[(df_all['pid'] == pid)
+        #              & (df_all['aligned_path'] == 'a')
+        #              , 'past_overlaps_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'a'), 'path_B_past_overlaps'] - df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'a'), 'path_A_past_overlaps']
+        # df_all.loc[(df_all['pid'] == pid)
+        #              & (df_all['aligned_path'] == 'b')
+        #              , 'observed_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'b'), 'path_A_past_observed_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'b'), 'path_B_past_observed_costs']
+        # df_all.loc[(df_all['pid'] == pid)
+        #                 & (df_all['aligned_path'] == 'a')
+        #                 , 'observed_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'a'), 'path_B_past_observed_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'a'), 'path_A_past_observed_costs']
+        # df_all.loc[(df_all['pid'] == pid)
+        #                 & (df_all['aligned_path'] == 'b')
+        #                 , 'observed_no_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'b'), 'path_A_past_observed_no_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'b'), 'path_B_past_observed_no_costs']
+        # df_all.loc[(df_all['pid'] == pid)
+        #                 & (df_all['aligned_path'] == 'a')
+        #                 , 'observed_no_costs_diff'] = df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'a'), 'path_B_past_observed_no_costs'] - df_all.loc[(df_all['pid'] == pid) & (df_all['aligned_path'] == 'a'), 'path_A_past_observed_no_costs']
 
         
         ## sanity check: total past overlaps should be the sum of path A and B past overlaps
@@ -1406,7 +1571,9 @@ def load_data(path):
     df_all.loc[(df_all['context'] == 'row') & (df_all['CE_chose_aligned'] == True), 'CE_chose_vertical'] = False
     df_all.loc[(df_all['context'] == 'row') & (df_all['CE_chose_aligned'] == False), 'CE_chose_vertical'] = True
     df_all['CE_human_consistent'] = (df_all['CE_action'] == df_all['path_chosen']).astype(bool)
-        
+
+    ## remove all non-choices?
+    df_all = df_all[df_all['path_chosen'].notna()]
 
     # last bit of cleaning of questionnaire data
     df_q = pd.DataFrame.from_dict(questionnaire)
@@ -1423,7 +1590,12 @@ def load_data(path):
         col = f"NFC{i}"
         df_q[col] = 6 - df_q[col]  # reverse-score
     df_q['NFC_total'] = df_q[[f"NFC{i}" for i in range(1, 19)]].sum(axis=1)
-    return df_all, df_q
+    
+    
+    if expt =='expt_1':
+        return df_all, df_q
+    elif expt =='expt_2':
+        return df_all, df_q, df_context_all, df_freetext
 
 
 ## check counterbalancing - does each unrotated id have a rotated counterpart?
