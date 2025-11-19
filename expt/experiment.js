@@ -1583,6 +1583,7 @@ const pathSelectionTrial = {
         
         // Store all the relevant data from the current trial
         const currentTrial = grid.getTrialInfo(currentTrialIndex);
+        data.practice = false;
         data.choice = choice;
         data.trial = currentTrial.trial;
         data.city = currentTrial.city;
@@ -2276,7 +2277,7 @@ const practice1SelectionTrial = {
         
         // Record their choice
         data.choice = choice;
-        data.practice_trial = true;
+        data.practice = true;
         
         // Check if they selected the correct path
         const correctChoice = (practice1TrialIndex === 0 && choice === 'blue') || (practice1TrialIndex === 1 && choice === 'green');
@@ -2618,6 +2619,7 @@ const instructions3_4 = {
         
         // // Store all the relevant data from the current trial
         const currentTrial = practice2Grid.getTrialInfo(practice2TrialIndex);
+        data.practice = true;
         data.choice = choice;
         data.trial = currentTrial.trial;
         data.city = currentTrial.city;
@@ -2966,6 +2968,7 @@ const practice3SelectionTrial = {
         
         // // Store all the relevant data from the current trial
         const currentTrial = practice3Grid.getTrialInfo(practice3TrialIndex);
+        data.practice = true;
         data.choice = choice;
         data.trial = currentTrial.trial;
         data.city = currentTrial.city;
