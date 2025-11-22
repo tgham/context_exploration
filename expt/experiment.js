@@ -255,9 +255,6 @@ const informedConsentTrial = {
         document.getElementById('consent-given').addEventListener('click', function() {
             jsPsych.finishTrial();
         });
-        document.getElementById('consent-rescinded').addEventListener('click', function() {
-            alert('You chose not to consent to participate. Please return your submission on Prolific.');
-        });
     }
 };
 
