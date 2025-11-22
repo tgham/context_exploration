@@ -703,6 +703,9 @@ class Grid {
             <div class="jobs-section">
         `;
 
+        // define totalCost text. if negative, it should be '-$${totalCost}', otherwise just '$${totalCost}'
+        
+
         if (!firstDay) {
             if (!feedback) {
                 const dayType = this.nGrids === 2 ? 'Practice Day' : 'Day';
@@ -1322,29 +1325,27 @@ function mergeCosts(trialCost, callback, pauseAtEnd=false) {
                 // trialCostElement.style.transform = "translateY(-20px)";
 
                 setTimeout(() => {
-                totalCost += trialCost;
-            
-                const startCost = totalCost - trialCost;
+                const startCost = totalCost;              // current total before fine
+                const endCost = totalCost - trialCost;    // total after fine
                 const duration = 1000;
                 const startTime = performance.now();
-            
-                function animate(now) {
+                // Show fine amount
+                // trialCostElement.textContent = `-$${trialCost}`;
+                trialCostElement.classList.add("cost-animate");
+                function animateFine(now) {
                     const elapsed = now - startTime;
                     const progress = Math.min(elapsed / duration, 1);
-                    const currentCount = Math.floor(startCost + progress * trialCost);
+                    const currentCount = Math.floor(startCost - progress * trialCost);
                     totalCostElement.textContent = `$${currentCount}`;
-            
                     if (progress < 1) {
-                        requestAnimationFrame(animate);
+                        requestAnimationFrame(animateFine);
                     } else {
+                        totalCost = endCost;
                         totalCostElement.textContent = `$${totalCost}`;
-                        // trialCostElement.textContent = `$0`;
-                        // trialCostElement.classList.remove("cost-animate");
                         trialCostElement.style.transform = "translateY(0)";
                     }
                 }
-            
-                requestAnimationFrame(animate);
+                requestAnimationFrame(animateFine);
             }, 100);
             }
             // }, 500);
