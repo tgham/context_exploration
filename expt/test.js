@@ -10,18 +10,18 @@ export const quizQuestions = [
     correct: 1 // Index of correct answer (0-based)
   },
   {
-    question: "If your taxi reveals a toll at an intersection, and you visit that intersection again later in the day, what happens?",
+    question: "If your taxi reveals a tip at an intersection, and you visit that intersection again later in the day, what happens?",
     options: [
-      "You will definitely receive a toll.",
-      "You will definitely not receive a toll.",
-      "You might receive a toll, or you might not.",
+      "You will definitely receive a tip.",
+      "You will definitely not receive a tip.",
+      "You might receive a tip, or you might not.",
     ],
     correct: 0
   },
   {
     question: "How do you know which intersections might be visited later in the day?", // What does it mean if an intersection is highlighted in pink?",
     options: [
-      // "You will pay a toll if you visit this intersection.",
+      // "You will earn a tip if you visit this intersection.",
       // "You have already visited this intersection.",
       // "This intersection appears on one of the jobs you might choose in an upcoming dispatch.",
       "You can't know which intersections might be visited later in the day.",
@@ -31,11 +31,11 @@ export const quizQuestions = [
     correct: 2
   },
   {
-    question: "How can previous tolls help you make smarter decisions later in the day?",
+    question: "How can previous tips help you make smarter decisions later in the day?",
     options: [
-      "If you visit an intersection again, you will not have to pay a toll there.",
-      "The toll cost decreases if you use the same route multiple times.",
-      "You can avoid jobs that pass through intersections that contain tolls.",
+      "If you visit an intersection again, you will earn another tip there.",
+      "The tip amount increases if you use the same route multiple times.",
+      "You can select jobs that pass through intersections that pay tips.",
     ],
     correct: 2
   },
@@ -43,35 +43,35 @@ export const quizQuestions = [
     question: "Why might it be useful to know about your upcoming dispatches?", // What does it mean if an intersection is highlighted in pink?",
     options: [
       "Because they tell you which intersections might be visited later on in the day.",
-      "Because they tell you which intersections are costly.",
+      "Because they tell you which intersections are rewarding.",
       "Because they tell you whether you are in a row city or a column city.",
     ],
     correct: 0
   },
   {
-    question: "What happens to tolls at the start of a new day?",
+    question: "What happens to tips at the start of a new day?",
     options: [
       "They remain in the same locations.",
       "They reset to new locations.",
-      "You only keep toll information for the route you chose last."
+      "You only keep tip information for the route you chose last."
     ],
     correct: 1
   },
   {
     question: "What happens after working in the same city for 5 days?",
     options: [
-      "You continue working in the same city, but with new toll locations.",
+      "You continue working in the same city, but with new tip locations.",
       "You move to a new city, with a new background and a potentially different traffic pattern.",
-      "The toll costs become permanently visible.",
+      "The tips become permanently visible.",
     ],
     correct: 1
   },
   {
     question: "What is the key difference between 'column cities' and 'row cities'?",
     options: [
-      "In column cities, tolls are randomly placed, while in row cities, they are fixed.",
-      "Column cities have higher tolls overall.",
-      "In column cities, tolls tend to cluster in columns, while in row cities, they cluster in rows."
+      "In column cities, tips are randomly placed, while in row cities, they are fixed.",
+      "Column cities have higher tips overall.",
+      "In column cities, tips tend to cluster in columns, while in row cities, they cluster in rows."
     ],
     correct: 2
   },
@@ -79,22 +79,22 @@ export const quizQuestions = [
     question: "How can you figure out what type of city you are in (i.e. a column city or a row city)?",
     options: [
       "By checking the city background color.",
-      "By noticing whether tolls tend to be clustered in columns or rows.",
+      "By noticing whether tips tend to be clustered in columns or rows.",
       "By counting how many jobs you complete each day.",
     ],
     correct: 1
   },
   {
-    question: "Suppose you observe a toll at an intersection. How can this information help you predict other toll locations on that day?",
+    question: "Suppose you receive a tip at an intersection. How can this information help you predict other tip locations on that day?",
     options: [
       "Nothing—intersections are not related to one another.",
-      "Other tolls are likely to be in the same row or column, depending on the city pattern.",
-      "This intersection will have a toll for the rest of the experiment."
+      "Other tips are likely to be in the same row or column, depending on the city pattern.",
+      "This intersection will pay a tip for the rest of the experiment."
     ],
     correct: 1
   },
   {
-    question: "At the start of a new day within the same city, what pattern will the new set of tolls have?",
+    question: "At the start of a new day within the same city, what pattern will the new set of tips have?",
     options: [
       "The same pattern as previous days in that city (i.e. clustered in columns or rows).",
       "A completely random pattern with no relation to previous days.",

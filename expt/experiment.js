@@ -138,7 +138,8 @@ if (test) {
 // get sound ready
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 let costSoundBuffer;
-fetch('assets/costSound.mp3')
+// fetch('assets/costSound.mp3')
+fetch('assets/coinSound.mp3')
     .then(response => response.arrayBuffer())
     .then(data => audioContext.decodeAudioData(data))
     .then(buffer => {
@@ -326,17 +327,17 @@ class Grid {
             gridHTML += `
             <div class="cost-display-container">
                 <h2 class="day-display">Day ${trial.grid}/${this.nGrids}</h2>
-                <h2 class="cost-total">Total Tolls Paid Today:</h2>
-                <p id="total-cost" class="cost-total.">-$${totalCost}</p>
-                <p id="trial-cost" class="cost-trial hidden">-$0</p> 
+                <h2 class="cost-total">Total Tips Earned Today:</h2>
+                <p id="total-cost" class="cost-total.">$${totalCost}</p>
+                <p id="trial-cost" class="cost-trial hidden">$0</p> 
             </div>
             `;
             } else {
             gridHTML += `
             <div class="cost-display-container">
-                <h2 class="cost-total">Total Tolls Paid:</h2>
-                <p id="total-cost" class="cost-total">-$${totalCost}</p>
-                <p id="trial-cost" class="cost-trial hidden">-$0</p> 
+                <h2 class="cost-total">Total Tips Earned:</h2>
+                <p id="total-cost" class="cost-total">$${totalCost}</p>
+                <p id="trial-cost" class="cost-trial hidden">$0</p> 
             </div>
             `;
             }
@@ -346,10 +347,10 @@ class Grid {
         if (feedback) {
             gridHTML += `
             <div class="cost-display-container">
-                <h2>You paid <strong style="color: rgb(203, 43, 43);">$${totalCost}</strong> today.</h2>
-                <p id="trial-cost" class="cost-trial hidden">-$0</p> 
+                <h2>You earned <strong style="color: rgb(0, 199, 73);;">$${totalCost}</strong> in tips today.</h2>
+                <p id="trial-cost" class="cost-trial hidden">$0</p> 
                 <p id="total-cost" class="cost-total">A new day has begun.</p>
-                <p id="total-cost" class="cost-total">Tolls in this city have been reset.</p>
+                <p id="total-cost" class="cost-total">Tips in this city have been reset.</p>
             </div>
             `;
         }
@@ -457,10 +458,10 @@ class Grid {
         if (feedback){
             gridHTML += `
             <div class="cost-display-container">
-                <h2>You paid <strong style="color:  rgb(203, 43, 43);">$${totalCost}</strong> today.</h2>
-                <p id="trial-cost" class="cost-trial hidden">-$0</p> 
+                <h2>You earned <strong style="color:  rgb(0, 199, 73);;">$${totalCost}</strong> in tips today.</h2>
+                <p id="trial-cost" class="cost-trial hidden">$0</p> 
                 <p id="total-cost" class="cost-total">A new day has begun.</p>
-                <p id="total-cost" class="cost-total">Tolls in this city have been reset.</p>
+                <p id="total-cost" class="cost-total">Tips in this city have been reset.</p>
             </div>
             `;
         } 
@@ -557,7 +558,7 @@ class Grid {
         // Reset trial cost
         const trialCostElement = document.getElementById("trial-cost");
         if (trialCostElement) {
-            trialCostElement.textContent = "-$0";
+            trialCostElement.textContent = "$0";
             trialCostElement.classList.add("hidden");
         }
     
@@ -708,9 +709,9 @@ class Grid {
                 upcomingHTML += `
                 <div id="cost-message" class="cost-display-container">
                 <h2 class="day-display">${dayType} ${trial.grid}/${this.nGrids}</h2>
-                <h2 class="cost-total">Total Tolls Paid Today:</h2>
-                <p id="total-cost" class="cost-total">-$${totalCost}</p>
-                <p id="trial-cost" class="cost-trial hidden">-$0</p> 
+                <h2 class="cost-total">Total Tips Earned Today:</h2>
+                <p id="total-cost" class="cost-total">$${totalCost}</p>
+                <p id="trial-cost" class="cost-trial hidden">$0</p> 
                 </div>
                 `;
             } else {
@@ -722,7 +723,7 @@ class Grid {
                     upcomingHTML += `
                     <div id="cost-message" class="cost-display-container">
                     <h2 class="day-display">Day ${trial.grid}/${this.nGrids} Complete</h2>
-                    <h2 class="cost-total">You paid a total of <strong style="color:  rgb(203, 43, 43);">$${totalCost}</strong> today.</h2>
+                    <h2 class="cost-total">You earned a total of <strong style="color: rgb(0, 199, 73);;">$${totalCost}</strong> today.</h2>
                     <h2 class="cost-total">${contextMessage}</h2>
                     <h2 class="cost-total">Once you have made your choice, you will continue to the next city.</h2>
                     </div>
@@ -731,7 +732,7 @@ class Grid {
                     upcomingHTML += `
                     <div id="cost-message" class="cost-display-container">
                     <h2 class="day-display">Day ${trial.grid}/${this.nGrids} Complete</h2>
-                    <h2 class="cost-total">You paid a total of <strong style="color:  rgb(203, 43, 43);">$${totalCost}</strong> today. Tolls will now reset for the next day in this city.</h2>
+                    <h2 class="cost-total">You earned a total of <strong style="color: rgb(0, 199, 73);;">$${totalCost}</strong> today. Tips will now reset for the next day in this city.</h2>
                     <h2 class="cost-total">${contextMessage}</h2>
                     <h2 class="cost-total">Once you have made your choice, you will continue to the next day in this city.</h2>
                     </div>
@@ -745,7 +746,7 @@ class Grid {
             <h2 class="day-display">${dayType} ${trial.grid}/${this.nGrids}</h2>
             <h2 class="cost-total">Here are your dispatches for the day.</h2>
             <h2 id="total-cost" class="cost-total">Get ready to select your jobs!</h2>
-            <h2 id="trial-cost" class="cost-trial hidden">-$0</h2> 
+            <h2 id="trial-cost" class="cost-trial hidden">$0</h2> 
             </div>
             `;
         }
@@ -1217,20 +1218,20 @@ function animateAgent(path, binaryCosts, pauseAtEnd=false, callback) {
 
                     // Ensure start and goal cells update their color when observed
                     if (cellElement.classList.contains("start") || cellElement.classList.contains("goal")) {
-                        cellElement.style.backgroundColor = cost === -1 ? "rgb(203, 43, 43)" : "#b8b8d9"; // Red for toll, grey for free NEED TO MAKE SURE THESE MATCH HTML SHADES
+                        cellElement.style.backgroundColor = cost === -1 ? "rgb(0, 199, 73);" : "#b8b8d9"; // Red for tip, grey for free NEED TO MAKE SURE THESE MATCH HTML SHADES
                     }
 
                     if (cost === -1) {
                         trialCost++;
 
-                        // Visual burst effect for toll cost
-                        cellElement.innerHTML += '<div class="cost-burst">+$1 Toll</div>';
+                        // Visual burst effect for tip cost
+                        cellElement.innerHTML += '<div class="cost-burst">$1 Tip</div>';
                         setTimeout(() => {
                             const burst = cellElement.querySelector('.cost-burst');
                             if (burst) burst.remove();
                         }, 500);
 
-                        // Play toll sound
+                        // Play tip sound
                         // costSound.play();
                         playCostSound();
 
@@ -1252,7 +1253,7 @@ function animateAgent(path, binaryCosts, pauseAtEnd=false, callback) {
 
                     const trialCostElement = document.getElementById("trial-cost");
                     if (trialCostElement) {
-                        trialCostElement.textContent = `-$${trialCost}`;
+                        trialCostElement.textContent = `$${trialCost}`;
                     }
 
                     // Update observed costs in upcoming grids
@@ -1331,13 +1332,13 @@ function mergeCosts(trialCost, callback, pauseAtEnd=false) {
                     const elapsed = now - startTime;
                     const progress = Math.min(elapsed / duration, 1);
                     const currentCount = Math.floor(startCost + progress * trialCost);
-                    totalCostElement.textContent = `-$${currentCount}`;
+                    totalCostElement.textContent = `$${currentCount}`;
             
                     if (progress < 1) {
                         requestAnimationFrame(animate);
                     } else {
-                        totalCostElement.textContent = `-$${totalCost}`;
-                        // trialCostElement.textContent = `-$0`;
+                        totalCostElement.textContent = `$${totalCost}`;
+                        // trialCostElement.textContent = `$0`;
                         // trialCostElement.classList.remove("cost-animate");
                         trialCostElement.style.transform = "translateY(0)";
                     }
@@ -1372,13 +1373,13 @@ function mergeCosts(trialCost, callback, pauseAtEnd=false) {
                     const elapsed = now - startTime;
                     const progress = Math.min(elapsed / duration, 1);
                     const currentCount = Math.floor(startCost + progress * trialCost);
-                    totalCostElement.textContent = `-$${currentCount}`;
+                    totalCostElement.textContent = `$${currentCount}`;
             
                     if (progress < 1) {
                         requestAnimationFrame(animate);
                     } else {
-                        totalCostElement.textContent = `-$${totalCost}`;
-                        // trialCostElement.textContent = `-$0`;
+                        totalCostElement.textContent = `$${totalCost}`;
+                        // trialCostElement.textContent = `$0`;
                         // trialCostElement.classList.remove("cost-animate");
                         trialCostElement.style.transform = "translateY(0)";
                     }
@@ -1767,10 +1768,10 @@ function animateDayChange(cityId) {
 const gridFeedback = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
-        const todayTolls = totalCost; // Assuming totalCost tracks the tolls paid so far
+        const todayTips = totalCost; // Assuming totalCost tracks the tips paid so far
         return `
             <div class="new-day-text">
-                <h3>You paid a total of <strong style="color:rgb(203, 43, 43);">$${todayTolls}</strong> in tolls today.</h3>
+                <h3>You earned a total of <strong style="color:rgb(0, 199, 73);;">$${todayTips}</strong> in tips today.</h3>
                 <h3>Press spacebar to continue.</h3>
             </div>
         `;
@@ -1785,10 +1786,10 @@ choices: [' '], // spacebar to continue
 const practiceGridFeedback = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
-        const todayTolls = totalCost; // Assuming totalCost tracks the tolls paid so far
+        const todayTips = totalCost; // Assuming totalCost tracks the tips paid so far
         return `
             <div class="new-day-text">
-                <h3>You would have paid a total of <strong style="color:  rgb(203, 43, 43);">$${todayTolls}</strong> in tolls today.</h3>
+                <h3>You would have earned a total of <strong style="color:  rgb(0, 199, 73);;">$${todayTips}</strong> in tips today.</h3>
                 <h2>Press spacebar to continue.</h2>
             </div>
         `;
@@ -1988,7 +1989,7 @@ const firstGridMessage = {
             <div class="new-day-text">
                 <h1>Ready?</h1>
                 <p>Your taxi company is starting operations in its first city.</p>
-                <p>Remember: your goal is to minimise the total tolls paid each day.</p>
+                <p>Remember: your goal is to maximise the total tips earned each day.</p>
                 <h2>Press spacebar to begin dispatching.</h2>
             </div>
         `;
@@ -2151,7 +2152,7 @@ const instructions2 = {
                 <p>- The letter <strong>P</strong> marks one job</p>
                 <p>- The letter <strong>Q</strong> marks the other job</p>
                 <p>On each dispatch, these letters are randomly assigned to each job. To send out a taxi to one of these jobs, you need to press the corresponding key on your keyboard. Note that if an intersection appears on both paths, it will contain both P and Q.</p>
-                <p>For any given choice, the lengths of the two possible jobs are the same, and you are paid the same wage by the company each day. However, some jobs are more costly than others, which you must pay for yourself. This is because of <span style="color: rgb(203, 43, 43);">tolls</span> in the city...</p>
+                <p>For any given choice, the lengths of the two possible jobs are the same, and you are paid the same base wage by the company each day. However, some jobs allow you to earn extra money. This is because you can earn <span style="color: rgb(0, 199, 73);;">tips</span> in popular parts of the city...</p>
             </div>
             <div class="instruction-section" style="font-size: 20px;">
                 <h2>Press spacebar to continue.</h2>
@@ -2174,12 +2175,12 @@ const instructions2_5 = {
         const fontSize = "20px"; // Define font size as a variable
         return `
             <div class="instruction-section" style="font-size: 20px;">
-                <h1>Toll Intersections:</h1>
-                <p>Traffic in some parts of the city is busier than in others. This means that tolls apply at busy intersections. Visiting an intersection reveals whether or not you have to pay a toll there.</p>
+                <h1>Tip Intersections:</h1>
+                <p>Each day, some parts of the city are more popular than others. This means that you will receive a tip if your job passes through one of these popular intersections. Visiting an intersection reveals whether or not you will earn a tip there.</p>
                 <p>- <strong><span style="color: rgb(114, 114, 150);">Dark grey intersections</span></strong> have not been visited yet</p>
-                <p>- <strong><span style="color: rgb(203, 43, 43);">Red intersections</span></strong> cost a $1 toll to pass through</p>
-                <p>- <strong><span style="color:rgb(194, 194, 229);">Light grey intersections</span></strong> are free with no tolls</p>
-                <p>Your goal is to complete all taxi jobs while minimising the total tolls paid out.</p>
+                <p>- <strong><span style="color: rgb(0, 199, 73);;">Green intersections</span></strong> pay you a $1 tip if you pass through</p>
+                <p>- <strong><span style="color:rgb(194, 194, 229);">Light grey intersections</span></strong> pay no tips</p>
+                <p>Your goal is to complete all taxi jobs while maximising the total tips earned.</p>
                 <p>Note that the rows and columns of the city are labelled with numbers and letters, respectively, to improve readability.</p>
             </div>
 
@@ -2206,7 +2207,7 @@ const practice1SelectionTrial = {
         const keyAssignment = { blue: 'Q', green: 'P' };
         const instruction = practice1TrialIndex === 0 
             ? `<h3>Please select the <span style="color: rgb(47, 164, 253); font-weight: bold;">BLUE</span> path by pressing the <span style="font-weight: bold;">${keyAssignment.blue}</span> key.</h3>`
-            : `<h3>Please select the <span style="color:  #29da6a; font-weight: bold;">GREEN</span> path by pressing the <span style="font-weight: bold;">${keyAssignment.green}</span> key.</h3>`;
+            : `<h3>Please select the <span style="color:  rgb(243, 136, 22); font-weight: bold;">ORANGE</span> path by pressing the <span style="font-weight: bold;">${keyAssignment.green}</span> key.</h3>`;
         
         // Store the assignment for this trial
         jsPsych.data.addProperties({
@@ -2295,9 +2296,9 @@ const practice1SelectionTrial = {
             gridContainer.innerHTML = `
                 <div class="current-job-container">
                     <div class="cost-display-container">
-                        <h2 class="cost-total">Total Tolls Paid:</h2>
-                        <p id="total-cost" class="cost-total">-$0</p>
-                        <p id="trial-cost" class="cost-trial hidden">-$0</p> 
+                        <h2 class="cost-total">Total Tips Earned:</h2>
+                        <p id="total-cost" class="cost-total">$0</p>
+                        <p id="trial-cost" class="cost-trial hidden">$0</p> 
                     </div>
                     ${practice1Grid.createGridHTML(practice1TrialIndex, choice, keyAssignment,true,true)}
                 </div>
@@ -2765,9 +2766,9 @@ const instructions3_6 = {
         <div class="cost-display-container">
             <h1>Daily Shift:</h1>
             <p style="font-size: ${fontSize};">As you move through the day’s dispatches from left to right, past dispatches are <span style="color: rgb(138, 138, 184);">greyed out</span>.</p>
-            <p style="font-size: ${fontSize};">The locations of tolls remain fixed throughout the day. Once you visit an intersection, you find out whether or not you have to pay a toll whenever you reach that intersection again on the same day.</p>
-            <p style="font-size: ${fontSize};">Notice how, whenever you visit an intersection, information about whether it contains a toll or not also becomes available in your upcoming dispatches.</p>
-            <p style="font-size: ${fontSize};">Hence, finding out about the intersections will help you for the rest of the day, since it allows you to select jobs where you don’t have to pay any tolls.</p>
+            <p style="font-size: ${fontSize};">The locations of tips remain fixed throughout the day. Once you visit an intersection, you find out whether or not you will earn a tip whenever you reach that intersection again on the same day.</p>
+            <p style="font-size: ${fontSize};">Notice how, whenever you visit an intersection, information about whether it contains a tip or not also becomes available in your upcoming dispatches.</p>
+            <p style="font-size: ${fontSize};">Hence, finding out about the intersections will help you for the rest of the day, since it allows you to select jobs where you can earn tips.</p>
             <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
         </div>
         <div class="jobs-layout">
@@ -2793,7 +2794,7 @@ const instructions3_7 = {
             <div class="instruction-section" style="font-size: 20px;">
                 <h1>Practice Shift:</h1>
                 <p>You will now practise two full days of dispatches.</p>
-                <p>The total amount of tolls paid over the course of each day will be shown at the top of your screen.</p>
+                <p>The total amount of tips earned over the course of each day will be shown at the top of your screen.</p>
                 <p>Before this practice, you have the opportunity to review the most recent instructions.</p>
                 <h2>Press backspace to review, or spacebar to continue.</h2>
             </div>
@@ -3060,7 +3061,7 @@ const instructions4 = {
     stimulus: `
         <div class="instruction-section" style="z-index: 2001; position: relative;">
             <h1>New Day:</h1>
-            <p>At the start of a new day, the traffic in the city resets, meaning that the intersections where you do (or do not) have to pay a toll have reset. You are also given a new set of dispatches.</p>
+            <p>At the start of a new day, the traffic in the city resets, meaning that the intersections where you do (or do not) receive a tip have reset. You are also given a new set of dispatches.</p>
             <p>Watch the grid reset for the next day below.</p>
             <h2 id="continue-text" style="display: none;">Press spacebar to continue dispatching.</h2>
         </div>
@@ -3211,19 +3212,19 @@ const instructions6 = {
         // document.body.style.zoom = "75%";
         return `
             <div class="instruction-section" style="margin: 10px;">
-            <h1>How can you predict which intersections have tolls (or no tolls)?</h1>
-            <p style="font-size: ${fontSize};">Each city has particular traffic properties, such that the busy intersections tend to be related to one another in one of two ways.</p>
+            <h1>How can you predict which intersections have tips (or no tips)?</h1>
+            <p style="font-size: ${fontSize};">Each city has particular traffic properties, such that the popular intersections tend to be related to one another in one of two ways.</p>
             </div>
             <div class="instruction-section" style="margin: 10px;">
             <h1>'Column cities'</h1>
-            <p style="font-size: ${fontSize};">In column cities, traffic tends to run from north to south every day, meaning that tolls tend to be clustered in columns.</p>
-            <p style="font-size: ${fontSize};">That is, a column may have <strong>a lot of tolls</strong>, or <strong>not many tolls</strong>.</p>
-            <p style="font-size: ${fontSize};">The particular locations of these busy columns may change each day, but the city will always have this column-dependent feature.</p>
+            <p style="font-size: ${fontSize};">In column cities, traffic tends to run from north to south every day, meaning that tips tend to be clustered in columns.</p>
+            <p style="font-size: ${fontSize};">That is, a column may have <strong>a lot of tips</strong>, or <strong>not many tips</strong>.</p>
+            <p style="font-size: ${fontSize};">The particular locations of these popular columns may change each day, but the city will always have this column-dependent feature.</p>
             <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
             </div>
             <div class="jobs-layout" >
             <div class="instruction-section" style="text-align: center; font-size: 20px; color: #3a3a3a; margin: 10px;">
-            <h3><strong>Example day ${practice4TrialIndex + 1} tolls</strong><h3>
+            <h3><strong>Example day ${practice4TrialIndex + 1} tips</strong><h3>
             </div>
             <div id="grid-container" class="current-job-section"></div>
         `;
@@ -3248,8 +3249,8 @@ const instructions7 = {
         const fontSize = "28px"; // Define font size as a variable
         return `
             <div class="instruction-section" style="z-index: 2000; position: relative;">
-            <h1>How can you predict which intersections have tolls (or no tolls)?</h1>
-            <p style="font-size: ${fontSize};">Each city has particular traffic properties, such that the busy intersections tend to be related to one another in one of two ways.</p>
+            <h1>How can you predict which intersections have tips (or no tips)?</h1>
+            <p style="font-size: ${fontSize};">Each city has particular traffic properties, such that the popular intersections tend to be related to one another in one of two ways.</p>
         `;
     },
     choices: "NO_KEYS", // No keypress required
@@ -3308,19 +3309,19 @@ const instructions8 = {
         const fontSize = "28px"; // Define font size as a variable
         return `
             <div class="instruction-section" style="z-index: 2000; position: relative;">
-                <h1>How can you predict which intersections have tolls (or no tolls)?</h1>
-                <p style="font-size: ${fontSize};">Each city has particular traffic properties, such that the busy intersections tend to be related to one another in one of two ways.</p>
+                <h1>How can you predict which intersections have tips (or no tips)?</h1>
+                <p style="font-size: ${fontSize};">Each city has particular traffic properties, such that the popular intersections tend to be related to one another in one of two ways.</p>
             </div>
             <div class="instruction-section"> 
                 <h1>'Row cities'</h1>
-                <p style="font-size: ${fontSize};">In row cities, the opposite is true: traffic tends to run from east to west every day, meaning that tolls tend to be clustered in rows.</p>
-                <p style="font-size: ${fontSize};">That is, a row may have <strong>a lot of tolls</strong>, or <strong>not many tolls</strong>.</p>
-                <p style="font-size: ${fontSize};">The particular locations of these busy rows may change each day, but the city will always have this row-dependent feature.</p>
+                <p style="font-size: ${fontSize};">In row cities, the opposite is true: traffic tends to run from east to west every day, meaning that tips tend to be clustered in rows.</p>
+                <p style="font-size: ${fontSize};">That is, a row may have <strong>a lot of tips</strong>, or <strong>not many tips</strong>.</p>
+                <p style="font-size: ${fontSize};">The particular locations of these popular rows may change each day, but the city will always have this row-dependent feature.</p>
                 <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
             </div>
             <div class="jobs-layout">
                 <div class="instruction-section" style="text-align: center;  font-size: 20px; color: #3a3a3a;">
-                    <h3><strong>Example day ${practice5TrialIndex + 1} tolls</strong><h3>
+                    <h3><strong>Example day ${practice5TrialIndex + 1} tips</strong><h3>
                 </div>
                 <div id="grid-container" class="current-job-section"></div>
             </div>
@@ -3358,7 +3359,7 @@ const instructions9 = {
             <div class="cost-display-container">
                 <h1>City Check:</h1>
                 <p style="font-size: ${fontSize};">At the end of each day, you will be asked which kind of city you think you are working in.</p>
-                <p style="font-size: ${fontSize};">This means you need to check the intersections you have observed, and see whether the tolls (or lack of tolls) tend to be clustered in rows or columns.</p>
+                <p style="font-size: ${fontSize};">This means you need to check the intersections you have observed, and see whether the tips (or lack of tips) tend to be clustered in rows or columns.</p>
                 <p style="font-size: ${fontSize};">For example, here are your ${n_trials} choices on one of the days that you practised.</p>
                 <h2 style="font-size: ${fontSize};">Press 'R' if you think you were in a row city, and 'C' if you think you were in a column city.</h2>
             </div>
@@ -3398,7 +3399,7 @@ const instructions10 = {
                 <h1>City Check:</h1>
                 <p style="font-size: ${fontSize};">${contextMessage}</p>
                 <p style="font-size: ${fontSize};">Note that in the actual task phase, you will not find out if you have correctly identified the city you are in after making your choice.</p>
-                <p style="font-size: ${fontSize};">Remember also: although the locations of the tolls reset each day, the city type you are in remains constant for all ${n_days} days you work in that city.</p>
+                <p style="font-size: ${fontSize};">Remember also: although the locations of the tips reset each day, the city type you are in remains constant for all ${n_days} days you work in that city.</p>
                 <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
             </div>
             <div class="jobs-layout">
@@ -3520,9 +3521,9 @@ const instructions11 = {
         return `
             <div class="instruction-section">
                 <h1>Bonus Payment:</h1>
-                <p>Remember: your aim is to minimise the total cost paid each day by predicting which intersections will (or will not) incur a toll, and hence by selecting jobs that you think will be least costly.</p>
+                <p>Remember: your aim is to maximise the total tips earned each day by predicting which intersections will (or will not) pay a tip, and hence by selecting jobs that you think will be most rewarding.</p>
                 <p>This means that when choosing a job, it helps to think about which intersections you might visit later on in that day. These are highlighted in <span style="color: rgb(240, 110, 254);">pink</span>, and shown in your upcoming dispatches.</p>
-                <p>At the end of the experiment, we will assess how well you chose jobs that were the least costly. This will determine whether you receive a bonus payment.</p>
+                <p>At the end of the experiment, we will assess how well you chose jobs that were the most rewarding. This will determine whether you receive a bonus payment.</p>
                 <p>So, you should pay attention throughout the experiment - i.e. on every day, and in every city.</p>
                 <p>Remember also: you will have 10 seconds to select a job once the clock icon above your current dispatch is highlighted in <span style="color: #ece75d;">yellow</span>, otherwise the trial will timeout.</p>
                 <p>If you timeout too many times, the experiment will end and you will return to Prolific.</p>
@@ -3918,9 +3919,9 @@ function initializeExperiment() {
   
     // Combine everything into a single timeline
     const fullTimeline = [
-      ...ethicsTimeline,
-      instructionsLoop,
-      ...quizTimeline,
+    //   ...ethicsTimeline,
+    //   instructionsLoop,
+    //   ...quizTimeline,
       ...mainTimeline
     ];
   
