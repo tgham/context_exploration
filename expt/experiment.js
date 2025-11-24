@@ -200,7 +200,7 @@ preloadImages([
 });
 
 // Function to calculate and apply the scaling factor
-let zoomFactor;
+let initialZoomFactor;
 function applyScreenScaling() {
     
     // Define the reference dimensions (MacBook Pro 16" M2)
@@ -217,14 +217,14 @@ function applyScreenScaling() {
     const baseZoomFactor = 0.85;
 
     // Adjust the zoom factor based on the screen proportions
-    zoomFactor = baseZoomFactor * Math.min(widthRatio, heightRatio);
+    initialZoomFactor = baseZoomFactor * Math.min(widthRatio, heightRatio);
 
-    document.body.style.zoom = zoomFactor;
     
+    // document.body.style.zoom = zoomFactor;
     console.log(`User screen: ${screenWidth}x${screenHeight}`);
     console.log(`Reference screen: ${baseWidth}x${baseHeight}`);
     console.log(`Base zoom factor: ${baseZoomFactor}`);
-    console.log(`Applied scaling factor: ${zoomFactor.toFixed(3)}`);
+    console.log(`Initial zoom factor: ${initialZoomFactor.toFixed(3)}`);
 }
 
 
@@ -250,6 +250,7 @@ const informedConsentTrial = {
     stimulus: informedConsentForm,
     response_ends_trial: false,
     on_load: function() {
+        initPractice(); // Initialize the grid  
         document.body.style.overflowY = "auto";
         document.documentElement.style.overflowY = "auto";
         document.getElementById('consent-given').addEventListener('click', function() {
@@ -689,7 +690,7 @@ class Grid {
 
 
     // Add createUpcomingJobsHTML as a method of the Grid class
-    createAllJobsHTML(currentTrialIndex, selectedPath=null, keyAssignment=null, feedback=false, firstDay=false, showPink=true, restrictPink=null) {
+    createAllJobsHTML(currentTrialIndex, selectedPath=null, keyAssignment=null, feedback=false, firstDay=false, showPink=true, restrictPink=null, showNoPaths=false) {
         const trial = this.getTrialInfo(currentTrialIndex);
         const currentGridNumber = Math.floor(currentTrialIndex / this.nTrials);
         const currentGridStartIndex = currentGridNumber * this.nTrials;
@@ -833,27 +834,29 @@ class Grid {
                     // Check if this cell is in upcoming paths (only for current trial)
                     const isUpcomingPath = previewIndex === currentTrialIndex && upcomingPaths.has(`${row}-${col}`);
 
-                    if (previewIndex > currentTrialIndex && (restrictPink === null || i <= restrictPink)) {
-                        isStartA = row === trial.start_A[0] && col === trial.start_A[1];
-                        isStartB = row === trial.start_B[0] && col === trial.start_B[1];
-                        isGoalA = row === trial.goal_A[0] && col === trial.goal_A[1];
-                        isGoalB = row === trial.goal_B[0] && col === trial.goal_B[1];
-                        isPathA = trial.path_A.some(coord => coord[0] === row && coord[1] === col);
-                        isPathB = trial.path_B.some(coord => coord[0] === row && coord[1] === col);
-                    } else if (previewIndex === currentTrialIndex) {
-                        isStartA = selectedPath !== 'green' && selectedPath !== 'none' && row === trial.start_A[0] && col === trial.start_A[1];
-                        isStartB = selectedPath !== 'blue' && selectedPath !== 'none' && row === trial.start_B[0] && col === trial.start_B[1];
-                        isGoalA = selectedPath !== 'green' && selectedPath !== 'none' && row === trial.goal_A[0] && col === trial.goal_A[1];
-                        isGoalB = selectedPath !== 'blue' && selectedPath !== 'none' && row === trial.goal_B[0] && col === trial.goal_B[1];
-                        isPathA = selectedPath !== 'green' && selectedPath !== 'none' && trial.path_A.some(coord => coord[0] === row && coord[1] === col);
-                        isPathB = selectedPath !== 'blue' && selectedPath !== 'none' && trial.path_B.some(coord => coord[0] === row && coord[1] === col);
-                    } else if (previewIndex < currentTrialIndex) {
-                            isStartA = false;
-                            isStartB = false;
-                            isGoalA = false;
-                            isGoalB = false;
-                            isPathA = false;
-                            isPathB = false;
+                    if (!showNoPaths) {
+                        if (previewIndex > currentTrialIndex && (restrictPink === null || i <= restrictPink)) {
+                            isStartA = row === trial.start_A[0] && col === trial.start_A[1];
+                            isStartB = row === trial.start_B[0] && col === trial.start_B[1];
+                            isGoalA = row === trial.goal_A[0] && col === trial.goal_A[1];
+                            isGoalB = row === trial.goal_B[0] && col === trial.goal_B[1];
+                            isPathA = trial.path_A.some(coord => coord[0] === row && coord[1] === col);
+                            isPathB = trial.path_B.some(coord => coord[0] === row && coord[1] === col);
+                        } else if (previewIndex === currentTrialIndex) {
+                            isStartA = selectedPath !== 'green' && selectedPath !== 'none' && row === trial.start_A[0] && col === trial.start_A[1];
+                            isStartB = selectedPath !== 'blue' && selectedPath !== 'none' && row === trial.start_B[0] && col === trial.start_B[1];
+                            isGoalA = selectedPath !== 'green' && selectedPath !== 'none' && row === trial.goal_A[0] && col === trial.goal_A[1];
+                            isGoalB = selectedPath !== 'blue' && selectedPath !== 'none' && row === trial.goal_B[0] && col === trial.goal_B[1];
+                            isPathA = selectedPath !== 'green' && selectedPath !== 'none' && trial.path_A.some(coord => coord[0] === row && coord[1] === col);
+                            isPathB = selectedPath !== 'blue' && selectedPath !== 'none' && trial.path_B.some(coord => coord[0] === row && coord[1] === col);
+                        } else if (previewIndex < currentTrialIndex) {
+                                isStartA = false;
+                                isStartB = false;
+                                isGoalA = false;
+                                isGoalB = false;
+                                isPathA = false;
+                                isPathB = false;
+                        }
                     }
                     const observedCost = this[`observedCosts${i}`][`${row}-${col}`];
                     const observedClass = observedCost !== undefined ?
@@ -2107,8 +2110,73 @@ function calculateBonus() {
     return bonusAchieved;
 }
 
+// Zoom adjustment
+let zoomFactor = 1.0; // persistent across this trial
+const zoomAdjustment = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        const n = grid.nTrials;
+        const fontSize = "22px"; // Define font size as a variable
+        const selectedPath = 'hello';
+        const keyAssignment = null
+        const feedback=false;
+        const firstDay=true;
+        const showPink=false;
+        const restrictPink=0;
+        const showNoPaths = true;
+        // practice2TrialIndex = 3;
+        return `
+        <div class="cost-display-container">
+            <h1>Display Setup</h1>
+            <p style="font-size: ${fontSize};">Let's first adjust your display so the experiment fits in your browser.</p>
+            <p style="font-size: ${fontSize};">Press the Up / Down Arrow keys to zoom in / out and adjust the display size.</p>
+            <p style="font-size: ${fontSize};">Once you can clearly see all ${n} grids side-by-side, press the spacebar to continue.</p>
+        </div>
+        <div class="jobs-layout">
+            <div class="upcoming-jobs-container grid">
+                ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay,showPink, restrictPink, showNoPaths).replace(/<div id="cost-message".*?<\/div>/s, '')} 
+            </div>
+        </div>
+        `;
+    },
+    choices: [' '], // Only spacebar ends the trial
+    on_load: function() {
 
-// ...existing code...
+        // calculate the initial best guess for the appropriate zoom factor
+        applyScreenScaling();
+        zoomFactor = initialZoomFactor;
+
+        const percentEl = document.getElementById('zoom-percent');
+        function applyZoom() {
+            document.body.style.zoom = zoomFactor;
+        }
+        function updateZoom(delta) {
+            zoomFactor = Math.min(1.8, Math.max(0.6, +(zoomFactor + delta).toFixed(2)));
+            applyZoom();
+            console.log('zoom factor', zoomFactor)
+        }
+        function zoomKeyHandler(e) {
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                updateZoom(0.05);
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                updateZoom(-0.05);
+            }
+        }
+        applyZoom();
+        document.addEventListener('keydown', zoomKeyHandler);
+        zoomAdjustment._zoomKeyHandler = zoomKeyHandler;
+    },
+    on_finish: function() {
+        if (zoomAdjustment._zoomKeyHandler) {
+            document.removeEventListener('keydown', zoomAdjustment._zoomKeyHandler);
+        }
+        jsPsych.data.addProperties({ final_zoom_factor: zoomFactor });
+        data.zoomFactor = zoomFactor;
+    }
+};
+
 
 // First instruction page
 const instructions1 = {
@@ -2131,7 +2199,7 @@ const instructions1 = {
         // appropriate zooming
         document.body.style.overflowY = "hidden";
         document.documentElement.style.overflowY = "hidden";
-        applyScreenScaling();
+        // applyScreenScaling();
 
         // Set initial city background to 'practice1.png'
         setCityBackground('practice1');
@@ -3780,6 +3848,7 @@ function createInstructionsTimeline() {
     createCityMapping(numCities);
 
     // Welcome message
+    timeline.push(zoomAdjustment);
     timeline.push(instructions1);
 
     // Practice selection
