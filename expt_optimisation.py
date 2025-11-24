@@ -44,8 +44,7 @@ def agent_loop(p, agent_params, hyperparams, agents):
     sim_outs = []
 
     ## load env objects
-    # with open('useful_saves/expt_optimisation/simulated_envs/ppt_'+str(p)+'_envs.pkl', 'rb') as f:
-    with open('useful_saves/expt_optimisation/simulated_envs/env_objects/expt_2_env_objects_' + str(p) + '.pkl', 'rb') as f:
+    with open('useful_saves/expt_optimisation/simulated_envs/expt_2_rewards/env_objects/expt_2_env_objects_' + str(p) + '.pkl', 'rb') as f:
         env_objects = pickle.load(f)
 
     ## loop through agents
@@ -90,8 +89,8 @@ beta_params = {
     }
 
 ## trial info
-n_sim_participants = 101
-n_cities = 8
+n_sim_participants = 240
+n_cities = 6
 n_days = 5
 n_trials = 4
 expt = 'AFC'
@@ -157,7 +156,7 @@ all_sim_out = {
     }
 parallel = True
 n_cores = 128
-create=False
+create=True
 
 ## init agent and expt
 agent_params = [
@@ -165,7 +164,7 @@ agent_params = [
     0.1, # lapse
 ]
 hyperparams = {
-    'n_sims': 50000,
+    'n_sims': 10000,
     'exploration_constant': 1,
     'discount_factor': 1,
     'n_iter': 10,
