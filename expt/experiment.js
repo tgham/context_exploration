@@ -704,16 +704,23 @@ class Grid {
         `;
 
         // define totalCost text. if negative, it should be '-$${totalCost}', otherwise just '$${totalCost}'
+        let totalCostText = '';
+        if (totalCost < 0) {
+            totalCostText = `-$${Math.abs(totalCost)}`;
+        } else {
+            totalCostText = `$${totalCost}`;
+        }
         
 
         if (!firstDay) {
             if (!feedback) {
                 const dayType = this.nGrids === 2 ? 'Practice Day' : 'Day';
+                
                 upcomingHTML += `
                 <div id="cost-message" class="cost-display-container">
                 <h2 class="day-display">${dayType} ${trial.grid}/${this.nGrids}</h2>
                 <h2 class="cost-total">Total Tips Earned Today:</h2>
-                <p id="total-cost" class="cost-total">$${totalCost}</p>
+                <p id="total-cost" class="cost-total">${totalCostText}</p>
                 <p id="trial-cost" class="cost-trial hidden">$0</p> 
                 </div>
                 `;
@@ -722,11 +729,13 @@ class Grid {
                 //     ? 'Which kind of city do you think you have been in today?' 
                 //     : `Which kind of city do you think you have been in the last ${trial.grid} days?`;
                 const contextMessage = "Which kind of city do you think you are working in? Press 'R' for a row city, or 'C' for a column city.";
+                // red if negative, green if positive
+                const tipColour = totalCost < 0 ? 'rgb(203, 43, 43);' : 'rgb(0, 199, 73);';
                 if (trial.grid === this.nGrids) {
                     upcomingHTML += `
                     <div id="cost-message" class="cost-display-container">
                     <h2 class="day-display">Day ${trial.grid}/${this.nGrids} Complete</h2>
-                    <h2 class="cost-total">You earned a total of <strong style="color: rgb(0, 199, 73);;">$${totalCost}</strong> today.</h2>
+                    <h2 class="cost-total">You earned a total of <strong style="color:${tipColour};;">${totalCostText}</strong> today.</h2>
                     <h2 class="cost-total">${contextMessage}</h2>
                     <h2 class="cost-total">Once you have made your choice, you will continue to the next city.</h2>
                     </div>
@@ -735,7 +744,7 @@ class Grid {
                     upcomingHTML += `
                     <div id="cost-message" class="cost-display-container">
                     <h2 class="day-display">Day ${trial.grid}/${this.nGrids} Complete</h2>
-                    <h2 class="cost-total">You earned a total of <strong style="color: rgb(0, 199, 73);;">$${totalCost}</strong> today. Tips will now reset for the next day in this city.</h2>
+                    <h2 class="cost-total">You earned a total of <strong style="color:${tipColour};;">${totalCostText}</strong> today. Tips will now reset for the next day in this city.</h2>
                     <h2 class="cost-total">${contextMessage}</h2>
                     <h2 class="cost-total">Once you have made your choice, you will continue to the next day in this city.</h2>
                     </div>
@@ -1336,12 +1345,20 @@ function mergeCosts(trialCost, callback, pauseAtEnd=false) {
                     const elapsed = now - startTime;
                     const progress = Math.min(elapsed / duration, 1);
                     const currentCount = Math.floor(startCost - progress * trialCost);
-                    totalCostElement.textContent = `$${currentCount}`;
+                    if (currentCount < 0) {
+                        totalCostElement.textContent = `-$${Math.abs(currentCount)}`;
+                    } else {
+                        totalCostElement.textContent = `$${currentCount}`;
+                    }
                     if (progress < 1) {
                         requestAnimationFrame(animateFine);
                     } else {
                         totalCost = endCost;
-                        totalCostElement.textContent = `$${totalCost}`;
+                        if (totalCost < 0) {
+                            totalCostElement.textContent = `-$${Math.abs(totalCost)}`;
+                        } else {
+                            totalCostElement.textContent = `$${totalCost}`;
+                        }
                         trialCostElement.style.transform = "translateY(0)";
                     }
                 }
@@ -1374,12 +1391,21 @@ function mergeCosts(trialCost, callback, pauseAtEnd=false) {
                     const elapsed = now - startTime;
                     const progress = Math.min(elapsed / duration, 1);
                     const currentCount = Math.floor(startCost + progress * trialCost);
-                    totalCostElement.textContent = `$${currentCount}`;
+                    // totalCostElement.textContent = `$${currentCount}`;
+                    if (currentCount < 0) {
+                        totalCostElement.textContent = `-$${Math.abs(currentCount)}`;
+                    } else {
+                        totalCostElement.textContent = `$${currentCount}`;
+                    }
             
                     if (progress < 1) {
                         requestAnimationFrame(animate);
                     } else {
-                        totalCostElement.textContent = `$${totalCost}`;
+                        if (totalCost < 0) {
+                            totalCostElement.textContent = `-$${Math.abs(totalCost)}`;
+                        } else {
+                            totalCostElement.textContent = `$${totalCost}`;
+                        }   
                         // trialCostElement.textContent = `$0`;
                         // trialCostElement.classList.remove("cost-animate");
                         trialCostElement.style.transform = "translateY(0)";
@@ -1770,9 +1796,10 @@ const gridFeedback = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         const todayTips = totalCost; // Assuming totalCost tracks the tips paid so far
+        const todayTipsText = todayTips >= 0 ? `$${todayTips}` : `-$${Math.abs(todayTips)}`;
         return `
             <div class="new-day-text">
-                <h3>You earned a total of <strong style="color:rgb(0, 199, 73);;">$${todayTips}</strong> in tips today.</h3>
+                <h3>You earned a total of <strong style="color:rgb(0, 199, 73);;">${todayTipsText}</strong> in tips today.</h3>
                 <h3>Press spacebar to continue.</h3>
             </div>
         `;
@@ -1788,9 +1815,10 @@ const practiceGridFeedback = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         const todayTips = totalCost; // Assuming totalCost tracks the tips paid so far
+        const todayTipsText = todayTips >= 0 ? `$${todayTips}` : `-$${Math.abs(todayTips)}`;
         return `
             <div class="new-day-text">
-                <h3>You would have earned a total of <strong style="color:  rgb(0, 199, 73);;">$${todayTips}</strong> in tips today.</h3>
+                <h3>You would have earned a total of <strong style="color:  rgb(0, 199, 73);;">${todayTipsText}</strong> in tips today.</h3>
                 <h2>Press spacebar to continue.</h2>
             </div>
         `;
