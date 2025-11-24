@@ -1102,7 +1102,7 @@ function loadPracticeGrid(filePath, gridVariableName) {
     .then(response => response.json())
     .then(data => {
         const practiceGrid = new Grid(data); // Initialize the Grid class with the loaded data
-        console.log(`${gridVariableName} data loaded:`, practiceGrid);
+        // console.log(`${gridVariableName} data loaded:`, practiceGrid);
         return practiceGrid;
     })
     .catch(error => console.error(`Error loading ${gridVariableName} JSON:`, error));
@@ -2173,7 +2173,6 @@ const zoomAdjustment = {
             document.removeEventListener('keydown', zoomAdjustment._zoomKeyHandler);
         }
         jsPsych.data.addProperties({ final_zoom_factor: zoomFactor });
-        data.zoomFactor = zoomFactor;
     }
 };
 
