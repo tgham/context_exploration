@@ -30,6 +30,7 @@ import json
 import os
 from tqdm.auto import tqdm
 import copy
+from scipy.stats import wasserstein_distance # Tool for OT/Wasserstein
 # from agents import Farmer
 
 
@@ -994,6 +995,8 @@ def load_data(path):
         "bonusAchieved",
         'expt_info_filename',
         'city_guess',
+        'practice',
+        'final_zoom_factor'
     ]
     df_all = pd.DataFrame(columns=fieldnames)
 
@@ -1026,6 +1029,15 @@ def load_data(path):
             continue
         filename = os.path.join(path, file)
         pid = file[:-5]
+
+        ## hacky exclusion of participants we know need to be excluded
+        skip_pids = [
+            'ibu9dew2ibrma8ze5x62tqvw', ## completed task twice
+            '2zuzodx5p3okbernt42fixu3', ## display too zoomed in
+        ]
+        if pid in skip_pids:
+            print(f"Skipping participant {pid} due to known issues.")
+            continue
 
         # Load and decode JSON (double decoding)
         with open(filename, 'r', encoding='utf-8') as f:
@@ -1157,16 +1169,18 @@ def load_data(path):
 
 
         ### skip practice trials
+        n_practice = df_tmp[df_tmp['practice'] == True].shape[0]
+        df_tmp = df_tmp[df_tmp['practice'] != True].reset_index(drop=True)
 
-        # check how many trials have city==1, and then skip the first few until we have n_days * n_trials
-        n_city_1 = df_tmp[df_tmp['city'] == 1].shape[0]
-        n_city_1_expected = 20
-        if n_city_1 > n_city_1_expected:
-            n_practice_trials = n_city_1 - n_city_1_expected
-            df_tmp = df_tmp.iloc[n_practice_trials:].reset_index(drop=True)
-        assert (df_tmp.iloc[0]['city'] == 1) & (df_tmp.iloc[0]['trial'] == 1) \
-            and (df_tmp.iloc[0]['grid'] == 1), 'First trial should be city 1, grid 1, trial 1. Instead got: ' \
-            + str(df_tmp.iloc[0]['city']) + ', ' + str(df_tmp.iloc[0]['grid']) + ', ' + str(df_tmp.iloc[0]['trial'])
+        # or hacky: check how many trials have city==1, and then skip the first few until we have n_days * n_trials
+        # n_city_1 = df_tmp[df_tmp['city'] == 1].shape[0]
+        # n_city_1_expected = 20
+        # if n_city_1 > n_city_1_expected:
+        #     n_practice_trials = n_city_1 - n_city_1_expected
+        #     df_tmp = df_tmp.iloc[n_practice_trials:].reset_index(drop=True)
+        # assert (df_tmp.iloc[0]['city'] == 1) & (df_tmp.iloc[0]['trial'] == 1) \
+        #     and (df_tmp.iloc[0]['grid'] == 1), 'First trial should be city 1, grid 1, trial 1. Instead got: ' \
+        #     + str(df_tmp.iloc[0]['city']) + ', ' + str(df_tmp.iloc[0]['grid']) + ', ' + str(df_tmp.iloc[0]['trial'])
         
         ## (above, but hacky for expt 1)
         # n_city_1 = df_tmp[df_tmp['city'] == 1].shape[0]
@@ -1331,6 +1345,8 @@ def load_data(path):
 
     ### get some additional data
     df_all['CE_action'] = np.nan
+    df_all['CE_Q_A'] = np.nan
+    df_all['CE_Q_B'] = np.nan
     df_all['CE_chose_vertical'] = np.nan
     df_all['CE_chose_aligned'] = np.nan
     df_all['CE_chose_orthogonal'] = np.nan
@@ -1375,6 +1391,8 @@ def load_data(path):
     df_all['past_overlaps_diff'] = np.nan 
     df_all['observed_costs_diff'] = np.nan 
     df_all['observed_no_costs_diff'] = np.nan
+    df_all['net_observed_diff'] = np.nan
+    df_all['distr_diff'] = np.nan
     
     ## accuracy as a function of first-trial choice - i.e. what is the trial-wise accuracy, conditional on having chosen path a or b first
     for p in tqdm(range(len(df_all['pid'].unique())), total=len(df_all['pid'].unique()), desc='Extracting participant trial info'):
@@ -1515,6 +1533,10 @@ def load_data(path):
         df_all.loc[(df_all['pid'] == pid)
                         , 'observed_no_costs_diff'] = df_all.loc[(df_all['pid'] == pid), 'path_A_past_observed_no_costs'] - df_all.loc[(df_all['pid'] == pid), 'path_B_past_observed_no_costs']
         
+        ## calculate the absolute net observed difference, including both costs and no costs
+        df_all.loc[(df_all['pid'] == pid)
+                     , 'net_observed_diff'] = np.abs((df_all.loc[(df_all['pid'] == pid), 'path_A_past_observed_costs'] - df_all.loc[(df_all['pid'] == pid), 'path_A_past_observed_no_costs']) - (df_all.loc[(df_all['pid'] == pid), 'path_B_past_observed_costs'] - df_all.loc[(df_all['pid'] == pid), 'path_B_past_observed_no_costs']))
+        
         # or, diffs (vertical - horizontal)
         # df_all.loc[(df_all['pid'] == pid)
         #            & (df_all['dominant_axis_A'] == 'vertical')
@@ -1562,6 +1584,11 @@ def load_data(path):
         
         ## extract CE choices
         df_all.loc[df_all['pid'] == pid, 'CE_action'] = agent.CE_actions.flatten()
+        df_all.loc[df_all['pid'] == pid, 'CE_Q_A'] = agent.CE_Q_vals[:,:,:,0].flatten()
+        df_all.loc[df_all['pid'] == pid, 'CE_Q_B'] = agent.CE_Q_vals[:,:,:,1].flatten()
+
+        ## extract distr diffs
+        df_all.loc[df_all['pid'] == pid, 'distr_diff'] = agent.distr_diff.flatten()
     df_all['CE_action'] = df_all['CE_action'].replace({1: 'b', 0: 'a'})
     df_all['CE_action'] = df_all['CE_action'].astype(str)
     df_all['CE_chose_aligned'] = (df_all['CE_action'] == df_all['aligned_path']).astype(bool)
@@ -1617,6 +1644,126 @@ def check_counterbalance(df):
     print('n rotated ids:', len(rotated_ids))
 
 
+## Assigns performance groups based on Leave-One-Out Cross-Validation.
+def loocv_split(df, iv='city'):
+
+    # List to store the processed chunks
+    processed_chunks = []
+
+    for held_out_var in df[iv].unique():
+        
+        # 1. Define Training Data )
+        train_data = df[df[iv] != held_out_var]
+        
+        # 2. Calculate Mean Accuracy per Subject in the Training Set
+        subject_performance = train_data.groupby('pid')['chose_better_path'].mean()
+        
+        # 3. Determine the Median Threshold from Training Data
+        median_threshold = subject_performance.median()
+        
+        # 4. Identify 'Good' and 'Bad' subjects based on this threshold
+        # Using >= ensures we handle the exact median case
+        good_subjects = subject_performance[subject_performance >= median_threshold].index.tolist()
+        
+        # 5. Apply labels to the Test Data (The hold_out_city)
+        # We create a copy of the slice to avoid SettingWithCopy warnings
+        test_chunk = df[df[iv] == held_out_var].copy()
+        
+        # Create the dynamic group label
+        test_chunk['loocv_split'] = np.where(
+            test_chunk['pid'].isin(good_subjects), 
+            'high', 
+            'low'
+        )
+        
+        # Store the threshold for reporting/checking later if needed
+        test_chunk['cv_threshold'] = median_threshold
+        
+        processed_chunks.append(test_chunk)
+
+    # Reassemble the dataframe
+    full_df_labeled = pd.concat(processed_chunks).sort_values(['pid', 'city', 'day', 'trial'])
+    
+    return full_df_labeled
+
+
+
+
+## get the difference between the distributions over total costs for the two paths, given prior probs
+# def path_distr_diff(prior_probs_A, prior_probs_B, metric='intersection', one_sided=None):
+
+#     ## DP convolution to get probability mass function of sum
+#     outcome_probs_all = []
+#     for prior_probs in [prior_probs_A, prior_probs_B]:
+#         n = len(prior_probs)
+#         outcome_probs = [0.0]*(n+1)
+#         outcome_probs[0] = 1.0
+#         for p in prior_probs:
+            
+#             # update from high to low to avoid overwrite
+#             for k in range(n, 0, -1):
+#                 outcome_probs[k] = outcome_probs[k]*(1-p) + outcome_probs[k-1]*p
+#             outcome_probs[0] *= (1-p)
+#         outcome_probs_all.append(outcome_probs)
+
+#     ## or do this using MC samples
+
+#     ### get difference between the two distributions
+
+#     ## intersection/overlap
+#     if metric == 'intersection':
+#         dist = sum([min(outcome_probs_all[0][k], outcome_probs_all[1][k]) for k in range(len(outcome_probs_all[0]))])
+    
+#     ## optimal transport/wasserstein
+#     elif metric == 'OT': 
+#         cdf_A = np.cumsum(outcome_probs_all[0])
+#         cdf_B = np.cumsum(outcome_probs_all[1])
+#         dist = sum([abs(cdf_A[k] - cdf_B[k]) for k in range(len(cdf_A))])
+
+#     ## prob of superiority
+#     elif metric == 'p_sup':
+
+#         # create grid of probability products, P(A=i) * P(B=j)
+#         grid_probs = np.outer(outcome_probs_all[0], outcome_probs_all[1])
+#         i_A, i_B = np.indices(grid_probs.shape)
+        
+#         # Sum probabilities where A > B
+#         p_A_wins = np.sum(grid_probs[i_A > i_B])
+        
+#         # Sum probabilities where A == B
+#         p_tie = np.sum(grid_probs[i_A == i_B])
+#         dist = p_A_wins + 0.5 * p_tie
+
+#         ## if one-sided, convert to p(better path wins)
+#         if one_sided == 1: ## i.e. path B wins
+#             dist = 1-dist
+
+#     return dist, outcome_probs_all
+
+
+## get the difference between the distributions over total costs for the two paths, given raw samples
+def path_distr_diff(samples_A, samples_B, metric='OT', one_sided=None):
+    
+    # --- 1. Calculate Metrics from Samples ---
+    
+    ## Wasserstein/Optimal Transport Distance
+    if metric == 'OT': 
+        dist = wasserstein_distance(samples_A, samples_B)
+
+    elif metric == 'p_sup':
+
+        # Probability that A > B (with tie handling)
+        diff = samples_B[None, :] - samples_A[:, None] ## reversed because negative values
+        p_A_wins = np.mean(diff > 0)
+        p_tie   = np.mean(diff == 0)    
+        dist = p_A_wins + 0.5 * p_tie
+        if one_sided == 1:  # Return P(B > A)
+            dist = 1 - dist
+    
+    else:
+        raise ValueError(f"Unknown metric: {metric}")
+
+    return dist
 
 
 ## data-saving/dict stuff
@@ -1643,6 +1790,7 @@ data_keys = [
     'optimal_costs',
     'actions',
     'CE_actions',
+    'distr_diff',
     'optimal_actions',
     'total_cost',
     'total_optimal_cost',
