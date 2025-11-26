@@ -39,7 +39,7 @@ const jsPsych = initJsPsych({
 
         var ppt_data = JSON.stringify(
             jsPsych.data.get()
-            .filterCustom(trial => trial.trial_type === 'html-keyboard-response' || trial.trial_type === 'survey-text' || trial.trial_type === 'html-button-response')
+            .filterCustom(trial => trial.trial_type === 'html-keyboard-response' || trial.trial_type === 'survey-text' || trial.trial_type === 'survey-multi-choice' || trial.trial_type === 'html-button-response')
             .values()
             .map(({ stimulus, ...rest }) => rest)
         );
@@ -2138,7 +2138,8 @@ function calculateBonus() {
         }
         // sum the accuracy in these trials
         const accuracy = trials.reduce((sum, trial) => {
-            return sum + (trial.chose_better_path ? 1 : 0);
+            // return sum + (trial.chose_better_path ? 1 : 0);
+            return sum + (trial.chose_better_path === 0 ? 1 : 0); // since accuracy is reversed, we count 1 for incorrect choices
         }, 0) / trials.length; // Average accuracy for this grid
         console.log("Accuracy for City:", cityIndex, "Grid:", gridIndex, accuracy);
         totalAccuracy += accuracy;
