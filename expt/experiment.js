@@ -732,11 +732,19 @@ class Grid {
                 const contextMessage = "Which kind of city do you think you are working in? Press 'R' for a row city, or 'C' for a column city.";
                 // red if negative, green if positive
                 const tipColour = totalCost < 0 ? 'rgb(203, 43, 43);' : 'rgb(0, 199, 73);';
+                let tipsPreamble, tipsPaid;
+                if (totalCost >= 0) {
+                    tipsPreamble = 'You earned ';
+                    tipsPaid = 'in tips ';
+                } else {
+                    tipsPreamble = 'You paid ';
+                    tipsPaid = 'in fines ';
+                }
                 if (trial.grid === this.nGrids) {
                     upcomingHTML += `
                     <div id="cost-message" class="cost-display-container">
                     <h2 class="day-display">Day ${trial.grid}/${this.nGrids} Complete</h2>
-                    <h2 class="cost-total">You earned a total of <strong style="color:${tipColour};;">${totalCostText}</strong> today.</h2>
+                    <h2 class="cost-total">${tipsPreamble} a total of <strong style="color:${tipColour};;">${totalCostText}</strong> ${tipsPaid}today.</h2>
                     <h2 class="cost-total">${contextMessage}</h2>
                     <h2 class="cost-total">Once you have made your choice, you will continue to the next city.</h2>
                     </div>
@@ -745,7 +753,7 @@ class Grid {
                     upcomingHTML += `
                     <div id="cost-message" class="cost-display-container">
                     <h2 class="day-display">Day ${trial.grid}/${this.nGrids} Complete</h2>
-                    <h2 class="cost-total">You earned a total of <strong style="color:${tipColour};;">${totalCostText}</strong> today. Tips will now reset for the next day in this city.</h2>
+                    <h2 class="cost-total">${tipsPreamble} a total of <strong style="color:${tipColour};;">${totalCostText}</strong> ${tipsPaid}today. Tips will now reset for the next day in this city.</h2>
                     <h2 class="cost-total">${contextMessage}</h2>
                     <h2 class="cost-total">Once you have made your choice, you will continue to the next day in this city.</h2>
                     </div>
@@ -1819,9 +1827,18 @@ const practiceGridFeedback = {
     stimulus: function() {
         const todayTips = totalCost; // Assuming totalCost tracks the tips paid so far
         const todayTipsText = todayTips >= 0 ? `$${todayTips}` : `-$${Math.abs(todayTips)}`;
+        const todayTipsColour = todayTips >= 0 ? 'rgb(0, 199, 73);' : 'rgb(203, 43, 43);';
+        let todayTipsPreamble, todayTipsPaid;
+        if (todayTips >= 0) {
+            todayTipsPreamble = 'You would have earned ';
+            todayTipsPaid = 'in tips';
+        } else {
+            todayTipsPreamble = 'You would have paid ';
+            todayTipsPaid = 'in fines';
+        }
         return `
             <div class="new-day-text">
-                <h3>You would have earned a total of <strong style="color:  rgb(0, 199, 73);;">${todayTipsText}</strong> in tips today.</h3>
+                <h3>${todayTipsPreamble}a total of <strong style="color: ${todayTipsColour}">${todayTipsText}</strong> ${todayTipsPaid} today.</h3>
                 <h2>Press spacebar to continue.</h2>
             </div>
         `;
@@ -2244,7 +2261,7 @@ const instructions2 = {
         return `
             <div class="instruction-section" style="font-size: 20px;">
                 <h1>Dispatch Instructions:</h1>
-                <p>For each dispatch, you'll see two possible jobs marked in <span class="blue-text">blue</span> and <span class="green-text">green</span>. Each job has a passenger ✋ at a pickup point, and a drop-off destination 🏠. The route of each job is marked with one of two letters:</p>
+                <p>For each dispatch, you'll see two possible jobs marked in <span class="blue-text">blue</span> and <span class="green-text">orange</span>. Each job has a passenger ✋ at a pickup point, and a drop-off destination 🏠. The route of each job is marked with one of two letters:</p>
                 <p>- The letter <strong>P</strong> marks one job</p>
                 <p>- The letter <strong>Q</strong> marks the other job</p>
                 <p>On each dispatch, these letters are randomly assigned to each job. To send out a taxi to one of these jobs, you need to press the corresponding key on your keyboard. Note that if an intersection appears on both paths, it will contain both P and Q.</p>
@@ -3313,7 +3330,7 @@ const instructions6 = {
             </div>
             <div class="instruction-section" style="margin: 10px;">
             <h1>'Column cities'</h1>
-            <p style="font-size: ${fontSize};">In column cities, traffic tends to run from north to south every day, meaning that tips tend to be clustered in columns.</p>
+            <p style="font-size: ${fontSize};">In column cities, popular areas tend to run from north to south every day, meaning that tips tend to be clustered in columns.</p>
             <p style="font-size: ${fontSize};">That is, a column may have <strong>a lot of tips</strong>, or <strong>not many tips</strong>.</p>
             <p style="font-size: ${fontSize};">The particular locations of these popular columns may change each day, but the city will always have this column-dependent feature.</p>
             <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
@@ -3410,7 +3427,7 @@ const instructions8 = {
             </div>
             <div class="instruction-section"> 
                 <h1>'Row cities'</h1>
-                <p style="font-size: ${fontSize};">In row cities, the opposite is true: traffic tends to run from east to west every day, meaning that tips tend to be clustered in rows.</p>
+                <p style="font-size: ${fontSize};">In row cities, the opposite is true: popular areas tend to run from east to west every day, meaning that tips tend to be clustered in rows.</p>
                 <p style="font-size: ${fontSize};">That is, a row may have <strong>a lot of tips</strong>, or <strong>not many tips</strong>.</p>
                 <p style="font-size: ${fontSize};">The particular locations of these popular rows may change each day, but the city will always have this row-dependent feature.</p>
                 <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
@@ -4016,9 +4033,9 @@ function initializeExperiment() {
   
     // Combine everything into a single timeline
     const fullTimeline = [
-    //   ...ethicsTimeline,
-    //   instructionsLoop,
-    //   ...quizTimeline,
+      ...ethicsTimeline,
+      instructionsLoop,
+      ...quizTimeline,
       ...mainTimeline
     ];
   

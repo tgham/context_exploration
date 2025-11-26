@@ -33,7 +33,7 @@ export const quizQuestions = [
   {
     question: "How can previous tips help you make smarter decisions later in the day?",
     options: [
-      "If you visit an intersection again, you will earn another tip there.",
+      "If you revisit an intersection that previously didn't offer you a tip, you will earn a tip the second time.",
       "The tip amount increases if you use the same route multiple times.",
       "You can select jobs that pass through intersections that pay tips.",
     ],
