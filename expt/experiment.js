@@ -2146,6 +2146,8 @@ function calculateBonus() {
     });
 
     const averageAccuracy = totalAccuracy / grid.nGrids;
+    jsPsych.data.addProperties({ bonus_accuracy: averageAccuracy });
+
 
     // debugging: print everything
     console.log("Selected Cities:", selectedCities);
