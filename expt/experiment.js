@@ -284,9 +284,9 @@ class Grid {
         this.nTrials = gridData.env_costs.n_trials
         this.nGrids = gridData.env_costs.n_grids
         this.nCities = gridData.env_costs.n_cities
-        this.observedCosts = {}; // Track observed costs for each grid
+        this.observations = {}; // Track observed costs for each grid
         for (let i = 0; i < this.nTrials; i++) {
-            this[`observedCosts${i}`] = {};
+            this[`observations${i}`] = {};
         }
         this.currentGrid = 0; // Track the current grid
         this.currentCity = null; // Track the current city
@@ -294,7 +294,7 @@ class Grid {
     }
 
     // Get the binary costs for a specific grid
-    getBinaryCosts(gridId) {
+    getbinaryObs(gridId) {
         return this.envCosts[gridId];
     }
 
@@ -328,7 +328,7 @@ class Grid {
         const trial = this.getTrialInfo(trialIndex);
         const city = trial.city;
         const grid = trial.grid;
-        const binaryCosts = this.getBinaryCosts(`city_${city}_grid_${grid}`);
+        const binaryObs = this.getbinaryObs(`city_${city}_grid_${grid}`);
         const gridSize = this.gridSize;
         const jobNumber = (trialIndex % this.nTrials) + 1; // Job number within the grid
         
@@ -336,36 +336,41 @@ class Grid {
             <div class="current-job-container">
         `;
 
+        /// class should be defined as cost-trial or reward-trial based on this.objective
+        let trialObsClass = this.objective === 'cost' ? 'cost-trial' : 'reward-trial';
+        obsMessage = objective === 'costs' ? 'Total Tolls Paid Today:' : 'Total Tips Earned Today:';
+
         if (includeCostDisplay) {
             // let currentDay = this.currentGrid; 
             if (!practice) {
             gridHTML += `
             <div class="cost-display-container">
                 <h2 class="day-display">Day ${trial.grid}/${this.nGrids}</h2>
-                <h2 class="cost-total">Total Tips Earned Today:</h2>
-                <p id="total-cost" class="cost-total.">$${totalCost}</p>
-                <p id="trial-cost" class="cost-trial hidden">$0</p> 
+                <h2 class="obs-total">${obsMessage}</h2>
+                <p id="total-obs" class="obs-total.">$${totalObs}</p>
+                <p id="trial-obs" class="${trialObsClass} hidden">$0</p> 
             </div>
             `;
             } else {
             gridHTML += `
             <div class="cost-display-container">
-                <h2 class="cost-total">Total Tips Earned:</h2>
-                <p id="total-cost" class="cost-total">$${totalCost}</p>
-                <p id="trial-cost" class="cost-trial hidden">$0</p> 
+                <h2 class="obs-total">${obsMessage}</h2>
+                <p id="total-obs" class="obs-total">$${totalObs}</p>
+                <p id="trial-obs" class="${trialObsClass} hidden">$0</p> 
             </div>
             `;
             }
         }   
         
 
+
         if (feedback) {
             gridHTML += `
             <div class="cost-display-container">
-                <h2>You earned <strong style="color: rgb(0, 199, 73);;">$${totalCost}</strong> in tips today.</h2>
-                <p id="trial-cost" class="cost-trial hidden">$0</p> 
-                <p id="total-cost" class="cost-total">A new day has begun.</p>
-                <p id="total-cost" class="cost-total">Tips in this city have been reset.</p>
+                <h2>You earned <strong style="color: rgb(0, 199, 73);;">$${totalObs}</strong> in tips today.</h2>
+                <p id="trial-obs" class="${trialObsClass} hidden">$0</p> 
+                <p id="total-obs" class="obs-total">A new day has begun.</p>
+                <p id="total-obs" class="obs-total">Tips in this city have been reset.</p>
             </div>
             `;
         }
@@ -392,10 +397,10 @@ class Grid {
                 const isPathA = selectedPath !== 'green' && selectedPath !== 'none' && trial.path_A.some(coord => coord[0] === row && coord[1] === col);
                 const isPathB = selectedPath !== 'blue' && selectedPath !== 'none' && trial.path_B.some(coord => coord[0] === row && coord[1] === col);
     
-                const observedCost = this.observedCosts[`${row}-${col}`];
-                const observedClass = observedCost !== undefined ? 
-                    (observedCost === -1 ? 'observed-cost' : 
-                     observedCost === 0 ? 'observed-clear' : 'observed-reward') : '';
+                const obs = this.observations[`${row}-${col}`];
+                const observedClass = obs !== undefined ? 
+                    (obs === -1 ? 'observed-cost' : 
+                     obs === 0 ? 'observed-clear' : 'observed-reward') : '';
     
                 // Handle overlapping paths
                 const isOverlap = isPathA && isPathB;
@@ -474,10 +479,10 @@ class Grid {
         if (feedback){
             gridHTML += `
             <div class="cost-display-container">
-                <h2>You earned <strong style="color:  rgb(0, 199, 73);;">$${totalCost}</strong> in tips today.</h2>
-                <p id="trial-cost" class="cost-trial hidden">$0</p> 
-                <p id="total-cost" class="cost-total">A new day has begun.</p>
-                <p id="total-cost" class="cost-total">Tips in this city have been reset.</p>
+                <h2>You earned <strong style="color:  rgb(0, 199, 73);;">$${totalObs}</strong> in tips today.</h2>
+                <p id="trial-obs" class="${trialObsClass} hidden">$0</p> 
+                <p id="total-obs" class="obs-total">A new day has begun.</p>
+                <p id="total-obs" class="obs-total">Tips in this city have been reset.</p>
             </div>
             `;
         } 
@@ -487,18 +492,18 @@ class Grid {
                 <div class="upcoming-grid" style="grid-template-columns: repeat(${this.gridSize}, 40px);">
         `;
     
-        let binaryCosts = null; // Initialize binaryCosts
+        let binaryObs = null; // Initialize binaryObs
     
         if (trialIndex !== null) {
             const trial = this.getTrialInfo(trialIndex);
             const city = trial.city;
             const grid = trial.grid;
     
-            // Attempt to get binaryCosts
-            binaryCosts = this.getBinaryCosts(`city_${city}_grid_${grid}`);
-            if (!binaryCosts) {
-                console.warn(`binaryCosts is undefined for city_${city}_grid_${grid}`);
-                binaryCosts = Array.from({ length: this.gridSize }, () => Array(this.gridSize).fill(0)); // Default grid
+            // Attempt to get binaryObs
+            binaryObs = this.getbinaryObs(`city_${city}_grid_${grid}`);
+            if (!binaryObs) {
+                console.warn(`binaryObs is undefined for city_${city}_grid_${grid}`);
+                binaryObs = Array.from({ length: this.gridSize }, () => Array(this.gridSize).fill(0)); // Default grid
             }
         }
     
@@ -508,11 +513,11 @@ class Grid {
     
                 if (revealCosts) {
                     if (revealedCosts === 'all') {
-                        const cost = binaryCosts ? binaryCosts[row][col] : 0; // Safely access binaryCosts
+                        const cost = binaryObs ? binaryObs[row][col] : 0; // Safely access binaryObs
                         const costClass = cost === -1 ? 'observed-cost' : cost === 0 ? 'observed-clear' : 'observed-reward';
                         gridHTML += `<div class="grid-cell ${costClass}" id="${cellId}"></div>`;
                     } else if (revealedCosts === 'observed') {
-                        const cost = this.observedCosts[`${row}-${col}`];
+                        const cost = this.observations[`${row}-${col}`];
                         const costClass = cost !== undefined ? 
                             (cost === -1 ? 'observed-cost' : cost === 0 ? 'observed-clear' : 'observed-reward') : '';
                         gridHTML += `<div class="grid-cell ${costClass}" id="${cellId}"></div>`;
@@ -527,7 +532,7 @@ class Grid {
     }
     
     // Record observed costs for a path
-    recordObservedCosts(path, binaryCosts) {
+    recordObservations(path, binaryObs) {
         path.forEach(cell => {
             const [row, col] = cell;
             
@@ -537,24 +542,24 @@ class Grid {
                 return;
             }
     
-            const cost = binaryCosts[row][col];
-            this.observedCosts[`${row}-${col}`] = cost;
+            const cost = binaryObs[row][col];
+            this.observations[`${row}-${col}`] = cost;
 
             // trialwise observed costs
             // const t = Math.floor(currentTrialIndex / this.nTrials);
             const t = currentTrialIndex - Math.floor(currentTrialIndex / grid.nTrials) * grid.nTrials;
-            if (this[`observedCosts${t}`]) {
-                this[`observedCosts${t}`][`${row}-${col}`] = cost;
+            if (this[`observations${t}`]) {
+                this[`observations${t}`][`${row}-${col}`] = cost;
             } else {
-                console.error(`Error: observedCosts${t} is not defined.`);
+                console.error(`Error: observations${t} is not defined.`);
             }
 
             // these costs are also available on all subsequent trials up to nTrials
             for (let i = t + 1; i < this.nTrials; i++) {
-                if (this[`observedCosts${i}`]) {
-                    this[`observedCosts${i}`][`${row}-${col}`] = cost;
+                if (this[`observations${i}`]) {
+                    this[`observations${i}`][`${row}-${col}`] = cost;
                 } else {
-                    console.error(`Error: observedCosts${i} is not defined.`);
+                    console.error(`Error: observations${i} is not defined.`);
                 }
             }
         });
@@ -562,27 +567,27 @@ class Grid {
 
     // Reset the grid for a new set of trials
     resetGrid() {
-        this.observedCosts = {}; 
+        this.observations = {}; 
         this.currentGrid++; 
         console.log('currentGrid:', this.currentGrid);
 
         // Reset observed costs for each grid
         for (let i = 0; i < this.nTrials; i++) {
-            this[`observedCosts${i}`] = {};
+            this[`observations${i}`] = {};
         }
     
-        // Reset trial cost
-        const trialCostElement = document.getElementById("trial-cost");
-        if (trialCostElement) {
-            trialCostElement.textContent = "$0";
-            trialCostElement.classList.add("hidden");
+        // Reset trial observed costs
+        const trialObsElement = document.getElementById("trial-obs");
+        if (trialObsElement) {
+            trialObsElement.textContent = "$0";
+            trialObsElement.classList.add("hidden");
         }
     
-        // Reset total cost
-        totalCost = 0;
-        const totalCostElement = document.getElementById("total-cost");
-        if (totalCostElement) {
-            totalCostElement.textContent = "$0";
+        // Reset total obs
+        totalObs = 0;
+        const totalObsElement = document.getElementById("total-obs");
+        if (totalObsElement) {
+            totalObsElement.textContent = "$0";
         }
     }
     
@@ -653,10 +658,10 @@ class Grid {
                     const isPathA = trial.path_A.some(coord => coord[0] === row && coord[1] === col);
                     const isPathB = trial.path_B.some(coord => coord[0] === row && coord[1] === col);
 
-                    const observedCost = this.observedCosts[`${row}-${col}`];
-                    const observedClass = observedCost !== undefined ? 
-                        (observedCost === -1 ? 'observed-cost' : 
-                         observedCost === 0 ? 'observed-clear' : 'observed-reward') : '';
+                    const obs = this.observations[`${row}-${col}`];
+                    const observedClass = obs !== undefined ? 
+                        (obs === -1 ? 'observed-cost' : 
+                         obs === 0 ? 'observed-clear' : 'observed-reward') : '';
 
                     const isOverlap = isPathA && isPathB;
                     let pathClass = '';
@@ -752,6 +757,7 @@ class Grid {
         /// get current objective
         const objective = trial.objective; // 'costs' or 'rewards'
         const context = trial.context; // 'row' or 'column'
+        // console.log('context:', context, 'objective:', objective);
         
         // Create vehicle border animations based on context
         const vehicleBorderHTML = this.createVehicleBorderAnimation(context);
@@ -760,13 +766,15 @@ class Grid {
             <div class="jobs-section">
         `;
 
-        // define totalCost text. if negative, it should be '-$${totalCost}', otherwise just '$${totalCost}'
-        let totalCostText = '';
-        if (totalCost < 0) {
-            totalCostText = `-$${Math.abs(totalCost)}`;
+        // define totalObs text. if negative, it should be '-$${totalObs}', otherwise just '$${totalObs}'
+        let totalObsText = '';
+        if (totalObs < 0) {
+            totalObsText = `-$${Math.abs(totalObs)}`;
         } else {
-            totalCostText = `$${totalCost}`;
+            totalObsText = `$${totalObs}`;
         }
+        let trialObsClass = objective === 'costs' ? 'cost-trial' : 'reward-trial';
+        let obsMessage = objective === 'costs' ? 'Total Tolls Paid Today:' : 'Total Tips Earned Today:';
         
 
         if (!firstDay) {
@@ -776,42 +784,38 @@ class Grid {
                 upcomingHTML += `
                 <div id="cost-message" class="cost-display-container">
                 <h2 class="day-display">${dayType} ${trial.city}/${this.nCities}</h2>
-                <h2 class="cost-total">Total Tips Earned Today:</h2>
-                <p id="total-cost" class="cost-total">${totalCostText}</p>
-                <p id="trial-cost" class="cost-trial hidden">$0</p> 
+                <h2 class="obs-total">${obsMessage}</h2>
+                <p id="total-obs" class="obs-total">${totalObsText}</p>
+                <p id="trial-obs" class="${trialObsClass} hidden">$0</p> 
                 </div>
                 `;
             } else {
-                // const contextMessage = trial.grid === 1 
-                //     ? 'Which kind of city do you think you have been in today?' 
-                //     : `Which kind of city do you think you have been in the last ${trial.grid} days?`;
-                const contextMessage = "Which kind of city do you think you are working in? Press 'R' for a row city, or 'C' for a column city.";
                 // red if negative, green if positive
-                const tipColour = totalCost < 0 ? 'rgb(203, 43, 43);' : 'rgb(0, 199, 73);';
+                const tipColour = totalObs < 0 ? 'rgb(203, 43, 43);' : 'rgb(0, 199, 73);';
                 let tipsPreamble, tipsPaid;
-                if (totalCost >= 0) {
+                if (totalObs >= 0) {
                     tipsPreamble = 'You earned ';
                     tipsPaid = 'in tips ';
                 } else {
                     tipsPreamble = 'You paid ';
-                    tipsPaid = 'in fines ';
+                    tipsPaid = 'in tolls ';
                 }
                 if (trial.grid === this.nGrids) {
                     upcomingHTML += `
                     <div id="cost-message" class="cost-display-container">
                     <h2 class="day-display">Day ${trial.grid}/${this.nGrids} Complete</h2>
-                    <h2 class="cost-total">${tipsPreamble} a total of <strong style="color:${tipColour};;">${totalCostText}</strong> ${tipsPaid}today.</h2>
-                    <h2 class="cost-total">${contextMessage}</h2>
-                    <h2 class="cost-total">Once you have made your choice, you will continue to the next city.</h2>
+                    <h2 class="obs-total">${tipsPreamble} a total of <strong style="color:${tipColour};;">${totalObsText}</strong> ${tipsPaid}today.</h2>
+                    <h2</h2>
+                    <h2 class="obs-total">Press spacebar to move onto the next day.</h2>
                     </div>
                     `;
                 } else {
                     upcomingHTML += `
                     <div id="cost-message" class="cost-display-container">
                     <h2 class="day-display">Day ${trial.grid}/${this.nGrids} Complete</h2>
-                    <h2 class="cost-total">${tipsPreamble} a total of <strong style="color:${tipColour};;">${totalCostText}</strong> ${tipsPaid}today. Tips will now reset for the next day in this city.</h2>
-                    <h2 class="cost-total">${contextMessage}</h2>
-                    <h2 class="cost-total">Once you have made your choice, you will continue to the next day in this city.</h2>
+                    <h2 class="obs-total">${tipsPreamble} a total of <strong style="color:${tipColour};;">${totalObsText}</strong> ${tipsPaid}today. Tips will now reset for the next day in this city.</h2>
+                    <h2</h2>
+                    <h2 class="obs-total">Press spacebar to move onto the next day.</h2>
                     </div>
                     `;
                 }
@@ -821,9 +825,9 @@ class Grid {
             upcomingHTML += `
             <div id="cost-message" class="cost-display-container">
             <h2 class="day-display">${dayType} ${trial.grid}/${this.nGrids}</h2>
-            <h2 class="cost-total">Here are your dispatches for the day.</h2>
-            <h2 id="total-cost" class="cost-total">Get ready to select your jobs!</h2>
-            <h2 id="trial-cost" class="cost-trial hidden">$0</h2> 
+            <h2 class="obs-total">Here are your dispatches for the day.</h2>
+            <h2 id="total-obs" class="obs-total">Get ready to select your jobs!</h2>
+            <h2 id="trial-obs" class="${trialObsClass} hidden">$0</h2> 
             </div>
             `;
         }
@@ -935,10 +939,10 @@ class Grid {
                                 isPathB = false;
                         }
                     }
-                    const observedCost = this[`observedCosts${i}`][`${row}-${col}`];
-                    const observedClass = observedCost !== undefined ? 
-                        (observedCost === -1 ? 'observed-cost' : 
-                         observedCost === 0 ? 'observed-clear' : 'observed-reward') : '';
+                    const obs = this[`observations${i}`][`${row}-${col}`];
+                    const observedClass = obs !== undefined ? 
+                        (obs === -1 ? 'observed-cost' : 
+                         obs === 0 ? 'observed-clear' : 'observed-reward') : '';
                         
                     // Handle overlapping paths
                     const isOverlap = isPathA && isPathB;
@@ -1209,12 +1213,12 @@ function getColorForKey(assignments, key) {
 let practice1Grid, practice2Grid, practice3Grid, practice4Grid, practice5Grid;
 let practice1TrialIndex = 0, practice2TrialIndex = 0, practice3TrialIndex = 0, practice4TrialIndex = 0, practice5TrialIndex = 0; 
 let currentTrialIndex = 0;
-let totalCost = 0; // Keeps track of total cost across trials
+let totalObs = 0; // Keeps track of total cost across trials
 
 // Function to initialize or reinitialize the practice grids
 function initPractice() {
     currentTrialIndex = 0;
-    totalCost = 0;
+    totalObs = 0;
     practice1TrialIndex = 0;
     practice2TrialIndex = 0;
     practice3TrialIndex = 0;
@@ -1274,10 +1278,10 @@ function createAvatar() {
 }
 
 // 2. Add visual and audio feedback for costs
-function animateAgent(path, binaryCosts, pauseAtEnd=false, callback) {
+function animateAgent(path, binaryObs, pauseAtEnd=false, callback) {
     let currentStep = 0;
-    let trialCost = 0;
-    let trialCostVisible = false;  
+    let trialObs = 0;
+    let trialObsVisible = false;  
 
     if (path) {
         function step() {
@@ -1297,26 +1301,26 @@ function animateAgent(path, binaryCosts, pauseAtEnd=false, callback) {
                 const trial = grid.getTrialInfo(currentTrialIndex);
                 const cellElement = document.getElementById(`cell-${curRow}-${curCol}-trial-${trial.trial}`);
                 if (cellElement) {
-                    const cost = binaryCosts[curRow][curCol];
+                    const obs = binaryObs[curRow][curCol];
 
                     // Update observed cost classes
                     cellElement.classList.remove("observed-cost", "observed-clear", "observed-reward");
                     cellElement.classList.add(
-                        cost === -1 ? "observed-cost" : 
-                        cost === 0 ? "observed-clear" : 
+                        obs === -1 ? "observed-cost" : 
+                        obs === 0 ? "observed-clear" : 
                         "observed-reward"
                     );
 
                     // Ensure start and goal cells update their color when observed
                     if (cellElement.classList.contains("start") || cellElement.classList.contains("goal")) {
                         cellElement.style.backgroundColor = 
-                            cost === -1 ? "rgb(203, 43, 43)" : 
-                            cost === 1 ? "rgb(0, 199, 73)" : 
+                            obs === -1 ? "rgb(203, 43, 43)" : 
+                            obs === 1 ? "rgb(0, 199, 73)" : 
                             "#b8b8d9";
                     }
 
-                    if (cost === -1) {
-                        trialCost++;
+                    if (obs === -1) {
+                        trialObs = trialObs + obs;
 
                         // Visual burst effect for tip cost
                         cellElement.innerHTML += '<div class="cost-burst">$1 Tip</div>';
@@ -1328,14 +1332,15 @@ function animateAgent(path, binaryCosts, pauseAtEnd=false, callback) {
                         // Play cost sound
                         playCostSound();
 
-                        if (!trialCostVisible) {
-                            const trialCostElement = document.getElementById("trial-cost");
-                            if (trialCostElement) {
-                                trialCostElement.classList.remove("hidden");
-                                trialCostVisible = true;
+                        if (!trialObsVisible) {
+                            const trialObsElement = document.getElementById("trial-obs");
+                            if (trialObsElement) {
+                                trialObsElement.classList.remove("hidden");
+                                trialObsVisible = true;
                             }
                         }
-                    } else if (cost === 1) {
+                    } else if (obs === 1) {
+                        trialObs = trialObs + obs;
                         
                         // Visual feedback for reward
                         cellElement.innerHTML += '<div class="cost-burst">$1 Tip</div>';
@@ -1347,11 +1352,11 @@ function animateAgent(path, binaryCosts, pauseAtEnd=false, callback) {
                         // Play cost sound
                         playRewardSound();
 
-                        if (!trialCostVisible) {
-                            const trialCostElement = document.getElementById("trial-cost");
-                            if (trialCostElement) {
-                                trialCostElement.classList.remove("hidden");
-                                trialCostVisible = true;
+                        if (!trialObsVisible) {
+                            const trialObsElement = document.getElementById("trial-obs");
+                            if (trialObsElement) {
+                                trialObsElement.classList.remove("hidden");
+                                trialObsVisible = true;
                             }
                         }
                     } else {
@@ -1363,9 +1368,13 @@ function animateAgent(path, binaryCosts, pauseAtEnd=false, callback) {
                         }, 500);
                     }
 
-                    const trialCostElement = document.getElementById("trial-cost");
-                    if (trialCostElement) {
-                        trialCostElement.textContent = `$${trialCost}`;
+                    const trialObsElement = document.getElementById("trial-obs");
+                    if (trialObsElement) {
+                        if (trialObs > 0) {
+                            trialObsElement.textContent = `+$${trialObs}`;
+                        } else {
+                            trialObsElement.textContent = `-$${Math.abs(trialObs)}`;
+                    }
                     }
 
                     // Update observed costs in upcoming grids
@@ -1374,8 +1383,8 @@ function animateAgent(path, binaryCosts, pauseAtEnd=false, callback) {
                         upcomingCell.classList.remove("observed-cost", "observed-clear", "observed-reward");
                         // upcomingCell.classList.add(cost === -1 ? "observed-cost" : "observed-clear",);
                         upcomingCell.classList.add(
-                            cost === -1 ? "observed-cost" : 
-                            cost === 0 ? "observed-clear" : 
+                            obs === -1 ? "observed-cost" : 
+                            obs === 0 ? "observed-clear" : 
                             "observed-reward"
                         );
                     });
@@ -1393,7 +1402,7 @@ function animateAgent(path, binaryCosts, pauseAtEnd=false, callback) {
                 setTimeout(step, 300);
             } else {
                 // Animation complete
-                mergeCosts(trialCost, callback, pauseAtEnd);
+                mergeObs(trialObs, callback, pauseAtEnd);
             }
         }
         
@@ -1401,70 +1410,70 @@ function animateAgent(path, binaryCosts, pauseAtEnd=false, callback) {
         setTimeout(step, 500);
     } else {
         // If there's no path, just merge costs and execute callback
-        mergeCosts(null, callback, pauseAtEnd);
+        mergeObs(null, callback, pauseAtEnd);
     }
 }
 
 // 4. Add animated transitions between trials
 // 4. Add animated transitions between trials
-function mergeCosts(trialCost, callback, pauseAtEnd=false) {
-    const totalCostElement = document.getElementById("total-cost");
-    const trialCostElement = document.getElementById("trial-cost");
+function mergeObs(trialObs, callback, pauseAtEnd=false) {
+    const totalObsElement = document.getElementById("total-obs");
+    const trialObsElement = document.getElementById("trial-obs");
 
     let trialFine;
-    if (trialCost === null) {
+    if (trialObs === null) {
         trialFine = true;
-        trialCost = 10;
+        trialObs = 10;
         
         // Show missed response message in red for n seconds
-        if (totalCostElement) {
-            const originalContent = totalCostElement.textContent;
-            const originalColor = totalCostElement.style.color;
+        if (totalObsElement) {
+            const originalContent = totalObsElement.textContent;
+            const originalColor = totalObsElement.style.color;
             
-            trialCostElement.textContent = `You ran out of time! -$${trialCost}`;
-            trialCostElement.style.color = "rgb(203, 43, 43)";
-            trialCostElement.classList.remove("hidden");
+            trialObsElement.textContent = `You ran out of time! -$${trialObs}`;
+            trialObsElement.style.color = "rgb(203, 43, 43)";
+            trialObsElement.classList.remove("hidden");
             
             // setTimeout(() => {
-            totalCostElement.style.color = originalColor;
+            totalObsElement.style.color = originalColor;
             
             // Continue with normal animation flow after showing the message
-            if (totalCostElement && trialCostElement) {
+            if (totalObsElement && trialObsElement) {
                 // Add warning animation to cost display
-                if (trialCost > 0) {
-                    trialCostElement.classList.add("cost-animate");
+                if (trialObs > 0) {
+                    trialObsElement.classList.add("cost-animate");
                 }
                 
-                // trialCostElement.style.transition = "transform 0.5s ease-in-out";
-                // trialCostElement.style.transform = "translateY(-20px)";
+                // trialObsElement.style.transition = "transform 0.5s ease-in-out";
+                // trialObsElement.style.transform = "translateY(-20px)";
 
                 setTimeout(() => {
-                const startCost = totalCost;              // current total before fine
-                const endCost = totalCost - trialCost;    // total after fine
+                const startCost = totalObs;              // current total before fine
+                const endCost = totalObs - trialObs;     // total after fine (subtract the $10 penalty)
                 const duration = 1000;
                 const startTime = performance.now();
                 // Show fine amount
-                // trialCostElement.textContent = `-$${trialCost}`;
-                trialCostElement.classList.add("cost-animate");
+                // trialObsElement.textContent = `-$${trialObs}`;
+                trialObsElement.classList.add("cost-animate");
                 function animateFine(now) {
                     const elapsed = now - startTime;
                     const progress = Math.min(elapsed / duration, 1);
-                    const currentCount = Math.floor(startCost - progress * trialCost);
+                    const currentCount = Math.floor(startCost - progress * trialObs);
                     if (currentCount < 0) {
-                        totalCostElement.textContent = `-$${Math.abs(currentCount)}`;
+                        totalObsElement.textContent = `-$${Math.abs(currentCount)}`;
                     } else {
-                        totalCostElement.textContent = `$${currentCount}`;
+                        totalObsElement.textContent = `$${currentCount}`;
                     }
                     if (progress < 1) {
                         requestAnimationFrame(animateFine);
                     } else {
-                        totalCost = endCost;
-                        if (totalCost < 0) {
-                            totalCostElement.textContent = `-$${Math.abs(totalCost)}`;
+                        totalObs = endCost;
+                        if (totalObs < 0) {
+                            totalObsElement.textContent = `-$${Math.abs(totalObs)}`;
                         } else {
-                            totalCostElement.textContent = `$${totalCost}`;
+                            totalObsElement.textContent = `$${totalObs}`;
                         }
-                        trialCostElement.style.transform = "translateY(0)";
+                        trialObsElement.style.transform = "translateY(0)";
                     }
                 }
                 requestAnimationFrame(animateFine);
@@ -1476,44 +1485,44 @@ function mergeCosts(trialCost, callback, pauseAtEnd=false) {
         trialFine = false;
         
         // Regular flow without missed response
-        if (totalCostElement && trialCostElement) {
+        if (totalObsElement && trialObsElement) {
             // Add warning animation to cost display
-            if (trialCost > 0) {
-                trialCostElement.classList.add("cost-animate");
+            if (trialObs !== 0) {
+                trialObsElement.classList.add("cost-animate");
             }
             
-            trialCostElement.style.transition = "transform 0.5s ease-in-out";
-            trialCostElement.style.transform = "translateY(-20px)";
+            trialObsElement.style.transition = "transform 0.5s ease-in-out";
+            trialObsElement.style.transform = "translateY(-20px)";
 
             setTimeout(() => {
-                totalCost += trialCost;
+                totalObs += trialObs;
             
-                const startCost = totalCost - trialCost;
+                const startCost = totalObs - trialObs;
                 const duration = 1000;
                 const startTime = performance.now();
             
                 function animate(now) {
                     const elapsed = now - startTime;
                     const progress = Math.min(elapsed / duration, 1);
-                    const currentCount = Math.floor(startCost + progress * trialCost);
-                    // totalCostElement.textContent = `$${currentCount}`;
+                    const currentCount = Math.floor(startCost + progress * trialObs);
+                    // totalObsElement.textContent = `$${currentCount}`;
                     if (currentCount < 0) {
-                        totalCostElement.textContent = `-$${Math.abs(currentCount)}`;
+                        totalObsElement.textContent = `-$${Math.abs(currentCount)}`;
                     } else {
-                        totalCostElement.textContent = `$${currentCount}`;
+                        totalObsElement.textContent = `$${currentCount}`;
                     }
             
                     if (progress < 1) {
                         requestAnimationFrame(animate);
                     } else {
-                        if (totalCost < 0) {
-                            totalCostElement.textContent = `-$${Math.abs(totalCost)}`;
+                        if (totalObs < 0) {
+                            totalObsElement.textContent = `-$${Math.abs(totalObs)}`;
                         } else {
-                            totalCostElement.textContent = `$${totalCost}`;
+                            totalObsElement.textContent = `$${totalObs}`;
                         }   
-                        // trialCostElement.textContent = `$0`;
-                        // trialCostElement.classList.remove("cost-animate");
-                        trialCostElement.style.transform = "translateY(0)";
+                        // trialObsElement.textContent = `$0`;
+                        // trialObsElement.classList.remove("cost-animate");
+                        trialObsElement.style.transform = "translateY(0)";
                     }
                 }
             
@@ -1780,14 +1789,14 @@ const pathAnimationTrial = {
         const chosenPath = lastTrialData.choice === 'blue' ? currentTrial.path_A : 
                    lastTrialData.choice === 'green' ? currentTrial.path_B : 
                    null;
-        const binaryCosts = grid.getBinaryCosts(`city_${currentTrial.city}_grid_${currentTrial.grid}`);
+        const binaryObs = grid.getbinaryObs(`city_${currentTrial.city}_grid_${currentTrial.grid}`);
 
         if (chosenPath !== null) {
-            grid.recordObservedCosts(chosenPath, binaryCosts);
+            grid.recordObservations(chosenPath, binaryObs);
         }
 
         setTimeout(() => {
-            animateAgent(chosenPath, binaryCosts, false, function() {
+            animateAgent(chosenPath, binaryObs, false, function() {
                 jsPsych.finishTrial();
             });
         }, 100);
@@ -1900,7 +1909,7 @@ function animateDayChange(cityId) {
 const gridFeedback = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
-        const todayTips = totalCost; // Assuming totalCost tracks the tips paid so far
+        const todayTips = totalObs; // Assuming totalObs tracks the tips paid so far
         const todayTipsText = todayTips >= 0 ? `$${todayTips}` : `-$${Math.abs(todayTips)}`;
         return `
             <div class="new-day-text">
@@ -1919,7 +1928,7 @@ choices: [' '], // spacebar to continue
 const practiceGridFeedback = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
-        const todayTips = totalCost; // Assuming totalCost tracks the tips paid so far
+        const todayTips = totalObs; // Assuming totalObs tracks the tips paid so far
         const todayTipsText = todayTips >= 0 ? `$${todayTips}` : `-$${Math.abs(todayTips)}`;
         const todayTipsColour = todayTips >= 0 ? 'rgb(0, 199, 73);' : 'rgb(203, 43, 43);';
         let todayTipsPreamble, todayTipsPaid;
@@ -1957,21 +1966,21 @@ const timeoutCheck = {
         const nTrialsPerCity = nTrials * nGrids;
         const threshold = Math.floor(0.3 * nTrialsPerCity);
 
-        if (nTimeouts > threshold) {
-            console.log(`Participant failed due to high number of timeouts in city ${previousCityId}`);
-            return `
-                <div class="instruction-section">
-                    <h2>Experiment Failed</h2>
-                    <p>You have timed out too many times in the previous city. Unfortunately, you cannot continue with the experiment.</p>
-                    <p>Please wait while you are redirected to Prolific. You will be paid for your time.</p>
-                    <p style="font-weight: bold; ">DO NOT CLOSE YOUR BROWSER until you have returned to Prolific. This may take a few seconds...</p>
-                </div>
-            `;
-        } else {
-            // If successful, reset nTimeouts and proceed
-            nTimeouts = 0;
-            return null;
-        }
+        // if (nTimeouts > threshold) {
+        //     console.log(`Participant failed due to high number of timeouts in city ${previousCityId}`);
+        //     return `
+        //         <div class="instruction-section">
+        //             <h2>Experiment Failed</h2>
+        //             <p>You have timed out too many times in the previous city. Unfortunately, you cannot continue with the experiment.</p>
+        //             <p>Please wait while you are redirected to Prolific. You will be paid for your time.</p>
+        //             <p style="font-weight: bold; ">DO NOT CLOSE YOUR BROWSER until you have returned to Prolific. This may take a few seconds...</p>
+        //         </div>
+        //     `;
+        // } else {
+            // }
+        // If successful, reset nTimeouts and proceed
+        nTimeouts = 0;
+        return null;
     },
     choices: "NO_KEYS", // Disable keypresses
     on_load: function() {
@@ -2045,21 +2054,54 @@ const newCityMessage = {
         const nCities = grid.nCities
         const nextCityId = nextTrial.city;
         const currentCityId = grid.getCurrentCity();
+        const objective = nextTrial.objective; // 'costs' or 'rewards'
+        const context = nextTrial.context; // 'row' or 'column'
         
         let message;
         console.log("City changed from", currentCityId, "to", nextCityId);
         animateCityChange(currentCityId, nextCityId);
         
+        // Determine traffic direction message
+        const trafficDirection = context === 'row' ? 'running horizontally (left-right)' : 'running vertically (up-down)';
+        
+        // Determine toll/tip message
+        const tollTipMessage = objective === 'costs' 
+            ? 'This city has tolls on popular intersections. Avoid them to save money!' 
+            : 'This city has tips on popular intersections. Seek them out to earn more money!';
+        
+        // Create vehicle animation HTML
+        const vehicleBorderClass = `context-${context}`;
+        const carColor = objective === 'costs' ? 'red' : 'green';
+        const imageUrls = context === 'row' 
+            ? [`assets/vehicles/${carColor}_car_right.png`, `assets/vehicles/${carColor}_car_left.png`, `assets/vehicles/${carColor}_car_right.png`, `assets/vehicles/${carColor}_car_left.png`, `assets/vehicles/${carColor}_car_right.png`, `assets/vehicles/${carColor}_car_left.png`, `assets/vehicles/${carColor}_car_right.png`, `assets/vehicles/${carColor}_car_left.png`, `assets/vehicles/${carColor}_car_right.png`]
+            : [`assets/vehicles/${carColor}_car_down.png`, `assets/vehicles/${carColor}_car_up.png`, `assets/vehicles/${carColor}_car_down.png`, `assets/vehicles/${carColor}_car_up.png`, `assets/vehicles/${carColor}_car_down.png`, `assets/vehicles/${carColor}_car_up.png`, `assets/vehicles/${carColor}_car_down.png`, `assets/vehicles/${carColor}_car_up.png`, `assets/vehicles/${carColor}_car_down.png`];
+        const speeds = [6, 8, 10, 7, 9, 11, 6, 8, 10];
+        
+        let vehicleHTML = '';
+        for (let i = 0; i < 9; i++) {
+            const speed = speeds[i];
+            const rowClass = context === 'row' ? `vehicle-row-${i}` : `vehicle-col-${i}`;
+            const animationName = context === 'row' ? `scroll-row-${i}` : `scroll-col-${i}`;
+            const imageUrl = imageUrls[i];
+            vehicleHTML += `<div class="vehicle-item ${rowClass}" style="background-image: url('${imageUrl}'); animation: ${animationName} ${speed}s linear infinite normal;"></div>`;
+        }
+        
         message = `
         <div class="new-day-text">
             <div>
-                <h2>City ${currentCityId}/${nCities} complete.</h2>
-                <h2>New City!</h2>
-                <p>Your taxi company is now operating in a new city.</p>
-                <p>Note: this may (or may not) be a different type of city - i.e. it might be a row city, or it might be a column city.</p>
-                <p>Prepare for your first day in this new city.</p>
-                <h2 id="continue-text" style="display: none;">Press spacebar to continue dispatching.</h2>
+                <h2>A new day has begun!</h2>
+                <p>${tollTipMessage}</p>
+                <p>Traffic is ${trafficDirection}.</p>
             </div>
+            <div class="traffic-report-container">
+                <h2 class="traffic-report-heading">Traffic Report</h2>
+            </div>
+            <div class="vehicle-animation-container ${vehicleBorderClass}">
+                <div class="vehicle-display-box ${vehicleBorderClass}">
+                    ${vehicleHTML}
+                </div>
+            </div>
+            <h2 id="continue-text" style="display: none;">Press spacebar to continue dispatching.</h2>
         </div>
         `;
         
@@ -2118,7 +2160,7 @@ const firstGridMessage = {
 
         // revert back to first trial
         currentTrialIndex = 0;
-        totalCost = 0;
+        totalObs = 0;
 
         // Set initial city background from the first trial
         const firstTrial = grid.getTrialInfo(0);
@@ -2501,13 +2543,14 @@ const practice1SelectionTrial = {
     
         // Replot the grid with only the chosen path
         const gridContainer = document.querySelector(".current-job-section");
+        let trialObsClass = this.objective === 'cost' ? 'cost-trial' : 'reward-trial';
         if (gridContainer) {
             gridContainer.innerHTML = `
                 <div class="current-job-container">
                     <div class="cost-display-container">
-                        <h2 class="cost-total">Total Tips Earned:</h2>
-                        <p id="total-cost" class="cost-total">$0</p>
-                        <p id="trial-cost" class="cost-trial hidden">$0</p> 
+                        <h2 class="obs-total">Total Tips Earned:</h2>
+                        <p id="total-obs" class="obs-total">$0</p>
+                        <p id="trial-obs" class="${trialObsClass} hidden">$0</p> 
                     </div>
                     ${practice1Grid.createGridHTML(practice1TrialIndex, choice, keyAssignment,true,true)}
                 </div>
@@ -2551,13 +2594,13 @@ const practice1AnimationTrial = {
         }
 
         const chosenPath = lastTrialData.choice === 'blue' ? currentTrial.path_A : currentTrial.path_B;
-        const binaryCosts = practice1Grid.getBinaryCosts(`city_${currentTrial.city}_grid_${currentTrial.grid}`);
+        const binaryObs = practice1Grid.getbinaryObs(`city_${currentTrial.city}_grid_${currentTrial.grid}`);
 
  
-        practice1Grid.recordObservedCosts(chosenPath, binaryCosts);
+        practice1Grid.recordObservations(chosenPath, binaryObs);
 
         setTimeout(() => {
-            animateAgent(chosenPath, binaryCosts, false, function() {
+            animateAgent(chosenPath, binaryObs, false, function() {
                 jsPsych.finishTrial();
             });
         }, 100);
@@ -2914,15 +2957,15 @@ const instructions3_5 = {
         const chosenPath = lastTrialData.choice === 'blue' ? currentTrial.path_A : 
                    lastTrialData.choice === 'green' ? currentTrial.path_B : 
                    null;
-        const binaryCosts = practice2Grid.getBinaryCosts(`city_${currentTrial.city}_grid_${currentTrial.grid}`);
+        const binaryObs = practice2Grid.getbinaryObs(`city_${currentTrial.city}_grid_${currentTrial.grid}`);
 
         if (chosenPath !== null) {
-            practice2Grid.recordObservedCosts(chosenPath, binaryCosts);
+            practice2Grid.recordObservations(chosenPath, binaryObs);
         }
         
 
         const pauseAtEnd = true;
-        animateAgent(chosenPath, binaryCosts, pauseAtEnd, function() {
+        animateAgent(chosenPath, binaryObs, pauseAtEnd, function() {
 
             jsPsych.finishTrial();
 
@@ -3023,7 +3066,7 @@ const instructions3_7 = {
 
         //check that grid has no observed costs in it
         for (let i = 0; i < practice2Grid.nTrials; i++) {
-            practice2Grid[`observedCosts${i}`] = {};
+            practice2Grid[`observations${i}`] = {};
         }
     }
 }   
@@ -3072,7 +3115,7 @@ const practice3PreSelectionTrial = {
     stimulus: function() {
         // Reset total cost for practice if first practice trial
         if (practice3TrialIndex === 0) {
-            totalCost = 0;
+            totalObs = 0;
         }
 
         // Randomly assign letters to blue and green paths
@@ -3122,11 +3165,11 @@ const practice3SelectionTrial = {
 
         // Reset total cost for practice if first practice trial
         if (practice3TrialIndex === 0) {
-            totalCost = 0;
+            totalObs = 0;
         }
-        const totalCostElement = document.getElementById("total-cost");
-        if (totalCostElement) {
-            totalCostElement.textContent = "$0";
+        const totalObsElement = document.getElementById("total-obs");
+        if (totalObsElement) {
+            totalObsElement.textContent = "$0";
         }
         
         return `
@@ -3246,15 +3289,15 @@ const practice3AnimationTrial = {
         const chosenPath = lastTrialData.choice === 'blue' ? currentTrial.path_A : 
                    lastTrialData.choice === 'green' ? currentTrial.path_B : 
                    null;
-        const binaryCosts = practice3Grid.getBinaryCosts(`city_${currentTrial.city}_grid_${currentTrial.grid}`);
+        const binaryObs = practice3Grid.getbinaryObs(`city_${currentTrial.city}_grid_${currentTrial.grid}`);
 
         if (chosenPath !== null) {
-            practice3Grid.recordObservedCosts(chosenPath, binaryCosts);
+            practice3Grid.recordObservations(chosenPath, binaryObs);
         }
         
 
         setTimeout(() => {
-            animateAgent(chosenPath, binaryCosts, false, function() {
+            animateAgent(chosenPath, binaryObs, false, function() {
                 jsPsych.finishTrial();
             });
         }, 100);
