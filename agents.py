@@ -185,6 +185,12 @@ class Farmer:
                 self.posterior_mean_p = self.context_prob * posterior_ps_col + (1-self.context_prob) * posterior_ps_row
                 self.posterior_mean_q = self.context_prob * posterior_qs_col + (1-self.context_prob) * posterior_qs_row
 
+                ## temp fix: this posterior should also be filled in with 1s and 0s for states where a low and high cost have been observed respectively
+                for i,j,c in obs:
+                    i = int(i)
+                    j = int(j)
+                    prob = 1 if c == self.low_cost else 0
+                    self.posterior_mean_p_cost[i,j] = prob
 
         ## debugging plot - kde of samples
         # fig, axs = plt.subplots(1, 2, figsize=(10, 5))
@@ -466,7 +472,6 @@ class Farmer:
         CPs = (1-self.lapse) * softmax(Q/self.temp) + self.lapse/len(Q)
         return CPs
 
-
         
     ## run agent on participant's trial sequence
     def run(self, params, hyperparams, agent = 'CE', df_trials=None, envs=None,fit=True, progress=False):
@@ -516,11 +521,13 @@ class Farmer:
             self.trial_loss = np.zeros(self.n_total_trials)
 
         ## for extracting some useful trial data...
+        self.path_future_overlaps = np.zeros((n_cities, n_days, n_trials, self.n_afc))
         self.path_past_overlaps = np.zeros((n_cities, n_days, n_trials, self.n_afc))
         self.path_past_observed_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
         self.path_past_observed_no_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
         self.path_len = np.zeros((n_cities, n_days, n_trials))
         self.day_costs = np.zeros((n_cities, n_days, n_trials)) ## i.e. the cost of the path chosen by the participant on that trial
+        self.distr_diff = np.zeros((n_cities, n_days, n_trials)) 
 
         
         ## init params and hyperparams
@@ -607,6 +614,7 @@ class Farmer:
                                 ## get the number of costs and no-costs that comprise these overlapping states
                                 path_past_observed_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.high_cost for obs in overlap)
                                 path_past_observed_no_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.low_cost for obs in overlap)
+                                self.path_future_overlaps[city, day, t, i] = env_copy.path_future_overlaps[t][i]
                                 self.path_past_overlaps[city, day, t, i] = path_past_overlap
                                 self.path_past_observed_costs[city, day, t, i] = path_past_observed_costs
                                 self.path_past_observed_no_costs[city, day, t, i] = path_past_observed_no_costs
@@ -619,6 +627,7 @@ class Farmer:
                                 path_past_overlap = len(overlap)
                                 path_past_observed_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.high_cost for obs in overlap)
                                 path_past_observed_no_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.low_cost for obs in overlap)
+                                self.path_future_overlaps[city, day, t, i] = env_copy.path_future_overlaps[t][i]
                                 self.path_past_overlaps[city, day, t, i] = path_past_overlap
                                 self.path_past_observed_costs[city, day, t, i] = path_past_observed_costs
                                 self.path_past_observed_no_costs[city, day, t, i] = path_past_observed_no_costs
@@ -730,6 +739,80 @@ class Farmer:
                         max_cost = np.max(path_costs)
                         CE_action = argm(path_costs, max_cost)
                         self.CE_actions[city, day, t] = CE_action
+                        self.CE_Q_vals[city, day, t] = np.array(path_costs)
+
+                        
+                        ### get the difference in distributions over total costs of the two paths
+
+                        # ## sample PMFs over total costs for each path
+                        # n_samples = 50000
+                        # self.root_samples(obs = env_copy.obs, n_samples=n_samples, CE=False, combo=False)
+                        # sample_total_costs = np.zeros((n_samples, env_copy.n_afc))
+                        # for s in range(n_samples):
+                            
+                        #     ## sample binary grid
+                        #     sample_costs = np.array([self.high_cost if r>self.all_posterior_p_costs[s].flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
+
+                        #     ## sum costs along each path
+                        #     for path_id in range(env_copy.n_afc):
+                        #         path_states = env_copy.path_states[t][path_id]
+                        #         path_cost = 0
+                        #         for state in path_states:
+                        #             path_cost += sample_costs[state[0], state[1]]
+                        #         sample_total_costs[s, path_id] = path_cost
+
+                        # --- 1. PRE-CALCULATION (Do this once outside the sampling loop) ---
+                        # Create the Path Weight Matrix W (N_path x N^2)
+                        W = np.zeros((env_copy.n_afc, self.N**2))
+                        for path_id in range(env_copy.n_afc):
+                            path_states = env_copy.path_states[t][path_id]
+                            flat_indices = [state[0] * self.N + state[1] for state in path_states]
+                            W[path_id, flat_indices] = 1
+
+
+                        # --- 2. VECTORIZED SAMPLING (Replaces your N_samples loop) ---
+                        n_samples = 10000
+                        self.root_samples(obs = env_copy.obs, n_samples=n_samples, CE=False, combo=False)
+                        p_costs_flat = self.all_posterior_p_costs.reshape(n_samples, self.N**2)
+                        random_draws = np.random.random((n_samples, self.N**2))
+                        sample_costs_binary = (random_draws < p_costs_flat).astype(int) 
+                        sample_costs_vectorized = sample_costs_binary * self.high_cost + (1 - sample_costs_binary) * self.low_cost
+
+                        # Step 3: Vectorized Path Summation
+                        sample_total_costs = sample_costs_vectorized @ W.T 
+
+                        # if t==2:
+                        #     plt.figure()
+                        #     sns.histplot(sample_total_costs[:,0], color='blue', label='path A', stat='probability', kde=True)
+                        #     sns.histplot(sample_total_costs[:,1], color='orange', label='path B', stat='probability', kde=True)
+                        #     ## crash for debugging
+                        #     plt.show()
+                        #     assert False, 'crash for debugging'                                
+                        
+
+                        ### or, analytically using posterior means
+                        
+                        ## get array of p(cost) for states on each path
+                        # probs_per_path = np.zeros((env_copy.n_afc, len(env_copy.path_states[t][0]))) ## assuming that both paths are the same length
+                        # for path_id in range(env_copy.n_afc):
+                        #     path_states = env_copy.path_states[t][path_id]
+                        #     for s, state in enumerate(path_states):
+                        #         probs_per_path[path_id, s] = self.posterior_mean_p_cost[state[0], state[1]]
+
+                        ## get difference between distributions over total costs
+                        metric = 'OT'
+                        # metric = 'p_sup'
+                        correct_path = np.argmax(env_copy.path_actual_costs[t]) 
+                        self.distr_diff[city, day, t] = path_distr_diff(sample_total_costs[:,0], sample_total_costs[:,1], metric, correct_path)
+
+                        ## or, only calculate the difference if the CE's belief does indeed favour the better path - i.e. if CE_aciton == correct_path
+                        # if CE_action == correct_path:
+                        #     self.distr_diff[city, day, t] = path_distr_diff(sample_total_costs[:,0], sample_total_costs[:,1], metric, correct_path)
+                        # else:
+                        #     self.distr_diff[city, day, t] = np.nan
+
+                        # print('t{}, distr diff: {}'.format(t, self.distr_diff[city, day, t]))
+                        
                         
 
 
@@ -840,6 +923,7 @@ class Farmer:
                 'context':[],
                 'actions':[],
                 'CE_actions':[],
+                'distr_diff':[],
                 'p_choice_A':[],
                 'p_choice_B':[],
                 'p_choice_C':[],
@@ -856,7 +940,7 @@ class Farmer:
                 'CE_Q_c':[],
                 'leaf_visits_a':[],
                 'leaf_visits_b':[],
-                'leaf_visits_c':[]
+                'leaf_visits_c':[],
             }
             for c in range(n_cities):
                 for d in range(n_days):
@@ -868,6 +952,7 @@ class Farmer:
                         sim_out['trial'].append(t+1)
                         sim_out['actions'].append(self.actions[c][d][t])
                         sim_out['CE_actions'].append(self.CE_actions[c][d][t])
+                        sim_out['distr_diff'].append(self.distr_diff[c][d][t])
                         sim_out['context'].append(self.true_context[c])
                         sim_out['p_correct'].append(self.p_correct[c][d][t])
                         sim_out['p_choice_A'].append(self.p_choice[c][d][t][0])

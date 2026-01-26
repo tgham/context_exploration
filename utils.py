@@ -30,6 +30,7 @@ import json
 import os
 from tqdm.auto import tqdm
 import copy
+from scipy.stats import wasserstein_distance # Tool for OT/Wasserstein
 # from agents import Farmer
 
 
@@ -684,14 +685,20 @@ def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params,
         np.random.seed(p + 1000)
         contexts = ['row']*int(n_cities/2) + ['column']*int(n_cities/2)
         np.random.shuffle(contexts)
+        
+        ## if expt 3, we also want to randomise the order of the tasks
+        objectives = ['rewards'] * int(n_cities/2) + ['costs'] * int(n_cities/2)
+        np.random.shuffle(objectives)
     else:
         contexts = [expt_info['context']]*n_cities
+        objectives = [expt_info['objective']]*n_cities
     env_objects = {}
     env_costs = {}
     df_expt = pd.DataFrame()
 
     for c in range(n_cities):
         expt_info['context'] = contexts[c]
+        expt_info['objective'] = objectives[c]
 
         ## generate envs for this city
         envs = [make_env(N, n_trials, expt_info, beta_params, metric) for _ in range(n_days)]
@@ -771,7 +778,8 @@ def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params,
         #     pickle.dump(env_objects, f)
         # return df_expt
         # save_path = 'useful_saves/expt_optimisation/simulated_envs'
-        save_path = 'useful_saves/expt_optimisation/simulated_envs/expt_2_rewards'
+        save_path = 'useful_saves/expt_optimisation/simulated_envs/expt_3'
+
     
     # i.e. actual ppt sequences for online testing
     # else:
@@ -781,12 +789,12 @@ def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params,
         'trial_info': df_expt.to_dict('records'),
         'env_costs': env_costs
     }
-    path_1 = save_path + '/expt_info/expt_2_info_' + str(p) + '.json'
+    path_1 = save_path + '/expt_info/expt_3_info_' + str(p) + '.json'
     with open(path_1, 'w') as f:
         json.dump(expt_dict, f, indent=4)
 
     ## save env objects
-    path_2 = save_path + '/env_objects/expt_2_env_objects_' + str(p) + '.pkl'
+    path_2 = save_path + '/env_objects/expt_3_env_objects_' + str(p) + '.pkl'
     with open(path_2, 'wb') as f:
         pickle.dump(env_objects, f)
 
@@ -995,6 +1003,8 @@ def load_data(path):
         "bonusAchieved",
         'expt_info_filename',
         'city_guess',
+        'practice',
+        'final_zoom_factor'
     ]
     df_all = pd.DataFrame(columns=fieldnames)
 
@@ -1027,6 +1037,15 @@ def load_data(path):
             continue
         filename = os.path.join(path, file)
         pid = file[:-5]
+
+        ## hacky exclusion of participants we know need to be excluded
+        skip_pids = [
+            'ibu9dew2ibrma8ze5x62tqvw', ## completed task twice
+            '2zuzodx5p3okbernt42fixu3', ## display too zoomed in
+        ]
+        if pid in skip_pids:
+            print(f"Skipping participant {pid} due to known issues.")
+            continue
 
         # Load and decode JSON (double decoding)
         with open(filename, 'r', encoding='utf-8') as f:
@@ -1147,7 +1166,7 @@ def load_data(path):
         n_cities = df_tmp['city'].nunique()
         if expt == 'expt_1':
             n_cities_expected = 8
-        elif expt == 'expt_2':
+        elif (expt == 'expt_2') or (expt == 'expt_2_rewards'):
             n_cities_expected = 6
         if n_cities < n_cities_expected:
             print('Incomplete dataset for participant:', file,'. Found only', n_cities, 'cities.')
@@ -1158,16 +1177,18 @@ def load_data(path):
 
 
         ### skip practice trials
+        n_practice = df_tmp[df_tmp['practice'] == True].shape[0]
+        df_tmp = df_tmp[df_tmp['practice'] != True].reset_index(drop=True)
 
-        # check how many trials have city==1, and then skip the first few until we have n_days * n_trials
-        n_city_1 = df_tmp[df_tmp['city'] == 1].shape[0]
-        n_city_1_expected = 20
-        if n_city_1 > n_city_1_expected:
-            n_practice_trials = n_city_1 - n_city_1_expected
-            df_tmp = df_tmp.iloc[n_practice_trials:].reset_index(drop=True)
-        assert (df_tmp.iloc[0]['city'] == 1) & (df_tmp.iloc[0]['trial'] == 1) \
-            and (df_tmp.iloc[0]['grid'] == 1), 'First trial should be city 1, grid 1, trial 1. Instead got: ' \
-            + str(df_tmp.iloc[0]['city']) + ', ' + str(df_tmp.iloc[0]['grid']) + ', ' + str(df_tmp.iloc[0]['trial'])
+        # or hacky: check how many trials have city==1, and then skip the first few until we have n_days * n_trials
+        # n_city_1 = df_tmp[df_tmp['city'] == 1].shape[0]
+        # n_city_1_expected = 20
+        # if n_city_1 > n_city_1_expected:
+        #     n_practice_trials = n_city_1 - n_city_1_expected
+        #     df_tmp = df_tmp.iloc[n_practice_trials:].reset_index(drop=True)
+        # assert (df_tmp.iloc[0]['city'] == 1) & (df_tmp.iloc[0]['trial'] == 1) \
+        #     and (df_tmp.iloc[0]['grid'] == 1), 'First trial should be city 1, grid 1, trial 1. Instead got: ' \
+        #     + str(df_tmp.iloc[0]['city']) + ', ' + str(df_tmp.iloc[0]['grid']) + ', ' + str(df_tmp.iloc[0]['trial'])
         
         ## (above, but hacky for expt 1)
         # n_city_1 = df_tmp[df_tmp['city'] == 1].shape[0]
@@ -1182,7 +1203,7 @@ def load_data(path):
         n_total_trials = len(df_tmp)
         if expt == 'expt_1':
             expected_trials = 160
-        elif expt == 'expt_2':
+        elif (expt == 'expt_2') or (expt == 'expt_2_rewards'):
             expected_trials = 120
         if n_total_trials != expected_trials:
             print(f'Expected {expected_trials} trials, but found:', n_total_trials, 'for participant:', pid)
@@ -1234,6 +1255,61 @@ def load_data(path):
                     }
                     df_tmp = pd.concat([df_tmp, pd.DataFrame([new_row])], ignore_index=True)
                 print('New total trials after fix:', len(df_tmp))
+            
+            ## else just fill in with nans up to expected_trials
+            else:
+                n_missing = expected_trials - n_total_trials
+                last_city = df_tmp['city'].max()
+                
+                ## loop through every day and trial of last city. if there is no such trial in df_tmp, add a row with nans
+                for day in range(1, 6):
+                    for trial in range(1, 5):
+                        if not ((df_tmp['city'] == last_city) & (df_tmp['grid'] == day) & (df_tmp['trial'] == trial)).any():
+                            new_row = {
+                                'pid': pid,
+                                'trial': trial,
+                                'city': last_city,
+                                'path_chosen': np.nan,
+                                'button_pressed': np.nan,
+                                'reaction_time_ms': np.nan,
+                                'context': np.nan,
+                                'grid': day,
+                                'path_A': np.nan,
+                                'path_B': np.nan,
+                                'path_A_expected_cost': np.nan,
+                                'path_B_expected_cost': np.nan,
+                                'path_A_actual_cost': np.nan,
+                                'path_B_actual_cost': np.nan,
+                                'path_A_future_overlap': np.nan,
+                                'path_B_future_overlap': np.nan,
+                                'path_A_future_row_overlap': np.nan,
+                                'path_B_future_row_overlap': np.nan,
+                                'path_A_future_col_overlap': np.nan,
+                                'path_B_future_col_overlap': np.nan,
+                                'path_A_future_row_and_col_overlap': np.nan,
+                                'path_B_future_row_and_col_overlap': np.nan,
+                                'path_A_future_rel_overlap': np.nan,
+                                'path_B_future_rel_overlap': np.nan,
+                                'path_A_future_irrel_overlap': np.nan,
+                                'path_B_future_irrel_overlap': np.nan,
+                                'abstract_sequence_A': np.nan,
+                                'abstract_sequence_B': np.nan,
+                                'dominant_axis_A': np.nan,
+                                'dominant_axis_B': np.nan,
+                                'better_path': np.nan,
+                                'chose_better_path': np.nan,
+                                'bonusAchieved': np.nan,
+                                # 'expt_info_filename': id_mapping.get(pid, '')
+                                'expt_info_filename': np.nan,
+                            }
+                            df_tmp = pd.concat([df_tmp, pd.DataFrame([new_row])], ignore_index=True)
+                            n_missing -= 1
+                    #         if n_missing == 0:
+                    #             break
+                    # if n_missing == 0:
+                    #     break
+                    assert n_missing >= 0, 'Added more trials than expected!'
+                
             # continue ## skip
 
 
@@ -1266,6 +1342,21 @@ def load_data(path):
             df_tmp.loc[df_tmp['pid'] == pid, 'expt_info_filename'] = str(id)
         all_expt_info_ids.append(id)
         df_all = pd.concat([df_all, df_tmp], ignore_index=True)
+
+        ## DEBUGGING:
+        # df_tmp['better_path'] = df_tmp.apply(
+        #     lambda row: 'a' if row['better_path'] == 'b' else 'b' if row['better_path'] == 'a' else np.nan,
+        #     axis=1
+        # )
+        # df_tmp['chose_path_with_more_cost'] = df_tmp.apply(
+        #     lambda row: True if (row['path_chosen'] == 'a' and row['path_A_actual_cost'] > row['path_B_actual_cost']) 
+        #                     or (row['path_chosen'] == 'b' and row['path_B_actual_cost'] > row['path_A_actual_cost'])
+        #                     else False if (row['path_chosen'] == 'a' and row['path_A_actual_cost'] < row['path_B_actual_cost']) 
+        #                     or (row['path_chosen'] == 'b' and row['path_B_actual_cost'] < row['path_A_actual_cost'])
+        #                     else np.nan,
+        #     axis=1
+        # )
+        # assert len(df_tmp.loc[(df_tmp['chose_path_with_more_cost'] == True) & (df_tmp['chose_better_path'] == 0)]) == 0, 'Data inconsistency for participant ' + pid
 
     # Cleaning
     df_all = df_all.replace('', np.nan)
@@ -1332,6 +1423,8 @@ def load_data(path):
 
     ### get some additional data
     df_all['CE_action'] = np.nan
+    df_all['CE_Q_A'] = np.nan
+    df_all['CE_Q_B'] = np.nan
     df_all['CE_chose_vertical'] = np.nan
     df_all['CE_chose_aligned'] = np.nan
     df_all['CE_chose_orthogonal'] = np.nan
@@ -1357,6 +1450,8 @@ def load_data(path):
     df_all['prev_day_chose_vertical'] = np.nan
     df_all['path_A_past_overlaps'] = np.nan
     df_all['path_B_past_overlaps'] = np.nan
+    df_all['path_A_future_overlaps'] = np.nan
+    df_all['path_B_future_overlaps'] = np.nan
     df_all['path_A_past_observed_costs'] = np.nan
     df_all['path_B_past_observed_costs'] = np.nan
     df_all['path_A_past_observed_no_costs'] = np.nan
@@ -1376,6 +1471,8 @@ def load_data(path):
     df_all['past_overlaps_diff'] = np.nan 
     df_all['observed_costs_diff'] = np.nan 
     df_all['observed_no_costs_diff'] = np.nan
+    df_all['net_observed_diff'] = np.nan
+    df_all['distr_diff'] = np.nan
     
     ## accuracy as a function of first-trial choice - i.e. what is the trial-wise accuracy, conditional on having chosen path a or b first
     for p in tqdm(range(len(df_all['pid'].unique())), total=len(df_all['pid'].unique()), desc='Extracting participant trial info'):
@@ -1466,20 +1563,23 @@ def load_data(path):
             raise KeyError(f'No id mapping for participant {pid}')
         try:
             base_path = 'expt/assets/trial_sequences/'+ expt
-            try:
-                path = base_path + '/env_objects/'+ expt + '_env_objects_{}.pkl'.format(id)
-                with open(path, 'rb') as f:
-                    envs = pickle.load(f)
-            except:
-                with open(base_path + '/rotated_env_objects/env_objects_{}.pkl'.format(id), 'rb') as f:
-                    envs = pickle.load(f)
+            if (expt == 'expt_2') or (expt == 'expt_2_rewards'):
+                # path = base_path + '/env_objects/'+ expt + '_env_objects_{}.pkl'.format(id)
+                path = base_path + '/env_objects/expt_2_env_objects_{}.pkl'.format(id)
+            elif expt == 'expt_1':
+                if id[-1]=='d':
+                    path = base_path + '/rotated_env_objects/env_objects_{}.pkl'.format(id)
+                else:
+                    path = base_path + '/env_objects/env_objects_{}.pkl'.format(id)
+            with open(path, 'rb') as f:
+                envs = pickle.load(f)
         except FileNotFoundError:
             raise FileNotFoundError(f'No env objects found for participant {pid} with id {id}')
         
         ## simulate
         if expt == 'expt_1':
             N=8
-        elif expt == 'expt_2':
+        elif (expt == 'expt_2') or (expt == 'expt_2_rewards'):
             N=9
         agent = Farmer(N=N, context_prior=0.5)
         agent.run(params = None, hyperparams=None, agent = 'human', df_trials= df_all.loc[df_all['pid'] == pid],envs=envs, fit=False)
@@ -1502,6 +1602,8 @@ def load_data(path):
         ## extract overlap info
         df_all.loc[df_all['pid'] == pid, 'path_A_past_overlaps'] = agent.path_past_overlaps[:,:,:,0].flatten()
         df_all.loc[df_all['pid'] == pid, 'path_B_past_overlaps'] = agent.path_past_overlaps[:,:,:,1].flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_A_future_overlaps'] = agent.path_future_overlaps[:,:,:,0].flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_B_future_overlaps'] = agent.path_future_overlaps[:,:,:,1].flatten()
         df_all.loc[df_all['pid'] == pid, 'total_past_overlaps'] = agent.path_past_overlaps[:,:,:,0].flatten() + agent.path_past_overlaps[:,:,:,1].flatten()
         df_all.loc[df_all['pid'] == pid, 'path_A_past_observed_costs'] = agent.path_past_observed_costs[:,:,:,0].flatten()
         df_all.loc[df_all['pid'] == pid, 'path_B_past_observed_costs'] = agent.path_past_observed_costs[:,:,:,1].flatten()
@@ -1515,6 +1617,11 @@ def load_data(path):
                      , 'observed_costs_diff'] = df_all.loc[(df_all['pid'] == pid), 'path_A_past_observed_costs'] - df_all.loc[(df_all['pid'] == pid), 'path_B_past_observed_costs']
         df_all.loc[(df_all['pid'] == pid)
                         , 'observed_no_costs_diff'] = df_all.loc[(df_all['pid'] == pid), 'path_A_past_observed_no_costs'] - df_all.loc[(df_all['pid'] == pid), 'path_B_past_observed_no_costs']
+        
+        
+        ## calculate the absolute net observed difference, including both costs and no costs
+        df_all.loc[(df_all['pid'] == pid)
+                     , 'net_observed_diff'] = np.abs((df_all.loc[(df_all['pid'] == pid), 'path_A_past_observed_costs'] - df_all.loc[(df_all['pid'] == pid), 'path_A_past_observed_no_costs']) - (df_all.loc[(df_all['pid'] == pid), 'path_B_past_observed_costs'] - df_all.loc[(df_all['pid'] == pid), 'path_B_past_observed_no_costs']))
         
         # or, diffs (vertical - horizontal)
         # df_all.loc[(df_all['pid'] == pid)
@@ -1563,6 +1670,11 @@ def load_data(path):
         
         ## extract CE choices
         df_all.loc[df_all['pid'] == pid, 'CE_action'] = agent.CE_actions.flatten()
+        df_all.loc[df_all['pid'] == pid, 'CE_Q_A'] = agent.CE_Q_vals[:,:,:,0].flatten()
+        df_all.loc[df_all['pid'] == pid, 'CE_Q_B'] = agent.CE_Q_vals[:,:,:,1].flatten()
+
+        ## extract distr diffs
+        df_all.loc[df_all['pid'] == pid, 'distr_diff'] = agent.distr_diff.flatten()
     df_all['CE_action'] = df_all['CE_action'].replace({1: 'b', 0: 'a'})
     df_all['CE_action'] = df_all['CE_action'].astype(str)
     df_all['CE_chose_aligned'] = (df_all['CE_action'] == df_all['aligned_path']).astype(bool)
@@ -1575,6 +1687,61 @@ def load_data(path):
 
     ## remove all non-choices?
     df_all = df_all[df_all['path_chosen'].notna()]
+
+    ## flip accuracy for expt 2 rewards
+    if expt == 'expt_2_rewards':
+        # df_all['chose_better_path'] = df_all.apply(
+        #     lambda row: 1 if row['chose_better_path'] == 0 else 0 if row['chose_better_path'] == 1 else np.nan,
+        #     axis=1
+        # )
+        df_all['better_path'] = df_all.apply(
+            lambda row: 'a' if row['better_path'] == 'b' else 'b' if row['better_path'] == 'a' else np.nan,
+            axis=1
+        )
+        assert len(df_all.loc[(df_all['path_chosen']==df_all['better_path']) & (df_all['chose_better_path']==0)]) == 0, 'Inconsistency in flipping better path accuracy'
+        df_all['chose_better_path'] = df_all.apply(
+            lambda row: 1 if row['path_chosen'] == row['better_path'] 
+            else 0 if row['path_chosen'] != row['better_path']
+            else np.nan,
+            axis=1
+        )
+        df_all['CE_human_consistent'] = ~df_all['CE_human_consistent']
+
+        df_all['task'] = 'rewards'
+    else:
+        df_all['task'] = 'costs'
+
+    
+    
+    ### make observed_cost meaningful 
+
+    ## how many nocost squares did P choose?
+    df_all['points'] = np.zeros_like(df_all['observed_cost']) + np.nan
+    if expt == 'expt_2':
+        df_all['points'] = N + df_all['observed_cost']
+
+
+    ## how many costs (i.e. tips) did P earn?
+    elif expt == 'expt_2_rewards':
+        df_all['points'] = -df_all['observed_cost']
+
+    ## regret
+    df_all['regret'] = np.nan
+    if expt == 'expt_2':
+        df_all['regret'] = df_all.apply(
+            lambda row: (N + row['path_A_actual_cost'] if (row['better_path']=='a') else
+                 N + row['path_B_actual_cost'] if (row['better_path']=='b') else
+                    np.nan) - row['points'], axis=1
+        )
+    elif expt == 'expt_2_rewards':
+        df_all['regret'] = df_all.apply(
+            lambda row: (-row['path_A_actual_cost'] if (row['better_path']=='a') else
+                 -row['path_B_actual_cost'] if (row['better_path']=='b') else
+                    np.nan) - row['points'], axis=1
+        )
+
+
+        
 
     # last bit of cleaning of questionnaire data
     df_q = pd.DataFrame.from_dict(questionnaire)
@@ -1595,7 +1762,7 @@ def load_data(path):
     
     if expt =='expt_1':
         return df_all, df_q
-    elif expt =='expt_2':
+    elif (expt =='expt_2') or (expt == 'expt_2_rewards'):
         return df_all, df_q, df_context_all, df_freetext
 
 
@@ -1618,6 +1785,126 @@ def check_counterbalance(df):
     print('n rotated ids:', len(rotated_ids))
 
 
+## Assigns performance groups based on Leave-One-Out Cross-Validation.
+def loocv_split(df, iv='city'):
+
+    # List to store the processed chunks
+    processed_chunks = []
+
+    for held_out_var in df[iv].unique():
+        
+        # 1. Define Training Data )
+        train_data = df[df[iv] != held_out_var]
+        
+        # 2. Calculate Mean Accuracy per Subject in the Training Set
+        subject_performance = train_data.groupby('pid')['chose_better_path'].mean()
+        
+        # 3. Determine the Median Threshold from Training Data
+        median_threshold = subject_performance.median()
+        
+        # 4. Identify 'Good' and 'Bad' subjects based on this threshold
+        # Using >= ensures we handle the exact median case
+        good_subjects = subject_performance[subject_performance >= median_threshold].index.tolist()
+        
+        # 5. Apply labels to the Test Data (The hold_out_city)
+        # We create a copy of the slice to avoid SettingWithCopy warnings
+        test_chunk = df[df[iv] == held_out_var].copy()
+        
+        # Create the dynamic group label
+        test_chunk['loocv_split'] = np.where(
+            test_chunk['pid'].isin(good_subjects), 
+            'high', 
+            'low'
+        )
+        
+        # Store the threshold for reporting/checking later if needed
+        test_chunk['cv_threshold'] = median_threshold
+        
+        processed_chunks.append(test_chunk)
+
+    # Reassemble the dataframe
+    full_df_labeled = pd.concat(processed_chunks).sort_values(['pid', 'city', 'day', 'trial'])
+    
+    return full_df_labeled
+
+
+
+
+## get the difference between the distributions over total costs for the two paths, given prior probs
+# def path_distr_diff(prior_probs_A, prior_probs_B, metric='intersection', one_sided=None):
+
+#     ## DP convolution to get probability mass function of sum
+#     outcome_probs_all = []
+#     for prior_probs in [prior_probs_A, prior_probs_B]:
+#         n = len(prior_probs)
+#         outcome_probs = [0.0]*(n+1)
+#         outcome_probs[0] = 1.0
+#         for p in prior_probs:
+            
+#             # update from high to low to avoid overwrite
+#             for k in range(n, 0, -1):
+#                 outcome_probs[k] = outcome_probs[k]*(1-p) + outcome_probs[k-1]*p
+#             outcome_probs[0] *= (1-p)
+#         outcome_probs_all.append(outcome_probs)
+
+#     ## or do this using MC samples
+
+#     ### get difference between the two distributions
+
+#     ## intersection/overlap
+#     if metric == 'intersection':
+#         dist = sum([min(outcome_probs_all[0][k], outcome_probs_all[1][k]) for k in range(len(outcome_probs_all[0]))])
+    
+#     ## optimal transport/wasserstein
+#     elif metric == 'OT': 
+#         cdf_A = np.cumsum(outcome_probs_all[0])
+#         cdf_B = np.cumsum(outcome_probs_all[1])
+#         dist = sum([abs(cdf_A[k] - cdf_B[k]) for k in range(len(cdf_A))])
+
+#     ## prob of superiority
+#     elif metric == 'p_sup':
+
+#         # create grid of probability products, P(A=i) * P(B=j)
+#         grid_probs = np.outer(outcome_probs_all[0], outcome_probs_all[1])
+#         i_A, i_B = np.indices(grid_probs.shape)
+        
+#         # Sum probabilities where A > B
+#         p_A_wins = np.sum(grid_probs[i_A > i_B])
+        
+#         # Sum probabilities where A == B
+#         p_tie = np.sum(grid_probs[i_A == i_B])
+#         dist = p_A_wins + 0.5 * p_tie
+
+#         ## if one-sided, convert to p(better path wins)
+#         if one_sided == 1: ## i.e. path B wins
+#             dist = 1-dist
+
+#     return dist, outcome_probs_all
+
+
+## get the difference between the distributions over total costs for the two paths, given raw samples
+def path_distr_diff(samples_A, samples_B, metric='OT', one_sided=None):
+    
+    # --- 1. Calculate Metrics from Samples ---
+    
+    ## Wasserstein/Optimal Transport Distance
+    if metric == 'OT': 
+        dist = wasserstein_distance(samples_A, samples_B)
+
+    elif metric == 'p_sup':
+
+        # Probability that A > B (with tie handling)
+        diff = samples_B[None, :] - samples_A[:, None] ## reversed because negative values
+        p_A_wins = np.mean(diff > 0)
+        p_tie   = np.mean(diff == 0)    
+        dist = p_A_wins + 0.5 * p_tie
+        if one_sided == 1:  # Return P(B > A)
+            dist = 1 - dist
+    
+    else:
+        raise ValueError(f"Unknown metric: {metric}")
+
+    return dist
 
 
 ## data-saving/dict stuff
@@ -1644,6 +1931,7 @@ data_keys = [
     'optimal_costs',
     'actions',
     'CE_actions',
+    'distr_diff',
     'optimal_actions',
     'total_cost',
     'total_optimal_cost',

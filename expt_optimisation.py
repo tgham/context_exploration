@@ -44,7 +44,13 @@ def agent_loop(p, agent_params, hyperparams, agents):
     sim_outs = []
 
     ## load env objects
+<<<<<<< HEAD
     with open('useful_saves/expt_optimisation/simulated_envs/expt_2_rewards/env_objects/expt_2_env_objects_' + str(p) + '.pkl', 'rb') as f:
+=======
+    # with open('useful_saves/expt_optimisation/simulated_envs/ppt_'+str(p)+'_envs.pkl', 'rb') as f:
+    # with open('useful_saves/expt_optimisation/simulated_envs/env_objects/expt_2_env_objects_' + str(p) + '.pkl', 'rb') as f:
+    with open('useful_saves/expt_optimisation/simulated_envs/env_objects/expt_3_env_objects_' + str(p) + '.pkl', 'rb') as f:
+>>>>>>> 6e73cda8174e39204993d961472bc52d90dc934c
         env_objects = pickle.load(f)
 
     ## loop through agents

@@ -63,7 +63,7 @@ expt_info = {
     'type': expt,
     'n_afc': n_afc,
 }
-save_path = 'expt/assets/trial_sequences/expt_2'
+save_path = 'expt/assets/trial_sequences/expt_3'
 parallel = True
 n_max_cores = 100
 
