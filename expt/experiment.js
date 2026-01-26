@@ -805,7 +805,7 @@ class Grid {
                     <div id="cost-message" class="cost-display-container">
                     <h2 class="day-display">Day ${trial.grid}/${this.nGrids} Complete</h2>
                     <h2 class="obs-total">${tipsPreamble} a total of <strong style="color:${tipColour};;">${totalObsText}</strong> ${tipsPaid}today.</h2>
-                    <h2</h2>
+                    <h2 class="obs-total">The city will now reset.</h2>
                     <h2 class="obs-total">Press spacebar to move onto the next day.</h2>
                     </div>
                     `;
@@ -813,18 +813,18 @@ class Grid {
                     upcomingHTML += `
                     <div id="cost-message" class="cost-display-container">
                     <h2 class="day-display">Day ${trial.grid}/${this.nGrids} Complete</h2>
-                    <h2 class="obs-total">${tipsPreamble} a total of <strong style="color:${tipColour};;">${totalObsText}</strong> ${tipsPaid}today. Tips will now reset for the next day in this city.</h2>
-                    <h2</h2>
+                    <h2 class="obs-total">${tipsPreamble} a total of <strong style="color:${tipColour};;">${totalObsText}</strong> ${tipsPaid}today.</h2>
+                    <h2 class="obs-total">The city will now reset.</h2>
                     <h2 class="obs-total">Press spacebar to move onto the next day.</h2>
                     </div>
                     `;
                 }
             }
         } else if (firstDay) {
-            const dayType = this.nGrids === 2 ? 'Practice Day' : 'Day';
+            const dayType = this.nCities === 2 ? 'Practice Day' : 'Day';
             upcomingHTML += `
             <div id="cost-message" class="cost-display-container">
-            <h2 class="day-display">${dayType} ${trial.grid}/${this.nGrids}</h2>
+            <h2 class="day-display">${dayType} ${trial.city}/${this.nCities}</h2>
             <h2 class="obs-total">Here are your dispatches for the day.</h2>
             <h2 id="total-obs" class="obs-total">Get ready to select your jobs!</h2>
             <h2 id="trial-obs" class="${trialObsClass} hidden">$0</h2> 
@@ -1809,7 +1809,8 @@ function setCityBackground(cityId) {
     const body = document.body;
     
     // Use the mapped city ID if cityId is not 'practice1' or 'practice2'
-    const mappedCityId = (cityId === 'practice1' || cityId === 'practice2' || cityId === 'practice3') ? cityId : cityMapping[cityId];
+    // const mappedCityId = (cityId === 'practice1' || cityId === 'practice2' || cityId === 'practice3') ? cityId : cityMapping[cityId];
+    const mappedCityId = 4;
 
     // Clear any existing background styles before applying a new one
     body.style.backgroundImage = '';
@@ -2053,21 +2054,18 @@ const newCityMessage = {
         const nextTrial = grid.getTrialInfo(nextTrialIndex);
         const nCities = grid.nCities
         const nextCityId = nextTrial.city;
-        const currentCityId = grid.getCurrentCity();
         const objective = nextTrial.objective; // 'costs' or 'rewards'
         const context = nextTrial.context; // 'row' or 'column'
         
         let message;
-        console.log("City changed from", currentCityId, "to", nextCityId);
-        animateCityChange(currentCityId, nextCityId);
         
         // Determine traffic direction message
         const trafficDirection = context === 'row' ? 'running horizontally (left-right)' : 'running vertically (up-down)';
         
         // Determine toll/tip message
         const tollTipMessage = objective === 'costs' 
-            ? 'This city has tolls on popular intersections. Avoid them to save money!' 
-            : 'This city has tips on popular intersections. Seek them out to earn more money!';
+            ? 'This city has <span style="color: rgb(203, 43, 43); font-weight: bold;">tolls</span> on popular intersections. Avoid them to save money!' 
+            : 'This city has <span style="color: rgb(0, 199, 73); font-weight: bold;">tips</span> on popular intersections. Seek them out to earn more money!';
         
         // Create vehicle animation HTML
         const vehicleBorderClass = `context-${context}`;
@@ -2092,9 +2090,6 @@ const newCityMessage = {
                 <h2>A new day has begun!</h2>
                 <p>${tollTipMessage}</p>
                 <p>Traffic is ${trafficDirection}.</p>
-            </div>
-            <div class="traffic-report-container">
-                <h2 class="traffic-report-heading">Traffic Report</h2>
             </div>
             <div class="vehicle-animation-container ${vehicleBorderClass}">
                 <div class="vehicle-display-box ${vehicleBorderClass}">
@@ -2144,7 +2139,7 @@ const newDayMessage = {
             </div>
         `;
     },
-    choices: ['r', 'c'], 
+    choices: [' '], // spacebar to continue
     on_finish: function(data) {
         data.city_guess = data.response; // 'r' for row city, 'c' for column city
         grid.resetGrid(); // Reset the grid for the new set of trials
@@ -2168,7 +2163,7 @@ const firstGridMessage = {
         console.log('trialIndex:', currentTrialIndex);
         console.log('cityId:', cityId);
         grid.currentCity = cityId; // Initialize the current city
-        setCityBackground(cityId); // Plot the first city background
+        setCityBackground(4); // Plot the first city background
 
         return `
             <div class="new-day-text">
@@ -4030,7 +4025,7 @@ function createInstructionsTimeline() {
     
     // city assignments
     const numCities = data.env_costs.n_cities; // Assuming this is the number of cities
-    createCityMapping(numCities);
+    // createCityMapping(numCities);
 
     // Welcome message
     timeline.push(zoomAdjustment);
