@@ -521,6 +521,7 @@ class Farmer:
             self.trial_loss = np.zeros(self.n_total_trials)
 
         ## for extracting some useful trial data...
+        self.path_future_overlaps = np.zeros((n_cities, n_days, n_trials, self.n_afc))
         self.path_past_overlaps = np.zeros((n_cities, n_days, n_trials, self.n_afc))
         self.path_past_observed_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
         self.path_past_observed_no_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
@@ -613,6 +614,7 @@ class Farmer:
                                 ## get the number of costs and no-costs that comprise these overlapping states
                                 path_past_observed_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.high_cost for obs in overlap)
                                 path_past_observed_no_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.low_cost for obs in overlap)
+                                self.path_future_overlaps[city, day, t, i] = env_copy.path_future_overlaps[t][i]
                                 self.path_past_overlaps[city, day, t, i] = path_past_overlap
                                 self.path_past_observed_costs[city, day, t, i] = path_past_observed_costs
                                 self.path_past_observed_no_costs[city, day, t, i] = path_past_observed_no_costs
@@ -625,6 +627,7 @@ class Farmer:
                                 path_past_overlap = len(overlap)
                                 path_past_observed_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.high_cost for obs in overlap)
                                 path_past_observed_no_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.low_cost for obs in overlap)
+                                self.path_future_overlaps[city, day, t, i] = env_copy.path_future_overlaps[t][i]
                                 self.path_past_overlaps[city, day, t, i] = path_past_overlap
                                 self.path_past_observed_costs[city, day, t, i] = path_past_observed_costs
                                 self.path_past_observed_no_costs[city, day, t, i] = path_past_observed_no_costs
