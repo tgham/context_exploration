@@ -26,10 +26,12 @@
             --c-blue: rgb(47, 164, 253);
             --c-green:rgb(243, 136, 22);
             --c-magenta:rgb(240, 110, 254);
-            --c-cost:rgb(0, 199, 73);
-            --c-cost-past: rgb(32, 135, 70);
-            --c-no-cost: #b8b8d9;
-            --c-no-cost-past: rgba(184, 184, 217, 0.8);
+            --c-reward:rgb(0, 199, 73);
+            --c-reward-past: rgb(32, 135, 70);
+            --c-clear: #b8b8d9;
+            --c-clear-past: rgba(184, 184, 217, 0.8);
+            --c-cost:rgb(203, 43, 43);
+            --c-cost-past:  rgba(210, 54, 54, 0.8);
 
 
             /* Optional: reusable half-and-half gradients */
@@ -107,8 +109,12 @@
             background-color: var(--c-cost); /* Red background for observed cost */
         }
 
-        .grid-cell.start.observed-no-cost {
-            background-color: var(--c-no-cost); /* Grey background for observed no cost */
+        .grid-cell.start.observed-clear {
+            background-color: var(--c-clear); /* Grey background for observed no cost */
+        }
+
+        .grid-cell.start.observed-reward {
+            background-color: var(--c-reward); /* Red background for observed reward */
         }
 
         .grid-cell.goal {
@@ -120,8 +126,12 @@
             background-color: var(--c-cost); /* Red background for observed cost */
         }
 
-        .grid-cell.goal.observed-no-cost {
-            background-color: var(--c-no-cost); /* Grey background for observed no cost */
+        .grid-cell.goal.observed-clear {
+            background-color: var(--c-clear); /* Grey background for observed no cost */
+        }
+
+        .grid-cell.goal.observed-reward {
+            background-color: var(--c-reward); /* Red background for observed reward */
         }
 
         .grid-cell.avatar {
@@ -173,8 +183,13 @@
             transition: background-color 0.5s;
         }
 
-        .observed-no-cost {
-            background-color: var(--c-no-cost); /* Much lighter grey for better visibility */
+        .observed-clear {
+            background-color: var(--c-clear); /* Much lighter grey for better visibility */
+            transition: background-color 0.5s;
+        }
+
+        .observed-reward {
+            background-color: var(--c-reward);
             transition: background-color 0.5s;
         }
 
@@ -435,8 +450,12 @@
             background-color: var(--c-cost);
         }
 
-        .upcoming-cell.observed-no-cost {
-            background-color: var(--c-no-cost);
+        .upcoming-cell.observed-clear {
+            background-color: var(--c-clear);
+        }
+
+        .upcoming-cell.observed-reward {
+            background-color: var(--c-reward);
         }
 
         /* Grid styling for completed upcoming jobs - slightly more transparent */
@@ -487,8 +506,12 @@
             background-color: var(--c-cost-past); /* Slightly more transparent red */
         }
 
-        .upcoming-cell-done.observed-no-cost {
-            background-color: var(--c-no-cost-past); /* Slightly more transparent grey */
+        .upcoming-cell-done.observed-clear {
+            background-color: var(--c-clear-past); /* Slightly more transparent grey */
+        }
+
+        .upcoming-cell-done.observed-reward {
+            background-color: var(--c-reward-past); /* Slightly more transparent red */
         }
 
         @keyframes pulse {

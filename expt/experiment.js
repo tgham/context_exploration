@@ -138,18 +138,32 @@ if (test) {
 // get sound ready
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 let costSoundBuffer;
-// fetch('assets/costSound.mp3')
-fetch('assets/coinSound.mp3')
+let rewardSoundBuffer;
+fetch('assets/costSound.mp3')
     .then(response => response.arrayBuffer())
     .then(data => audioContext.decodeAudioData(data))
     .then(buffer => {
         costSoundBuffer = buffer;
+    });
+fetch('assets/coinSound.mp3')
+    .then(response => response.arrayBuffer())
+    .then(data => audioContext.decodeAudioData(data))
+    .then(buffer => {
+        rewardSoundBuffer = buffer;
     });
 
 function playCostSound() {
     if (costSoundBuffer) {
         const source = audioContext.createBufferSource();
         source.buffer = costSoundBuffer;
+        source.connect(audioContext.destination);
+        source.start(0); // Play the sound
+    }
+}
+function playRewardSound() {
+    if (rewardSoundBuffer) {
+        const source = audioContext.createBufferSource();
+        source.buffer = rewardSoundBuffer;
         source.connect(audioContext.destination);
         source.start(0); // Play the sound
     }
@@ -380,7 +394,8 @@ class Grid {
     
                 const observedCost = this.observedCosts[`${row}-${col}`];
                 const observedClass = observedCost !== undefined ? 
-                    (observedCost === -1 ? 'observed-cost' : 'observed-no-cost') : '';
+                    (observedCost === -1 ? 'observed-cost' : 
+                     observedCost === 0 ? 'observed-clear' : 'observed-reward') : '';
     
                 // Handle overlapping paths
                 const isOverlap = isPathA && isPathB;
@@ -494,12 +509,12 @@ class Grid {
                 if (revealCosts) {
                     if (revealedCosts === 'all') {
                         const cost = binaryCosts ? binaryCosts[row][col] : 0; // Safely access binaryCosts
-                        const costClass = cost === -1 ? 'observed-cost' : 'observed-no-cost';
+                        const costClass = cost === -1 ? 'observed-cost' : cost === 0 ? 'observed-clear' : 'observed-reward';
                         gridHTML += `<div class="grid-cell ${costClass}" id="${cellId}"></div>`;
                     } else if (revealedCosts === 'observed') {
                         const cost = this.observedCosts[`${row}-${col}`];
                         const costClass = cost !== undefined ? 
-                            (cost === -1 ? 'observed-cost' : 'observed-no-cost') : '';
+                            (cost === -1 ? 'observed-cost' : cost === 0 ? 'observed-clear' : 'observed-reward') : '';
                         gridHTML += `<div class="grid-cell ${costClass}" id="${cellId}"></div>`;
                     }
                 } else {
@@ -640,7 +655,8 @@ class Grid {
 
                     const observedCost = this.observedCosts[`${row}-${col}`];
                     const observedClass = observedCost !== undefined ? 
-                        (observedCost === -1 ? 'observed-cost' : 'observed-no-cost') : '';
+                        (observedCost === -1 ? 'observed-cost' : 
+                         observedCost === 0 ? 'observed-clear' : 'observed-reward') : '';
 
                     const isOverlap = isPathA && isPathB;
                     let pathClass = '';
@@ -724,7 +740,7 @@ class Grid {
     }
 
     // Add createUpcomingJobsHTML as a method of the Grid class
-    createAllJobsHTML(currentTrialIndex, selectedPath=null, keyAssignment=null, feedback=false, firstDay=false, showPink=true, restrictPink=null, showNoPaths=false, context='column', objective='costs') {
+    createAllJobsHTML(currentTrialIndex, selectedPath=null, keyAssignment=null, feedback=false, firstDay=false, showPink=true, restrictPink=null, showNoPaths=false) {
         const trial = this.getTrialInfo(currentTrialIndex);
         const currentGridNumber = Math.floor(currentTrialIndex / this.nTrials);
         const currentGridStartIndex = currentGridNumber * this.nTrials;
@@ -732,6 +748,10 @@ class Grid {
         const clockCharacters = ['&#x00E6;', '&#x00DD;', '&#x0026;', '&#x263A;']; // Add more characters if needed
 
         const totalTrialsInGrid = currentGridEndIndex - currentGridStartIndex + 1;
+
+        /// get current objective
+        const objective = trial.objective; // 'costs' or 'rewards'
+        const context = trial.context; // 'row' or 'column'
         
         // Create vehicle border animations based on context
         const vehicleBorderHTML = this.createVehicleBorderAnimation(context);
@@ -751,11 +771,11 @@ class Grid {
 
         if (!firstDay) {
             if (!feedback) {
-                const dayType = this.nGrids === 2 ? 'Practice Day' : 'Day';
+                const dayType = this.nCities === 2 ? 'Practice Day' : 'Day';
                 
                 upcomingHTML += `
                 <div id="cost-message" class="cost-display-container">
-                <h2 class="day-display">${dayType} ${trial.grid}/${this.nGrids}</h2>
+                <h2 class="day-display">${dayType} ${trial.city}/${this.nCities}</h2>
                 <h2 class="cost-total">Total Tips Earned Today:</h2>
                 <p id="total-cost" class="cost-total">${totalCostText}</p>
                 <p id="trial-cost" class="cost-trial hidden">$0</p> 
@@ -916,8 +936,9 @@ class Grid {
                         }
                     }
                     const observedCost = this[`observedCosts${i}`][`${row}-${col}`];
-                    const observedClass = observedCost !== undefined ?
-                        (observedCost === -1 ? 'observed-cost' : 'observed-no-cost') : '';
+                    const observedClass = observedCost !== undefined ? 
+                        (observedCost === -1 ? 'observed-cost' : 
+                         observedCost === 0 ? 'observed-clear' : 'observed-reward') : '';
                         
                     // Handle overlapping paths
                     const isOverlap = isPathA && isPathB;
@@ -1275,17 +1296,23 @@ function animateAgent(path, binaryCosts, pauseAtEnd=false, callback) {
                 const [curRow, curCol] = path[currentStep];
                 const trial = grid.getTrialInfo(currentTrialIndex);
                 const cellElement = document.getElementById(`cell-${curRow}-${curCol}-trial-${trial.trial}`);
-
                 if (cellElement) {
                     const cost = binaryCosts[curRow][curCol];
 
                     // Update observed cost classes
-                    cellElement.classList.remove("observed-cost", "observed-no-cost");
-                    cellElement.classList.add(cost === -1 ? "observed-cost" : "observed-no-cost");
+                    cellElement.classList.remove("observed-cost", "observed-clear", "observed-reward");
+                    cellElement.classList.add(
+                        cost === -1 ? "observed-cost" : 
+                        cost === 0 ? "observed-clear" : 
+                        "observed-reward"
+                    );
 
                     // Ensure start and goal cells update their color when observed
                     if (cellElement.classList.contains("start") || cellElement.classList.contains("goal")) {
-                        cellElement.style.backgroundColor = cost === -1 ? "rgb(0, 199, 73);" : "#b8b8d9"; // Red for tip, grey for free NEED TO MAKE SURE THESE MATCH HTML SHADES
+                        cellElement.style.backgroundColor = 
+                            cost === -1 ? "rgb(203, 43, 43)" : 
+                            cost === 1 ? "rgb(0, 199, 73)" : 
+                            "#b8b8d9";
                     }
 
                     if (cost === -1) {
@@ -1298,9 +1325,27 @@ function animateAgent(path, binaryCosts, pauseAtEnd=false, callback) {
                             if (burst) burst.remove();
                         }, 500);
 
-                        // Play tip sound
-                        // costSound.play();
+                        // Play cost sound
                         playCostSound();
+
+                        if (!trialCostVisible) {
+                            const trialCostElement = document.getElementById("trial-cost");
+                            if (trialCostElement) {
+                                trialCostElement.classList.remove("hidden");
+                                trialCostVisible = true;
+                            }
+                        }
+                    } else if (cost === 1) {
+                        
+                        // Visual feedback for reward
+                        cellElement.innerHTML += '<div class="cost-burst">$1 Tip</div>';
+                        setTimeout(() => {
+                            const burst = cellElement.querySelector('.cost-burst');
+                            if (burst) burst.remove();
+                        }, 500);
+
+                        // Play cost sound
+                        playRewardSound();
 
                         if (!trialCostVisible) {
                             const trialCostElement = document.getElementById("trial-cost");
@@ -1326,8 +1371,13 @@ function animateAgent(path, binaryCosts, pauseAtEnd=false, callback) {
                     // Update observed costs in upcoming grids
                     const upcomingCells = document.querySelectorAll(`.upcoming-cell[data-row="${curRow}"][data-col="${curCol}"]`);
                     upcomingCells.forEach(upcomingCell => {
-                        upcomingCell.classList.remove("observed-cost", "observed-no-cost");
-                        upcomingCell.classList.add(cost === -1 ? "observed-cost" : "observed-no-cost");
+                        upcomingCell.classList.remove("observed-cost", "observed-clear", "observed-reward");
+                        // upcomingCell.classList.add(cost === -1 ? "observed-cost" : "observed-clear",);
+                        upcomingCell.classList.add(
+                            cost === -1 ? "observed-cost" : 
+                            cost === 0 ? "observed-clear" : 
+                            "observed-reward"
+                        );
                     });
 
                     // Remove the star or S or G, then add the avatar
