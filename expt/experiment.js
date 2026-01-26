@@ -689,9 +689,16 @@ class Grid {
         return upcomingHTML;
     }
 
+    // Create vehicle border animation context class
+    createVehicleBorderAnimation(context) {
+        if (!context || (context !== 'row' && context !== 'column')) {
+            return ''; // Return empty if no valid context
+        }
+        return `context-${context}`;
+    }
 
     // Add createUpcomingJobsHTML as a method of the Grid class
-    createAllJobsHTML(currentTrialIndex, selectedPath=null, keyAssignment=null, feedback=false, firstDay=false, showPink=true, restrictPink=null, showNoPaths=false) {
+    createAllJobsHTML(currentTrialIndex, selectedPath=null, keyAssignment=null, feedback=false, firstDay=false, showPink=true, restrictPink=null, showNoPaths=false, context='column') {
         const trial = this.getTrialInfo(currentTrialIndex);
         const currentGridNumber = Math.floor(currentTrialIndex / this.nTrials);
         const currentGridStartIndex = currentGridNumber * this.nTrials;
@@ -699,6 +706,9 @@ class Grid {
         const clockCharacters = ['&#x00E6;', '&#x00DD;', '&#x0026;', '&#x263A;']; // Add more characters if needed
 
         const totalTrialsInGrid = currentGridEndIndex - currentGridStartIndex + 1;
+        
+        // Create vehicle border animations based on context
+        const vehicleBorderHTML = this.createVehicleBorderAnimation(context);
 
         let upcomingHTML = `
             <div class="jobs-section">
@@ -802,7 +812,7 @@ class Grid {
                                 <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; color: transparent;">
                                     ${clockCharacter}
                                 </div>
-                                <div class="upcoming-grid-done" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
+                                <div class="upcoming-grid-done ${vehicleBorderHTML}" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
                         `;
                     } else if (previewIndex === currentTrialIndex) {
                         upcomingHTML += `
@@ -810,7 +820,7 @@ class Grid {
                                 <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; background-color: #ece75d;">
                                     ${clockCharacter}
                                 </div>
-                                <div class="upcoming-grid" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
+                                <div class="upcoming-grid ${vehicleBorderHTML}" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
                         `;
                     } else {
                         upcomingHTML += `
@@ -818,7 +828,7 @@ class Grid {
                                 <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; color: ${previewIndex === currentTrialIndex ? '#ece75d' : 'inherit'};">
                                     ${clockCharacter}
                                 </div>
-                                <div class="upcoming-grid" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
+                                <div class="upcoming-grid ${vehicleBorderHTML}" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
                         `;
                     }
                 } else if (feedback) {
@@ -827,7 +837,7 @@ class Grid {
                                 <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; color: transparent;">
                                     ${clockCharacter}
                                 </div>
-                                <div class="upcoming-grid-done" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
+                                <div class="upcoming-grid-done ${vehicleBorderHTML}" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
                     `;
                 }
             } else if (firstDay) {
@@ -836,7 +846,7 @@ class Grid {
                                 <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px;">
                                     ${clockCharacter}
                                 </div>
-                                <div class="upcoming-grid" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
+                                <div class="upcoming-grid ${vehicleBorderHTML}" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
                         `;
             }
 
@@ -4036,9 +4046,9 @@ function initializeExperiment() {
   
     // Combine everything into a single timeline
     const fullTimeline = [
-      ...ethicsTimeline,
-      instructionsLoop,
-      ...quizTimeline,
+    //   ...ethicsTimeline,
+    //   instructionsLoop,
+    //   ...quizTimeline,
       ...mainTimeline
     ];
   

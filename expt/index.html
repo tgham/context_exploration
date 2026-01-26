@@ -308,7 +308,7 @@
             grid-gap: 13px; /* Increased from 11px */
             margin: 0 auto;
             background-color: rgb(208, 208, 210);
-            padding: 36px; /* Increased from 17px */
+            padding: 50px; /* Increased from 17px */
             border-radius: 10px; /* Increased from 8px */
             grid-template-columns: repeat(auto-fit, 43px); /* Increased from 36px */
             grid-auto-rows: 43px; /* Increased from 36px */
@@ -320,8 +320,8 @@
         
         /* as above - make sure changes match, but also .grid-cell (used in practice) */
         .upcoming-cell {
-            width: 40px; /* Increased from 32px */
-            height: 40px; /* Increased from 32px */
+            width: 38px; /* Increased from 32px */
+            height: 38px; /* Increased from 32px */
             background-color: rgba(51, 51, 77, 0.8);
             border: 7px solid transparent; /* Increased from 4px */
             display: flex;
@@ -882,6 +882,176 @@
         .col-label {
             transform: translateX(-50%);
             white-space: nowrap;
+        }
+
+        /* Context animation arrows container */
+        .context-arrows-container {
+            background-color: rgba(28, 28, 51, 0.85);
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            width: 100%;
+            /* Height will match cost-display-container dynamically */
+        }
+
+        /* Horizontal arrows layout (column stacking) */
+        .context-arrows-container.row-context {
+            flex-direction: column;
+        }
+
+        /* Vertical arrows layout (row stacking) */
+        .context-arrows-container.column-context {
+            flex-direction: row;
+            flex-wrap: wrap;
+        }
+
+        /* Individual arrow item */
+        .arrow-item {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2.5rem;
+            width: 50px;
+            height: 50px;
+            border-radius: 5px;
+        }
+
+        /* Arrow colors */
+        .arrow-item.green {
+            color: rgb(243, 136, 22);
+        }
+
+        .arrow-item.grey {
+            color: #9ca3af;
+        }
+
+        /* Horizontal arrows */
+        .arrow-item.arrow-right {
+            content: '→';
+        }
+
+        .arrow-item.arrow-left {
+            content: '←';
+        }
+
+        /* Vertical arrows */
+        .arrow-item.arrow-up {
+            content: '↑';
+        }
+
+        .arrow-item.arrow-down {
+            content: '↓';
+        }
+
+        /* Vehicle border animations */
+        
+        /* Row context: horizontal vehicle animation */
+        .upcoming-grid.context-row,
+        .upcoming-grid-done.context-row {
+            position: relative;
+        }
+
+        /* Top border vehicles (scrolling left) */
+        .upcoming-grid.context-row::before,
+        .upcoming-grid-done.context-row::before {
+            content: '';
+            position: absolute;
+            top: 8px;
+            left: 0;
+            right: 0;
+            height: 30px;
+            background-image: url('assets/vehicles/green_car.png');
+            background-size: 30px 30px;
+            background-repeat: repeat-x;
+            background-position: 0 0;
+            animation: scroll-row-top 4s linear infinite;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        /* Bottom border vehicles (scrolling right) */
+        .upcoming-grid.context-row::after,
+        .upcoming-grid-done.context-row::after {
+            content: '';
+            position: absolute;
+            bottom: 8px;
+            left: 0;
+            right: 0;
+            height: 30px;
+            background-image: url('assets/vehicles/green_car.png');
+            background-size: 30px 30px;
+            background-repeat: repeat-x;
+            background-position: 0 0;
+            animation: scroll-row-bottom 4s linear infinite;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        @keyframes scroll-row-top {
+            0% { background-position: 100% 0; }
+            100% { background-position: -100% 0; }
+        }
+
+        @keyframes scroll-row-bottom {
+            0% { background-position: -100% 0; }
+            100% { background-position: 100% 0; }
+        }
+
+        /* Column context: vertical vehicle animation */
+        .upcoming-grid.context-column,
+        .upcoming-grid-done.context-column {
+            position: relative;
+        }
+
+        /* Left border vehicles (scrolling down) */
+        .upcoming-grid.context-column::before,
+        .upcoming-grid-done.context-column::before {
+            content: '';
+            position: absolute;
+            left: 2px;
+            top: 0;
+            bottom: 0;
+            width: 30px;
+            background-image: url('assets/vehicles/green_car.png');
+            background-size: 30px 30px;
+            background-repeat: repeat-y;
+            background-position: 0 0;
+            animation: scroll-col-left 10s linear infinite;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        /* Right border vehicles (scrolling up) */
+        .upcoming-grid.context-column::after,
+        .upcoming-grid-done.context-column::after {
+            content: '';
+            position: absolute;
+            right: 8px;
+            top: 0;
+            bottom: 0;
+            width: 30px;
+            background-image: url('assets/vehicles/green_car.png');
+            background-size: 30px 30px;
+            background-repeat: repeat-y;
+            background-position: 0 0;
+            animation: scroll-col-right 10s linear infinite;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        @keyframes scroll-col-left {
+            0% { background-position: 0 100%; }
+            100% { background-position: 0 -100%; }
+        }
+
+        @keyframes scroll-col-right {
+            0% { background-position: 0 -100%; }
+            100% { background-position: 0 100%; }
         }
 
     </style>
