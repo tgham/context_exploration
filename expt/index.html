@@ -884,174 +884,209 @@
             white-space: nowrap;
         }
 
-        /* Context animation arrows container */
-        .context-arrows-container {
-            background-color: rgba(28, 28, 51, 0.85);
-            padding: 20px;
+        /* Traffic Report Container */
+        .traffic-report-container {
+            width: 300px;
+            background-color: rgba(28, 28, 51, 0.9);
             border-radius: 10px;
-            margin-top: 20px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            margin-top: 10px;
+            margin-left: auto;
+            margin-right: auto;
             display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 15px;
-            width: 100%;
-            /* Height will match cost-display-container dynamically */
-        }
-
-        /* Horizontal arrows layout (column stacking) */
-        .context-arrows-container.row-context {
             flex-direction: column;
-        }
-
-        /* Vertical arrows layout (row stacking) */
-        .context-arrows-container.column-context {
-            flex-direction: row;
-            flex-wrap: wrap;
-        }
-
-        /* Individual arrow item */
-        .arrow-item {
-            display: flex;
-            justify-content: center;
             align-items: center;
-            font-size: 2.5rem;
-            width: 50px;
-            height: 50px;
-            border-radius: 5px;
+            justify-content: center;
+            padding: 15px 0;
         }
 
-        /* Arrow colors */
-        .arrow-item.green {
-            color: rgb(243, 136, 22);
-        }
-
-        .arrow-item.grey {
-            color: #9ca3af;
-        }
-
-        /* Horizontal arrows */
-        .arrow-item.arrow-right {
-            content: '→';
-        }
-
-        .arrow-item.arrow-left {
-            content: '←';
-        }
-
-        /* Vertical arrows */
-        .arrow-item.arrow-up {
-            content: '↑';
-        }
-
-        .arrow-item.arrow-down {
-            content: '↓';
+        .traffic-report-heading {
+            color: #ece75d;
+            font-size: 1.5em;
+            margin: 0;
+            font-weight: bold;
         }
 
         /* Vehicle border animations */
         
-        /* Row context: horizontal vehicle animation */
-        .upcoming-grid.context-row,
-        .upcoming-grid-done.context-row {
+        /* Vehicle animation container - outer wrapper */
+        .vehicle-animation-container {
+            width: 100%;
+            background-color: rgba(28, 28, 51, 0);
+            border-radius: 10px;
+            margin-top: 0px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 0;
+            overflow: hidden;
+        }
+
+        /* Inner display box - centered square container */
+        .vehicle-display-box {
             position: relative;
+            width: 300px;
+            height: 300px;
+            background-color: rgb(51, 51, 77);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 2px solid rgba(100, 100, 150, 0.5);
         }
 
-        /* Top border vehicles (scrolling left) */
-        .upcoming-grid.context-row::before,
-        .upcoming-grid-done.context-row::before {
-            content: '';
+        /* Vehicle item base styles */
+        .vehicle-item {
             position: absolute;
-            top: 8px;
-            left: 0;
-            right: 0;
-            height: 30px;
-            background-image: url('assets/vehicles/green_car.png');
-            background-size: 30px 30px;
-            background-repeat: repeat-x;
-            background-position: 0 0;
-            animation: scroll-row-top 4s linear infinite;
+            background-repeat: repeat;
+            opacity: 0.8;
             pointer-events: none;
-            z-index: 10;
         }
 
-        /* Bottom border vehicles (scrolling right) */
-        .upcoming-grid.context-row::after,
-        .upcoming-grid-done.context-row::after {
-            content: '';
-            position: absolute;
-            bottom: 8px;
-            left: 0;
-            right: 0;
-            height: 30px;
-            background-image: url('assets/vehicles/green_car.png');
-            background-size: 30px 30px;
-            background-repeat: repeat-x;
-            background-position: 0 0;
-            animation: scroll-row-bottom 4s linear infinite;
-            pointer-events: none;
-            z-index: 10;
+        /* Row context: 6 horizontal rows with different speeds and alternating directions */
+        .vehicle-display-box.context-row .vehicle-row-0 {
+            top: 4.17%;
+            width: 100%;
+            height: 13.33%;
+            background-size: auto 100%;
         }
 
-        @keyframes scroll-row-top {
-            0% { background-position: 100% 0; }
-            100% { background-position: -100% 0; }
+        .vehicle-display-box.context-row .vehicle-row-1 {
+            top: 20.83%;
+            width: 100%;
+            height: 13.33%;
+            background-size: auto 100%;
         }
 
-        @keyframes scroll-row-bottom {
-            0% { background-position: -100% 0; }
-            100% { background-position: 100% 0; }
+        .vehicle-display-box.context-row .vehicle-row-2 {
+            top: 37.5%;
+            width: 100%;
+            height: 13.33%;
+            background-size: auto 100%;
         }
 
-        /* Column context: vertical vehicle animation */
-        .upcoming-grid.context-column,
-        .upcoming-grid-done.context-column {
-            position: relative;
+        .vehicle-display-box.context-row .vehicle-row-3 {
+            top: 54.17%;
+            width: 100%;
+            height: 13.33%;
+            background-size: auto 100%;
         }
 
-        /* Left border vehicles (scrolling down) */
-        .upcoming-grid.context-column::before,
-        .upcoming-grid-done.context-column::before {
-            content: '';
-            position: absolute;
-            left: 2px;
-            top: 0;
-            bottom: 0;
-            width: 30px;
-            background-image: url('assets/vehicles/green_car.png');
-            background-size: 30px 30px;
-            background-repeat: repeat-y;
-            background-position: 0 0;
-            animation: scroll-col-left 10s linear infinite;
-            pointer-events: none;
-            z-index: 10;
+        .vehicle-display-box.context-row .vehicle-row-4 {
+            top: 70.83%;
+            width: 100%;
+            height: 13.33%;
+            background-size: auto 100%;
         }
 
-        /* Right border vehicles (scrolling up) */
-        .upcoming-grid.context-column::after,
-        .upcoming-grid-done.context-column::after {
-            content: '';
-            position: absolute;
-            right: 8px;
-            top: 0;
-            bottom: 0;
-            width: 30px;
-            background-image: url('assets/vehicles/green_car.png');
-            background-size: 30px 30px;
-            background-repeat: repeat-y;
-            background-position: 0 0;
-            animation: scroll-col-right 10s linear infinite;
-            pointer-events: none;
-            z-index: 10;
+        .vehicle-display-box.context-row .vehicle-row-5 {
+            top: 87.5%;
+            width: 100%;
+            height: 13.33%;
+            background-size: auto 100%;
         }
 
-        @keyframes scroll-col-left {
-            0% { background-position: 0 100%; }
-            100% { background-position: 0 -100%; }
+        /* Column context: 6 vertical columns with different speeds and alternating directions */
+        .vehicle-display-box.context-column .vehicle-col-0 {
+            left: 4.17%;
+            height: 100%;
+            width: 13.33%;
+            background-size: 100% auto;
         }
 
-        @keyframes scroll-col-right {
-            0% { background-position: 0 -100%; }
-            100% { background-position: 0 100%; }
+        .vehicle-display-box.context-column .vehicle-col-1 {
+            left: 20.83%;
+            height: 100%;
+            width: 13.33%;
+            background-size: 100% auto;
+        }
+
+        .vehicle-display-box.context-column .vehicle-col-2 {
+            left: 37.5%;
+            height: 100%;
+            width: 13.33%;
+            background-size: 100% auto;
+        }
+
+        .vehicle-display-box.context-column .vehicle-col-3 {
+            left: 54.17%;
+            height: 100%;
+            width: 13.33%;
+            background-size: 100% auto;
+        }
+
+        .vehicle-display-box.context-column .vehicle-col-4 {
+            left: 70.83%;
+            height: 100%;
+            width: 13.33%;
+            background-size: 100% auto;
+        }
+
+        .vehicle-display-box.context-column .vehicle-col-5 {
+            left: 87.5%;
+            height: 100%;
+            width: 13.33%;
+            background-size: 100% auto;
+        }
+
+        /* Row scroll animations - horizontal scrolling */
+        @keyframes scroll-row-0 {
+            0% { background-position: 0 0; }
+            100% { background-position: 300px 0; }
+        }
+
+        @keyframes scroll-row-1 {
+            0% { background-position: 0 0; }
+            100% { background-position: -300px 0; }
+        }
+
+        @keyframes scroll-row-2 {
+            0% { background-position: 0 0; }
+            100% { background-position: 300px 0; }
+        }
+
+        @keyframes scroll-row-3 {
+            0% { background-position: 0 0; }
+            100% { background-position: -300px 0; }
+        }
+
+        @keyframes scroll-row-4 {
+            0% { background-position: 0 0; }
+            100% { background-position: 300px 0; }
+        }
+
+        @keyframes scroll-row-5 {
+            0% { background-position: 0 0; }
+            100% { background-position: -300px 0; }
+        }
+
+        /* Column scroll animations - 6 keyframes with varying directions */
+        @keyframes scroll-col-0 {
+            0% { background-position: 0 0; }
+            100% { background-position: 0 300px; }
+        }
+
+        @keyframes scroll-col-1 {
+            0% { background-position: 0 0; }
+            100% { background-position: 0 -300px; }
+        }
+
+        @keyframes scroll-col-2 {
+            0% { background-position: 0 0; }
+            100% { background-position: 0 300px; }
+        }
+
+        @keyframes scroll-col-3 {
+            0% { background-position: 0 0; }
+            100% { background-position: 0 -300px; }
+        }
+
+        @keyframes scroll-col-4 {
+            0% { background-position: 0 0; }
+            100% { background-position: 0 300px; }
+        }
+
+        @keyframes scroll-col-5 {
+            0% { background-position: 0 0; }
+            100% { background-position: 0 -300px; }
         }
 
     </style>

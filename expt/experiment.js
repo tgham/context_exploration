@@ -697,8 +697,31 @@ class Grid {
         return `context-${context}`;
     }
 
+    // Generate 6 vehicle rows with different speeds and alternating directions
+    generateVehicleRows(contextClass) {
+        const speeds = [6, 8, 10, 7, 9, 11]; // seconds
+        
+        // Image URLs based on context and direction
+        // Row context: even indices go right, odd indices go left
+        // Column context: even indices go down, odd indices go up
+        const imageUrls = contextClass === 'context-row' 
+            ? ['assets/vehicles/green_car_right.png', 'assets/vehicles/green_car_left.png', 'assets/vehicles/green_car_right.png', 'assets/vehicles/green_car_left.png', 'assets/vehicles/green_car_right.png', 'assets/vehicles/green_car_left.png']
+            : ['assets/vehicles/green_car_down.png', 'assets/vehicles/green_car_up.png', 'assets/vehicles/green_car_down.png', 'assets/vehicles/green_car_up.png', 'assets/vehicles/green_car_down.png', 'assets/vehicles/green_car_up.png'];
+        
+        let html = '';
+        for (let i = 0; i < 6; i++) {
+            const speed = speeds[i];
+            const direction = 'normal';
+            const rowClass = contextClass === 'context-row' ? `vehicle-row-${i}` : `vehicle-col-${i}`;
+            const animationName = contextClass === 'context-row' ? `scroll-row-${i}` : `scroll-col-${i}`;
+            const imageUrl = imageUrls[i];
+            html += `<div class="vehicle-item ${rowClass}" style="background-image: url('${imageUrl}'); animation: ${animationName} ${speed}s linear infinite ${direction};"></div>`;
+        }
+        return html;
+    }
+
     // Add createUpcomingJobsHTML as a method of the Grid class
-    createAllJobsHTML(currentTrialIndex, selectedPath=null, keyAssignment=null, feedback=false, firstDay=false, showPink=true, restrictPink=null, showNoPaths=false, context='column') {
+    createAllJobsHTML(currentTrialIndex, selectedPath=null, keyAssignment=null, feedback=false, firstDay=false, showPink=true, restrictPink=null, showNoPaths=false, context='row') {
         const trial = this.getTrialInfo(currentTrialIndex);
         const currentGridNumber = Math.floor(currentTrialIndex / this.nTrials);
         const currentGridStartIndex = currentGridNumber * this.nTrials;
@@ -812,7 +835,7 @@ class Grid {
                                 <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; color: transparent;">
                                     ${clockCharacter}
                                 </div>
-                                <div class="upcoming-grid-done ${vehicleBorderHTML}" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
+                                <div class="upcoming-grid-done" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
                         `;
                     } else if (previewIndex === currentTrialIndex) {
                         upcomingHTML += `
@@ -820,7 +843,7 @@ class Grid {
                                 <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; background-color: #ece75d;">
                                     ${clockCharacter}
                                 </div>
-                                <div class="upcoming-grid ${vehicleBorderHTML}" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
+                                <div class="upcoming-grid" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
                         `;
                     } else {
                         upcomingHTML += `
@@ -828,7 +851,7 @@ class Grid {
                                 <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; color: ${previewIndex === currentTrialIndex ? '#ece75d' : 'inherit'};">
                                     ${clockCharacter}
                                 </div>
-                                <div class="upcoming-grid ${vehicleBorderHTML}" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
+                                <div class="upcoming-grid" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
                         `;
                     }
                 } else if (feedback) {
@@ -837,7 +860,7 @@ class Grid {
                                 <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px; color: transparent;">
                                     ${clockCharacter}
                                 </div>
-                                <div class="upcoming-grid-done ${vehicleBorderHTML}" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
+                                <div class="upcoming-grid-done" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
                     `;
                 }
             } else if (firstDay) {
@@ -846,7 +869,7 @@ class Grid {
                                 <div class="clock-container" style="font-size: 50px; text-align: center; margin-bottom: 10px;">
                                     ${clockCharacter}
                                 </div>
-                                <div class="upcoming-grid ${vehicleBorderHTML}" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
+                                <div class="upcoming-grid" style="grid-template-columns: repeat(${this.gridSize}, 30px); grid-auto-rows: 30px;">
                         `;
             }
 
@@ -1118,6 +1141,14 @@ class Grid {
 
         upcomingHTML += `
                     </div>
+                </div>
+            </div>
+            <div class="traffic-report-container">
+                <h2 class="traffic-report-heading">Traffic Report</h2>
+            </div>
+            <div class="vehicle-animation-container ${vehicleBorderHTML}">
+                <div class="vehicle-display-box ${vehicleBorderHTML}">
+                    ${this.generateVehicleRows(vehicleBorderHTML)}
                 </div>
             </div>
         `;
