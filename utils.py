@@ -685,14 +685,20 @@ def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params,
         np.random.seed(p + 1000)
         contexts = ['row']*int(n_cities/2) + ['column']*int(n_cities/2)
         np.random.shuffle(contexts)
+        
+        ## if expt 3, we also want to randomise the order of the tasks
+        objectives = ['rewards'] * int(n_cities/2) + ['costs'] * int(n_cities/2)
+        np.random.shuffle(objectives)
     else:
         contexts = [expt_info['context']]*n_cities
+        objectives = [expt_info['objective']]*n_cities
     env_objects = {}
     env_costs = {}
     df_expt = pd.DataFrame()
 
     for c in range(n_cities):
         expt_info['context'] = contexts[c]
+        expt_info['objective'] = objectives[c]
 
         ## generate envs for this city
         envs = [make_env(N, n_trials, expt_info, beta_params, metric) for _ in range(n_days)]
@@ -771,7 +777,9 @@ def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params,
         # with open('useful_saves/expt_optimisation/simulated_env_objects/expt_2_env_objects_' + str(p) + '.pkl', 'wb') as f:
         #     pickle.dump(env_objects, f)
         # return df_expt
-        save_path = 'useful_saves/expt_optimisation/simulated_envs'
+        # save_path = 'useful_saves/expt_optimisation/simulated_envs'
+        save_path = 'useful_saves/expt_optimisation/simulated_envs/expt_3'
+
     
     # i.e. actual ppt sequences for online testing
     # else:
@@ -781,12 +789,12 @@ def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params,
         'trial_info': df_expt.to_dict('records'),
         'env_costs': env_costs
     }
-    path_1 = save_path + '/expt_info/expt_2_info_' + str(p) + '.json'
+    path_1 = save_path + '/expt_info/expt_3_info_' + str(p) + '.json'
     with open(path_1, 'w') as f:
         json.dump(expt_dict, f, indent=4)
 
     ## save env objects
-    path_2 = save_path + '/env_objects/expt_2_env_objects_' + str(p) + '.pkl'
+    path_2 = save_path + '/env_objects/expt_3_env_objects_' + str(p) + '.pkl'
     with open(path_2, 'wb') as f:
         pickle.dump(env_objects, f)
 
@@ -1158,7 +1166,7 @@ def load_data(path):
         n_cities = df_tmp['city'].nunique()
         if expt == 'expt_1':
             n_cities_expected = 8
-        elif expt == 'expt_2':
+        elif (expt == 'expt_2') or (expt == 'expt_2_rewards'):
             n_cities_expected = 6
         if n_cities < n_cities_expected:
             print('Incomplete dataset for participant:', file,'. Found only', n_cities, 'cities.')
@@ -1195,7 +1203,7 @@ def load_data(path):
         n_total_trials = len(df_tmp)
         if expt == 'expt_1':
             expected_trials = 160
-        elif expt == 'expt_2':
+        elif (expt == 'expt_2') or (expt == 'expt_2_rewards'):
             expected_trials = 120
         if n_total_trials != expected_trials:
             print(f'Expected {expected_trials} trials, but found:', n_total_trials, 'for participant:', pid)
@@ -1247,6 +1255,61 @@ def load_data(path):
                     }
                     df_tmp = pd.concat([df_tmp, pd.DataFrame([new_row])], ignore_index=True)
                 print('New total trials after fix:', len(df_tmp))
+            
+            ## else just fill in with nans up to expected_trials
+            else:
+                n_missing = expected_trials - n_total_trials
+                last_city = df_tmp['city'].max()
+                
+                ## loop through every day and trial of last city. if there is no such trial in df_tmp, add a row with nans
+                for day in range(1, 6):
+                    for trial in range(1, 5):
+                        if not ((df_tmp['city'] == last_city) & (df_tmp['grid'] == day) & (df_tmp['trial'] == trial)).any():
+                            new_row = {
+                                'pid': pid,
+                                'trial': trial,
+                                'city': last_city,
+                                'path_chosen': np.nan,
+                                'button_pressed': np.nan,
+                                'reaction_time_ms': np.nan,
+                                'context': np.nan,
+                                'grid': day,
+                                'path_A': np.nan,
+                                'path_B': np.nan,
+                                'path_A_expected_cost': np.nan,
+                                'path_B_expected_cost': np.nan,
+                                'path_A_actual_cost': np.nan,
+                                'path_B_actual_cost': np.nan,
+                                'path_A_future_overlap': np.nan,
+                                'path_B_future_overlap': np.nan,
+                                'path_A_future_row_overlap': np.nan,
+                                'path_B_future_row_overlap': np.nan,
+                                'path_A_future_col_overlap': np.nan,
+                                'path_B_future_col_overlap': np.nan,
+                                'path_A_future_row_and_col_overlap': np.nan,
+                                'path_B_future_row_and_col_overlap': np.nan,
+                                'path_A_future_rel_overlap': np.nan,
+                                'path_B_future_rel_overlap': np.nan,
+                                'path_A_future_irrel_overlap': np.nan,
+                                'path_B_future_irrel_overlap': np.nan,
+                                'abstract_sequence_A': np.nan,
+                                'abstract_sequence_B': np.nan,
+                                'dominant_axis_A': np.nan,
+                                'dominant_axis_B': np.nan,
+                                'better_path': np.nan,
+                                'chose_better_path': np.nan,
+                                'bonusAchieved': np.nan,
+                                # 'expt_info_filename': id_mapping.get(pid, '')
+                                'expt_info_filename': np.nan,
+                            }
+                            df_tmp = pd.concat([df_tmp, pd.DataFrame([new_row])], ignore_index=True)
+                            n_missing -= 1
+                    #         if n_missing == 0:
+                    #             break
+                    # if n_missing == 0:
+                    #     break
+                    assert n_missing >= 0, 'Added more trials than expected!'
+                
             # continue ## skip
 
 
@@ -1279,6 +1342,21 @@ def load_data(path):
             df_tmp.loc[df_tmp['pid'] == pid, 'expt_info_filename'] = str(id)
         all_expt_info_ids.append(id)
         df_all = pd.concat([df_all, df_tmp], ignore_index=True)
+
+        ## DEBUGGING:
+        # df_tmp['better_path'] = df_tmp.apply(
+        #     lambda row: 'a' if row['better_path'] == 'b' else 'b' if row['better_path'] == 'a' else np.nan,
+        #     axis=1
+        # )
+        # df_tmp['chose_path_with_more_cost'] = df_tmp.apply(
+        #     lambda row: True if (row['path_chosen'] == 'a' and row['path_A_actual_cost'] > row['path_B_actual_cost']) 
+        #                     or (row['path_chosen'] == 'b' and row['path_B_actual_cost'] > row['path_A_actual_cost'])
+        #                     else False if (row['path_chosen'] == 'a' and row['path_A_actual_cost'] < row['path_B_actual_cost']) 
+        #                     or (row['path_chosen'] == 'b' and row['path_B_actual_cost'] < row['path_A_actual_cost'])
+        #                     else np.nan,
+        #     axis=1
+        # )
+        # assert len(df_tmp.loc[(df_tmp['chose_path_with_more_cost'] == True) & (df_tmp['chose_better_path'] == 0)]) == 0, 'Data inconsistency for participant ' + pid
 
     # Cleaning
     df_all = df_all.replace('', np.nan)
@@ -1372,6 +1450,8 @@ def load_data(path):
     df_all['prev_day_chose_vertical'] = np.nan
     df_all['path_A_past_overlaps'] = np.nan
     df_all['path_B_past_overlaps'] = np.nan
+    df_all['path_A_future_overlaps'] = np.nan
+    df_all['path_B_future_overlaps'] = np.nan
     df_all['path_A_past_observed_costs'] = np.nan
     df_all['path_B_past_observed_costs'] = np.nan
     df_all['path_A_past_observed_no_costs'] = np.nan
@@ -1483,20 +1563,23 @@ def load_data(path):
             raise KeyError(f'No id mapping for participant {pid}')
         try:
             base_path = 'expt/assets/trial_sequences/'+ expt
-            try:
-                path = base_path + '/env_objects/'+ expt + '_env_objects_{}.pkl'.format(id)
-                with open(path, 'rb') as f:
-                    envs = pickle.load(f)
-            except:
-                with open(base_path + '/rotated_env_objects/env_objects_{}.pkl'.format(id), 'rb') as f:
-                    envs = pickle.load(f)
+            if (expt == 'expt_2') or (expt == 'expt_2_rewards'):
+                # path = base_path + '/env_objects/'+ expt + '_env_objects_{}.pkl'.format(id)
+                path = base_path + '/env_objects/expt_2_env_objects_{}.pkl'.format(id)
+            elif expt == 'expt_1':
+                if id[-1]=='d':
+                    path = base_path + '/rotated_env_objects/env_objects_{}.pkl'.format(id)
+                else:
+                    path = base_path + '/env_objects/env_objects_{}.pkl'.format(id)
+            with open(path, 'rb') as f:
+                envs = pickle.load(f)
         except FileNotFoundError:
             raise FileNotFoundError(f'No env objects found for participant {pid} with id {id}')
         
         ## simulate
         if expt == 'expt_1':
             N=8
-        elif expt == 'expt_2':
+        elif (expt == 'expt_2') or (expt == 'expt_2_rewards'):
             N=9
         agent = Farmer(N=N, context_prior=0.5)
         agent.run(params = None, hyperparams=None, agent = 'human', df_trials= df_all.loc[df_all['pid'] == pid],envs=envs, fit=False)
@@ -1519,6 +1602,8 @@ def load_data(path):
         ## extract overlap info
         df_all.loc[df_all['pid'] == pid, 'path_A_past_overlaps'] = agent.path_past_overlaps[:,:,:,0].flatten()
         df_all.loc[df_all['pid'] == pid, 'path_B_past_overlaps'] = agent.path_past_overlaps[:,:,:,1].flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_A_future_overlaps'] = agent.path_future_overlaps[:,:,:,0].flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_B_future_overlaps'] = agent.path_future_overlaps[:,:,:,1].flatten()
         df_all.loc[df_all['pid'] == pid, 'total_past_overlaps'] = agent.path_past_overlaps[:,:,:,0].flatten() + agent.path_past_overlaps[:,:,:,1].flatten()
         df_all.loc[df_all['pid'] == pid, 'path_A_past_observed_costs'] = agent.path_past_observed_costs[:,:,:,0].flatten()
         df_all.loc[df_all['pid'] == pid, 'path_B_past_observed_costs'] = agent.path_past_observed_costs[:,:,:,1].flatten()
@@ -1532,6 +1617,7 @@ def load_data(path):
                      , 'observed_costs_diff'] = df_all.loc[(df_all['pid'] == pid), 'path_A_past_observed_costs'] - df_all.loc[(df_all['pid'] == pid), 'path_B_past_observed_costs']
         df_all.loc[(df_all['pid'] == pid)
                         , 'observed_no_costs_diff'] = df_all.loc[(df_all['pid'] == pid), 'path_A_past_observed_no_costs'] - df_all.loc[(df_all['pid'] == pid), 'path_B_past_observed_no_costs']
+        
         
         ## calculate the absolute net observed difference, including both costs and no costs
         df_all.loc[(df_all['pid'] == pid)
@@ -1602,6 +1688,61 @@ def load_data(path):
     ## remove all non-choices?
     df_all = df_all[df_all['path_chosen'].notna()]
 
+    ## flip accuracy for expt 2 rewards
+    if expt == 'expt_2_rewards':
+        # df_all['chose_better_path'] = df_all.apply(
+        #     lambda row: 1 if row['chose_better_path'] == 0 else 0 if row['chose_better_path'] == 1 else np.nan,
+        #     axis=1
+        # )
+        df_all['better_path'] = df_all.apply(
+            lambda row: 'a' if row['better_path'] == 'b' else 'b' if row['better_path'] == 'a' else np.nan,
+            axis=1
+        )
+        assert len(df_all.loc[(df_all['path_chosen']==df_all['better_path']) & (df_all['chose_better_path']==0)]) == 0, 'Inconsistency in flipping better path accuracy'
+        df_all['chose_better_path'] = df_all.apply(
+            lambda row: 1 if row['path_chosen'] == row['better_path'] 
+            else 0 if row['path_chosen'] != row['better_path']
+            else np.nan,
+            axis=1
+        )
+        df_all['CE_human_consistent'] = ~df_all['CE_human_consistent']
+
+        df_all['task'] = 'rewards'
+    else:
+        df_all['task'] = 'costs'
+
+    
+    
+    ### make observed_cost meaningful 
+
+    ## how many nocost squares did P choose?
+    df_all['points'] = np.zeros_like(df_all['observed_cost']) + np.nan
+    if expt == 'expt_2':
+        df_all['points'] = N + df_all['observed_cost']
+
+
+    ## how many costs (i.e. tips) did P earn?
+    elif expt == 'expt_2_rewards':
+        df_all['points'] = -df_all['observed_cost']
+
+    ## regret
+    df_all['regret'] = np.nan
+    if expt == 'expt_2':
+        df_all['regret'] = df_all.apply(
+            lambda row: (N + row['path_A_actual_cost'] if (row['better_path']=='a') else
+                 N + row['path_B_actual_cost'] if (row['better_path']=='b') else
+                    np.nan) - row['points'], axis=1
+        )
+    elif expt == 'expt_2_rewards':
+        df_all['regret'] = df_all.apply(
+            lambda row: (-row['path_A_actual_cost'] if (row['better_path']=='a') else
+                 -row['path_B_actual_cost'] if (row['better_path']=='b') else
+                    np.nan) - row['points'], axis=1
+        )
+
+
+        
+
     # last bit of cleaning of questionnaire data
     df_q = pd.DataFrame.from_dict(questionnaire)
     answers = ["extremely uncharacteristic of me", "somewhat uncharacteristic of me", "uncertain", "somewhat characteristic of me", "extremely characteristic of me"];
@@ -1621,7 +1762,7 @@ def load_data(path):
     
     if expt =='expt_1':
         return df_all, df_q
-    elif expt =='expt_2':
+    elif (expt =='expt_2') or (expt == 'expt_2_rewards'):
         return df_all, df_q, df_context_all, df_freetext
 
 
