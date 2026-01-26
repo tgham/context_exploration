@@ -54,6 +54,10 @@ class GridEnv(gym.Env):
         self.expt = expt_info['type']
         self.context = expt_info['context']
         self.n_afc = expt_info['n_afc'] if 'n_afc' in expt_info else 2
+        if self.expt_info['objective'] is not None:
+            self.objective = expt_info['objective']
+        else:
+            self.objective = 'costs'
 
 
         ### misc gym inits
@@ -122,9 +126,12 @@ class GridEnv(gym.Env):
         while not init_done:
             SG_found = False
             paths_found = False
-            # self.high_cost, self.low_cost = -0.9, -0.1
-            self.high_cost, self.low_cost = -1, -0
-            # self.high_cost, self.low_cost = 0, 1
+            if self.objective == 'rewards':
+                self.high_cost, self.low_cost = 0, 1
+            elif self.objective == 'costs':
+                self.high_cost, self.low_cost = -1, -0
+            else:
+                raise ValueError('objective must be either rewards or costs')
             self.alpha_row = beta_params['alpha_row']
             self.beta_row = beta_params['beta_row']
             self.alpha_col = beta_params['alpha_col']
@@ -346,7 +353,7 @@ class GridEnv(gym.Env):
                         #     n_intersections.append(len(intersections) -2) ## -2 if start and end are shared
                         # self.path_n_intersections.append(n_intersections)
 
-                        ## repeats (e.g. if [x,y] appears in trials 2 and 3, count it twice)
+                        ## overlaps
                         n_overlaps = []
                         for path in self.path_states[t]:
                             path = path.copy()
@@ -361,10 +368,19 @@ class GridEnv(gym.Env):
                                         intersection = intersection - set([path[0]])
                                     if np.array_equal(path[-1], next_path[-1]):
                                         intersection = intersection - set([path[-1]])
-                                    intersections.extend(intersection)
+
+
+                                    ## allow double counting (e.g. if [x,y] appears in trials 2 and 3, count it twice)
+                                    # intersections.extend(intersection)
+
+                                    ## or, prevent double counting of states by seeing if they have already been counted (e.g. if [x,y] appears in trials 2 and 3, count it once))
+                                    for state in intersection:
+                                        if state not in intersections:
+                                            intersections.append(state)
                             n_overlaps.append(len(intersections))
                         self.path_future_overlaps.append(n_overlaps)
                         self.most_overlap.append(np.argmax(n_overlaps))
+                
 
 
                         ## for each path, check how many subsequently visited states are on rows or columns covered by these paths
