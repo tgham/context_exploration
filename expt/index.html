@@ -308,7 +308,7 @@
             grid-gap: 13px; /* Increased from 11px */
             margin: 0 auto;
             background-color: rgb(208, 208, 210);
-            padding: 50px; /* Increased from 17px */
+            padding: 36px; /* Increased from 17px */
             border-radius: 10px; /* Increased from 8px */
             grid-template-columns: repeat(auto-fit, 43px); /* Increased from 36px */
             grid-auto-rows: 43px; /* Increased from 36px */
@@ -320,8 +320,8 @@
         
         /* as above - make sure changes match, but also .grid-cell (used in practice) */
         .upcoming-cell {
-            width: 38px; /* Increased from 32px */
-            height: 38px; /* Increased from 32px */
+            width: 40px; /* Increased from 32px */
+            height: 40px; /* Increased from 32px */
             background-color: rgba(51, 51, 77, 0.8);
             border: 7px solid transparent; /* Increased from 4px */
             display: flex;
@@ -943,87 +943,129 @@
 
         /* Row context: 6 horizontal rows with different speeds and alternating directions */
         .vehicle-display-box.context-row .vehicle-row-0 {
-            top: 4.17%;
+            top: 0%;
             width: 100%;
-            height: 13.33%;
+            height: 11.11%;
             background-size: auto 100%;
         }
 
         .vehicle-display-box.context-row .vehicle-row-1 {
-            top: 20.83%;
+            top: 11.11%;
             width: 100%;
-            height: 13.33%;
+            height: 11.11%;
             background-size: auto 100%;
         }
 
         .vehicle-display-box.context-row .vehicle-row-2 {
-            top: 37.5%;
+            top: 22.22%;
             width: 100%;
-            height: 13.33%;
+            height: 11.11%;
             background-size: auto 100%;
         }
 
         .vehicle-display-box.context-row .vehicle-row-3 {
-            top: 54.17%;
+            top: 33.33%;
             width: 100%;
-            height: 13.33%;
+            height: 11.11%;
             background-size: auto 100%;
         }
 
         .vehicle-display-box.context-row .vehicle-row-4 {
-            top: 70.83%;
+            top: 44.44%;
             width: 100%;
-            height: 13.33%;
+            height: 11.11%;
             background-size: auto 100%;
         }
 
         .vehicle-display-box.context-row .vehicle-row-5 {
-            top: 87.5%;
+            top: 55.55%;
             width: 100%;
-            height: 13.33%;
+            height: 11.11%;
             background-size: auto 100%;
         }
 
-        /* Column context: 6 vertical columns with different speeds and alternating directions */
+        .vehicle-display-box.context-row .vehicle-row-6 {
+            top: 66.66%;
+            width: 100%;
+            height: 11.11%;
+            background-size: auto 100%;
+        }
+
+        .vehicle-display-box.context-row .vehicle-row-7 {
+            top: 77.77%;
+            width: 100%;
+            height: 11.11%;
+            background-size: auto 100%;
+        }
+
+        .vehicle-display-box.context-row .vehicle-row-8 {
+            top: 88.88%;
+            width: 100%;
+            height: 11.11%;
+            background-size: auto 100%;
+        }
+
+        /* Column context: 9 vertical columns with different speeds and alternating directions */
         .vehicle-display-box.context-column .vehicle-col-0 {
-            left: 4.17%;
+            left: 0%;
             height: 100%;
-            width: 13.33%;
+            width: 11.11%;
             background-size: 100% auto;
         }
 
         .vehicle-display-box.context-column .vehicle-col-1 {
-            left: 20.83%;
+            left: 11.11%;
             height: 100%;
-            width: 13.33%;
+            width: 11.11%;
             background-size: 100% auto;
         }
 
         .vehicle-display-box.context-column .vehicle-col-2 {
-            left: 37.5%;
+            left: 22.22%;
             height: 100%;
-            width: 13.33%;
+            width: 11.11%;
             background-size: 100% auto;
         }
 
         .vehicle-display-box.context-column .vehicle-col-3 {
-            left: 54.17%;
+            left: 33.33%;
             height: 100%;
-            width: 13.33%;
+            width: 11.11%;
             background-size: 100% auto;
         }
 
         .vehicle-display-box.context-column .vehicle-col-4 {
-            left: 70.83%;
+            left: 44.44%;
             height: 100%;
-            width: 13.33%;
+            width: 11.11%;
             background-size: 100% auto;
         }
 
         .vehicle-display-box.context-column .vehicle-col-5 {
-            left: 87.5%;
+            left: 55.55%;
             height: 100%;
-            width: 13.33%;
+            width: 11.11%;
+            background-size: 100% auto;
+        }
+
+        .vehicle-display-box.context-column .vehicle-col-6 {
+            left: 66.66%;
+            height: 100%;
+            width: 11.11%;
+            background-size: 100% auto;
+        }
+
+        .vehicle-display-box.context-column .vehicle-col-7 {
+            left: 77.77%;
+            height: 100%;
+            width: 11.11%;
+            background-size: 100% auto;
+        }
+
+        .vehicle-display-box.context-column .vehicle-col-8 {
+            left: 88.88%;
+            height: 100%;
+            width: 11.11%;
             background-size: 100% auto;
         }
 
@@ -1058,6 +1100,21 @@
             100% { background-position: -300px 0; }
         }
 
+        @keyframes scroll-row-6 {
+            0% { background-position: 0 0; }
+            100% { background-position: 300px 0; }
+        }
+
+        @keyframes scroll-row-7 {
+            0% { background-position: 0 0; }
+            100% { background-position: -300px 0; }
+        }
+
+        @keyframes scroll-row-8 {
+            0% { background-position: 0 0; }
+            100% { background-position: 300px 0; }
+        }
+
         /* Column scroll animations - 6 keyframes with varying directions */
         @keyframes scroll-col-0 {
             0% { background-position: 0 0; }
@@ -1087,6 +1144,21 @@
         @keyframes scroll-col-5 {
             0% { background-position: 0 0; }
             100% { background-position: 0 -300px; }
+        }
+
+        @keyframes scroll-col-6 {
+            0% { background-position: 0 0; }
+            100% { background-position: 0 300px; }
+        }
+
+        @keyframes scroll-col-7 {
+            0% { background-position: 0 0; }
+            100% { background-position: 0 -300px; }
+        }
+
+        @keyframes scroll-col-8 {
+            0% { background-position: 0 0; }
+            100% { background-position: 0 300px; }
         }
 
     </style>

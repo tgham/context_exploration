@@ -697,19 +697,22 @@ class Grid {
         return `context-${context}`;
     }
 
-    // Generate 6 vehicle rows with different speeds and alternating directions
-    generateVehicleRows(contextClass) {
-        const speeds = [6, 8, 10, 7, 9, 11]; // seconds
+    // Generate 9 vehicle rows with different speeds and alternating directions
+    generateVehicleRows(contextClass, objective='rewards') {
+        const speeds = [6, 8, 10, 7, 9, 11, 6, 8, 10]; // 9 speeds (cycling pattern)
         
-        // Image URLs based on context and direction
+        // Determine car color based on objective
+        const carColor = objective === 'costs' ? 'red' : 'green';
+        
+        // Image URLs based on context, direction, and objective
         // Row context: even indices go right, odd indices go left
         // Column context: even indices go down, odd indices go up
         const imageUrls = contextClass === 'context-row' 
-            ? ['assets/vehicles/green_car_right.png', 'assets/vehicles/green_car_left.png', 'assets/vehicles/green_car_right.png', 'assets/vehicles/green_car_left.png', 'assets/vehicles/green_car_right.png', 'assets/vehicles/green_car_left.png']
-            : ['assets/vehicles/green_car_down.png', 'assets/vehicles/green_car_up.png', 'assets/vehicles/green_car_down.png', 'assets/vehicles/green_car_up.png', 'assets/vehicles/green_car_down.png', 'assets/vehicles/green_car_up.png'];
+            ? [`assets/vehicles/${carColor}_car_right.png`, `assets/vehicles/${carColor}_car_left.png`, `assets/vehicles/${carColor}_car_right.png`, `assets/vehicles/${carColor}_car_left.png`, `assets/vehicles/${carColor}_car_right.png`, `assets/vehicles/${carColor}_car_left.png`, `assets/vehicles/${carColor}_car_right.png`, `assets/vehicles/${carColor}_car_left.png`, `assets/vehicles/${carColor}_car_right.png`]
+            : [`assets/vehicles/${carColor}_car_down.png`, `assets/vehicles/${carColor}_car_up.png`, `assets/vehicles/${carColor}_car_down.png`, `assets/vehicles/${carColor}_car_up.png`, `assets/vehicles/${carColor}_car_down.png`, `assets/vehicles/${carColor}_car_up.png`, `assets/vehicles/${carColor}_car_down.png`, `assets/vehicles/${carColor}_car_up.png`, `assets/vehicles/${carColor}_car_down.png`];
         
         let html = '';
-        for (let i = 0; i < 6; i++) {
+        for (let i = 0; i < 9; i++) {
             const speed = speeds[i];
             const direction = 'normal';
             const rowClass = contextClass === 'context-row' ? `vehicle-row-${i}` : `vehicle-col-${i}`;
@@ -721,7 +724,7 @@ class Grid {
     }
 
     // Add createUpcomingJobsHTML as a method of the Grid class
-    createAllJobsHTML(currentTrialIndex, selectedPath=null, keyAssignment=null, feedback=false, firstDay=false, showPink=true, restrictPink=null, showNoPaths=false, context='row') {
+    createAllJobsHTML(currentTrialIndex, selectedPath=null, keyAssignment=null, feedback=false, firstDay=false, showPink=true, restrictPink=null, showNoPaths=false, context='column', objective='costs') {
         const trial = this.getTrialInfo(currentTrialIndex);
         const currentGridNumber = Math.floor(currentTrialIndex / this.nTrials);
         const currentGridStartIndex = currentGridNumber * this.nTrials;
@@ -1148,7 +1151,7 @@ class Grid {
             </div>
             <div class="vehicle-animation-container ${vehicleBorderHTML}">
                 <div class="vehicle-display-box ${vehicleBorderHTML}">
-                    ${this.generateVehicleRows(vehicleBorderHTML)}
+                    ${this.generateVehicleRows(vehicleBorderHTML, objective)}
                 </div>
             </div>
         `;
@@ -2219,8 +2222,7 @@ const zoomAdjustment = {
         return `
         <div class="cost-display-container">
             <h1>Display Setup</h1>
-            <p style="font-size: ${fontSize};">Let's first adjust your display so the experiment fits in your browser.</p>
-            <p style="font-size: ${fontSize};">Press the Up / Down Arrow keys to zoom in / out and adjust the display size.</p>
+            <p style="font-size: ${fontSize};">Let's first adjust your display. Press the Up / Down Arrow keys to zoom in / out and adjust the display size.</p>
             <p style="font-size: ${fontSize};">Once you can clearly see all ${n} grids side-by-side, press the spacebar to continue.</p>
         </div>
         <div class="jobs-layout">
@@ -3942,51 +3944,51 @@ function createInstructionsTimeline() {
     timeline.push(instructions1);
 
     // Practice selection
-    timeline.push(instructions2);
-    timeline.push(instructions2_5);
-    timeline.push(practice1SelectionTrial);
-    timeline.push(practice1AnimationTrial);
-    timeline.push(practice1SelectionTrial);
-    timeline.push(practice1AnimationTrial);
+    // timeline.push(instructions2);
+    // timeline.push(instructions2_5);
+    // timeline.push(practice1SelectionTrial);
+    // timeline.push(practice1AnimationTrial);
+    // timeline.push(practice1SelectionTrial);
+    // timeline.push(practice1AnimationTrial);
 
-    // Explain days
-    timeline.push(instructions3_node);
+    // // Explain days
+    // timeline.push(instructions3_node);
 
-    // Practice a full day
-    timeline.push(practiceFirstDayTrial);
-    for (let i = 0; i < grid.nTrials; i++) {
-        // timeline.push(practice3PreSelectionTrial);
-        timeline.push(practice3SelectionTrial);
-        timeline.push(practice3AnimationTrial);
-    }
-    timeline.push(practiceGridFeedback);
+    // // Practice a full day
+    // timeline.push(practiceFirstDayTrial);
+    // for (let i = 0; i < grid.nTrials; i++) {
+    //     // timeline.push(practice3PreSelectionTrial);
+    //     timeline.push(practice3SelectionTrial);
+    //     timeline.push(practice3AnimationTrial);
+    // }
+    // timeline.push(practiceGridFeedback);
 
-    // Animation to show grid resetting, and then another day
-    timeline.push(instructions4);
-    timeline.push(practiceFirstDayTrial);
-    for (let i = 0; i < grid.nTrials; i++) {
-        // timeline.push(practice3PreSelectionTrial);
-        timeline.push(practice3SelectionTrial);
-        timeline.push(practice3AnimationTrial);
-    }
-    timeline.push(practiceGridFeedback);
+    // // Animation to show grid resetting, and then another day
+    // timeline.push(instructions4);
+    // timeline.push(practiceFirstDayTrial);
+    // for (let i = 0; i < grid.nTrials; i++) {
+    //     // timeline.push(practice3PreSelectionTrial);
+    //     timeline.push(practice3SelectionTrial);
+    //     timeline.push(practice3AnimationTrial);
+    // }
+    // timeline.push(practiceGridFeedback);
 
-    // New city animation
-    timeline.push(instructions5);
+    // // New city animation
+    // timeline.push(instructions5);
 
-    // illustrate contexts
-    for (let i = 1; i <= grid.nGrids; i++) {
-        timeline.push(instructions6);
-    }
-    timeline.push(instructions7);
-    for (let i = 1; i <= grid.nGrids; i++) {
-        timeline.push(instructions8);
-    }
-    timeline.push(instructions9);
-    timeline.push(instructions10);
+    // // illustrate contexts
+    // for (let i = 1; i <= grid.nGrids; i++) {
+    //     timeline.push(instructions6);
+    // }
+    // timeline.push(instructions7);
+    // for (let i = 1; i <= grid.nGrids; i++) {
+    //     timeline.push(instructions8);
+    // }
+    // timeline.push(instructions9);
+    // timeline.push(instructions10);
 
-    // Add the option to review the instructions
-    timeline.push(instructionsReview);
+    // // Add the option to review the instructions
+    // timeline.push(instructionsReview);
     
     return timeline
 }
@@ -4077,7 +4079,7 @@ function initializeExperiment() {
   
     // Combine everything into a single timeline
     const fullTimeline = [
-    //   ...ethicsTimeline,
+      ...ethicsTimeline,
     //   instructionsLoop,
     //   ...quizTimeline,
       ...mainTimeline
