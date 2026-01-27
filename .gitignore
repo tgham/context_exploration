@@ -6,3 +6,12 @@
 *.o
 *.csv
 *.pkl
+*.dot
+*.png
+*.pstats
+*.txt
+*.out
+expt/jspsych/*
+expt/assets/galaxies/*
+expt/assets/planets/*
+expt/assets/ships/*
