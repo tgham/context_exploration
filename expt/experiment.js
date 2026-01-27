@@ -2160,16 +2160,52 @@ const firstGridMessage = {
         // Set initial city background from the first trial
         const firstTrial = grid.getTrialInfo(0);
         const cityId = firstTrial.city;
+        const objective = firstTrial.objective; // 'costs' or 'rewards'
+        const context = firstTrial.context; // 'row' or 'column'
+        
         console.log('trialIndex:', currentTrialIndex);
         console.log('cityId:', cityId);
         grid.currentCity = cityId; // Initialize the current city
         setCityBackground(4); // Plot the first city background
 
+        // Determine traffic direction message
+        const trafficDirection = context === 'row' ? 'running horizontally (left-right)' : 'running vertically (up-down)';
+        
+        // Determine toll/tip message
+        const tollTipMessage = objective === 'costs' 
+            ? 'This city has <span style="color: rgb(203, 43, 43); font-weight: bold;">tolls</span> on popular intersections. Avoid them to save money!' 
+            : 'This city has <span style="color: rgb(0, 199, 73); font-weight: bold;">tips</span> on popular intersections. Seek them out to earn more money!';
+        
+        // Create vehicle animation HTML
+        const vehicleBorderClass = `context-${context}`;
+        const carColor = objective === 'costs' ? 'red' : 'green';
+        const imageUrls = context === 'row' 
+            ? [`assets/vehicles/${carColor}_car_right.png`, `assets/vehicles/${carColor}_car_left.png`, `assets/vehicles/${carColor}_car_right.png`, `assets/vehicles/${carColor}_car_left.png`, `assets/vehicles/${carColor}_car_right.png`, `assets/vehicles/${carColor}_car_left.png`, `assets/vehicles/${carColor}_car_right.png`, `assets/vehicles/${carColor}_car_left.png`, `assets/vehicles/${carColor}_car_right.png`]
+            : [`assets/vehicles/${carColor}_car_down.png`, `assets/vehicles/${carColor}_car_up.png`, `assets/vehicles/${carColor}_car_down.png`, `assets/vehicles/${carColor}_car_up.png`, `assets/vehicles/${carColor}_car_down.png`, `assets/vehicles/${carColor}_car_up.png`, `assets/vehicles/${carColor}_car_down.png`, `assets/vehicles/${carColor}_car_up.png`, `assets/vehicles/${carColor}_car_down.png`];
+        const speeds = [6, 8, 10, 7, 9, 11, 6, 8, 10];
+        
+        let vehicleHTML = '';
+        for (let i = 0; i < 9; i++) {
+            const speed = speeds[i];
+            const rowClass = context === 'row' ? `vehicle-row-${i}` : `vehicle-col-${i}`;
+            const animationName = context === 'row' ? `scroll-row-${i}` : `scroll-col-${i}`;
+            const imageUrl = imageUrls[i];
+            vehicleHTML += `<div class="vehicle-item ${rowClass}" style="background-image: url('${imageUrl}'); animation: ${animationName} ${speed}s linear infinite normal;"></div>`;
+        }
+
         return `
             <div class="new-day-text">
-                <h1>Ready?</h1>
-                <p>Your taxi company is starting operations in its first city.</p>
-                <p>Remember: your goal is to maximise the total tips earned each day.</p>
+                <div>
+                    <h1>Ready?</h1>
+                    <p>Your taxi company is starting operations in its first city.</p>
+                    <p>${tollTipMessage}</p>
+                    <p>Traffic is ${trafficDirection}.</p>
+                </div>
+                <div class="vehicle-animation-container ${vehicleBorderClass}">
+                    <div class="vehicle-display-box ${vehicleBorderClass}">
+                        ${vehicleHTML}
+                    </div>
+                </div>
                 <h2>Press spacebar to begin dispatching.</h2>
             </div>
         `;
@@ -4167,7 +4203,7 @@ function initializeExperiment() {
   
     // Combine everything into a single timeline
     const fullTimeline = [
-      ...ethicsTimeline,
+    //   ...ethicsTimeline,
     //   instructionsLoop,
     //   ...quizTimeline,
       ...mainTimeline
