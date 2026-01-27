@@ -683,8 +683,11 @@ def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params,
     ## if real ppt sequences, ensure even split of contexts, otherwise if we're generating practice sequences, these are pre-determined
     if n_cities > 1:
         np.random.seed(p + 1000)
-        contexts = ['row']*int(n_cities/2) + ['column']*int(n_cities/2)
-        np.random.shuffle(contexts)
+        # contexts = ['row']*int(n_cities/2) + ['column']*int(n_cities/2)
+        # np.random.shuffle(contexts)
+        
+        ## if generating practice seqs, sometimes we want to hold the context constant
+        contexts = [expt_info['context']]*n_cities
         
         ## if expt 3, we also want to randomise the order of the tasks
         objectives = ['rewards'] * int(n_cities/2) + ['costs'] * int(n_cities/2)
