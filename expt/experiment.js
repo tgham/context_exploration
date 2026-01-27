@@ -722,16 +722,93 @@ class Grid {
     generateVehicleRows(contextClass, objective='rewards') {
         const speeds = [6, 8, 10, 7, 9, 11, 6, 8, 10]; // 9 speeds (cycling pattern)
         
-        // Determine car color based on objective
+        // Determine car color based on objective (alternate with neutral grey)
         const carColor = objective === 'costs' ? 'red' : 'green';
+        const carPath = (dir, useObjective) => `assets/vehicles/${useObjective ? carColor : 'grey'}_car_${dir}.png`;
         
-        // Image URLs based on context, direction, and objective
+        // Image URLs based on context, direction, and alternating colors
+        // Row context: even indices go right (objective color), odd indices go left (grey)
+        // Column context: even indices go down (objective color), odd indices go up (grey)
+        const imageUrls = contextClass === 'context-row' 
+            ? [
+                carPath('right', true),
+                carPath('left', false),
+                carPath('right', true),
+                carPath('left', false),
+                carPath('right', true),
+                carPath('left', false),
+                carPath('right', true),
+                carPath('left', false),
+                carPath('right', true)
+            ]
+            : [
+                carPath('down', true),
+                carPath('up', false),
+                carPath('down', true),
+                carPath('up', false),
+                carPath('down', true),
+                carPath('up', false),
+                carPath('down', true),
+                carPath('up', false),
+                carPath('down', true)
+            ];
+        
+        let html = '';
+        for (let i = 0; i < 9; i++) {
+            const speed = speeds[i];
+            const direction = 'normal';
+            const rowClass = contextClass === 'context-row' ? `vehicle-row-${i}` : `vehicle-col-${i}`;
+            const animationName = contextClass === 'context-row' ? `scroll-row-${i}` : `scroll-col-${i}`;
+            const imageUrl = imageUrls[i];
+            html += `<div class="vehicle-item ${rowClass}" style="background-image: url('${imageUrl}'); animation: ${animationName} ${speed}s linear infinite ${direction};"></div>`;
+        }
+        return html;
+    }
+
+    // Generate 9 vehicle rows with different speeds and alternating directions
+    generateArrowRows(contextClass, objective='rewards') {
+        const speeds = [6, 8, 10, 7, 9, 11, 6, 8, 10]; // 9 speeds (cycling pattern)
+
+        // Build inline SVG arrows (data URIs) so no external PNGs are needed
+        const colorHex = objective === 'costs' ? '#e74c3c' : '#00c749';
+        const makeArrowDataUri = (direction, fillColor) => {
+            const angles = { right: 0, down: 90, left: 180, up: -90 };
+            const angle = angles[direction] || 0;
+            // Slightly thicker arrow via wider polygon and thicker stroke
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><polygon points="15,20 82,50 15,80 48,50" fill="${fillColor}" stroke="${fillColor}" stroke-width="12" stroke-linejoin="round" transform="rotate(${angle} 50 50)"/></svg>`;
+            return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+        };
+
+        // Alternate colors per index: even -> objective color, odd -> neutral gray
+        const neutralColor = '#b8b8d9';
+
+        // Image URLs based on context and direction (using inline SVG arrows)
         // Row context: even indices go right, odd indices go left
         // Column context: even indices go down, odd indices go up
-        const imageUrls = contextClass === 'context-row' 
-            ? [`assets/vehicles/${carColor}_car_right.png`, `assets/vehicles/${carColor}_car_left.png`, `assets/vehicles/${carColor}_car_right.png`, `assets/vehicles/${carColor}_car_left.png`, `assets/vehicles/${carColor}_car_right.png`, `assets/vehicles/${carColor}_car_left.png`, `assets/vehicles/${carColor}_car_right.png`, `assets/vehicles/${carColor}_car_left.png`, `assets/vehicles/${carColor}_car_right.png`]
-            : [`assets/vehicles/${carColor}_car_down.png`, `assets/vehicles/${carColor}_car_up.png`, `assets/vehicles/${carColor}_car_down.png`, `assets/vehicles/${carColor}_car_up.png`, `assets/vehicles/${carColor}_car_down.png`, `assets/vehicles/${carColor}_car_up.png`, `assets/vehicles/${carColor}_car_down.png`, `assets/vehicles/${carColor}_car_up.png`, `assets/vehicles/${carColor}_car_down.png`];
-        
+        const imageUrls = contextClass === 'context-row'
+            ? [
+                makeArrowDataUri('right', colorHex),
+                makeArrowDataUri('left', neutralColor),
+                makeArrowDataUri('right', colorHex),
+                makeArrowDataUri('left', neutralColor),
+                makeArrowDataUri('right', colorHex),
+                makeArrowDataUri('left', neutralColor),
+                makeArrowDataUri('right', colorHex),
+                makeArrowDataUri('left', neutralColor),
+                makeArrowDataUri('right', colorHex)
+            ]
+            : [
+                makeArrowDataUri('down', colorHex),
+                makeArrowDataUri('up', neutralColor),
+                makeArrowDataUri('down', colorHex),
+                makeArrowDataUri('up', neutralColor),
+                makeArrowDataUri('down', colorHex),
+                makeArrowDataUri('up', neutralColor),
+                makeArrowDataUri('down', colorHex),
+                makeArrowDataUri('up', neutralColor),
+                makeArrowDataUri('down', colorHex)
+            ];
+
         let html = '';
         for (let i = 0; i < 9; i++) {
             const speed = speeds[i];
@@ -803,7 +880,7 @@ class Grid {
                 if (trial.grid === this.nGrids) {
                     upcomingHTML += `
                     <div id="cost-message" class="cost-display-container">
-                    <h2 class="day-display">Day ${trial.grid}/${this.nGrids} Complete</h2>
+                    <h2 class="day-display">Day ${trial.city}/${this.nCities} Complete</h2>
                     <h2 class="obs-total">${tipsPreamble} a total of <strong style="color:${tipColour};;">${totalObsText}</strong> ${tipsPaid}today.</h2>
                     <h2 class="obs-total">The city will now reset.</h2>
                     <h2 class="obs-total">Press spacebar to move onto the next day.</h2>
@@ -812,7 +889,7 @@ class Grid {
                 } else {
                     upcomingHTML += `
                     <div id="cost-message" class="cost-display-container">
-                    <h2 class="day-display">Day ${trial.grid}/${this.nGrids} Complete</h2>
+                    <h2 class="day-display">Day ${trial.city}/${this.nCities} Complete</h2>
                     <h2 class="obs-total">${tipsPreamble} a total of <strong style="color:${tipColour};;">${totalObsText}</strong> ${tipsPaid}today.</h2>
                     <h2 class="obs-total">The city will now reset.</h2>
                     <h2 class="obs-total">Press spacebar to move onto the next day.</h2>
@@ -2067,22 +2144,9 @@ const newCityMessage = {
             ? 'This city has <span style="color: rgb(203, 43, 43); font-weight: bold;">tolls</span> on popular intersections. Avoid them to save money!' 
             : 'This city has <span style="color: rgb(0, 199, 73); font-weight: bold;">tips</span> on popular intersections. Seek them out to earn more money!';
         
-        // Create vehicle animation HTML
+        // Create vehicle animation HTML using generateVehicleRows method
         const vehicleBorderClass = `context-${context}`;
-        const carColor = objective === 'costs' ? 'red' : 'green';
-        const imageUrls = context === 'row' 
-            ? [`assets/vehicles/${carColor}_car_right.png`, `assets/vehicles/${carColor}_car_left.png`, `assets/vehicles/${carColor}_car_right.png`, `assets/vehicles/${carColor}_car_left.png`, `assets/vehicles/${carColor}_car_right.png`, `assets/vehicles/${carColor}_car_left.png`, `assets/vehicles/${carColor}_car_right.png`, `assets/vehicles/${carColor}_car_left.png`, `assets/vehicles/${carColor}_car_right.png`]
-            : [`assets/vehicles/${carColor}_car_down.png`, `assets/vehicles/${carColor}_car_up.png`, `assets/vehicles/${carColor}_car_down.png`, `assets/vehicles/${carColor}_car_up.png`, `assets/vehicles/${carColor}_car_down.png`, `assets/vehicles/${carColor}_car_up.png`, `assets/vehicles/${carColor}_car_down.png`, `assets/vehicles/${carColor}_car_up.png`, `assets/vehicles/${carColor}_car_down.png`];
-        const speeds = [6, 8, 10, 7, 9, 11, 6, 8, 10];
-        
-        let vehicleHTML = '';
-        for (let i = 0; i < 9; i++) {
-            const speed = speeds[i];
-            const rowClass = context === 'row' ? `vehicle-row-${i}` : `vehicle-col-${i}`;
-            const animationName = context === 'row' ? `scroll-row-${i}` : `scroll-col-${i}`;
-            const imageUrl = imageUrls[i];
-            vehicleHTML += `<div class="vehicle-item ${rowClass}" style="background-image: url('${imageUrl}'); animation: ${animationName} ${speed}s linear infinite normal;"></div>`;
-        }
+        const vehicleHTML = grid.generateVehicleRows(vehicleBorderClass, objective);
         
         message = `
         <div class="new-day-text">
@@ -2176,28 +2240,15 @@ const firstGridMessage = {
             ? 'This city has <span style="color: rgb(203, 43, 43); font-weight: bold;">tolls</span> on popular intersections. Avoid them to save money!' 
             : 'This city has <span style="color: rgb(0, 199, 73); font-weight: bold;">tips</span> on popular intersections. Seek them out to earn more money!';
         
-        // Create vehicle animation HTML
+        // Create vehicle animation HTML using generateVehicleRows method
         const vehicleBorderClass = `context-${context}`;
-        const carColor = objective === 'costs' ? 'red' : 'green';
-        const imageUrls = context === 'row' 
-            ? [`assets/vehicles/${carColor}_car_right.png`, `assets/vehicles/${carColor}_car_left.png`, `assets/vehicles/${carColor}_car_right.png`, `assets/vehicles/${carColor}_car_left.png`, `assets/vehicles/${carColor}_car_right.png`, `assets/vehicles/${carColor}_car_left.png`, `assets/vehicles/${carColor}_car_right.png`, `assets/vehicles/${carColor}_car_left.png`, `assets/vehicles/${carColor}_car_right.png`]
-            : [`assets/vehicles/${carColor}_car_down.png`, `assets/vehicles/${carColor}_car_up.png`, `assets/vehicles/${carColor}_car_down.png`, `assets/vehicles/${carColor}_car_up.png`, `assets/vehicles/${carColor}_car_down.png`, `assets/vehicles/${carColor}_car_up.png`, `assets/vehicles/${carColor}_car_down.png`, `assets/vehicles/${carColor}_car_up.png`, `assets/vehicles/${carColor}_car_down.png`];
-        const speeds = [6, 8, 10, 7, 9, 11, 6, 8, 10];
-        
-        let vehicleHTML = '';
-        for (let i = 0; i < 9; i++) {
-            const speed = speeds[i];
-            const rowClass = context === 'row' ? `vehicle-row-${i}` : `vehicle-col-${i}`;
-            const animationName = context === 'row' ? `scroll-row-${i}` : `scroll-col-${i}`;
-            const imageUrl = imageUrls[i];
-            vehicleHTML += `<div class="vehicle-item ${rowClass}" style="background-image: url('${imageUrl}'); animation: ${animationName} ${speed}s linear infinite normal;"></div>`;
-        }
+        const vehicleHTML = grid.generateVehicleRows(vehicleBorderClass, objective);
 
         return `
             <div class="new-day-text">
                 <div>
                     <h1>Ready?</h1>
-                    <p>Your taxi company is starting operations in its first city.</p>
+                    <p>Your taxi company is starting its first day of operations.</p>
                     <p>${tollTipMessage}</p>
                     <p>Traffic is ${trafficDirection}.</p>
                 </div>
@@ -4204,8 +4255,8 @@ function initializeExperiment() {
     // Combine everything into a single timeline
     const fullTimeline = [
     //   ...ethicsTimeline,
-    //   instructionsLoop,
-    //   ...quizTimeline,
+      instructionsLoop,
+      ...quizTimeline,
       ...mainTimeline
     ];
   
