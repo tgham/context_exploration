@@ -54,7 +54,7 @@ class GridEnv(gym.Env):
         self.expt = expt_info['type']
         self.context = expt_info['context']
         self.n_afc = expt_info['n_afc'] if 'n_afc' in expt_info else 2
-        if self.expt_info['objective'] is not None:
+        if expt_info['objective'] is not None:
             self.objective = expt_info['objective']
         else:
             self.objective = 'costs'
@@ -478,9 +478,9 @@ class GridEnv(gym.Env):
 
 
                     ## or just skip this if debugging...
-                    # self.same_overlaps = True
-                    # init_done = True
-                    # self._trial = 0
+                    self.same_overlaps = True
+                    init_done = True
+                    self._trial = 0
 
             t+=1
             if t>500:
