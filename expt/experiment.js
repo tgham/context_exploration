@@ -338,7 +338,12 @@ class Grid {
 
         /// class should be defined as cost-trial or reward-trial based on this.objective
         let trialObsClass = this.objective === 'cost' ? 'cost-trial' : 'reward-trial';
-        obsMessage = objective === 'costs' ? 'Total Tolls Paid Today:' : 'Total Tips Earned Today:';
+        let obsMessage;
+        if (!this.objective || this.objective === 'none') {
+            obsMessage = 'Total Tips Earned Today:';
+        } else {
+            obsMessage = this.objective === 'costs' ? 'Total Tolls Paid Today:' : 'Total Tips Earned Today:';
+        }
 
         if (includeCostDisplay) {
             // let currentDay = this.currentGrid; 
@@ -822,7 +827,7 @@ class Grid {
     }
 
     // Add createUpcomingJobsHTML as a method of the Grid class
-    createAllJobsHTML(currentTrialIndex, selectedPath=null, keyAssignment=null, feedback=false, firstDay=false, showPink=true, restrictPink=null, showNoPaths=false) {
+    createAllJobsHTML(currentTrialIndex, selectedPath=null, keyAssignment=null, feedback=false, firstDay=false, showPink=true, restrictPink=null, showNoPaths=false, trafficReport=true) {
         const trial = this.getTrialInfo(currentTrialIndex);
         const currentGridNumber = Math.floor(currentTrialIndex / this.nTrials);
         const currentGridStartIndex = currentGridNumber * this.nTrials;
@@ -835,9 +840,6 @@ class Grid {
         const objective = trial.objective; // 'costs' or 'rewards'
         const context = trial.context; // 'row' or 'column'
         // console.log('context:', context, 'objective:', objective);
-        
-        // Create vehicle border animations based on context
-        const vehicleBorderHTML = this.createVehicleBorderAnimation(context);
 
         let upcomingHTML = `
             <div class="jobs-section">
@@ -1244,20 +1246,23 @@ class Grid {
             `;
         }
 
-        upcomingHTML += `
-                    </div>
-                </div>
+        // Create vehicle border animations based on context
+        if (trafficReport){
+            const vehicleBorderHTML = this.createVehicleBorderAnimation(context);
+            upcomingHTML += `
+            </div>
+            </div>
             </div>
             <div class="traffic-report-container">
-                <h2 class="traffic-report-heading">Traffic Report</h2>
+            <h2 class="traffic-report-heading">Traffic Report</h2>
             </div>
             <div class="vehicle-animation-container ${vehicleBorderHTML}">
-                <div class="vehicle-display-box ${vehicleBorderHTML}">
-                    ${this.generateVehicleRows(vehicleBorderHTML, objective)}
-                </div>
+            <div class="vehicle-display-box ${vehicleBorderHTML}">
+            ${this.generateVehicleRows(vehicleBorderHTML, objective)}
             </div>
-        `;
-
+            </div>
+            `;   
+        }
         return upcomingHTML;
     }
 }
@@ -1303,11 +1308,11 @@ function initPractice() {
     practice5TrialIndex = 0;
 
     return Promise.all([
-        loadPracticeGrid('assets/trial_sequences/expt_2/practice/expt_info/expt_2_info_1.json', 'practice1Grid').then(grid => practice1Grid = grid),
-        loadPracticeGrid('assets/trial_sequences/expt_2/practice/expt_info/expt_2_info_2.json', 'practice2Grid').then(grid => practice2Grid = grid),
-        loadPracticeGrid('assets/trial_sequences/expt_2/practice/expt_info/expt_2_info_3.json', 'practice3Grid').then(grid => practice3Grid = grid),
-        loadPracticeGrid('assets/trial_sequences/expt_2/practice/expt_info/expt_2_info_4.json', 'practice4Grid').then(grid => practice4Grid = grid),
-        loadPracticeGrid('assets/trial_sequences/expt_2/practice/expt_info/expt_2_info_5.json', 'practice5Grid').then(grid => practice5Grid = grid)
+        loadPracticeGrid('assets/trial_sequences/expt_3/practice/expt_info/expt_3_info_1.json', 'practice1Grid').then(grid => practice1Grid = grid),
+        loadPracticeGrid('assets/trial_sequences/expt_3/practice/expt_info/expt_3_info_2.json', 'practice2Grid').then(grid => practice2Grid = grid),
+        loadPracticeGrid('assets/trial_sequences/expt_3/practice/expt_info/expt_3_info_3.json', 'practice3Grid').then(grid => practice3Grid = grid),
+        loadPracticeGrid('assets/trial_sequences/expt_3/practice/expt_info/expt_3_info_4.json', 'practice4Grid').then(grid => practice4Grid = grid),
+        loadPracticeGrid('assets/trial_sequences/expt_3/practice/expt_info/expt_3_info_5.json', 'practice5Grid').then(grid => practice5Grid = grid)
     ]).then(() => {
         console.log('All practice grids loaded successfully.');
     }).catch(error => {
@@ -2392,16 +2397,17 @@ const zoomAdjustment = {
         const showPink=false;
         const restrictPink=0;
         const showNoPaths = true;
+        const trafficReport = true;
         // practice2TrialIndex = 3;
         return `
         <div class="cost-display-container">
             <h1>Display Setup</h1>
             <p style="font-size: ${fontSize};">Let's first adjust your display. Press the Up / Down Arrow keys to zoom in / out and adjust the display size.</p>
-            <p style="font-size: ${fontSize};">Once you can clearly see all ${n} grids side-by-side, press the spacebar to continue.</p>
+            <p style="font-size: ${fontSize};">Once you can clearly see all ${n} grids side-by-side and the smaller grid with cars underneath, press the spacebar to continue.</p>
         </div>
         <div class="jobs-layout">
             <div class="upcoming-jobs-container grid">
-                ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay,showPink, restrictPink, showNoPaths).replace(/<div id="cost-message".*?<\/div>/s, '')} 
+                ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay,showPink, restrictPink, showNoPaths, trafficReport).replace(/<div id="cost-message".*?<\/div>/s, '')} 
             </div>
         </div>
         `;
@@ -2703,6 +2709,9 @@ const instructions3_1 = {
         const feedback=false;
         const firstDay=false;
         const showPink=false;
+        const restrictPink=0;
+        const showNoPaths=false;
+        const trafficReport=false;
         return `
         <div class="cost-display-container">
             <h1>Daily Shift:</h1>
@@ -2714,7 +2723,7 @@ const instructions3_1 = {
         </div>
         <div class="jobs-layout">
             <div class="upcoming-jobs-container grid">
-                ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay,showPink).replace(/<div id="cost-message".*?<\/div>/s, '')} 
+                ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay,showPink, restrictPink, showNoPaths, trafficReport).replace(/<div id="cost-message".*?<\/div>/s, '')} 
             </div>
         </div>
         `;
@@ -2777,6 +2786,8 @@ const instructions3_3_1 = {
         const firstDay=false;
         const showPink=true;
         const restrictPink=1;
+        const showNoPaths=false;
+        const trafficReport=false;
         return `
         <div class="cost-display-container">
             <h1>Daily Shift:</h1>
@@ -2790,7 +2801,7 @@ const instructions3_3_1 = {
         </div>
         <div class="jobs-layout">
             <div class="upcoming-jobs-container grid">
-            ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay, showPink, restrictPink).replace(/<div id="cost-message".*?<\/div>/s, '')} 
+            ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay, showPink, restrictPink, showNoPaths, trafficReport).replace(/<div id="cost-message".*?<\/div>/s, '')} 
             </div>
         `;
     },
@@ -2815,6 +2826,8 @@ const instructions3_3_2 = {
         const firstDay=false;
         const showPink=true;
         const restrictPink=2;
+        const showNoPaths=false;
+        const trafficReport=false;
         return `
         <div class="cost-display-container">
             <h1>Daily Shift:</h1>
@@ -2828,7 +2841,7 @@ const instructions3_3_2 = {
         </div>
         <div class="jobs-layout">
             <div class="upcoming-jobs-container grid">
-            ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay, showPink, restrictPink).replace(/<div id="cost-message".*?<\/div>/s, '')} 
+            ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay, showPink, restrictPink, showNoPaths, trafficReport).replace(/<div id="cost-message".*?<\/div>/s, '')} 
             </div>
         `;
     },
@@ -2852,6 +2865,9 @@ const instructions3_3_3 = {
         const feedback=false;
         const firstDay=false;
         const showPink=true;
+        const restrictPink=null;
+        const showNoPaths=false;
+        const trafficReport=false;
         return `
         <div class="cost-display-container">
             <h1>Daily Shift:</h1>
@@ -2865,7 +2881,7 @@ const instructions3_3_3 = {
         </div>
         <div class="jobs-layout">
             <div class="upcoming-jobs-container grid">
-            ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay, showPink).replace(/<div id="cost-message".*?<\/div>/s, '')} 
+            ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay, showPink, restrictPink, showNoPaths, trafficReport).replace(/<div id="cost-message".*?<\/div>/s, '')} 
             </div>
         `;
     },
@@ -2890,6 +2906,9 @@ const instructions3_4 = {
         const feedback=false;
         const firstDay=false;
         const showPink=2;
+        const restrictPink=null;
+        const showNoPaths=false;
+        const trafficReport=false;
         return `
         <div class="cost-display-container">
             <h1>Daily Shift:</h1>
@@ -2906,7 +2925,7 @@ const instructions3_4 = {
         </div>
         <div class="jobs-layout">
             <div class="upcoming-jobs-container grid">
-            ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay, showPink).replace(/<div id="cost-message".*?<\/div>/s, '')} 
+            ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay, showPink, restrictPink, showNoPaths, trafficReport).replace(/<div id="cost-message".*?<\/div>/s, '')} 
             </div>
         </div>
         `;
@@ -2999,6 +3018,12 @@ const instructions3_5 = {
         const lastTrialData = jsPsych.data.get().last(1).values()[0];
         const keyAssignment = lastTrialData.key_assignment;
         const selectedPath = lastTrialData.choice;
+        const feedback=false;
+        const firstDay=false;
+        const showPink=2;
+        const restrictPink=null;
+        const showNoPaths=false;
+        const trafficReport=false;
         console.log('selectedPath', selectedPath, 'keyAssignment', keyAssignment);
 
         const fontSize = "22px"; // Define font size as a variable
@@ -3018,7 +3043,7 @@ const instructions3_5 = {
         </div>
         <div class="jobs-layout">
             <div class="upcoming-jobs-container grid">
-            ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment).replace(/<div id="cost-message".*?<\/div>/s, '')} 
+            ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay, showPink, restrictPink, showNoPaths, trafficReport).replace(/<div id="cost-message".*?<\/div>/s, '')} 
             </div>
         </div>
         `;
@@ -3096,6 +3121,9 @@ const instructions3_6 = {
         const feedback=false;
         const firstDay=false;
         const showPink=n;
+        const restrictPink=null;
+        const showNoPaths=false;
+        const trafficReport=false;
         return `
         <div class="cost-display-container">
             <h1>Daily Shift:</h1>
@@ -3107,7 +3135,7 @@ const instructions3_6 = {
         </div>
         <div class="jobs-layout">
             <div class="upcoming-jobs-container grid">
-            ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay, showPink).replace(/<div id="cost-message".*?<\/div>/s, '')} 
+            ${practice2Grid.createAllJobsHTML(practice2TrialIndex, selectedPath, keyAssignment, feedback, firstDay, showPink, restrictPink, showNoPaths, trafficReport).replace(/<div id="cost-message".*?<\/div>/s, '')} 
             </div>
         </div>
         `;
@@ -3127,8 +3155,8 @@ const instructions3_7 = {
         return `
             <div class="instruction-section" style="font-size: 20px;">
                 <h1>Practice Shift:</h1>
-                <p>You will now practise two full days of dispatches.</p>
-                <p>The total amount of tips earned over the course of each day will be shown at the top of your screen.</p>
+                <p>You will now practise a full day of dispatches.</p>
+                <p>The total amount of tips earned over the course of the day will be shown at the top of your screen.</p>
                 <p>Before this practice, you have the opportunity to review the most recent instructions.</p>
                 <h2>Press backspace to review, or spacebar to continue.</h2>
             </div>
@@ -4112,7 +4140,7 @@ function createInstructionsTimeline() {
     
     // city assignments
     const numCities = data.env_costs.n_cities; // Assuming this is the number of cities
-    // createCityMapping(numCities);
+    createCityMapping(numCities);
 
     // Welcome message
     timeline.push(zoomAdjustment);
@@ -4126,44 +4154,44 @@ function createInstructionsTimeline() {
     // timeline.push(practice1SelectionTrial);
     // timeline.push(practice1AnimationTrial);
 
-    // // Explain days
-    // timeline.push(instructions3_node);
+    // Explain days
+    timeline.push(instructions3_node);
 
-    // // Practice a full day
-    // timeline.push(practiceFirstDayTrial);
-    // for (let i = 0; i < grid.nTrials; i++) {
-    //     // timeline.push(practice3PreSelectionTrial);
-    //     timeline.push(practice3SelectionTrial);
-    //     timeline.push(practice3AnimationTrial);
-    // }
-    // timeline.push(practiceGridFeedback);
+    // Practice a full day
+    timeline.push(practiceFirstDayTrial);
+    for (let i = 0; i < grid.nTrials; i++) {
+        // timeline.push(practice3PreSelectionTrial);
+        timeline.push(practice3SelectionTrial);
+        timeline.push(practice3AnimationTrial);
+    }
+    timeline.push(practiceGridFeedback);
 
-    // // Animation to show grid resetting, and then another day
-    // timeline.push(instructions4);
-    // timeline.push(practiceFirstDayTrial);
-    // for (let i = 0; i < grid.nTrials; i++) {
-    //     // timeline.push(practice3PreSelectionTrial);
-    //     timeline.push(practice3SelectionTrial);
-    //     timeline.push(practice3AnimationTrial);
-    // }
-    // timeline.push(practiceGridFeedback);
+    // Animation to show grid resetting, and then another day
+    timeline.push(instructions4);
+    timeline.push(practiceFirstDayTrial);
+    for (let i = 0; i < grid.nTrials; i++) {
+        // timeline.push(practice3PreSelectionTrial);
+        timeline.push(practice3SelectionTrial);
+        timeline.push(practice3AnimationTrial);
+    }
+    timeline.push(practiceGridFeedback);
 
-    // // New city animation
-    // timeline.push(instructions5);
+    // New city animation
+    timeline.push(instructions5);
 
-    // // illustrate contexts
-    // for (let i = 1; i <= grid.nGrids; i++) {
-    //     timeline.push(instructions6);
-    // }
-    // timeline.push(instructions7);
-    // for (let i = 1; i <= grid.nGrids; i++) {
-    //     timeline.push(instructions8);
-    // }
-    // timeline.push(instructions9);
-    // timeline.push(instructions10);
+    // illustrate contexts
+    for (let i = 1; i <= grid.nGrids; i++) {
+        timeline.push(instructions6);
+    }
+    timeline.push(instructions7);
+    for (let i = 1; i <= grid.nGrids; i++) {
+        timeline.push(instructions8);
+    }
+    timeline.push(instructions9);
+    timeline.push(instructions10);
 
-    // // Add the option to review the instructions
-    // timeline.push(instructionsReview);
+    // Add the option to review the instructions
+    timeline.push(instructionsReview);
     
     return timeline
 }
@@ -4254,7 +4282,7 @@ function initializeExperiment() {
   
     // Combine everything into a single timeline
     const fullTimeline = [
-    //   ...ethicsTimeline,
+      ...ethicsTimeline,
       instructionsLoop,
       ...quizTimeline,
       ...mainTimeline
