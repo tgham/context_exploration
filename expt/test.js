@@ -10,7 +10,25 @@ export const quizQuestions = [
     correct: 1 // Index of correct answer (0-based)
   },
   {
-    question: "If your taxi reveals a tip at an intersection, and you visit that intersection again later in the day, what happens?",
+    question: "What is the difference between ‘tip days’ and ‘toll days’?",
+    options: [
+      "On tip days, popular intersections earn you a $1 tip; on toll days, busy intersections require you to pay a $1 toll.",
+      "There is no difference between tip days and toll days - on all days, you have the chance to receive tips and avoid tolls.",
+      "On tip days, you work overtime, meaning you need to select more jobs.",
+    ],
+    correct: 0
+  },
+  {
+    question: "How does the traffic report inform me of my objective for the day?",
+    options: [
+      "If the traffic report contains orange dollars, I might encounter both tips and tolls, and so should balance these two together.",
+      "If the traffic report contains green dollars, my aim is to maximise tips; if it contains red dollars, my aim is minimise tolls.",
+      "If the traffic report contains dollars that are moving from north to south, my aim is to maximise tips; if the dollars are moving from east to west, my aim is minimise tolls.",
+    ],
+    correct: 1
+  },
+  {
+    question: "Suppose it is a tip day. If your taxi reveals a tip at an intersection, and you visit that intersection again later in the same day, what happens?",
     options: [
       "You will definitely receive a tip.",
       "You will definitely not receive a tip.",
@@ -19,23 +37,20 @@ export const quizQuestions = [
     correct: 0
   },
   {
-    question: "How do you know which intersections might be visited later in the day?", // What does it mean if an intersection is highlighted in pink?",
+    question: "How do you know which intersections might be visited later in the same day?", 
     options: [
-      // "You will earn a tip if you visit this intersection.",
-      // "You have already visited this intersection.",
-      // "This intersection appears on one of the jobs you might choose in an upcoming dispatch.",
-      "You can't know which intersections might be visited later in the day.",
+      "You can't know which intersections might be visited later in the same day.",
       "They are shown in your upcoming dispatches.",
       "They are shown in your upcoming dispatches, and also highlighted in your current dispatch in pink.",
     ],
     correct: 2
   },
   {
-    question: "How can previous tips help you make smarter decisions later in the day?",
+    question: "Suppose it is a toll day. How can previous tolls from earlier in the day help you make smarter decisions later in the same day?",
     options: [
-      "If you revisit an intersection that previously didn't offer you a tip, you will earn a tip the second time.",
-      "The tip amount increases if you use the same route multiple times.",
-      "You can select jobs that pass through intersections that pay tips.",
+      "If you revisit an intersection that previously didn't required you to pay a toll, you will instead earn a tip the second time.",
+      "The toll amount increases if you use the same route multiple times.",
+      "You can select jobs that avoid intersections that require you to pay tolls.",
     ],
     correct: 2
   },
@@ -43,65 +58,56 @@ export const quizQuestions = [
     question: "Why might it be useful to know about your upcoming dispatches?", // What does it mean if an intersection is highlighted in pink?",
     options: [
       "Because they tell you which intersections might be visited later on in the day.",
-      "Because they tell you which intersections are rewarding.",
-      "Because they tell you whether you are in a row city or a column city.",
+      "Because they tell you which intersections are rewarding or costly.",
+      "Because they tell you whether it is a column day or a row day.",
     ],
     correct: 0
   },
   {
-    question: "What happens to tips at the start of a new day?",
+    question: "What happens to tips or tolls at the start of a new day?",
     options: [
       "They remain in the same locations.",
       "They reset to new locations.",
-      "You only keep tip information for the route you chose last."
+      "You only keep tip or toll information for the route you chose last."
     ],
     correct: 1
   },
   {
-    question: "What happens after working in the same city for 5 days?",
+    question: "What is the key difference between 'column days' and 'row days'?",
     options: [
-      "You continue working in the same city, but with new tip locations.",
-      "You move to a new city, with a new background and a potentially different traffic pattern.",
-      "The tips become permanently visible.",
-    ],
-    correct: 1
-  },
-  {
-    question: "What is the key difference between 'column cities' and 'row cities'?",
-    options: [
-      "In column cities, tips are randomly placed, while in row cities, they are fixed.",
-      "Column cities have higher tips overall.",
-      "In column cities, tips tend to cluster in columns, while in row cities, they cluster in rows."
+      "In column days, tips are randomly placed, while in row days, they are fixed.",
+      "Column days have higher tips overall.",
+      "In column days, tips tend to cluster in columns, while in row days, they cluster in rows."
     ],
     correct: 2
   },
   {
-    question: "How can you figure out what type of city you are in (i.e. a column city or a row city)?",
+    question: "How does the traffic report tell you how the tips or tolls tend to be clustered on that day?",
     options: [
-      "By checking the city background color.",
-      "By noticing whether tips tend to be clustered in columns or rows.",
-      "By counting how many jobs you complete each day.",
+      "It doesn't - the traffic report only indicates whether it's a tip day or a toll day.",
+      "If the traffic report contains dollars that are moving from north to south, tips/tolls tend to be clustered in columns; if the dollars are moving from east to west, tips/tolls tend to be clustered in rows.",
+      "If the traffic report contains red dollars, tips/tolls tend to be clustered in columns; if it contains green dollars, tips/tolls tend to be clustered in rows.",
     ],
     correct: 1
   },
   {
-    question: "Suppose you receive a tip at an intersection. How can this information help you predict other tip locations on that day?",
+    question: "Suppose it is both a 'tip day' and a 'column day'. You receive a tip at an intersection. How can this information help you predict other tip locations on that same day?",
     options: [
       "Nothing—intersections are not related to one another.",
-      "Other tips are likely to be in the same row or column, depending on the city pattern.",
+      "Other tips are likely to be in the same column.",
       "This intersection will pay a tip for the rest of the experiment."
     ],
     correct: 1
   },
   {
-    question: "At the start of a new day within the same city, what pattern will the new set of tips have?",
+    question: "Suppose it is both a 'toll day' and a 'row day'. You do not pay a toll at an intersection. How can this information help you predict other toll locations on that same day?",
     options: [
-      "The same pattern as previous days in that city (i.e. clustered in columns or rows).",
-      "A completely random pattern with no relation to previous days.",
-      "A pattern that depends on the jobs you selected.",
+      "This intersection will pay a toll for the rest of the experiment.",
+      "Nothing—intersections are not related to one another.",
+      "The whole row is likely to be free of tolls.",
     ],
-    correct: 0
-  }
+    correct: 2
+  },
  ];
  
  // Function to create quiz trials

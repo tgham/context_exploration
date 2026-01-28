@@ -2213,7 +2213,6 @@ const newDayMessage = {
     },
     choices: [' '], // spacebar to continue
     on_finish: function(data) {
-        data.city_guess = data.response; // 'r' for row city, 'c' for column city
         grid.resetGrid(); // Reset the grid for the new set of trials
         var ppt_data = jsPsych.data.get().json();
         send_incomplete(subject_id, ppt_data);
@@ -3723,83 +3722,6 @@ const instructions8 = {
     }
 };
 
-const instructions9 = { 
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: function() {
-        document.body.style.zoom = zoomFactor;
-        const feedback = true;
-        const n_days = grid.nGrids;
-        const n_trials = grid.nTrials;
-        const selectedPath = 'none';
-        const keyAssignment = null;
-        const fontSize = "28px"; // Define font size as a variable
-        const trial = practice3Grid.getTrialInfo(practice3TrialIndex - 1);
-        console.log('trial:', trial);
-        const correctContext = trial.context;
-        
-        //revert back to first practice background 
-        setCityBackground('practice1');
-
-        return `
-            <div class="cost-display-container">
-                <h1>City Check:</h1>
-                <p style="font-size: ${fontSize};">At the end of each day, you will be asked which kind of city you think you are working in.</p>
-                <p style="font-size: ${fontSize};">This means you need to check the intersections you have observed, and see whether the tips (or lack of tips) tend to be clustered in rows or columns.</p>
-                <p style="font-size: ${fontSize};">For example, here are your ${n_trials} choices on one of the days that you practised.</p>
-                <h2 style="font-size: ${fontSize};">Press 'R' if you think you were in a row city, and 'C' if you think you were in a column city.</h2>
-            </div>
-            <div class="jobs-layout">
-                <div class="upcoming-jobs-container grid">
-                    ${practice3Grid.createAllJobsHTML(practice3TrialIndex - 1, selectedPath, keyAssignment, feedback).replace(/<div id="cost-message".*?<\/div>/s, '')} 
-                </div>
-            </div>
-        `;
-    },
-    choices: ['r', 'c'], 
-    on_finish: function(data) {
-        data.city_guess = data.response; // 'r' for row city, 'c' for column city
-        // grid.resetGrid(); // Reset the grid for the new set of trials
-        var ppt_data = jsPsych.data.get().json();
-        send_incomplete(subject_id, ppt_data);
-    }
-};
-const instructions10 = { 
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: function() {
-        const feedback = true;
-        const n_days = grid.nGrids;
-        const n_trials = grid.nTrials;
-        const selectedPath = 'none';
-        const keyAssignment = null;
-        const fontSize = "28px"; // Define font size as a variable
-        const trial = practice3Grid.getTrialInfo(practice3TrialIndex - 1);
-        const correctContext = trial.context;
-        const lastChoice = jsPsych.data.get().last(1).values()[0].city_guess;
-        const choseCorrectContext  = (lastChoice === 'r' && correctContext === 'row') || (lastChoice === 'c' && correctContext === 'column');
-        const contextMessage = choseCorrectContext ?
-            `In this practice trial, you chose the correct city type - you were indeed in a <strong>${correctContext} city</strong>!` :
-            `In this practice trial, you chose the wrong city type - you were actually in a <strong>${correctContext} city</strong>.`;
-        return `
-            <div class="cost-display-container">
-                <h1>City Check:</h1>
-                <p style="font-size: ${fontSize};">${contextMessage}</p>
-                <p style="font-size: ${fontSize};">Note that in the actual task phase, you will not find out if you have correctly identified the city you are in after making your choice.</p>
-                <p style="font-size: ${fontSize};">Remember also: although the locations of the tips reset each day, the city type you are in remains constant for all ${n_days} days you work in that city.</p>
-                <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
-            </div>
-            <div class="jobs-layout">
-                <div class="upcoming-jobs-container grid">
-                    ${practice3Grid.createAllJobsHTML(practice3TrialIndex - 1, selectedPath, keyAssignment, feedback).replace(/<div id="cost-message".*?<\/div>/s, '')} 
-                </div>
-            </div>
-        `;
-    },
-    choices: [' '], // Wait for spacebar to continue
-    on_finish: function(data) {
-    }
-};
-
-
 // instructions review - i.e. ask participants if they want to review the instructions pages (instructions1-instructions8, without the practices)
 const instructionsReview = {
     type: jsPsychHtmlKeyboardResponse,
@@ -3931,7 +3853,7 @@ const feedback_trial1 = {
     type: jsPsychSurveyText,
     preamble: `
         <div class="instruction-section">
-            <h1>Q1: What strategy did you use to learn about the cities?</h1>
+            <h1>Q1: What strategy did you use to learn about the city on each day?</h1>
         </div>
     `,
     questions: [
@@ -3951,14 +3873,33 @@ const feedback_trial2 = {
     type: jsPsychSurveyText,
     preamble: `
         <div class="instruction-section">
-            <h1>Q2: Did your strategy differ depending on whether you were in a row city or a column city?</h1>
+            <h1>Q2: Did your strategy differ depending on whether it was a 'tip day' or a 'toll day'?</h1>
         </div>
     `,
     questions: [
         {
             prompt: `
             `,
-            name: 'observations',
+            name: 'tips_vs_tolls',
+            rows: 5,
+            columns: 60,
+            required: false
+        },
+    ],
+    button_label: 'Submit'
+};
+const feedback_trial3 = {
+    type: jsPsychSurveyText,
+    preamble: `
+        <div class="instruction-section">
+            <h1>Q3: Did your strategy differ depending on whether it was a 'column day' or a 'row day'?</h1>
+        </div>
+    `,
+    questions: [
+        {
+            prompt: `
+            `,
+            name: 'rows_vs_columns',
             rows: 5,
             columns: 60,
             required: false
@@ -3967,11 +3908,11 @@ const feedback_trial2 = {
     button_label: 'Submit'
 };
 
-const feedback_trial3 = {
+const feedback_trial4 = {
     type: jsPsychSurveyText,
     preamble: `
         <div class="instruction-section">
-            <h1>Q3: When choosing each job, how far ahead did you look at the upcoming jobs to make your decision?</h1>
+            <h1>Q4: When choosing each job, how far ahead did you look at the upcoming jobs to make your decision?</h1>
         </div>
     `,
     questions: [
@@ -3987,11 +3928,11 @@ const feedback_trial3 = {
     button_label: 'Submit'
 };
 
-const feedback_trial4 = {
+const feedback_trial5 = {
     type: jsPsychSurveyText,
     preamble: `
         <div class="instruction-section">
-            <h1>Q4: Any other comments or feedback about the experiment?</h1>
+            <h1>Q5: Any other comments or feedback about the experiment?</h1>
         </div>
     `,
     questions: [
@@ -4258,6 +4199,7 @@ function createMainTimeline() {
     timeline.push(feedback_trial2);
     timeline.push(feedback_trial3);
     timeline.push(feedback_trial4);
+    timeline.push(feedback_trial5);
     
     // questionnaire
     timeline.push(preQuestionnaire);
