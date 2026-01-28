@@ -1,41 +1,81 @@
+// Import Grid class and practice grids from experiment.js
+import { Grid, 
+  practice1Grid,
+  practice2Grid, 
+  practice3Grid,
+  practice4Grid, 
+  practice5Grid,
+  practice6Grid, 
+  practice7Grid,
+  practice8Grid,
+ } from './experiment.js';
+
 // Quiz questions and answers
 export const quizQuestions = [
-  {
-    question: "How do you select a taxi job?",
-    options: [
-      "Click on the passenger icon.",
-      "Press the corresponding key on your keyboard.",
-      "Wait for the system to assign a job automatically."
-    ],
-    correct: 1 // Index of correct answer (0-based)
-  },
-  {
-    question: "What is the difference between ‘tip days’ and ‘toll days’?",
-    options: [
-      "On tip days, popular intersections earn you a $1 tip; on toll days, busy intersections require you to pay a $1 toll.",
-      "There is no difference between tip days and toll days - on all days, you have the chance to receive tips and avoid tolls.",
-      "On tip days, you work overtime, meaning you need to select more jobs.",
-    ],
-    correct: 0
-  },
-  {
-    question: "How does the traffic report inform me of my objective for the day?",
-    options: [
-      "If the traffic report contains orange dollars, I might encounter both tips and tolls, and so should balance these two together.",
-      "If the traffic report contains green dollars, my aim is to maximise tips; if it contains red dollars, my aim is minimise tolls.",
-      "If the traffic report contains dollars that are moving from north to south, my aim is to maximise tips; if the dollars are moving from east to west, my aim is minimise tolls.",
-    ],
-    correct: 1
-  },
-  {
-    question: "Suppose it is a tip day. If your taxi reveals a tip at an intersection, and you visit that intersection again later in the same day, what happens?",
-    options: [
-      "You will definitely receive a tip.",
-      "You will definitely not receive a tip.",
-      "You might receive a tip, or you might not.",
-    ],
-    correct: 0
-  },
+  // {
+  //   question: "How do you select a taxi job?",
+  //   options: [
+  //     "Click on the passenger icon.",
+  //     "Press the corresponding key on your keyboard.",
+  //     "Wait for the system to assign a job automatically."
+  //   ],
+  //   correct: 1 // Index of correct answer (0-based)
+  // },
+  // {
+  //   question: "What is the difference between ‘tip days’ and ‘toll days’?",
+  //   options: [
+  //     "On tip days, popular intersections earn you a $1 tip; on toll days, busy intersections require you to pay a $1 toll.",
+  //     "There is no difference between tip days and toll days - on all days, you have the chance to receive tips and avoid tolls.",
+  //     "On tip days, you work overtime, meaning you need to select more jobs.",
+  //   ],
+  //   correct: 0
+  // },
+  // {
+  //   question: "Suppose you receive the following traffic report. What does this tell you about the objective of your day?",
+  //   options: [
+  //     "I might encounter both tips and tolls today, and so should balance these two together.",
+  //     "Today is a 'tip day', so my aim is to maximise tips.",
+  //     "Today is a 'toll day', so my aim is to minimise tolls.",
+  //   ],
+  //   correct: 2,
+  //   visualContent: function() {
+  //     // Generate vehicle HTML for both contexts
+  //     const vehicleHTMLRow = practice6Grid && practice6Grid.generateDollarRows ? practice6Grid.generateDollarRows('context-row', 'costs') : '';
+  //     const vehicleHTMLColumn = practice6Grid && practice6Grid.generateDollarRows ? practice6Grid.generateDollarRows('context-column', 'costs') : '';
+  //     return `
+  //       <div style="display: flex; justify-content: space-around; gap: 20px; margin: 16px 0 8px 0;">
+  //         <div style="flex: 1; text-align: center;">
+  //             <div class="vehicle-animation-container context-row" style="margin: 8px 0;">
+  //                 <div class="vehicle-display-box context-row">
+  //                     ${vehicleHTMLRow}
+  //                 </div>
+  //             </div>
+  //         </div>
+  //     </div>
+  //     `;
+  //   }
+  // },
+  // {
+  //   question: "Suppose it is a tip day, and your taxi has revealed a tip at intersection D7. If you visit that same intersection again later in the same day, what happens?",
+  //   options: [
+  //     "You will definitely receive a tip.",
+  //     "You will definitely not receive a tip.",
+  //     "You might receive a tip, or you might not.",
+  //   ],
+  //   correct: 0,
+  //   visualContent: function() {
+  //     const gridHTML = practice1Grid?.createBlankGridHTML(0, true, false, 'specific', [2, 3], 1) || '';
+  //     return `
+  //       <div style="display: flex; justify-content: center; margin: 0px 0 0px 0;">
+  //         <div style="flex: 1; text-align: center;">
+  //             <div id="grid-container" class="current-job-section">
+  //               ${gridHTML}
+  //             </div>
+  //         </div>
+  //       </div>
+  //     `;
+  //   }
+  // },
   {
     question: "How do you know which intersections might be visited later in the same day?", 
     options: [
@@ -43,7 +83,34 @@ export const quizQuestions = [
       "They are shown in your upcoming dispatches.",
       "They are shown in your upcoming dispatches, and also highlighted in your current dispatch in pink.",
     ],
-    correct: 2
+    correct: 2,
+
+    visualContent: function() {
+      const keyAssignment = Math.random() < 0.5 ? 
+            { blue: 'Q', green: 'P' } : 
+            { blue: 'P', green: 'Q' };
+      const feedback=false;
+      const selectedPath=null;
+      const firstDay=false;
+      const showPink=2;
+      const restrictPink=null;
+      const showNoPaths=false;
+      const trafficReport=false;
+      const jobsHTML = practice2Grid.createAllJobsHTML(0, selectedPath, keyAssignment, feedback, firstDay, showPink, restrictPink, showNoPaths, trafficReport).replace(/<div id="cost-message".*?<\/div>/s, '');
+      const HTML = `
+      <div style="display: flex; justify-content: center; margin: 0px 0 20px 0;">
+        <div class="jobs-layout">
+          <div class="upcoming-jobs-container grid">
+            <div style="zoom: 0.5;">
+              ${jobsHTML}
+            </div>
+          </div>
+        </div>
+      </div>
+      `;
+
+      return HTML;
+    }
   },
   {
     question: "Suppose it is a toll day. How can previous tolls from earlier in the day help you make smarter decisions later in the same day?",
@@ -139,6 +206,7 @@ export const quizQuestions = [
       display: flex;
       flex-direction: column;
       align-items: center;
+      zoom: 1 !important;
     }
    
     .jspsych-html-button-response-button {
@@ -160,6 +228,8 @@ export const quizQuestions = [
       transition: background-color 0.3s;
       display: flex;
       align-items: center;
+      zoom: 1 !important;
+
     }
    
     .quiz-answer:hover {
@@ -233,12 +303,16 @@ export const quizQuestions = [
   quizQuestions.forEach((questionData, questionIndex) => {
     quizTrials.push({
       type: jsPsychHtmlButtonResponse,
-      stimulus: `
-        <div class="quiz-container">
-          <div class="quiz-question">Question ${questionIndex + 1}: ${questionData.question}</div>
-          <div class="quiz-options-container" id="options-container-${questionIndex}"></div>
-        </div>
-      `,
+      stimulus: function() {
+        const visualHTML = questionData.visualContent ? questionData.visualContent() : '';
+        return `
+          <div class="quiz-container">
+            <div class="quiz-question">Question ${questionIndex + 1}: ${questionData.question}</div>
+            ${visualHTML}
+            <div class="quiz-options-container" id="options-container-${questionIndex}"></div>
+          </div>
+        `;
+      },
       choices: questionData.options.map(option => option),
       button_html: '<button class="quiz-answer">%choice%</button>',
       data: {

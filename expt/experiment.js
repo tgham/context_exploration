@@ -472,7 +472,7 @@ class Grid {
     };
 
     // method for plotting a grid, either blank or with all costs revealed
-    createBlankGridHTML(trialIndex = null, revealCosts = false, feedback=false, revealedCosts = 'all') {
+    createBlankGridHTML(trialIndex = null, revealCosts = false, feedback=false, revealedCosts = 'specific', revealedCell = null, revealedCost = null) {
 
         // let gridHTML = `
         //     <div class="current-job-container">
@@ -526,6 +526,13 @@ class Grid {
                         const costClass = cost !== undefined ? 
                             (cost === -1 ? 'observed-cost' : cost === 0 ? 'observed-clear' : 'observed-reward') : '';
                         gridHTML += `<div class="grid-cell ${costClass}" id="${cellId}"></div>`;
+                    } else if (revealedCosts === 'specific' && revealedCell) {
+                        if (row === revealedCell[0] && col === revealedCell[1]) {
+                            const costClass = revealedCost === -1 ? 'observed-cost' : revealedCost === 0 ? 'observed-clear' : 'observed-reward';
+                            gridHTML += `<div class="grid-cell ${costClass}" id="${cellId}"></div>`;
+                        } else {
+                            gridHTML += `<div class="grid-cell" id="${cellId}"></div>`;
+                        }
                     }
                 } else {
                     gridHTML += `<div class="grid-cell" id="${cellId}"></div>`;
