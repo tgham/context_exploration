@@ -2380,12 +2380,14 @@ choices: [' '], // spacebar to continue
 // Function to calculate bonus
 function calculateBonus() {
     
-    // Randomly select nGrids cities without replacement
+    // Randomly select 5 cities without replacement
+    const NUM_BONUS_CITIES = 5;
+    const numCitiesToEvaluate = Math.min(NUM_BONUS_CITIES, grid.nCities); // Use 5 or fewer if not enough cities
     const cityIndices = Array.from({ length: grid.nCities }, (_, i) => i + 1); // Create an array of city indices (1 to nCities)
     const shuffledCities = shuffleArray(cityIndices); // Shuffle the array
-    const selectedCities = shuffledCities.slice(0, grid.nGrids); // Take the first nGrids cities
+    const selectedCities = shuffledCities.slice(0, numCitiesToEvaluate); // Take the first 5 cities (or fewer if available)
 
-    // Calculate the average accuracy for the selected grids
+    // Calculate the average accuracy for the selected cities
     let totalAccuracy = 0;
     selectedCities.forEach((cityIndex, gridIndex) => {
         console.log("City Index:", cityIndex, "Grid Index:", gridIndex);
@@ -2399,24 +2401,24 @@ function calculateBonus() {
         }
         // sum the accuracy in these trials
         const accuracy = trials.reduce((sum, trial) => {
-            // return sum + (trial.chose_better_path ? 1 : 0);
-            return sum + (trial.chose_better_path === 0 ? 1 : 0); // since accuracy is reversed, we count 1 for incorrect choices
+            return sum + (trial.chose_better_path ? 1 : 0);
         }, 0) / trials.length; // Average accuracy for this grid
         console.log("Accuracy for City:", cityIndex, "Grid:", gridIndex, accuracy);
         totalAccuracy += accuracy;
     });
 
-    const averageAccuracy = totalAccuracy / grid.nGrids;
+    const averageAccuracy = totalAccuracy / numCitiesToEvaluate;
     jsPsych.data.addProperties({ bonus_accuracy: averageAccuracy });
 
 
     // debugging: print everything
-    console.log("Selected Cities:", selectedCities);
+    console.log("Selected Cities for Bonus Evaluation:", selectedCities);
+    console.log("Number of Cities Evaluated:", numCitiesToEvaluate);
     console.log("Total Accuracy:", totalAccuracy);
     console.log("Average Accuracy:", averageAccuracy);
-    console.log("Bonus Achieved:", averageAccuracy > 0.7);
+    console.log("Bonus Achieved (threshold: 0.7):", averageAccuracy > 0.7);
 
-    // Check if the average accuracy exceeds the threshold
+    // Check if the average accuracy exceeds the threshold of 0.7
     const bonusAchieved = averageAccuracy > 0.7;
     return bonusAchieved;
 }
@@ -4570,12 +4572,14 @@ function initializeExperiment() {
     // Combine everything into a single timeline
     const fullTimeline = [
       ...ethicsTimeline,
-      instructionsLoop,
+    //   instructionsLoop,
       ...quizTimeline,
       ...mainTimeline
     ];
   
-    // Run it all at once
-    jsPsych.run(fullTimeline);
-  }
-  
+  // Run it all at once
+  jsPsych.run(fullTimeline);
+}
+
+// Export Grid class and practice grids for use in test.js
+export { Grid, practice1Grid, practice2Grid, practice3Grid, practice4Grid, practice5Grid, practice6Grid, practice7Grid, practice8Grid };  
