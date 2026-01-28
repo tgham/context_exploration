@@ -1322,8 +1322,8 @@ function getColorForKey(assignments, key) {
 }
 
 // Declare global variables for practice grids and trial indices
-let practice1Grid, practice2Grid, practice3Grid, practice4Grid, practice5Grid, practice6Grid;
-let practice1TrialIndex = 0, practice2TrialIndex = 0, practice3TrialIndex = 0, practice4TrialIndex = 0, practice5TrialIndex = 0, practice6TrialIndex = 0;
+let practice1Grid, practice2Grid, practice3Grid, practice4Grid, practice5Grid, practice6Grid, practice7Grid, practice8Grid;
+let practice1TrialIndex = 0, practice2TrialIndex = 0, practice3TrialIndex = 0, practice4TrialIndex = 0, practice5TrialIndex = 0, practice6TrialIndex = 0, practice7TrialIndex = 0, practice8TrialIndex = 0;
 let currentTrialIndex = 0;
 let totalObs = 0; // Keeps track of total cost across trials
 
@@ -1337,6 +1337,8 @@ function initPractice() {
     practice4TrialIndex = 0;
     practice5TrialIndex = 0;
     practice6TrialIndex = 0;
+    practice7TrialIndex = 0;
+    practice8TrialIndex = 0;
 
     return Promise.all([
         loadPracticeGrid('assets/trial_sequences/expt_3/practice/expt_info/expt_3_info_1.json', 'practice1Grid').then(grid => practice1Grid = grid),
@@ -1344,7 +1346,9 @@ function initPractice() {
         loadPracticeGrid('assets/trial_sequences/expt_3/practice/expt_info/expt_3_info_3.json', 'practice3Grid').then(grid => practice3Grid = grid),
         loadPracticeGrid('assets/trial_sequences/expt_3/practice/expt_info/expt_3_info_4.json', 'practice4Grid').then(grid => practice4Grid = grid),
         loadPracticeGrid('assets/trial_sequences/expt_3/practice/expt_info/expt_3_info_5.json', 'practice5Grid').then(grid => practice5Grid = grid),
-        loadPracticeGrid('assets/trial_sequences/expt_3/practice/expt_info/expt_3_info_6.json', 'practice6Grid').then(grid => practice6Grid = grid)
+        loadPracticeGrid('assets/trial_sequences/expt_3/practice/expt_info/expt_3_info_6.json', 'practice6Grid').then(grid => practice6Grid = grid),
+        loadPracticeGrid('assets/trial_sequences/expt_3/practice/expt_info/expt_3_info_7.json', 'practice7Grid').then(grid => practice7Grid = grid),
+        loadPracticeGrid('assets/trial_sequences/expt_3/practice/expt_info/expt_3_info_8.json', 'practice8Grid').then(grid => practice8Grid = grid),
     ]).then(() => {
         console.log('All practice grids loaded successfully.');
     }).catch(error => {
@@ -2525,7 +2529,7 @@ const instructions2 = {
                 <p>- The letter <strong>P</strong> marks one job</p>
                 <p>- The letter <strong>Q</strong> marks the other job</p>
                 <p>On each dispatch, these letters are randomly assigned to each job. To send out a taxi to one of these jobs, you need to press the corresponding key on your keyboard. Note that if an intersection appears on both paths, it will contain both P and Q.</p>
-                <p>For any given choice, the lengths of the two possible jobs are the same, and you are paid the same base wage by the company each day. However, on some days, some jobs allow you to earn extra money. This is because you can earn <span style="color: rgb(0, 199, 73);;">tips</span> in popular parts of the city...</p>
+                <p>For any given choice, the lengths of the two possible jobs are the same, and you are paid the same base wage by the company each day. However, on some days, some jobs allow you to earn extra money, while on others, you may lose money. This is because you may be able to earn <span style="color: rgb(0, 199, 73);;">tips</span> in popular parts of the city, or you may have to pay <span style="color: rgb(199, 0, 0);;">tolls</span>...</p>
             </div>
             <div class="instruction-section" style="font-size: 20px;">
                 <h2>Press spacebar to continue.</h2>
@@ -2748,7 +2752,7 @@ const instructions3_1 = {
         return `
         <div class="cost-display-container">
             <h1>Daily Shift:</h1>
-            <p style="font-size: ${fontSize};">Each day, you will manage ${n} dispatches, meaning you have ${n} jobs to select. All ${n} pairs of jobs will be presented on screen at once, side-by-side.</p>
+            <p style="font-size: ${fontSize};">Each day, you will manage ${n} dispatches, meaning you have ${n} jobs to select. All ${n} dispatches will be presented on screen at once, side-by-side.</p>
             <p style="font-size: ${fontSize};">Each dispatch takes place at a different time of the day and is marked with one of the following clock icons, displayed above the dispatch:</p>
             <p style="font-family: golemClocks; text-align: center; font-size: ${fontSize};">&#x00E6; &#x00DD; &#x0026; &#x263A;</p>
             <p style="font-size: ${fontSize};">You will move through these dispatches from the left- to the right-hand side of the screen. The clock icon above your current dispatch is highlighted in <span style="color: #ece75d;">yellow</span>.</p>
@@ -3185,21 +3189,187 @@ const instructions3_7 = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         const fontSize = "20px";
-        // Use the same vehicle animation as in newCityMessage/firstGridMessage for a 'tip day' (green cars)
-        const vehicleBorderClass = 'context-row';
-        // Show green cars for a tip day
-        const vehicleHTML = practice2Grid && practice2Grid.generateDollarRows ? practice2Grid.generateDollarRows(vehicleBorderClass, 'rewards') : '';
+        // Show both context-row and context-column traffic reports side-by-side
+        const vehicleHTMLRow = practice2Grid && practice2Grid.generateDollarRows ? practice2Grid.generateDollarRows('context-row', 'rewards') : '';
+        const vehicleHTMLColumn = practice2Grid && practice2Grid.generateDollarRows ? practice2Grid.generateDollarRows('context-column', 'rewards') : '';
         return `
             <div class="instruction-section" style="font-size: 20px;">
                 <h1>Traffic Report:</h1>
                 <p>At the start of each day, you will be shown a traffic report informing you whether it is a tip day or not.</p>
-                <p>If the traffic report contains <span style="color:rgb(0,199,73);font-weight:bold;">green cars</span>, like below, this means that it is a <strong>tip day</strong>, and hence that you have the opportunity to earn extra money.</p>
+                <p>If the traffic report has a <span style="color:rgb(0,199,73);font-weight:bold;">green background</span>, like one of the two reports below, this means that it is a <span style="color:rgb(0,199,73);font-weight:bold;">tip day</span>, and hence that you have the opportunity to earn extra money.</p>
+                <div style="display: flex; justify-content: space-around; gap: 20px; margin: 16px 0 8px 0;">
+                    <div style="flex: 1; text-align: center;">
+                        <div class="vehicle-animation-container context-row" style="margin: 8px 0;">
+                            <div class="vehicle-display-box context-row">
+                                ${vehicleHTMLRow}
+                            </div>
+                        </div>
+                    </div>
+                    <div style="flex: 1; text-align: center;">
+                        <div class="vehicle-animation-container context-column" style="margin: 8px 0;">
+                            <div class="vehicle-display-box context-column">
+                                ${vehicleHTMLColumn}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <h2>Press spacebar to continue.</h2>
+            </div>
+        `;
+    },
+    choices: [' '], 
+    on_load: function() {
+    },
+    on_finish: function() {
+    }
+};
+
+
+// illustrate column city
+const instructions3_8 = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        const fontSize = "32px"; // Define font size as a variable
+        const zoomTmp = zoomFactor * 0.75
+        document.body.style.zoom = zoomTmp;
+        // document.body.style.zoom = "75%";
+
+        const vehicleBorderClass = `context-column`;
+        const vehicleHTMLColumn = practice2Grid && practice2Grid.generateDollarRows ? practice2Grid.generateDollarRows('context-column', 'rewards') : '';
+        return `
+            <div class="cost-display-container" style="margin: 10px;">
+            <h1>How can you predict what you will observe at each intersection?</h1>
+            <div class="vehicle-animation-container ${vehicleBorderClass}" style="margin: 16px 0 8px 0;">
+            <div class="vehicle-display-box ${vehicleBorderClass}">
+                ${vehicleHTMLColumn}
+            </div>
+            </div>
+            <p style="font-size: ${fontSize};">On <strong>'column days'</strong>, the dollar signs run from top to bottom in the traffic report. This means that popular intersections also tend to run from top to bottom that day.</p>
+            <p style="font-size: ${fontSize};">Therefore, on <strong>'column + tip days'</strong>, a column may have <strong>a lot of tips</strong>, or <strong>not many tips</strong>.</p>
+            <p style="font-size: ${fontSize};">Below are some examples of <strong>'column + tip days'</strong> with all of their tips revealed - notice how the tips (and lack of tips) tend to be clustered in columns.</p>
+            <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
+            </div>
+            <div class="jobs-layout" >
+            <div id="grid-container" class="current-job-section"></div>
+        `;
+    },
+    choices: [' '], // Wait for spacebar to continue
+    on_load: function() {
+ 
+        const gridContainer = document.getElementById('grid-container');
+        const revealCosts = true; // Set to true to show costs
+
+        const baseIndex = practice3TrialIndex;
+        
+        // Create 3 versions of the grid side-by-side
+        let html = '<div style="display: flex; justify-content: space-around; gap: 20px;">';
+        for (let i = 0; i < 3; i++) {
+            html += '<div style="flex: 1; text-align: center;">';
+            html += practice3Grid.createBlankGridHTML(baseIndex + i, revealCosts);
+            html += '</div>';
+        }
+        html += '</div>';
+        gridContainer.innerHTML = html;
+        // practice3TrialIndex++;
+    },
+    on_finish: function() {
+    }
+    // on_load: function() {
+
+    //     const gridContainer = document.getElementById('grid-container');
+    //     const revealCosts = true; // Set to true to show costs
+    //     console.log("Rendering grid for practice3TrialIndex:", practice3TrialIndex);
+    //     gridContainer.innerHTML = practice3Grid.createBlankGridHTML(practice3TrialIndex, revealCosts); // Render a blank grid
+    //     practice3TrialIndex++;
+    // },
+    // on_finish: function() {
+    // }
+};
+
+// illustrate row city
+const instructions3_9 = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        const fontSize = "32px"; // Define font size as a variable
+        const zoomTmp = zoomFactor * 0.75
+        document.body.style.zoom = zoomTmp;
+        // document.body.style.zoom = "75%";
+
+        const vehicleBorderClass = `context-row`;
+        const vehicleHTMLColumn = practice2Grid && practice2Grid.generateDollarRows ? practice2Grid.generateDollarRows('context-row', 'rewards') : '';
+        return `
+            <div class="cost-display-container" style="margin: 10px;">
+            <h1>How can you predict what you will observe at each intersection?</h1>
+            <div class="vehicle-animation-container ${vehicleBorderClass}" style="margin: 16px 0 8px 0;">
+                <div class="vehicle-display-box ${vehicleBorderClass}">
+                    ${vehicleHTMLColumn}
+                </div>
+            </div>
+            <p style="font-size: ${fontSize};">On <strong>'row days'</strong>, the opposite is true: the dollar signs run from left to right in the traffic report. This means that popular intersections also tend to run from left to right that day.</p>
+            <p style="font-size: ${fontSize};">Therefore, on <strong>'row + tip days'</strong>, a row may have <strong>a lot of tips</strong>, or <strong>not many tips</strong>.</p>
+            <p style="font-size: ${fontSize};">Below are some examples of <strong>'row + tip days'</strong> with all of their tips revealed - notice how the tips (and lack of tips) tend to be clustered in rows.</p>
+            <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
+            </div>
+            <div class="jobs-layout" >
+            <div id="grid-container" class="current-job-section"></div>
+        `;
+    },
+    choices: [' '], // Wait for spacebar to continue
+    on_load: function() {
+ 
+        const gridContainer = document.getElementById('grid-container');
+        const revealCosts = true; // Set to true to show costs
+
+        const baseIndex = practice4TrialIndex;
+        
+        // Create 3 versions of the grid side-by-side
+        let html = '<div style="display: flex; justify-content: space-around; gap: 20px;">';
+        for (let i = 0; i < 3; i++) {
+            html += '<div style="flex: 1; text-align: center;">';
+            html += practice4Grid.createBlankGridHTML(baseIndex + i, revealCosts);
+            html += '</div>';
+        }
+        html += '</div>';
+        gridContainer.innerHTML = html;
+        // practice4TrialIndex++;
+    },
+    on_finish: function() {
+    }
+    // on_load: function() {
+
+    //     const gridContainer = document.getElementById('grid-container');
+    //     const revealCosts = true; // Set to true to show costs
+    //     console.log("Rendering grid for practice6TrialIndex:", practice6TrialIndex);
+    //     gridContainer.innerHTML = practice6Grid.createBlankGridHTML(practice6TrialIndex, revealCosts); // Render a blank grid
+    //     practice6TrialIndex++;
+    // },
+    // on_finish: function() {
+    // }
+};
+
+const instructions3_10 = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        const fontSize = "20px";
+        // Use the same vehicle animation as in newCityMessage/firstGridMessage for a 'tip day' (green cars)
+        // const vehicleBorderClass = 'context-row';
+        
+        /// get vehicle border class based on practice5Grid
+        const trial = practice5Grid.getTrialInfo(practice5TrialIndex);
+        const objective = trial.objective;
+        const context = trial.context;
+        const vehicleBorderClass = `context-${context}`;
+        const vehicleHTML = practice5Grid.generateDollarRows(vehicleBorderClass, objective);
+        return `
+            <div class="instruction-section" style="font-size: 20px;">
+                <h1>Traffic Report:</h1>
+                <p>You will now practise a full day of dispatches. The total amount of tips earned over the course of the day will be shown at the top of your screen.</p>
+                <p>Here is your traffic report for the practice day, which shows that this practice day is a 'tips + ${context}' day:</p>
                 <div class="vehicle-animation-container ${vehicleBorderClass}" style="margin: 16px 0 8px 0;">
                     <div class="vehicle-display-box ${vehicleBorderClass}">
                         ${vehicleHTML}
                     </div>
                 </div>
-                <p>You will now practise a full day of dispatches. The total amount of tips earned over the course of the day will be shown at the top of your screen.</p>
                 <p>Before this practice, you have the opportunity to review the most recent instructions.</p>
                 <h2>Press backspace to review, or spacebar to continue.</h2>
             </div>
@@ -3207,6 +3377,7 @@ const instructions3_7 = {
     },
     choices: [' ', 'backspace'], // allow both
     on_load: function() {
+        document.body.style.zoom = zoomFactor;
     },
     on_finish: function(data) {
     data.restart_instructions = (data.response === 'backspace');
@@ -3225,10 +3396,10 @@ const instructions3_7 = {
 }   
 };
 
+
 const instructions3_node = {
   timeline: [
     instructions3_1,
-    // instructions3_2,
     instructions3_3_1,
     instructions3_3_2,
     instructions3_3_3,
@@ -3236,7 +3407,14 @@ const instructions3_node = {
     instructions3_5,
     instructions3_6,
     instructions3_7,
+    
+    instructions3_8,
+    
+    instructions3_9,
+    
+    instructions3_10,
   ],
+  
   loop_function: function(data) {
     const last = data.values().slice(-1)[0];      
     return !!(last.restart_instructions || last.response === 'backspace');
@@ -3249,8 +3427,8 @@ const practiceFirstDayTrial = {
         // document.body.style.zoom = zoomFactor;
         return `
             <div class="jobs-layout">
-            <div class="upcoming-jobs-container grid ${practice3TrialIndex % practice3Grid.nTrials === 0 ? 'grid-fade-in' : ''}">
-                ${practice3Grid.createAllJobsHTML(practice3TrialIndex, null, null, false, true)} 
+            <div class="upcoming-jobs-container grid ${practice5TrialIndex % practice5Grid.nTrials === 0 ? 'grid-fade-in' : ''}">
+                ${practice5Grid.createAllJobsHTML(practice5TrialIndex, null, null, false, true)} 
             </div>
             </div>
         `;
@@ -3263,11 +3441,11 @@ const practiceFirstDayTrial = {
     }
 };
 
-const practice3PreSelectionTrial = {
+const practice5PreSelectionTrial = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         // Reset total cost for practice if first practice trial
-        if (practice3TrialIndex === 0) {
+        if (practice5TrialIndex === 0) {
             totalObs = 0;
         }
 
@@ -3284,7 +3462,7 @@ const practice3PreSelectionTrial = {
         return `
             <div class="jobs-layout">
             <div class="upcoming-jobs-container grid">
-                ${practice3Grid.createAllJobsHTML(practice3TrialIndex, null, keyAssignment)} 
+                ${practice5Grid.createAllJobsHTML(practice5TrialIndex, null, keyAssignment)} 
             </div>
             </div>
         `;
@@ -3295,7 +3473,7 @@ const practice3PreSelectionTrial = {
     }
 };
 
-const practice3SelectionTrial = {
+const practice5SelectionTrial = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
 
@@ -3317,7 +3495,7 @@ const practice3SelectionTrial = {
         // };
 
         // Reset total cost for practice if first practice trial
-        if (practice3TrialIndex === 0) {
+        if (practice5TrialIndex === 0) {
             totalObs = 0;
         }
         const totalObsElement = document.getElementById("total-obs");
@@ -3328,7 +3506,7 @@ const practice3SelectionTrial = {
         return `
             <div class="jobs-layout">
                 <div class="upcoming-jobs-container">
-                    ${practice3Grid.createAllJobsHTML(practice3TrialIndex, null, keyAssignment)} 
+                    ${practice5Grid.createAllJobsHTML(practice5TrialIndex, null, keyAssignment)} 
                 </div>
             </div>
         `;
@@ -3366,16 +3544,16 @@ const practice3SelectionTrial = {
         // Replot the grid with only the chosen path
         const gridContainer = document.querySelector(".current-job-section");
         if (gridContainer) {
-            gridContainer.innerHTML = practice3Grid.createGridHTML(practice3TrialIndex, choice, keyAssignment,true,true);
+            gridContainer.innerHTML = practice5Grid.createGridHTML(practice5TrialIndex, choice, keyAssignment,true,true);
         }
         
         // // Store all the relevant data from the current trial
-        const currentTrial = practice3Grid.getTrialInfo(practice3TrialIndex);
+        const currentTrial = practice5Grid.getTrialInfo(practice5TrialIndex);
         data.practice = true;
         data.choice = choice;
         data.trial = currentTrial.trial;
         data.city = currentTrial.city;
-        data.grid_id = currentTrial.practice3Grid;
+        data.grid_id = currentTrial.practice5Grid;
         data.path_chosen = choice;
         data.button_pressed = data.response;
         data.reaction_time_ms = data.rt;
@@ -3412,7 +3590,7 @@ const practice3SelectionTrial = {
     }
 };
 
-const practice3AnimationTrial = {
+const practice5AnimationTrial = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         const lastTrialData = jsPsych.data.get().last(1).values()[0];
@@ -3421,18 +3599,18 @@ const practice3AnimationTrial = {
         return `
             <div class="jobs-layout">
                 <div class="upcoming-jobs-container">
-                    ${practice3Grid.createAllJobsHTML(practice3TrialIndex, lastTrialData.choice, keyAssignment)} 
+                    ${practice5Grid.createAllJobsHTML(practice5TrialIndex, lastTrialData.choice, keyAssignment)} 
                 </div>
             </div>
         `;
     },
     choices: "NO_KEYS",
     on_load: function() {
-        const currentTrial = practice3Grid.getTrialInfo(practice3TrialIndex);
+        const currentTrial = practice5Grid.getTrialInfo(practice5TrialIndex);
         const lastTrialData = jsPsych.data.get().last(1).values()[0];
 
         // hacky
-        currentTrialIndex = practice3TrialIndex;
+        currentTrialIndex = practice5TrialIndex;
 
         if (!lastTrialData || !lastTrialData.choice) {
             console.error("No valid path choice found. Restarting trial.");
@@ -3442,10 +3620,10 @@ const practice3AnimationTrial = {
         const chosenPath = lastTrialData.choice === 'blue' ? currentTrial.path_A : 
                    lastTrialData.choice === 'green' ? currentTrial.path_B : 
                    null;
-        const binaryObs = practice3Grid.getbinaryObs(`city_${currentTrial.city}_grid_${currentTrial.grid}`);
+        const binaryObs = practice5Grid.getbinaryObs(`city_${currentTrial.city}_grid_${currentTrial.grid}`);
 
         if (chosenPath !== null) {
-            practice3Grid.recordObservations(chosenPath, binaryObs);
+            practice5Grid.recordObservations(chosenPath, binaryObs);
         }
         
 
@@ -3456,8 +3634,245 @@ const practice3AnimationTrial = {
         }, 100);
         
         // Increment the practice trial index
-        practice3TrialIndex++;
+        practice5TrialIndex++;
     }
+};
+
+
+// show how the grid resets at the end of the day
+const instructions4 = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        const fontSize = "20px"; // Define font size as a variable
+        // const vehicleBorderClass = 'context-row';
+        // const vehicleHTML = practice6Grid && practice6Grid.generateDollarRows ? practice6Grid.generateDollarRows(vehicleBorderClass, 'costs') : '';
+        const vehicleHTMLRow = practice6Grid && practice6Grid.generateDollarRows ? practice6Grid.generateDollarRows('context-row', 'costs') : '';
+        const vehicleHTMLColumn = practice6Grid && practice6Grid.generateDollarRows ? practice6Grid.generateDollarRows('context-column', 'costs') : '';
+        return `
+            <div class="instruction-section" style="font-size: 20px;">
+                <h1>Toll Days:</h1>
+                <p>Some days, however, the traffic report may have a <span style="color: rgb(203, 43, 43);">red background</span>, meaning that it is a 'toll day'.</p>
+                <div style="display: flex; justify-content: space-around; gap: 20px; margin: 16px 0 8px 0;">
+                    <div style="flex: 1; text-align: center;">
+                        <div class="vehicle-animation-container context-row" style="margin: 8px 0;">
+                            <div class="vehicle-display-box context-row">
+                                ${vehicleHTMLRow}
+                            </div>
+                        </div>
+                    </div>
+                    <div style="flex: 1; text-align: center;">
+                        <div class="vehicle-animation-container context-column" style="margin: 8px 0;">
+                            <div class="vehicle-display-box context-column">
+                                ${vehicleHTMLColumn}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p>On these days, traffic in some parts of the city is busier than in others. This means that tolls apply at busy intersections. Visiting an intersection reveals whether or not you have to pay a toll there.</p>
+                <p>- <strong><span style="color: rgb(114, 114, 150);">Dark grey intersections</span></strong> have not been visited yet</p>
+                <p>- <strong><span style="color: rgb(203, 43, 43);">Red intersections</span></strong> cost a $1 toll to pass through</p>
+                <p>- <strong><span style="color:rgb(194, 194, 229);">Light grey intersections</span></strong> are free with no tolls</p>
+                <p>Your goal on toll days is to complete all taxi jobs while minimising the total tolls paid out.</p>
+                <p>Otherwise, the task remains the same - e.g. you still have four dispatches each day.</p>
+            </div>
+
+            <div class="instruction-section" style="font-size: 20px;">
+                <h2>Press spacebar to continue.</h2>
+            </div>
+        `;
+    },
+    choices: [' '], // Spacebar to continue
+    on_load: function() {
+    },
+    on_finish: function(data) {
+    }  
+};
+
+
+// illustrate column city
+const instructions5 = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        const fontSize = "32px"; // Define font size as a variable
+        const zoomTmp = zoomFactor * 0.75
+        document.body.style.zoom = zoomTmp;
+        // document.body.style.zoom = "75%";
+
+        const vehicleBorderClass = `context-column`;
+        const vehicleHTMLColumn = practice6Grid && practice6Grid.generateDollarRows ? practice6Grid.generateDollarRows('context-column', 'costs') : '';
+        return `
+            <div class="cost-display-container" style="margin: 10px;">
+            <h1>How can you predict what you will observe at each intersection?</h1>
+            <div class="vehicle-animation-container ${vehicleBorderClass}" style="margin: 16px 0 8px 0;">
+            <div class="vehicle-display-box ${vehicleBorderClass}">
+            ${vehicleHTMLColumn}
+            </div>
+            </div>
+            <p style="font-size: ${fontSize};">Just like on tip days, you can predict what you will observe at each intersection depending on the traffic report.</p>
+            <p style="font-size: ${fontSize};">On 'column days', the dollar signs run from top to bottom in the traffic report. This means that popular intersections also tend to run from top to bottom that day.</p>
+            <p style="font-size: ${fontSize};">Therefore, on <strong>'column + toll days'</strong>, a column may have <strong>a lot of tolls</strong>, or <strong>not many tolls</strong>.</p>
+            <p style="font-size: ${fontSize};">Below are some examples of <strong>'column + toll days'</strong> with all of their tolls revealed - notice how the tolls (and lack of tolls) tend to be clustered in columns.</p>
+            <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
+            </div>
+            <div class="jobs-layout" >
+            <div id="grid-container" class="current-job-section"></div>
+        `;
+    },
+    choices: [' '], // Wait for spacebar to continue
+    on_load: function() {
+ 
+        const gridContainer = document.getElementById('grid-container');
+        const revealCosts = true; // Set to true to show costs
+
+        const baseIndex = practice6TrialIndex;
+        
+        // Create 3 versions of the grid side-by-side
+        let html = '<div style="display: flex; justify-content: space-around; gap: 20px;">';
+        for (let i = 0; i < 3; i++) {
+            html += '<div style="flex: 1; text-align: center;">';
+            html += practice6Grid.createBlankGridHTML(baseIndex + i, revealCosts);
+            html += '</div>';
+        }
+        html += '</div>';
+        gridContainer.innerHTML = html;
+        // practice6TrialIndex++;
+    },
+    on_finish: function() {
+    }
+    // on_load: function() {
+
+    //     const gridContainer = document.getElementById('grid-container');
+    //     const revealCosts = true; // Set to true to show costs
+    //     console.log("Rendering grid for practice6TrialIndex:", practice6TrialIndex);
+    //     gridContainer.innerHTML = practice6Grid.createBlankGridHTML(practice6TrialIndex, revealCosts); // Render a blank grid
+    //     practice6TrialIndex++;
+    // },
+    // on_finish: function() {
+    // }
+};
+
+// illustrate row city
+const instructions6 = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        const fontSize = "32px"; // Define font size as a variable
+        const zoomTmp = zoomFactor * 0.75
+        document.body.style.zoom = zoomTmp;
+        // document.body.style.zoom = "75%";
+
+        const vehicleBorderClass = `context-row`;
+        const vehicleHTMLColumn = practice7Grid && practice7Grid.generateDollarRows ? practice7Grid.generateDollarRows('context-row', 'costs') : '';
+        return `
+            <div class="cost-display-container" style="margin: 10px;">
+            <h1>How can you predict what you will observe at each intersection?</h1>
+            <div class="vehicle-animation-container ${vehicleBorderClass}" style="margin: 16px 0 8px 0;">
+            <div class="vehicle-display-box ${vehicleBorderClass}">
+            ${vehicleHTMLColumn}
+            </div>
+            </div>
+            <p style="font-size: ${fontSize};">On 'row days', the opposite is true: the dollar signs run from left to right in the traffic report. This means that popular intersections also tend to run from left to right that day.</p>
+            <p style="font-size: ${fontSize};">Therefore, on <strong>'row + toll days'</strong>, a row may have <strong>a lot of tolls</strong>, or <strong>not many tolls</strong>.</p>
+            <p style="font-size: ${fontSize};">Below are some examples of <strong>'row + toll days'</strong> with all of their tolls revealed - notice how the tolls (and lack of tolls) tend to be clustered in rows.</p>
+            <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
+            </div>
+            <div class="jobs-layout" >
+            <div id="grid-container" class="current-job-section"></div>
+        `;
+    },
+    choices: [' '], // Wait for spacebar to continue
+    on_load: function() {
+ 
+        const gridContainer = document.getElementById('grid-container');
+        const revealCosts = true; // Set to true to show costs
+
+        const baseIndex = practice7TrialIndex;
+        
+        // Create 3 versions of the grid side-by-side
+        let html = '<div style="display: flex; justify-content: space-around; gap: 20px;">';
+        for (let i = 0; i < 3; i++) {
+            html += '<div style="flex: 1; text-align: center;">';
+            html += practice7Grid.createBlankGridHTML(baseIndex + i, revealCosts);
+            html += '</div>';
+        }
+        html += '</div>';
+        gridContainer.innerHTML = html;
+        // practice7TrialIndex++;
+    },
+    on_finish: function() {
+    }
+    // on_load: function() {
+
+    //     const gridContainer = document.getElementById('grid-container');
+    //     const revealCosts = true; // Set to true to show costs
+    //     console.log("Rendering grid for practice6TrialIndex:", practice6TrialIndex);
+    //     gridContainer.innerHTML = practice6Grid.createBlankGridHTML(practice6TrialIndex, revealCosts); // Render a blank grid
+    //     practice6TrialIndex++;
+    // },
+    // on_finish: function() {
+    // }
+};
+
+const instructions7 = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        const fontSize = "20px";
+        // Use the same vehicle animation as in newCityMessage/firstGridMessage for a 'tip day' (green cars)
+        // const vehicleBorderClass = 'context-row';
+        
+        /// get vehicle border class based on practice7Grid
+        const trial = practice8Grid.getTrialInfo(practice8TrialIndex);
+        const objective = trial.objective;
+        const context = trial.context;
+        const vehicleBorderClass = `context-${context}`;
+        const vehicleHTML = practice8Grid.generateDollarRows(vehicleBorderClass, objective);
+        return `
+            <div class="instruction-section" style="font-size: 20px;">
+                <h1>Traffic Report:</h1>
+                <p>You will now practise another full day of dispatches, this time with tolls. The total amount of tolls paid over the course of the day will be shown at the top of your screen.</p>
+                <p>Here is your traffic report for the practice day, which shows that this practice day is a 'tips + ${context}' day:</p>
+                <div class="vehicle-animation-container ${vehicleBorderClass}" style="margin: 16px 0 8px 0;">
+                    <div class="vehicle-display-box ${vehicleBorderClass}">
+                        ${vehicleHTML}
+                    </div>
+                </div>
+                <p>Before this practice, you have the opportunity to review the most recent instructions.</p>
+                <h2>Press backspace to review, or spacebar to continue.</h2>
+            </div>
+        `;
+    },
+    choices: [' ', 'backspace'], // allow both
+    on_load: function() {
+        document.body.style.zoom = zoomFactor;
+    },
+    on_finish: function(data) {
+    data.restart_instructions = (data.response === 'backspace');
+
+    // if restarting instructions, need to clear practice7TrialIndex and practice7Grid
+    if (data.restart_instructions) {
+        // practice7TrialIndex = 0;
+        // loadPracticeGrid('assets/trial_sequences/expt_2/practice/expt_info/expt_2_info_2.json', 'practice7Grid').then(grid => practice7Grid = grid);
+        initPractice(); // Initialize the grid for practice1
+
+        //check that grid has no observed costs in it
+        for (let i = 0; i < practice7Grid.nTrials; i++) {
+            practice7Grid[`observations${i}`] = {};
+        }
+    }
+}   
+};
+
+const instructions4_node = {
+  timeline: [
+    instructions4,
+    instructions5,
+    instructions6,
+    instructions7,
+  ],
+  
+  loop_function: function(data) {
+    const last = data.values().slice(-1)[0];      
+    return !!(last.restart_instructions || last.response === 'backspace');
+  }
 };
 
 const practiceFirstDayTrialAgain = {
@@ -3466,8 +3881,8 @@ const practiceFirstDayTrialAgain = {
         // document.body.style.zoom = zoomFactor;
         return `
             <div class="jobs-layout">
-            <div class="upcoming-jobs-container grid ${practice4TrialIndex % practice4Grid.nTrials === 0 ? 'grid-fade-in' : ''}">
-                ${practice4Grid.createAllJobsHTML(practice4TrialIndex, null, null, false, true)} 
+            <div class="upcoming-jobs-container grid ${practice8TrialIndex % practice8Grid.nTrials === 0 ? 'grid-fade-in' : ''}">
+                ${practice8Grid.createAllJobsHTML(practice8TrialIndex, null, null, false, true)} 
             </div>
             </div>
         `;
@@ -3480,7 +3895,7 @@ const practiceFirstDayTrialAgain = {
     }
 };
 
-const practice4SelectionTrial = {
+const practice8SelectionTrial = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
 
@@ -3502,7 +3917,7 @@ const practice4SelectionTrial = {
         // };
 
         // Reset total cost for practice if first practice trial
-        if (practice4TrialIndex === 0) {
+        if (practice8TrialIndex === 0) {
             totalObs = 0;
         }
         const totalObsElement = document.getElementById("total-obs");
@@ -3513,7 +3928,7 @@ const practice4SelectionTrial = {
         return `
             <div class="jobs-layout">
                 <div class="upcoming-jobs-container">
-                    ${practice4Grid.createAllJobsHTML(practice4TrialIndex, null, keyAssignment)} 
+                    ${practice8Grid.createAllJobsHTML(practice8TrialIndex, null, keyAssignment)} 
                 </div>
             </div>
         `;
@@ -3551,16 +3966,16 @@ const practice4SelectionTrial = {
         // Replot the grid with only the chosen path
         const gridContainer = document.querySelector(".current-job-section");
         if (gridContainer) {
-            gridContainer.innerHTML = practice4Grid.createGridHTML(practice4TrialIndex, choice, keyAssignment,true,true);
+            gridContainer.innerHTML = practice8Grid.createGridHTML(practice8TrialIndex, choice, keyAssignment,true,true);
         }
         
         // // Store all the relevant data from the current trial
-        const currentTrial = practice4Grid.getTrialInfo(practice4TrialIndex);
+        const currentTrial = practice8Grid.getTrialInfo(practice8TrialIndex);
         data.practice = true;
         data.choice = choice;
         data.trial = currentTrial.trial;
         data.city = currentTrial.city;
-        data.grid_id = currentTrial.practice4Grid;
+        data.grid_id = currentTrial.practice8Grid;
         data.path_chosen = choice;
         data.button_pressed = data.response;
         data.reaction_time_ms = data.rt;
@@ -3597,7 +4012,7 @@ const practice4SelectionTrial = {
     }
 };
 
-const practice4AnimationTrial = {
+const practice8AnimationTrial = {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: function() {
         const lastTrialData = jsPsych.data.get().last(1).values()[0];
@@ -3606,18 +4021,18 @@ const practice4AnimationTrial = {
         return `
             <div class="jobs-layout">
                 <div class="upcoming-jobs-container">
-                    ${practice4Grid.createAllJobsHTML(practice4TrialIndex, lastTrialData.choice, keyAssignment)} 
+                    ${practice8Grid.createAllJobsHTML(practice8TrialIndex, lastTrialData.choice, keyAssignment)} 
                 </div>
             </div>
         `;
     },
     choices: "NO_KEYS",
     on_load: function() {
-        const currentTrial = practice4Grid.getTrialInfo(practice4TrialIndex);
+        const currentTrial = practice8Grid.getTrialInfo(practice8TrialIndex);
         const lastTrialData = jsPsych.data.get().last(1).values()[0];
 
         // hacky
-        currentTrialIndex = practice4TrialIndex;
+        currentTrialIndex = practice8TrialIndex;
         if (!lastTrialData || !lastTrialData.choice) {
             console.error("No valid path choice found. Restarting trial.");
             return jsPsych.finishTrial();
@@ -3626,10 +4041,10 @@ const practice4AnimationTrial = {
         const chosenPath = lastTrialData.choice === 'blue' ? currentTrial.path_A : 
                    lastTrialData.choice === 'green' ? currentTrial.path_B : 
                    null;
-        const binaryObs = practice4Grid.getbinaryObs(`city_${currentTrial.city}_grid_${currentTrial.grid}`);
+        const binaryObs = practice8Grid.getbinaryObs(`city_${currentTrial.city}_grid_${currentTrial.grid}`);
 
         if (chosenPath !== null) {
-            practice4Grid.recordObservations(chosenPath, binaryObs);
+            practice8Grid.recordObservations(chosenPath, binaryObs);
         }
         
 
@@ -3640,117 +4055,10 @@ const practice4AnimationTrial = {
         }, 100);
         
         // Increment the practice trial index
-        practice4TrialIndex++;
+        practice8TrialIndex++;
     }
 };
 
-// show how the grid resets at the end of the day
-const instructions4 = {
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: function() {
-        const fontSize = "20px"; // Define font size as a variable
-        const vehicleBorderClass = 'context-row';
-        const vehicleHTML = practice4Grid && practice4Grid.generateDollarRows ? practice4Grid.generateDollarRows(vehicleBorderClass, 'costs') : '';
-        return `
-            <div class="instruction-section" style="font-size: 20px;">
-                <h1>Toll Days:</h1>
-                <p>Some days, however, the traffic report may contain <span style="color: rgb(203, 43, 43);">red cars</span>, meaning that it is a 'toll day'.</p>
-                <div class="vehicle-animation-container ${vehicleBorderClass}" style="margin: 16px 0 8px 0;">
-                    <div class="vehicle-display-box ${vehicleBorderClass}">
-                        ${vehicleHTML}
-                    </div>
-                </div>
-                <p>On these days, traffic in some parts of the city is busier than in others. This means that tolls apply at busy intersections. Visiting an intersection reveals whether or not you have to pay a toll there.</p>
-                <p>- <strong><span style="color: rgb(114, 114, 150);">Dark grey intersections</span></strong> have not been visited yet</p>
-                <p>- <strong><span style="color: rgb(203, 43, 43);">Red intersections</span></strong> cost a $1 toll to pass through</p>
-                <p>- <strong><span style="color:rgb(194, 194, 229);">Light grey intersections</span></strong> are free with no tolls</p>
-                <p>Your goal on toll days is to complete all taxi jobs while minimising the total tolls paid out.</p>
-                <p>Otherwise, the task remains the same - e.g. you still have four dispatches each day.</p>
-            </div>
-
-            <div class="instruction-section" style="font-size: 20px;">
-                <h2>Press spacebar to practise a toll day.</h2>
-            </div>
-        `;
-    },
-    choices: [' '], // Spacebar to continue
-    on_load: function() {
-    },
-    on_finish: function(data) {
-    }  
-};
-
-// illustrate column city
-const instructions6 = {
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: function() {
-        const fontSize = "28px"; // Define font size as a variable
-        const zoomTmp = zoomFactor * 0.75
-        document.body.style.zoom = zoomTmp;
-        // document.body.style.zoom = "75%";
-        return `
-            <div class="instruction-section" style="margin: 10px;">
-            <h1>How can you predict what you will observe at each intersection?</h1>
-            <p style="font-size: ${fontSize};">Each day, the city has particular traffic properties, such that the popular intersections tend to be related to one another in one of two ways.</p>
-            </div>
-            <div class="instruction-section" style="margin: 10px;">
-            <h1>'Column days'</h1>
-            <p style="font-size: ${fontSize};">On column days, popular areas tend to run from north to south every day, meaning that tips or tolls tend to be clustered in columns.</p>
-            <p style="font-size: ${fontSize};">That is, a column may have <strong>a lot of tips/tolls</strong>, or <strong>not many tips/tolls</strong>.</p>
-            <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
-            </div>
-            <div class="jobs-layout" >
-            <div class="instruction-section" style="text-align: center; font-size: 20px; color: #3a3a3a; margin: 10px;">
-            <h3><strong>Example column day</strong><h3>
-            </div>
-            <div id="grid-container" class="current-job-section"></div>
-        `;
-    },
-    choices: [' '], // Wait for spacebar to continue
-    on_load: function() {
-
-        const gridContainer = document.getElementById('grid-container');
-        const revealCosts = true; // Set to true to show costs
-        console.log("Rendering grid for practice5TrialIndex:", practice5TrialIndex);
-        gridContainer.innerHTML = practice5Grid.createBlankGridHTML(practice5TrialIndex, revealCosts); // Render a blank grid
-        practice5TrialIndex++;
-    },
-    on_finish: function() {
-    }
-};
-
-const instructions8 = {
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: function() {
-        const fontSize = "28px"; // Define font size as a variable
-        return `
-            <div class="instruction-section" style="margin: 10px;">
-            <h1>How can you predict what you will observe at each intersection?</h1>
-            <p style="font-size: ${fontSize};">Each day, the city has particular traffic properties, such that the popular intersections tend to be related to one another in one of two ways.</p>
-            </div>
-            <div class="instruction-section" style="margin: 10px;">
-            <h1>'Row days'</h1>
-            <p style="font-size: ${fontSize};">On row days, the opposite is true: popular areas tend to run from east to west every day, meaning that tips or tolls tend to be clustered in rows.</p>
-            <p style="font-size: ${fontSize};">That is, a row may have <strong>a lot of tips/tolls</strong>, or <strong>not many tips/tolls</strong>.</p>
-            <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
-            </div>
-            <div class="jobs-layout" >
-            <div class="instruction-section" style="text-align: center; font-size: 20px; color: #3a3a3a; margin: 10px;">
-            <h3><strong>Example row day</strong><h3>
-            </div>
-            <div id="grid-container" class="current-job-section"></div>
-        `;
-    },
-    choices: [' '], // Wait for spacebar to continue
-    on_load: function() {
-        const gridContainer = document.getElementById('grid-container');
-        const revealCosts = true; // Set to true to show costs
-        gridContainer.innerHTML = practice6Grid.createBlankGridHTML(practice6TrialIndex, revealCosts); // Render a blank grid
-        practice6TrialIndex++;
-    },
-    on_finish: function() {
-    }
-};
 
 // instructions review - i.e. ask participants if they want to review the instructions pages (instructions1-instructions8, without the practices)
 const instructionsReview = {
@@ -4141,12 +4449,12 @@ function createInstructionsTimeline() {
     timeline.push(instructions1);
 
     // Practice selection
-    // timeline.push(instructions2);
-    // timeline.push(instructions2_5);
-    // timeline.push(practice1SelectionTrial);
-    // timeline.push(practice1AnimationTrial);
-    // timeline.push(practice1SelectionTrial);
-    // timeline.push(practice1AnimationTrial);
+    timeline.push(instructions2);
+    timeline.push(instructions2_5);
+    timeline.push(practice1SelectionTrial);
+    timeline.push(practice1AnimationTrial);
+    timeline.push(practice1SelectionTrial);
+    timeline.push(practice1AnimationTrial);
 
     // Explain days
     timeline.push(instructions3_node);
@@ -4154,31 +4462,19 @@ function createInstructionsTimeline() {
     // Practice a full day
     timeline.push(practiceFirstDayTrial);
     for (let i = 0; i < grid.nTrials; i++) {
-        timeline.push(practice3SelectionTrial);
-        timeline.push(practice3AnimationTrial);
+        timeline.push(practice5SelectionTrial);
+        timeline.push(practice5AnimationTrial);
     }
     timeline.push(practiceGridFeedback);
 
     // Animation to show grid resetting, and then another day
-    timeline.push(instructions4);
+    timeline.push(instructions4_node);
     timeline.push(practiceFirstDayTrialAgain);
     for (let i = 0; i < grid.nTrials; i++) {
-        timeline.push(practice4SelectionTrial);
-        timeline.push(practice4AnimationTrial);
+        timeline.push(practice8SelectionTrial);
+        timeline.push(practice8AnimationTrial);
     }
     timeline.push(practiceGridFeedback);
-
-    // illustrate contexts
-    // for (let i = 1; i <= grid.nGrids; i++) {
-    for (let i = 1; i <= 6; i++) { /// hacky
-        timeline.push(instructions6);
-    }
-    // for (let i = 1; i <= grid.nGrids; i++) {
-    for (let i = 1; i <= 6; i++) {
-        timeline.push(instructions8);
-    }
-    // timeline.push(instructions9);
-    // timeline.push(instructions10);
 
     // Add the option to review the instructions
     timeline.push(instructionsReview);
