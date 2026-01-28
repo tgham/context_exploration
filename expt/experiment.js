@@ -727,35 +727,36 @@ class Grid {
     generateVehicleRows(contextClass, objective='rewards') {
         const speeds = [6, 8, 10, 7, 9, 11, 6, 8, 10]; // 9 speeds (cycling pattern)
         
-        // Determine car color based on objective (alternate with neutral grey)
-        const carColor = objective === 'costs' ? 'red' : 'green';
-        const carPath = (dir, useObjective) => `assets/vehicles/${useObjective ? carColor : 'grey'}_car_${dir}.png`;
+        // Determine background color based on objective
+        const backgroundColor = objective === 'costs' ? '#e74c3c' : '#00c749';
+        const carColor = 'white';
+        const carPath = (dir) => `assets/vehicles/${carColor}_car_${dir}.png`;
         
-        // Image URLs based on context, direction, and alternating colors
-        // Row context: even indices go right (objective color), odd indices go left (grey)
-        // Column context: even indices go down (objective color), odd indices go up (grey)
+        // Image URLs based on context and direction (all white cars now)
+        // Row context: even indices go right, odd indices go left
+        // Column context: even indices go down, odd indices go up
         const imageUrls = contextClass === 'context-row' 
             ? [
-                carPath('right', true),
-                carPath('left', false),
-                carPath('right', true),
-                carPath('left', false),
-                carPath('right', true),
-                carPath('left', false),
-                carPath('right', true),
-                carPath('left', false),
-                carPath('right', true)
+                carPath('right'),
+                carPath('left'),
+                carPath('right'),
+                carPath('left'),
+                carPath('right'),
+                carPath('left'),
+                carPath('right'),
+                carPath('left'),
+                carPath('right')
             ]
             : [
-                carPath('down', true),
-                carPath('up', false),
-                carPath('down', true),
-                carPath('up', false),
-                carPath('down', true),
-                carPath('up', false),
-                carPath('down', true),
-                carPath('up', false),
-                carPath('down', true)
+                carPath('down'),
+                carPath('up'),
+                carPath('down'),
+                carPath('up'),
+                carPath('down'),
+                carPath('up'),
+                carPath('down'),
+                carPath('up'),
+                carPath('down')
             ];
         
         let html = '';
@@ -765,7 +766,7 @@ class Grid {
             const rowClass = contextClass === 'context-row' ? `vehicle-row-${i}` : `vehicle-col-${i}`;
             const animationName = contextClass === 'context-row' ? `scroll-row-${i}` : `scroll-col-${i}`;
             const imageUrl = imageUrls[i];
-            html += `<div class="vehicle-item ${rowClass}" style="background-image: url('${imageUrl}'); animation: ${animationName} ${speed}s linear infinite ${direction};"></div>`;
+            html += `<div class="vehicle-item ${rowClass}" style="background-color: ${backgroundColor}; background-image: url('${imageUrl}'); animation: ${animationName} ${speed}s linear infinite ${direction};"></div>`;
         }
         return html;
     }
@@ -775,43 +776,41 @@ class Grid {
         const speeds = [6, 8, 10, 7, 9, 11, 6, 8, 10]; // 9 speeds (cycling pattern)
 
         // Build inline SVG arrows (data URIs) so no external PNGs are needed
-        const colorHex = objective === 'costs' ? '#e74c3c' : '#00c749';
-        const makeArrowDataUri = (direction, fillColor) => {
+        const backgroundColor = objective === 'costs' ? '#e74c3c' : '#00c749';
+        const arrowColor = '#ffffff';
+        const makeArrowDataUri = (direction) => {
             const angles = { right: 0, down: 90, left: 180, up: -90 };
             const angle = angles[direction] || 0;
             // Slightly thicker arrow via wider polygon and thicker stroke
-            const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><polygon points="15,20 82,50 15,80 48,50" fill="${fillColor}" stroke="${fillColor}" stroke-width="12" stroke-linejoin="round" transform="rotate(${angle} 50 50)"/></svg>`;
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><polygon points="15,20 82,50 15,80 48,50" fill="${arrowColor}" stroke="${arrowColor}" stroke-width="12" stroke-linejoin="round" transform="rotate(${angle} 50 50)"/></svg>`;
             return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
         };
 
-        // Alternate colors per index: even -> objective color, odd -> neutral gray
-        const neutralColor = '#b8b8d9';
-
-        // Image URLs based on context and direction (using inline SVG arrows)
+        // Image URLs based on context and direction (using inline SVG arrows with white color)
         // Row context: even indices go right, odd indices go left
         // Column context: even indices go down, odd indices go up
         const imageUrls = contextClass === 'context-row'
             ? [
-                makeArrowDataUri('right', colorHex),
-                makeArrowDataUri('left', neutralColor),
-                makeArrowDataUri('right', colorHex),
-                makeArrowDataUri('left', neutralColor),
-                makeArrowDataUri('right', colorHex),
-                makeArrowDataUri('left', neutralColor),
-                makeArrowDataUri('right', colorHex),
-                makeArrowDataUri('left', neutralColor),
-                makeArrowDataUri('right', colorHex)
+                makeArrowDataUri('right'),
+                makeArrowDataUri('left'),
+                makeArrowDataUri('right'),
+                makeArrowDataUri('left'),
+                makeArrowDataUri('right'),
+                makeArrowDataUri('left'),
+                makeArrowDataUri('right'),
+                makeArrowDataUri('left'),
+                makeArrowDataUri('right')
             ]
             : [
-                makeArrowDataUri('down', colorHex),
-                makeArrowDataUri('up', neutralColor),
-                makeArrowDataUri('down', colorHex),
-                makeArrowDataUri('up', neutralColor),
-                makeArrowDataUri('down', colorHex),
-                makeArrowDataUri('up', neutralColor),
-                makeArrowDataUri('down', colorHex),
-                makeArrowDataUri('up', neutralColor),
-                makeArrowDataUri('down', colorHex)
+                makeArrowDataUri('down'),
+                makeArrowDataUri('up'),
+                makeArrowDataUri('down'),
+                makeArrowDataUri('up'),
+                makeArrowDataUri('down'),
+                makeArrowDataUri('up'),
+                makeArrowDataUri('down'),
+                makeArrowDataUri('up'),
+                makeArrowDataUri('down')
             ];
 
         let html = '';
@@ -821,7 +820,38 @@ class Grid {
             const rowClass = contextClass === 'context-row' ? `vehicle-row-${i}` : `vehicle-col-${i}`;
             const animationName = contextClass === 'context-row' ? `scroll-row-${i}` : `scroll-col-${i}`;
             const imageUrl = imageUrls[i];
-            html += `<div class="vehicle-item ${rowClass}" style="background-image: url('${imageUrl}'); animation: ${animationName} ${speed}s linear infinite ${direction};"></div>`;
+            html += `<div class="vehicle-item ${rowClass}" style="background-color: ${backgroundColor}; background-image: url('${imageUrl}'); animation: ${animationName} ${speed}s linear infinite ${direction};"></div>`;
+        }
+        return html;
+    }
+
+    // Generate 9 dollar sign rows with different speeds and alternating directions
+    generateDollarRows(contextClass, objective='rewards') {
+        const speeds = [6, 8, 10, 7, 9, 11, 6, 8, 10]; // 9 speeds (cycling pattern)
+
+        // Build inline SVG dollar signs (data URIs) so no external PNGs are needed
+        const backgroundColor = objective === 'costs' ? '#e74c3c' : '#00c749';
+        const dollarColor = '#ffffff';
+        const makeDollarDataUri = () => {
+            // Create a dollar sign SVG with white color
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+                <text x="50" y="75" font-size="80" font-weight="bold" fill="${dollarColor}" text-anchor="middle" font-family="Arial, sans-serif">$</text>
+            </svg>`;
+            return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+        };
+
+        // Image URLs for dollar signs - all white now
+        const dollarDataUri = makeDollarDataUri();
+        const imageUrls = Array(9).fill(dollarDataUri);
+
+        let html = '';
+        for (let i = 0; i < 9; i++) {
+            const speed = speeds[i];
+            const direction = 'normal';
+            const rowClass = contextClass === 'context-row' ? `vehicle-row-${i}` : `vehicle-col-${i}`;
+            const animationName = contextClass === 'context-row' ? `scroll-row-${i}` : `scroll-col-${i}`;
+            const imageUrl = imageUrls[i];
+            html += `<div class="vehicle-item ${rowClass}" style="background-color: ${backgroundColor}; background-image: url('${imageUrl}'); animation: ${animationName} ${speed}s linear infinite ${direction};"></div>`;
         }
         return html;
     }
@@ -1258,7 +1288,7 @@ class Grid {
             </div>
             <div class="vehicle-animation-container ${vehicleBorderHTML}">
             <div class="vehicle-display-box ${vehicleBorderHTML}">
-            ${this.generateVehicleRows(vehicleBorderHTML, objective)}
+            ${this.generateDollarRows(vehicleBorderHTML, objective)}
             </div>
             </div>
             `;   
@@ -2152,9 +2182,9 @@ const newCityMessage = {
             ? 'This city has <span style="color: rgb(203, 43, 43); font-weight: bold;">tolls</span> on popular intersections. Avoid them to save money!' 
             : 'This city has <span style="color: rgb(0, 199, 73); font-weight: bold;">tips</span> on popular intersections. Seek them out to earn more money!';
         
-        // Create vehicle animation HTML using generateVehicleRows method
+        // Create vehicle animation HTML using generateDollarRows method
         const vehicleBorderClass = `context-${context}`;
-        const vehicleHTML = grid.generateVehicleRows(vehicleBorderClass, objective);
+        const vehicleHTML = grid.generateDollarRows(vehicleBorderClass, objective);
         
         message = `
         <div class="new-day-text">
@@ -2249,9 +2279,9 @@ const firstGridMessage = {
             ? 'This city has <span style="color: rgb(203, 43, 43); font-weight: bold;">tolls</span> on popular intersections. Avoid them to save money!' 
             : 'This city has <span style="color: rgb(0, 199, 73); font-weight: bold;">tips</span> on popular intersections. Seek them out to earn more money!';
         
-        // Create vehicle animation HTML using generateVehicleRows method
+        // Create vehicle animation HTML using generateDollarRows method
         const vehicleBorderClass = `context-${context}`;
-        const vehicleHTML = grid.generateVehicleRows(vehicleBorderClass, objective);
+        const vehicleHTML = grid.generateDollarRows(vehicleBorderClass, objective);
 
         return `
             <div class="new-day-text">
@@ -3158,7 +3188,7 @@ const instructions3_7 = {
         // Use the same vehicle animation as in newCityMessage/firstGridMessage for a 'tip day' (green cars)
         const vehicleBorderClass = 'context-row';
         // Show green cars for a tip day
-        const vehicleHTML = practice2Grid && practice2Grid.generateVehicleRows ? practice2Grid.generateVehicleRows(vehicleBorderClass, 'rewards') : '';
+        const vehicleHTML = practice2Grid && practice2Grid.generateDollarRows ? practice2Grid.generateDollarRows(vehicleBorderClass, 'rewards') : '';
         return `
             <div class="instruction-section" style="font-size: 20px;">
                 <h1>Traffic Report:</h1>
@@ -3620,7 +3650,7 @@ const instructions4 = {
     stimulus: function() {
         const fontSize = "20px"; // Define font size as a variable
         const vehicleBorderClass = 'context-row';
-        const vehicleHTML = practice4Grid && practice4Grid.generateVehicleRows ? practice4Grid.generateVehicleRows(vehicleBorderClass, 'costs') : '';
+        const vehicleHTML = practice4Grid && practice4Grid.generateDollarRows ? practice4Grid.generateDollarRows(vehicleBorderClass, 'costs') : '';
         return `
             <div class="instruction-section" style="font-size: 20px;">
                 <h1>Toll Days:</h1>
@@ -3699,7 +3729,7 @@ const instructions8 = {
             <p style="font-size: ${fontSize};">Each day, the city has particular traffic properties, such that the popular intersections tend to be related to one another in one of two ways.</p>
             </div>
             <div class="instruction-section" style="margin: 10px;">
-            <h1>'Column days'</h1>
+            <h1>'Row days'</h1>
             <p style="font-size: ${fontSize};">On row days, the opposite is true: popular areas tend to run from east to west every day, meaning that tips or tolls tend to be clustered in rows.</p>
             <p style="font-size: ${fontSize};">That is, a row may have <strong>a lot of tips/tolls</strong>, or <strong>not many tips/tolls</strong>.</p>
             <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
@@ -4111,12 +4141,12 @@ function createInstructionsTimeline() {
     timeline.push(instructions1);
 
     // Practice selection
-    timeline.push(instructions2);
-    timeline.push(instructions2_5);
-    timeline.push(practice1SelectionTrial);
-    timeline.push(practice1AnimationTrial);
-    timeline.push(practice1SelectionTrial);
-    timeline.push(practice1AnimationTrial);
+    // timeline.push(instructions2);
+    // timeline.push(instructions2_5);
+    // timeline.push(practice1SelectionTrial);
+    // timeline.push(practice1AnimationTrial);
+    // timeline.push(practice1SelectionTrial);
+    // timeline.push(practice1AnimationTrial);
 
     // Explain days
     timeline.push(instructions3_node);
