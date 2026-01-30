@@ -2450,7 +2450,7 @@ const zoomAdjustment = {
         <div class="cost-display-container">
             <h1>Display Setup</h1>
             <p style="font-size: ${fontSize};">Let's first adjust your display. Press the Up / Down Arrow keys to zoom in / out and adjust the display size.</p>
-            <p style="font-size: ${fontSize};">Once you can clearly see all ${n} grids side-by-side and the smaller grid with cars underneath, press the spacebar to continue.</p>
+            <p style="font-size: ${fontSize};">Once you can clearly see all ${n} grids side-by-side and the smaller grid with dollar signs underneath, press the spacebar to continue.</p>
         </div>
         <div class="jobs-layout">
             <div class="upcoming-jobs-container grid">
@@ -3253,7 +3253,7 @@ const instructions3_8 = {
                 ${vehicleHTMLColumn}
             </div>
             </div>
-            <p style="font-size: ${fontSize};">On <strong>'column days'</strong>, the dollar signs run from top to bottom in the traffic report. This means that popular intersections also tend to run from top to bottom that day.</p>
+            <p style="font-size: ${fontSize};">On <strong>'column days'</strong>, the dollar signs run from top to bottom in the traffic report. This means that popular intersections tend to run from top to bottom that day.</p>
             <p style="font-size: ${fontSize};">Therefore, on <strong>'column + tip days'</strong>, a column may have <strong>a lot of tips</strong>, or <strong>not many tips</strong>.</p>
             <p style="font-size: ${fontSize};">Below are some examples of <strong>'column + tip days'</strong> with all of their tips revealed - notice how the tips (and lack of tips) tend to be clustered in columns.</p>
             <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
@@ -3314,7 +3314,7 @@ const instructions3_9 = {
                     ${vehicleHTMLColumn}
                 </div>
             </div>
-            <p style="font-size: ${fontSize};">On <strong>'row days'</strong>, the opposite is true: the dollar signs run from left to right in the traffic report. This means that popular intersections also tend to run from left to right that day.</p>
+            <p style="font-size: ${fontSize};">On <strong>'row days'</strong>, the opposite is true: the dollar signs run from left to right in the traffic report. This means that popular intersections tend to run from left to right that day.</p>
             <p style="font-size: ${fontSize};">Therefore, on <strong>'row + tip days'</strong>, a row may have <strong>a lot of tips</strong>, or <strong>not many tips</strong>.</p>
             <p style="font-size: ${fontSize};">Below are some examples of <strong>'row + tip days'</strong> with all of their tips revealed - notice how the tips (and lack of tips) tend to be clustered in rows.</p>
             <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
@@ -3371,9 +3371,9 @@ const instructions3_10 = {
         const vehicleHTML = practice5Grid.generateDollarRows(vehicleBorderClass, objective);
         return `
             <div class="instruction-section" style="font-size: 20px;">
-                <h1>Traffic Report:</h1>
+                <h1>Practice Day:</h1>
                 <p>You will now practise a full day of dispatches. The total amount of tips earned over the course of the day will be shown at the top of your screen.</p>
-                <p>Here is your traffic report for the practice day, which shows that this practice day is a 'tips + ${context}' day:</p>
+                <p>Here is your traffic report for the practice day, which shows that this practice day is a '${context} + tips' day:</p>
                 <div class="vehicle-animation-container ${vehicleBorderClass}" style="margin: 16px 0 8px 0;">
                     <div class="vehicle-display-box ${vehicleBorderClass}">
                         ${vehicleHTML}
@@ -3718,7 +3718,7 @@ const instructions5 = {
             </div>
             </div>
             <p style="font-size: ${fontSize};">Just like on tip days, you can predict what you will observe at each intersection depending on the traffic report.</p>
-            <p style="font-size: ${fontSize};">On 'column days', the dollar signs run from top to bottom in the traffic report. This means that popular intersections also tend to run from top to bottom that day.</p>
+            <p style="font-size: ${fontSize};">On 'column days', the dollar signs run from top to bottom in the traffic report. This means that popular intersections tend to run from top to bottom that day.</p>
             <p style="font-size: ${fontSize};">Therefore, on <strong>'column + toll days'</strong>, a column may have <strong>a lot of tolls</strong>, or <strong>not many tolls</strong>.</p>
             <p style="font-size: ${fontSize};">Below are some examples of <strong>'column + toll days'</strong> with all of their tolls revealed - notice how the tolls (and lack of tolls) tend to be clustered in columns.</p>
             <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
@@ -3779,7 +3779,7 @@ const instructions6 = {
             ${vehicleHTMLColumn}
             </div>
             </div>
-            <p style="font-size: ${fontSize};">On 'row days', the opposite is true: the dollar signs run from left to right in the traffic report. This means that popular intersections also tend to run from left to right that day.</p>
+            <p style="font-size: ${fontSize};">On 'row days', the opposite is true: the dollar signs run from left to right in the traffic report. This means that popular intersections tend to run from left to right that day.</p>
             <p style="font-size: ${fontSize};">Therefore, on <strong>'row + toll days'</strong>, a row may have <strong>a lot of tolls</strong>, or <strong>not many tolls</strong>.</p>
             <p style="font-size: ${fontSize};">Below are some examples of <strong>'row + toll days'</strong> with all of their tolls revealed - notice how the tolls (and lack of tolls) tend to be clustered in rows.</p>
             <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
@@ -3836,9 +3836,9 @@ const instructions7 = {
         const vehicleHTML = practice8Grid.generateDollarRows(vehicleBorderClass, objective);
         return `
             <div class="instruction-section" style="font-size: 20px;">
-                <h1>Traffic Report:</h1>
+                <h1>Practice Day:</h1>
                 <p>You will now practise another full day of dispatches, this time with tolls. The total amount of tolls paid over the course of the day will be shown at the top of your screen.</p>
-                <p>Here is your traffic report for the practice day, which shows that this practice day is a 'tips + ${context}' day:</p>
+                <p>Here is your traffic report for the practice day, which shows that this practice day is a '${context} + tolls' day:</p>
                 <div class="vehicle-animation-container ${vehicleBorderClass}" style="margin: 16px 0 8px 0;">
                     <div class="vehicle-display-box ${vehicleBorderClass}">
                         ${vehicleHTML}
