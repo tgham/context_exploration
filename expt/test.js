@@ -12,70 +12,79 @@ import { Grid,
 
 // Quiz questions and answers
 export const quizQuestions = [
-  // {
-  //   question: "How do you select a taxi job?",
-  //   options: [
-  //     "Click on the passenger icon.",
-  //     "Press the corresponding key on your keyboard.",
-  //     "Wait for the system to assign a job automatically."
-  //   ],
-  //   correct: 1 // Index of correct answer (0-based)
-  // },
-  // {
-  //   question: "What is the difference between ‘tip days’ and ‘toll days’?",
-  //   options: [
-  //     "On tip days, popular intersections earn you a $1 tip; on toll days, busy intersections require you to pay a $1 toll.",
-  //     "There is no difference between tip days and toll days - on all days, you have the chance to receive tips and avoid tolls.",
-  //     "On tip days, you work overtime, meaning you need to select more jobs.",
-  //   ],
-  //   correct: 0
-  // },
-  // {
-  //   question: "Suppose you receive the following traffic report. What does this tell you about the objective of your day?",
-  //   options: [
-  //     "I might encounter both tips and tolls today, and so should balance these two together.",
-  //     "Today is a 'tip day', so my aim is to maximise tips.",
-  //     "Today is a 'toll day', so my aim is to minimise tolls.",
-  //   ],
-  //   correct: 2,
-  //   visualContent: function() {
-  //     // Generate vehicle HTML for both contexts
-  //     const vehicleHTMLRow = practice6Grid && practice6Grid.generateDollarRows ? practice6Grid.generateDollarRows('context-row', 'costs') : '';
-  //     const vehicleHTMLColumn = practice6Grid && practice6Grid.generateDollarRows ? practice6Grid.generateDollarRows('context-column', 'costs') : '';
-  //     return `
-  //       <div style="display: flex; justify-content: space-around; gap: 20px; margin: 16px 0 8px 0;">
-  //         <div style="flex: 1; text-align: center;">
-  //             <div class="vehicle-animation-container context-row" style="margin: 8px 0;">
-  //                 <div class="vehicle-display-box context-row">
-  //                     ${vehicleHTMLRow}
-  //                 </div>
-  //             </div>
-  //         </div>
-  //     </div>
-  //     `;
-  //   }
-  // },
-  // {
-  //   question: "Suppose it is a tip day, and your taxi has revealed a tip at intersection D7. If you visit that same intersection again later in the same day, what happens?",
-  //   options: [
-  //     "You will definitely receive a tip.",
-  //     "You will definitely not receive a tip.",
-  //     "You might receive a tip, or you might not.",
-  //   ],
-  //   correct: 0,
-  //   visualContent: function() {
-  //     const gridHTML = practice1Grid?.createBlankGridHTML(0, true, false, 'specific', [2, 3], 1) || '';
-  //     return `
-  //       <div style="display: flex; justify-content: center; margin: 0px 0 0px 0;">
-  //         <div style="flex: 1; text-align: center;">
-  //             <div id="grid-container" class="current-job-section">
-  //               ${gridHTML}
-  //             </div>
-  //         </div>
-  //       </div>
-  //     `;
-  //   }
-  // },
+  {
+    question: "How do you select a taxi job?",
+    options: [
+      "Click on the passenger icon.",
+      "Press the corresponding key on your keyboard.",
+      "Wait for the system to assign a job automatically."
+    ],
+    correct: 1 // Index of correct answer (0-based)
+  },
+  {
+    question: "What is the difference between ‘tip days’ and ‘toll days’?",
+    options: [
+      "On tip days, popular intersections earn you a $1 tip; on toll days, busy intersections require you to pay a $1 toll.",
+      "There is no difference between tip days and toll days - on all days, you have the chance to receive tips and avoid tolls.",
+      "On tip days, you work overtime, meaning you need to select more jobs.",
+    ],
+    correct: 0
+  },
+  {
+    question: "Suppose you receive the following traffic report. What does this tell you about the objective of your day?",
+    options: [
+      "You might encounter both tips and tolls today, and so should balance these two together.",
+      "Today is a 'tip day', so my aim is to maximise tips.",
+      "Today is a 'toll day', so my aim is to minimise tolls.",
+    ],
+    correct: 2,
+    visualContent: function() {
+      // Generate vehicle HTML for both contexts
+      const vehicleHTMLRow = practice6Grid && practice6Grid.generateDollarRows ? practice6Grid.generateDollarRows('context-row', 'costs') : '';
+      const vehicleHTMLColumn = practice6Grid && practice6Grid.generateDollarRows ? practice6Grid.generateDollarRows('context-column', 'costs') : '';
+      return `
+        <div style="display: flex; justify-content: space-around; gap: 20px; margin: 16px 0 8px 0;">
+          <div style="flex: 1; text-align: center;">
+              <div class="vehicle-animation-container context-row" style="margin: 8px 0;">
+                  <div class="vehicle-display-box context-row">
+                      ${vehicleHTMLRow}
+                  </div>
+              </div>
+          </div>
+      </div>
+      `;
+    }
+  },
+  {
+    question: "Suppose it is a tip day, and your taxi has revealed a tip at intersection D7. If you visit that same intersection again later in the same day, what happens?",
+    options: [
+      "You will definitely receive a tip.",
+      "You will definitely not receive a tip.",
+      "You might receive a tip, or you might not.",
+    ],
+    correct: 0,
+    visualContent: function() {
+      const gridHTML = practice1Grid?.createBlankGridHTML(0, true, false, 'specific', [2, 3], 1) || '';
+      return `
+        <div style="display: flex; justify-content: center; margin: 0px 0 0px 0;">
+          <div style="flex: 1; text-align: center;">
+              <div id="grid-container" class="current-job-section" style="zoom: 0.5;">
+                ${gridHTML}
+              </div>
+          </div>
+        </div>
+      `;
+    }
+  },
+  {
+    question: "Suppose it is a toll day. How can previous tolls from earlier in the day help you make smarter decisions later in the same day?",
+    options: [
+      "If you revisit an intersection that previously didn't required you to pay a toll, you will instead earn a tip the second time.",
+      "The toll amount increases if you use the same route multiple times.",
+      "You can select jobs that avoid intersections that require you to pay tolls.",
+    ],
+    correct: 2
+  },
   {
     question: "How do you know which intersections might be visited later in the same day?", 
     options: [
@@ -98,11 +107,13 @@ export const quizQuestions = [
       const trafficReport=false;
       const jobsHTML = practice2Grid.createAllJobsHTML(0, selectedPath, keyAssignment, feedback, firstDay, showPink, restrictPink, showNoPaths, trafficReport).replace(/<div id="cost-message".*?<\/div>/s, '');
       const HTML = `
-      <div style="display: flex; justify-content: center; margin: 0px 0 20px 0;">
-        <div class="jobs-layout">
-          <div class="upcoming-jobs-container grid">
-            <div style="zoom: 0.5;">
-              ${jobsHTML}
+      <div style="display: flex; justify-content: center; align-items: center; margin: 0px 0 20px 0; width: 100%;">
+        <div style="width: 700px; display: flex; justify-content: center;">
+          <div class="jobs-layout">
+            <div class="upcoming-jobs-container grid">
+              <div style="zoom: 0.5;">
+                ${jobsHTML}
+              </div>
             </div>
           </div>
         </div>
@@ -111,15 +122,6 @@ export const quizQuestions = [
 
       return HTML;
     }
-  },
-  {
-    question: "Suppose it is a toll day. How can previous tolls from earlier in the day help you make smarter decisions later in the same day?",
-    options: [
-      "If you revisit an intersection that previously didn't required you to pay a toll, you will instead earn a tip the second time.",
-      "The toll amount increases if you use the same route multiple times.",
-      "You can select jobs that avoid intersections that require you to pay tolls.",
-    ],
-    correct: 2
   },
   {
     question: "Why might it be useful to know about your upcoming dispatches?", // What does it mean if an intersection is highlighted in pink?",
@@ -146,36 +148,120 @@ export const quizQuestions = [
       "Column days have higher tips overall.",
       "In column days, tips tend to cluster in columns, while in row days, they cluster in rows."
     ],
-    correct: 2
+    correct: 2,
+    visualContent: function() {
+    // Generate vehicle HTML for both contexts
+    const vehicleHTMLRow = practice6Grid && practice6Grid.generateDollarRows ? practice6Grid.generateDollarRows('context-row', 'costs') : '';
+    const vehicleHTMLColumn = practice7Grid && practice7Grid.generateDollarRows ? practice7Grid.generateDollarRows('context-column', 'costs') : '';
+    return `
+      <div style="display: flex; justify-content: space-around; gap: 20px; margin: 16px 0 8px 0;">
+      <div style="flex: 1; text-align: center;">
+        <div class="vehicle-animation-container context-row" style="margin: 8px 0;">
+          <div class="vehicle-display-box context-row">
+            ${vehicleHTMLRow}
+          </div>
+        </div>
+      </div>
+      <div style="flex: 1; text-align: center;">
+        <div class="vehicle-animation-container context-column" style="margin: 8px 0;">
+          <div class="vehicle-display-box context-column">
+            ${vehicleHTMLColumn}
+          </div>
+        </div>
+      </div>
+      </div>
+    `;
+    }
   },
   {
-    question: "How does the traffic report tell you how the tips or tolls tend to be clustered on that day?",
+    question: "Suppose you receive the following traffic report. What does this tell you about how the tips tend to be clustered on that day?",
     options: [
       "It doesn't - the traffic report only indicates whether it's a tip day or a toll day.",
-      "If the traffic report contains dollars that are moving from north to south, tips/tolls tend to be clustered in columns; if the dollars are moving from east to west, tips/tolls tend to be clustered in rows.",
-      "If the traffic report contains red dollars, tips/tolls tend to be clustered in columns; if it contains green dollars, tips/tolls tend to be clustered in rows.",
+      "Today is a 'row day', so tips (and lack of tips) will tend to be clustered in rows.",
+      "Today is a 'column day', so tips (and lack of tips) will tend to be clustered in columns.",
     ],
-    correct: 1
+    correct: 2,
+    visualContent: function() {
+    // Generate vehicle HTML for both contexts
+    const vehicleHTMLRow = practice6Grid && practice6Grid.generateDollarRows ? practice6Grid.generateDollarRows('context-row', 'costs') : '';
+    const vehicleHTMLColumn = practice7Grid && practice7Grid.generateDollarRows ? practice7Grid.generateDollarRows('context-column', 'rewards') : '';
+    return `
+      <div style="display: flex; justify-content: space-around; gap: 20px; margin: 16px 0 8px 0;">
+        <div style="flex: 1; text-align: center;">
+            <div class="vehicle-animation-container context-row" style="margin: 8px 0;">
+                <div class="vehicle-display-box context-column">
+                    ${vehicleHTMLColumn}
+                </div>
+            </div>
+        </div>
+    </div>
+    `;
+  }
   },
   {
-    question: "Suppose it is both a 'tip day' and a 'column day'. You receive a tip at an intersection. How can this information help you predict other tip locations on that same day?",
+    question: "Suppose it is 'column + tips day'. You receive the following tip at an intersection. How can this information help you predict other tip locations on that same day?",
     options: [
       "Nothing—intersections are not related to one another.",
-      "Other tips are likely to be in the same column.",
+      "Other tips are likely to be in the same column (i.e. column G).",
       "This intersection will pay a tip for the rest of the experiment."
     ],
-    correct: 1
+    correct: 1,
+    visualContent: function() {
+    const gridHTML = practice1Grid?.createBlankGridHTML(0, true, false, 'specific', [5, 6], 1) || '';
+    const vehicleHTMLColumn = practice6Grid && practice6Grid.generateDollarRows ? practice6Grid.generateDollarRows('context-column', 'rewards') : '';
+    return `
+    <div style="display: flex; justify-content: center; margin: 0px 0 0px 0;">
+    <div style="flex: 1; text-align: center;">
+    <div id="grid-container" class="current-job-section" style="zoom: 0.5;">
+    ${gridHTML}
+    </div>
+    </div>
+    </div>
+    <div style="display: flex; justify-content: space-around; gap: 20px; margin: 16px 0 8px 0;">
+      <div style="flex: 1; text-align: center;">
+        <div class="vehicle-animation-container context-column" style="margin: 8px 0;" style="zoom: 0.5;">
+          <div class="vehicle-display-box context-column" style="zoom: 0.5;">
+            ${vehicleHTMLColumn}
+          </div>
+        </div>
+      </div>
+    </div>
+    `;
+  }
+
   },
   {
     question: "Suppose it is both a 'toll day' and a 'row day'. You do not pay a toll at an intersection. How can this information help you predict other toll locations on that same day?",
     options: [
       "This intersection will pay a toll for the rest of the experiment.",
       "Nothing—intersections are not related to one another.",
-      "The whole row is likely to be free of tolls.",
+      "The whole row (i.e. row 9) is likely to be free of tolls.",
     ],
-    correct: 2
+    correct: 2,
+    visualContent: function() {
+    const gridHTML = practice1Grid?.createBlankGridHTML(0, true, false, 'specific', [8,2], 0) || '';
+    const vehicleHTMLRow = practice6Grid && practice6Grid.generateDollarRows ? practice6Grid.generateDollarRows('context-row', 'costs') : '';
+    return `
+    <div style="display: flex; justify-content: center; margin: 0px 0 0px 0;">
+    <div style="flex: 1; text-align: center;">
+    <div id="grid-container" class="current-job-section" style="zoom: 0.5;">
+    ${gridHTML}
+    </div>
+    </div>
+    </div>
+    <div style="display: flex; justify-content: space-around; gap: 20px; margin: 16px 0 8px 0;">
+      <div style="flex: 1; text-align: center;">
+        <div class="vehicle-animation-container context-row" style="margin: 8px 0;" style="zoom: 0.5;">
+          <div class="vehicle-display-box context-row" style="zoom: 0.5;">
+            ${vehicleHTMLRow}
+          </div>
+        </div>
+      </div>
+    </div>
+    `;
+    }
   },
- ];
+ ]; 
  
  // Function to create quiz trials
  export function createQuizTrials(jsPsych) {
@@ -225,15 +311,9 @@ export const quizQuestions = [
       background-color: #f9f9f9;
       font-size: 22px;
       cursor: pointer;
-      transition: background-color 0.3s;
       display: flex;
       align-items: center;
       zoom: 1 !important;
-
-    }
-   
-    .quiz-answer:hover {
-      background-color: #e9e9e9;
     }
    
     .correct {
@@ -302,49 +382,56 @@ export const quizQuestions = [
    // Create a trial for each question
   quizQuestions.forEach((questionData, questionIndex) => {
     quizTrials.push({
-      type: jsPsychHtmlButtonResponse,
+      type: jsPsychHtmlKeyboardResponse,
       stimulus: function() {
         const visualHTML = questionData.visualContent ? questionData.visualContent() : '';
+        const buttonHTML = questionData.options.map((option, idx) => 
+          `<button class="quiz-answer" data-index="${idx}">${option}</button>`
+        ).join('');
+        
         return `
           <div class="quiz-container">
-            <div class="quiz-question">Question ${questionIndex + 1}: ${questionData.question}</div>
+            <div class="quiz-question">Q${questionIndex + 1}: ${questionData.question}</div>
             ${visualHTML}
-            <div class="quiz-options-container" id="options-container-${questionIndex}"></div>
+            <div class="quiz-options-container" id="options-container-${questionIndex}">
+              ${buttonHTML}
+            </div>
           </div>
         `;
       },
-      choices: questionData.options.map(option => option),
-      button_html: '<button class="quiz-answer">%choice%</button>',
+      choices: "NO_KEYS",
       data: {
         question: questionData.question,
         correct_response: questionData.correct,
         question_type: 'quiz'
       },
       on_load: function() {
-        // Move buttons into options container for better positioning
         const optionsContainer = document.getElementById(`options-container-${questionIndex}`);
-        const buttons = document.querySelectorAll('.jspsych-html-button-response-button');
+        const currentButtons = optionsContainer.querySelectorAll('.quiz-answer');
+        let answerSelected = false;
        
-        buttons.forEach((button) => {
-          optionsContainer.appendChild(button);
-        });
-       
-        // Add event listeners to answer buttons
-        document.querySelectorAll('.quiz-answer').forEach((button, index) => {
+        currentButtons.forEach((button) => {
           button.addEventListener('click', function() {
-            // Check if correct and add appropriate class
-            if (index === questionData.correct) {
+            if (answerSelected) return;
+            answerSelected = true;
+            
+            const selectedIndex = parseInt(button.getAttribute('data-index'));
+            
+            // Show correct/incorrect feedback
+            if (selectedIndex === questionData.correct) {
               button.classList.add('correct');
-              // Increment correct answer counter
-              const correctCount = jsPsych.data.get().last(1).values()[0]?.correctCount || 0;
-              jsPsych.data.addProperties({ correctCount: correctCount + 1 });
             } else {
               button.classList.add('incorrect');
               // Highlight the correct answer
-              document.querySelectorAll('.quiz-answer')[questionData.correct].classList.add('correct');
+              currentButtons[questionData.correct].classList.add('correct');
             }
-            jsPsych.data.addProperties({ total_n_questions: quizQuestions.length });
-           
+            
+            // Disable all buttons after selection
+            currentButtons.forEach(btn => {
+              btn.style.pointerEvents = 'none';
+              btn.disabled = true;
+            });
+            
             // Add instruction to press spacebar
             const quizContainer = document.querySelector('.quiz-container');
             const nextInstructions = document.createElement('div');
@@ -353,25 +440,38 @@ export const quizQuestions = [
               <div>Press spacebar to continue to the next question.</div>
             `;
             quizContainer.appendChild(nextInstructions);
-           
+            
             // Set up spacebar listener to progress
             const proceedListener = function(e) {
               if (e.code === 'Space') {
+                e.preventDefault();
                 document.removeEventListener('keydown', proceedListener);
                 jsPsych.finishTrial();
               }
             };
             document.addEventListener('keydown', proceedListener);
-           
-            // Disable all buttons after selection
-            document.querySelectorAll('.quiz-answer').forEach(btn => {
-              btn.style.pointerEvents = 'none';
-            });
-          }, { once: true });
+          });
         });
       },
       trial_duration: null,
-      response_ends_trial: false
+      on_finish: function(data) {
+        // Track correct answers
+        const optionsContainer = document.getElementById(`options-container-${questionIndex}`);
+        const currentButtons = optionsContainer.querySelectorAll('.quiz-answer');
+        let wasCorrect = false;
+        
+        currentButtons.forEach((button, index) => {
+          if (button.classList.contains('correct') && index === questionData.correct) {
+            wasCorrect = true;
+          }
+        });
+        
+        if (wasCorrect) {
+          const correctCount = jsPsych.data.get().last(1).values()[0]?.correctCount || 0;
+          jsPsych.data.addProperties({ correctCount: correctCount + 1 });
+        }
+        jsPsych.data.addProperties({ total_n_questions: quizQuestions.length });
+      }
     });
   });
 
