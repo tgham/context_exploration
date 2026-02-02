@@ -2211,7 +2211,7 @@ const newCityMessage = {
             <div>
             <h2>Today is a '<strong>${context === 'row' ? 'row' : 'column'}</strong> + ${objective === 'costs' ? "tolls day'" : "tips day'"} </h2>
             <p>${tollTipMessage}</p>
-            <p>Traffic is ${trafficDirection}. This means that <strong>${context}s</strong> tend to contain a lot of ${objective === 'costs' ? 'tolls' : 'tips'}, or very few ${objective === 'costs' ? 'tolls' : 'tips'}.</p>
+            <p>Traffic is ${trafficDirection}. This means that <strong>${context}s</strong> tend to contain either a lot of ${objective === 'costs' ? 'tolls' : 'tips'}, or very few ${objective === 'costs' ? 'tolls' : 'tips'}.</p>
             </div>
             <div class="vehicle-animation-container ${vehicleBorderClass}">
             <div class="vehicle-display-box ${vehicleBorderClass}">
