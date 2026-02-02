@@ -53,9 +53,9 @@ beta_params = {
     }
 
 ## trial info
-n_participants = 100
-n_cities = 6
-n_days = 5
+n_participants = 270
+n_cities = 32
+n_days = 1
 n_trials = 4
 expt = 'AFC'
 n_afc = 2
@@ -65,7 +65,7 @@ expt_info = {
 }
 save_path = 'expt/assets/trial_sequences/expt_3'
 parallel = True
-n_max_cores = 100
+n_max_cores = 135
 
 
 ## serial

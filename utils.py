@@ -689,9 +689,23 @@ def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params,
         ## if generating practice seqs, sometimes we want to hold the context constant
         contexts = [expt_info['context']]*n_cities
         
-        ## if expt 3, we also want to randomise the order of the tasks
-        objectives = ['rewards'] * int(n_cities/2) + ['costs'] * int(n_cities/2)
-        np.random.shuffle(objectives)
+        # Repeat each pairing n_reps times
+        n_reps = int(n_cities / 4)
+        context_objective_pairs = [
+            ('row', 'rewards'),
+            ('row', 'costs'),
+            ('column', 'rewards'),
+            ('column', 'costs')
+        ]
+        all_pairs = context_objective_pairs * n_reps
+        
+        # Shuffle the list of pairs
+        np.random.shuffle(all_pairs)
+        
+        # Unpack into separate lists
+        contexts = [pair[0] for pair in all_pairs]
+        objectives = [pair[1] for pair in all_pairs]
+
     else:
         contexts = [expt_info['context']]*n_cities
         objectives = [expt_info['objective']]*n_cities
