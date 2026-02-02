@@ -429,13 +429,14 @@ export const quizQuestions = [
         const optionsContainer = document.getElementById(`options-container-${questionIndex}`);
         const currentButtons = optionsContainer.querySelectorAll('.quiz-answer');
         let answerSelected = false;
+        let selectedIndex = null;
        
         currentButtons.forEach((button) => {
           button.addEventListener('click', function() {
             if (answerSelected) return;
             answerSelected = true;
             
-            const selectedIndex = parseInt(button.getAttribute('data-index'));
+            selectedIndex = parseInt(button.getAttribute('data-index'));
             
             // Show correct/incorrect feedback
             if (selectedIndex === questionData.correct) {
@@ -466,7 +467,10 @@ export const quizQuestions = [
               if (e.code === 'Space') {
                 e.preventDefault();
                 document.removeEventListener('keydown', proceedListener);
-                jsPsych.finishTrial();
+                jsPsych.finishTrial({
+                  selected_index: selectedIndex,
+                  correct: selectedIndex === questionData.correct
+                });
               }
             };
             document.addEventListener('keydown', proceedListener);
@@ -475,22 +479,14 @@ export const quizQuestions = [
       },
       trial_duration: null,
       on_finish: function(data) {
-        // Track correct answers
-        const optionsContainer = document.getElementById(`options-container-${questionIndex}`);
-        const currentButtons = optionsContainer.querySelectorAll('.quiz-answer');
-        let wasCorrect = false;
-        
-        currentButtons.forEach((button, index) => {
-          if (button.classList.contains('correct') && index === questionData.correct) {
-            wasCorrect = true;
-          }
+        const correctCount = jsPsych.data.get()
+          .filter({ question_type: 'quiz' })
+          .select('correct')
+          .sum();
+        jsPsych.data.addProperties({
+          correctCount: correctCount,
+          total_n_questions: quizQuestions.length
         });
-        
-        if (wasCorrect) {
-          const correctCount = jsPsych.data.get().last(1).values()[0]?.correctCount || 0;
-          jsPsych.data.addProperties({ correctCount: correctCount + 1 });
-        }
-        jsPsych.data.addProperties({ total_n_questions: quizQuestions.length });
       }
     });
   });

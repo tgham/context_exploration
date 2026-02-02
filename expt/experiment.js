@@ -280,7 +280,7 @@ const informedConsentTrial = {
             jsPsych.finishTrial();
         });
     }
-};
+}; 
 
 
 // Define the Grid class
@@ -2189,13 +2189,13 @@ const newCityMessage = {
         const objective = nextTrial.objective; // 'costs' or 'rewards'
         const context = nextTrial.context; // 'row' or 'column'
         
-        // Play the appropriate sound 3 times with 300ms intervals
-        playSoundRepeated(objective, 3, 500);
+        // Play the appropriate sound
+        playSoundRepeated(objective, 4, 300);
         
         let message;
         
         // Determine traffic direction message
-        const trafficDirection = context === 'row' ? 'running horizontally (left-right)' : 'running vertically (up-down)';
+        const trafficDirection = context === 'row' ? 'running from left to right' : 'running from top to bottom';
         
         // Determine toll/tip message
         const tollTipMessage = objective === 'costs' 
@@ -2209,9 +2209,9 @@ const newCityMessage = {
         message = `
         <div class="new-day-text">
             <div>
-                <h2>Today is a ${context === 'row' ? 'row day' : 'column day'} + ${objective === 'costs' ? 'tolls' : 'tips'} </h2>
+                <h2>Today is a '${context === 'row' ? 'row' : 'column'} + ${objective === 'costs' ? "tolls day'" : "tips day'"} </h2>
                 <p>${tollTipMessage}</p>
-                <p>Traffic is ${trafficDirection}.</p>
+                <p>Traffic is ${trafficDirection}. This means that ${context}s tend to contain a lot of ${objective}s, or very few ${objective}s.</p>
             </div>
             <div class="vehicle-animation-container ${vehicleBorderClass}">
                 <div class="vehicle-display-box ${vehicleBorderClass}">
@@ -3362,6 +3362,7 @@ const instructions3_10 = {
         const context = trial.context;
         const vehicleBorderClass = `context-${context}`;
         const vehicleHTML = practice5Grid.generateDollarRows(vehicleBorderClass, objective);
+        playSoundRepeated(objective, 4, 300);
         return `
             <div class="instruction-section" style="font-size: 20px;">
                 <h1>Practice Day:</h1>
@@ -3828,6 +3829,7 @@ const instructions7 = {
         const context = trial.context;
         const vehicleBorderClass = `context-${context}`;
         const vehicleHTML = practice8Grid.generateDollarRows(vehicleBorderClass, objective);
+        playSoundRepeated(objective, 4, 300);
         return `
             <div class="instruction-section" style="font-size: 20px;">
                 <h1>Practice Day:</h1>
