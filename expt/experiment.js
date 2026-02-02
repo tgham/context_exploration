@@ -903,7 +903,7 @@ class Grid {
 
         if (!firstDay) {
             if (!feedback) {
-                const dayType = this.nCities === 2 ? 'Practice Day' : 'Day';
+                const dayType = this.nCities === 1 ? 'Practice Day' : 'Day';
                 
                 upcomingHTML += `
                 <div id="cost-message" class="cost-display-container">
@@ -945,7 +945,7 @@ class Grid {
                 }
             }
         } else if (firstDay) {
-            const dayType = this.nCities === 2 ? 'Practice Day' : 'Day';
+            const dayType = this.nCities === 1 ? 'Practice Day' : 'Day';
             upcomingHTML += `
             <div id="cost-message" class="cost-display-container">
             <h2 class="day-display">${dayType} ${trial.city}/${this.nCities}</h2>
@@ -1450,9 +1450,6 @@ function animateAgent(path, binaryObs, pauseAtEnd=false, callback) {
                             obs === -1 ? "rgb(203, 43, 43)" : 
                             obs === 1 ? "rgb(0, 199, 73)" : 
                             "#b8b8d9";
-
-                        //  we also want to set the fontsize to 18
-                        cellElement.style.fontSize = "1.5rem";
                     }
 
                     if (obs === -1) {
@@ -1528,6 +1525,7 @@ function animateAgent(path, binaryObs, pauseAtEnd=false, callback) {
                     // Remove the star or S or G, then add the avatar
                     cellElement.textContent = '';
                     cellElement.classList.add('avatar');
+                    cellElement.style.fontSize = '1.5rem';
                     cellElement.innerHTML += createAvatar(); // Add taxi avatar on top
                 } else {
                     console.error(`Cell not found in DOM: cell-${curRow}-${curCol}`);
@@ -2211,7 +2209,7 @@ const newCityMessage = {
         message = `
         <div class="new-day-text">
             <div>
-                <h2>Today is a ${objective === 'costs' ? 'tolls' : 'tips'} + ${context === 'row' ? 'row day' : 'column day'}</h2>
+                <h2>Today is a ${context === 'row' ? 'row day' : 'column day'} + ${objective === 'costs' ? 'tolls' : 'tips'} </h2>
                 <p>${tollTipMessage}</p>
                 <p>Traffic is ${trafficDirection}.</p>
             </div>
@@ -2441,7 +2439,7 @@ const zoomAdjustment = {
         // practice2TrialIndex = 3;
         return `
         <div class="cost-display-container">
-            <h1>Display Setup</h1>
+            <h2 style="font-size: 25;">Display Setup</h2>
             <p style="font-size: ${fontSize};">Let's first adjust your display. Press the Up / Down Arrow keys to zoom in / out and adjust the display size.</p>
             <p style="font-size: ${fontSize};">Once you can clearly see all ${n} grids side-by-side and the smaller grid with dollar signs underneath, press the spacebar to continue.</p>
         </div>
@@ -2531,7 +2529,7 @@ const instructions2 = {
                 <p>- The letter <strong>P</strong> marks one job</p>
                 <p>- The letter <strong>Q</strong> marks the other job</p>
                 <p>On each dispatch, these letters are randomly assigned to each job. To send out a taxi to one of these jobs, you need to press the corresponding key on your keyboard. Note that if an intersection appears on both paths, it will contain both P and Q.</p>
-                <p>For any given choice, the lengths of the two possible jobs are the same, and you are paid the same base wage by the company each day. However, on some days, some jobs allow you to earn extra money, while on others, you may lose money. This is because you may be able to earn <span style="color: rgb(0, 199, 73);;">tips</span> in popular parts of the city, or you may have to pay <span style="color: rgb(199, 0, 0);;">tolls</span>...</p>
+                <p>For any given choice, the lengths of the two possible jobs are the same, and you are paid the same base wage by the company each day. However, on some days, some jobs allow you to earn extra money, while on other days, you may lose money. This is because you may be able to earn <span style="color: rgb(0, 199, 73);;">tips</span> in popular parts of the city, or you may have to pay <span style="color: rgb(199, 0, 0);;">tolls</span>...</p>
             </div>
             <div class="instruction-section" style="font-size: 20px;">
                 <h2>Press spacebar to continue.</h2>
@@ -2554,8 +2552,8 @@ const instructions2_5 = {
         const fontSize = "20px"; // Define font size as a variable
         return `
             <div class="instruction-section" style="font-size: 20px;">
-                <h1>Tip Intersections:</h1>
-                <p>On 'tip days', some parts of the city are more popular than others. This means that you will receive a tip if your job passes through one of these popular intersections. Visiting an intersection reveals whether or not you will earn a tip there.</p>
+                <h1>Tip Days:</h1>
+                <p>On 'tip days', some parts of the city are more popular than others. This means that you will receive a $1 tip if your job passes through one of these popular intersections. Visiting an intersection reveals whether or not you will earn a tip there.</p>
                 <p>- <strong><span style="color: rgb(114, 114, 150);">Dark grey intersections</span></strong> have not been visited yet</p>
                 <p>- <strong><span style="color: rgb(0, 199, 73);;">Green intersections</span></strong> pay you a $1 tip if you pass through</p>
                 <p>- <strong><span style="color:rgb(194, 194, 229);">Light grey intersections</span></strong> pay no tips</p>
@@ -3247,7 +3245,7 @@ const instructions3_8 = {
             </div>
             </div>
             <p style="font-size: ${fontSize};">On <strong>'column days'</strong>, the dollar signs run from top to bottom in the traffic report. This means that popular intersections tend to run from top to bottom that day.</p>
-            <p style="font-size: ${fontSize};">Therefore, on <strong>'column + tip days'</strong>, a column may have <strong>a lot of tips</strong>, or <strong>not many tips</strong>.</p>
+            <p style="font-size: ${fontSize};">Therefore, on <strong>'column + tip days'</strong>, a column may have <strong><span style="color: rgb(0, 199, 73);">a lot of tips</span></strong>, or <strong><span style="color: rgb(194, 194, 229);">not many tips</span></strong>.</p>
             <p style="font-size: ${fontSize};">Below are some examples of <strong>'column + tip days'</strong> with all of their tips revealed - notice how the tips (and lack of tips) tend to be clustered in columns.</p>
             <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
             </div>
@@ -3260,14 +3258,15 @@ const instructions3_8 = {
  
         const gridContainer = document.getElementById('grid-container');
         const revealCosts = true; // Set to true to show costs
-
+        const feedback=false;
+        const revealedCosts = 'all';
         const baseIndex = practice3TrialIndex;
         
         // Create 3 versions of the grid side-by-side
         let html = '<div style="display: flex; justify-content: space-around; gap: 20px;">';
         for (let i = 0; i < 3; i++) {
             html += '<div style="flex: 1; text-align: center;">';
-            html += practice3Grid.createBlankGridHTML(baseIndex + i, revealCosts);
+            html += practice3Grid.createBlankGridHTML(baseIndex + i, revealCosts, feedback, revealedCosts);
             html += '</div>';
         }
         html += '</div>';
@@ -3303,12 +3302,12 @@ const instructions3_9 = {
             <div class="cost-display-container" style="margin: 10px;">
             <h1>How can you predict what you will observe at each intersection?</h1>
             <div class="vehicle-animation-container ${vehicleBorderClass}" style="margin: 16px 0 8px 0;">
-                <div class="vehicle-display-box ${vehicleBorderClass}">
-                    ${vehicleHTMLColumn}
-                </div>
+            <div class="vehicle-display-box ${vehicleBorderClass}">
+                ${vehicleHTMLColumn}
+            </div>
             </div>
             <p style="font-size: ${fontSize};">On <strong>'row days'</strong>, the opposite is true: the dollar signs run from left to right in the traffic report. This means that popular intersections tend to run from left to right that day.</p>
-            <p style="font-size: ${fontSize};">Therefore, on <strong>'row + tip days'</strong>, a row may have <strong>a lot of tips</strong>, or <strong>not many tips</strong>.</p>
+            <p style="font-size: ${fontSize};">Therefore, on <strong>'row + tip days'</strong>, a row may have <strong><span style="color: rgb(0, 199, 73);">a lot of tips</span></strong>, or <strong><span style="color: rgb(194, 194, 229);">not many tips</span></strong>.</p>
             <p style="font-size: ${fontSize};">Below are some examples of <strong>'row + tip days'</strong> with all of their tips revealed - notice how the tips (and lack of tips) tend to be clustered in rows.</p>
             <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
             </div>
@@ -3321,14 +3320,15 @@ const instructions3_9 = {
  
         const gridContainer = document.getElementById('grid-container');
         const revealCosts = true; // Set to true to show costs
-
+        const feedback=false;
+        const revealedCosts = 'all';
         const baseIndex = practice4TrialIndex;
         
         // Create 3 versions of the grid side-by-side
         let html = '<div style="display: flex; justify-content: space-around; gap: 20px;">';
         for (let i = 0; i < 3; i++) {
             html += '<div style="flex: 1; text-align: center;">';
-            html += practice4Grid.createBlankGridHTML(baseIndex + i, revealCosts);
+            html += practice4Grid.createBlankGridHTML(baseIndex + i, revealCosts, feedback, revealedCosts);
             html += '</div>';
         }
         html += '</div>';
@@ -3670,15 +3670,14 @@ const instructions4 = {
                         </div>
                     </div>
                 </div>
-                <p>On these days, traffic in some parts of the city is busier than in others. This means that tolls apply at busy intersections. Visiting an intersection reveals whether or not you have to pay a toll there.</p>
+                <p>On these days, traffic in some parts of the city is busier than in others. This means that tolls apply at busy intersections. Visiting an intersection reveals whether or not you have to pay a $1 toll there.</p>
                 <p>- <strong><span style="color: rgb(114, 114, 150);">Dark grey intersections</span></strong> have not been visited yet</p>
                 <p>- <strong><span style="color: rgb(203, 43, 43);">Red intersections</span></strong> cost a $1 toll to pass through</p>
                 <p>- <strong><span style="color:rgb(194, 194, 229);">Light grey intersections</span></strong> are free with no tolls</p>
-                <p>Your goal on toll days is to complete all taxi jobs while minimising the total tolls paid out.</p>
-                <p>Otherwise, the task remains the same - e.g. you still have four dispatches each day.</p>
+                <p>Your goal on toll days is to complete all taxi jobs while minimising the total tolls paid out. Otherwise, the task remains the same - e.g. you still have four dispatches each day.</p>
             </div>
 
-            <div class="instruction-section" style="font-size: 20px;">
+            <div class="instruction-section" style="font-size: 18px;">
                 <h2>Press spacebar to continue.</h2>
             </div>
         `;
@@ -3712,7 +3711,7 @@ const instructions5 = {
             </div>
             <p style="font-size: ${fontSize};">Just like on tip days, you can predict what you will observe at each intersection depending on the traffic report.</p>
             <p style="font-size: ${fontSize};">On 'column days', the dollar signs run from top to bottom in the traffic report. This means that popular intersections tend to run from top to bottom that day.</p>
-            <p style="font-size: ${fontSize};">Therefore, on <strong>'column + toll days'</strong>, a column may have <strong>a lot of tolls</strong>, or <strong>not many tolls</strong>.</p>
+            <p style="font-size: ${fontSize};">Therefore, on <strong>'column + toll days'</strong>, a column may have <strong><span style="color: rgb(203, 43, 43);">a lot of tolls</span></strong>, or <strong><span style="color: rgb(194, 194, 229);">not many tolls</span></strong>.</p>
             <p style="font-size: ${fontSize};">Below are some examples of <strong>'column + toll days'</strong> with all of their tolls revealed - notice how the tolls (and lack of tolls) tend to be clustered in columns.</p>
             <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
             </div>
@@ -3725,14 +3724,15 @@ const instructions5 = {
  
         const gridContainer = document.getElementById('grid-container');
         const revealCosts = true; // Set to true to show costs
-
+        const feedback=false;
+        const revealedCosts = 'all';
         const baseIndex = practice6TrialIndex;
         
         // Create 3 versions of the grid side-by-side
         let html = '<div style="display: flex; justify-content: space-around; gap: 20px;">';
         for (let i = 0; i < 3; i++) {
             html += '<div style="flex: 1; text-align: center;">';
-            html += practice6Grid.createBlankGridHTML(baseIndex + i, revealCosts);
+            html += practice6Grid.createBlankGridHTML(baseIndex + i, revealCosts, feedback, revealedCosts);
             html += '</div>';
         }
         html += '</div>';
@@ -3773,7 +3773,7 @@ const instructions6 = {
             </div>
             </div>
             <p style="font-size: ${fontSize};">On 'row days', the opposite is true: the dollar signs run from left to right in the traffic report. This means that popular intersections tend to run from left to right that day.</p>
-            <p style="font-size: ${fontSize};">Therefore, on <strong>'row + toll days'</strong>, a row may have <strong>a lot of tolls</strong>, or <strong>not many tolls</strong>.</p>
+            <p style="font-size: ${fontSize};">Therefore, on <strong>'row + toll days'</strong>, a row may have <strong><span style="color: rgb(203, 43, 43);">a lot of tolls</span></strong>, or <strong><span style="color: rgb(194, 194, 229);">not many tolls</span></strong>.</p>
             <p style="font-size: ${fontSize};">Below are some examples of <strong>'row + toll days'</strong> with all of their tolls revealed - notice how the tolls (and lack of tolls) tend to be clustered in rows.</p>
             <h2 style="font-size: ${fontSize};">Press spacebar to continue.</h2>
             </div>
@@ -3786,14 +3786,15 @@ const instructions6 = {
  
         const gridContainer = document.getElementById('grid-container');
         const revealCosts = true; // Set to true to show costs
-
+        const feedback=false;
+        const revealedCosts = 'all';
         const baseIndex = practice7TrialIndex;
         
         // Create 3 versions of the grid side-by-side
         let html = '<div style="display: flex; justify-content: space-around; gap: 20px;">';
         for (let i = 0; i < 3; i++) {
             html += '<div style="flex: 1; text-align: center;">';
-            html += practice7Grid.createBlankGridHTML(baseIndex + i, revealCosts);
+            html += practice7Grid.createBlankGridHTML(baseIndex + i, revealCosts, feedback, revealedCosts);
             html += '</div>';
         }
         html += '</div>';
@@ -4127,7 +4128,7 @@ const quizFeedback = {
         <p>You answered ${correctCount} out of ${total_n_questions} questions correctly (${percentage}%).</p>
         ${passed
           ? '<p>Congratulations! You passed the quiz. Press the spacebar to continue with the experiment.</p>'
-          : '<p>Unfortunately, you did not pass the quiz. You will be returned to Prolific shortly.</p>'}
+          : '<p>Unfortunately, you did not pass the quiz. You will be returned to Prolific shortly, and you will be compensated for your time.</p>'}
       </div>
     `;
   },
@@ -4573,8 +4574,8 @@ function initializeExperiment() {
     // Combine everything into a single timeline
     const fullTimeline = [
       ...ethicsTimeline,
-    //   instructionsLoop,
-    //   ...quizTimeline,
+      instructionsLoop,
+      ...quizTimeline,
       ...mainTimeline
     ];
   
