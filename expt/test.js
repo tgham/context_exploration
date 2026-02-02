@@ -379,6 +379,26 @@ export const quizQuestions = [
     choices: [' ']
   };
    quizTrials.push(welcomeTrial);
+
+  // Reset all grids at the start of the quiz
+  const resetGridsTrial = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: '',
+    choices: 'NO_KEYS',
+    trial_duration: 0,
+    on_load: function() {
+      practice1Grid?.resetGrid();
+      practice2Grid?.resetGrid();
+      practice3Grid?.resetGrid();
+      practice4Grid?.resetGrid();
+      practice5Grid?.resetGrid();
+      practice6Grid?.resetGrid();
+      practice7Grid?.resetGrid();
+      practice8Grid?.resetGrid();
+    }
+  };
+  quizTrials.push(resetGridsTrial);
+   
    // Create a trial for each question
   quizQuestions.forEach((questionData, questionIndex) => {
     quizTrials.push({

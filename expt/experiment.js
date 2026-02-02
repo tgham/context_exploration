@@ -168,6 +168,14 @@ function playRewardSound() {
         source.start(0); // Play the sound
     }
 }
+function playSoundRepeated(soundType, times = 3, interval = 300) {
+    const playFunction = soundType === 'costs' ? playCostSound : playRewardSound;
+    for (let i = 0; i < times; i++) {
+        setTimeout(() => {
+            playFunction();
+        }, i * interval);
+    }
+}
 
 // Global object to store preloaded images
 const preloadedImages = {};
@@ -2183,6 +2191,9 @@ const newCityMessage = {
         const objective = nextTrial.objective; // 'costs' or 'rewards'
         const context = nextTrial.context; // 'row' or 'column'
         
+        // Play the appropriate sound 3 times with 300ms intervals
+        playSoundRepeated(objective, 3, 500);
+        
         let message;
         
         // Determine traffic direction message
@@ -2200,7 +2211,7 @@ const newCityMessage = {
         message = `
         <div class="new-day-text">
             <div>
-                <h2>A new day has begun!</h2>
+                <h2>Today is a ${objective === 'costs' ? 'tolls' : 'tips'} + ${context === 'row' ? 'row day' : 'column day'}</h2>
                 <p>${tollTipMessage}</p>
                 <p>Traffic is ${trafficDirection}.</p>
             </div>
@@ -2254,6 +2265,7 @@ const newDayMessage = {
     },
     choices: [' '], // spacebar to continue
     on_finish: function(data) {
+        console.log("Starting new day...");
         grid.resetGrid(); // Reset the grid for the new set of trials
         var ppt_data = jsPsych.data.get().json();
         send_incomplete(subject_id, ppt_data);
@@ -2282,30 +2294,11 @@ const firstGridMessage = {
         grid.currentCity = cityId; // Initialize the current city
         setCityBackground(4); // Plot the first city background
 
-        // Determine traffic direction message
-        const trafficDirection = context === 'row' ? 'running horizontally (left-right)' : 'running vertically (up-down)';
-        
-        // Determine toll/tip message
-        const tollTipMessage = objective === 'costs' 
-            ? 'This city has <span style="color: rgb(203, 43, 43); font-weight: bold;">tolls</span> on popular intersections. Avoid them to save money!' 
-            : 'This city has <span style="color: rgb(0, 199, 73); font-weight: bold;">tips</span> on popular intersections. Seek them out to earn more money!';
-        
-        // Create vehicle animation HTML using generateDollarRows method
-        const vehicleBorderClass = `context-${context}`;
-        const vehicleHTML = grid.generateDollarRows(vehicleBorderClass, objective);
-
         return `
             <div class="new-day-text">
                 <div>
                     <h1>Ready?</h1>
                     <p>Your taxi company is starting its first day of operations.</p>
-                    <p>${tollTipMessage}</p>
-                    <p>Traffic is ${trafficDirection}.</p>
-                </div>
-                <div class="vehicle-animation-container ${vehicleBorderClass}">
-                    <div class="vehicle-display-box ${vehicleBorderClass}">
-                        ${vehicleHTML}
-                    </div>
                 </div>
                 <h2>Press spacebar to begin dispatching.</h2>
             </div>
@@ -4509,17 +4502,18 @@ function createMainTimeline() {
 
     // Add the first grid message
     timeline.push(firstGridMessage);
+    timeline.push(newCityMessage);
 
     // Loop through all trials and add them to the timeline
     for (let i = 0; i < grid.trialInfo.length; i++) {
         if (i % grid.nTrials === 0) {
              if (i !== 0) {
-                 timeline.push(newDayMessage);
+                //  timeline.push(newDayMessage);
+                 timeline.push(timeoutCheck);
+                 timeline.push(newCityMessage);
                 // add new grid message if the city changes, i.e. if i is a multiple of nTrials*nGrids
-                if (i % (grid.nTrials * grid.nGrids) === 0) {
-                    timeline.push(timeoutCheck);
-                    timeline.push(newCityMessage);
-                }
+                // if (i % (grid.nTrials * grid.nGrids) === 0) {
+                // }
             }
             timeline.push(firstDayTrial)
         }
@@ -4580,7 +4574,7 @@ function initializeExperiment() {
     const fullTimeline = [
       ...ethicsTimeline,
     //   instructionsLoop,
-      ...quizTimeline,
+    //   ...quizTimeline,
       ...mainTimeline
     ];
   
