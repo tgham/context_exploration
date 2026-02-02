@@ -4175,10 +4175,10 @@ const instructions11 = {
         return `
             <div class="instruction-section">
                 <h1>Bonus Payment:</h1>
-                <p>Remember: your aim is to maximise the total tips earned each day by predicting which intersections will (or will not) pay a tip, and hence by selecting jobs that you think will be most rewarding.</p>
+                <p>Remember: your aim is to maximise the total tips earned each day on tip days, and to minimise the total tolls paid each day on toll days. This is achieved by predicting which intersections will (or will not) pay a tip or require a toll, and hence by selecting jobs that you think will be most rewarding or least costly.</p>
                 <p>This means that when choosing a job, it helps to think about which intersections you might visit later on in that day. These are highlighted in <span style="color: rgb(240, 110, 254);">pink</span>, and shown in your upcoming dispatches.</p>
-                <p>At the end of the experiment, we will assess how well you chose jobs that were the most rewarding. This will determine whether you receive a bonus payment.</p>
-                <p>So, you should pay attention throughout the experiment - i.e. on every day, and in every city.</p>
+                <p>At the end of the experiment, we will assess how well you chose jobs that were the most rewarding or least costly. This will determine whether you receive a bonus payment.</p>
+                <p>So, you should pay attention on every day of the experiment.</p>
                 <p>Remember also: you will have 10 seconds to select a job once the clock icon above your current dispatch is highlighted in <span style="color: #ece75d;">yellow</span>, otherwise the trial will timeout.</p>
                 <p>If you timeout too many times, the experiment will end and you will return to Prolific.</p>
             </div>

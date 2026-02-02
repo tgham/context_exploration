@@ -34,8 +34,8 @@ export const quizQuestions = [
     question: "Suppose you receive the following traffic report. What does this tell you about the objective of your day?",
     options: [
       "You might encounter both tips and tolls today, and so should balance these two together.",
-      "Today is a 'tip day', so my aim is to maximise tips.",
-      "Today is a 'toll day', so my aim is to minimise tolls.",
+      "Today is a 'tip day', so your aim is to maximise tips.",
+      "Today is a 'toll day', so your aim is to minimise tolls.",
     ],
     correct: 2,
     visualContent: function() {
@@ -56,7 +56,7 @@ export const quizQuestions = [
     }
   },
   {
-    question: "Suppose it is a tip day, and your taxi has revealed a tip at intersection D7. If you visit that same intersection again later in the same day, what happens?",
+    question: "Suppose it is a tip day, and your taxi has revealed a tip at the intersection shown below. If you visit that same intersection again later in the same day, what will happen?",
     options: [
       "You will definitely receive a tip.",
       "You will definitely not receive a tip.",
@@ -79,7 +79,7 @@ export const quizQuestions = [
   {
     question: "Suppose it is a toll day. How can previous tolls from earlier in the day help you make smarter decisions later in the same day?",
     options: [
-      "If you revisit an intersection that previously didn't required you to pay a toll, you will instead earn a tip the second time.",
+      "If you revisit an intersection that previously required you to pay a toll, you will instead earn a tip the second time.",
       "The toll amount increases if you use the same route multiple times.",
       "You can select jobs that avoid intersections that require you to pay tolls.",
     ],
@@ -144,9 +144,9 @@ export const quizQuestions = [
   {
     question: "What is the key difference between 'column days' and 'row days'?",
     options: [
-      "In column days, tips are randomly placed, while in row days, they are fixed.",
-      "Column days have higher tips overall.",
-      "In column days, tips tend to cluster in columns, while in row days, they cluster in rows."
+      "On column days, tips/tolls are randomly placed, while on row days, they are fixed.",
+      "Column days have higher tips/tolls overall.",
+      "On column days, tips/tolls tend to cluster in columns, while on row days, they cluster in rows."
     ],
     correct: 2,
     visualContent: function() {
@@ -199,7 +199,7 @@ export const quizQuestions = [
   }
   },
   {
-    question: "Suppose it is 'column + tips day'. You receive the following tip at an intersection. How can this information help you predict other tip locations on that same day?",
+    question: "Suppose it is 'column + tips day'. You receive a tip at the intersection shown below. How can this information help you predict other tip locations on that same day?",
     options: [
       "Nothing—intersections are not related to one another.",
       "Other tips are likely to be in the same column (i.e. column G).",
@@ -231,7 +231,7 @@ export const quizQuestions = [
 
   },
   {
-    question: "Suppose it is both a 'toll day' and a 'row day'. You do not pay a toll at an intersection. How can this information help you predict other toll locations on that same day?",
+    question: "Suppose it is 'row + tolls day'. You do not pay a toll at the intersection shown below. How can this information help you predict other toll locations on that same day?",
     options: [
       "This intersection will pay a toll for the rest of the experiment.",
       "Nothing—intersections are not related to one another.",
@@ -364,7 +364,7 @@ export const quizQuestions = [
     stimulus: `
       <div class="instruction-section">
         <h2>Knowledge Check Quiz</h2>
-        <p>You will be presented with 11 questions about the Taxi Coordination task.</p>
+        <p>You will be presented with 12 questions about the Taxi Coordination task.</p>
         <p>For each question:</p>
         <p>
           <p>- Click on the answer you believe is correct.</p>
