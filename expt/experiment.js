@@ -2199,8 +2199,8 @@ const newCityMessage = {
         
         // Determine toll/tip message
         const tollTipMessage = objective === 'costs' 
-            ? 'This city has <span style="color: rgb(203, 43, 43); font-weight: bold;">tolls</span> on popular intersections. Avoid them to save money!' 
-            : 'This city has <span style="color: rgb(0, 199, 73); font-weight: bold;">tips</span> on popular intersections. Seek them out to earn more money!';
+            ? 'Popular intersections contain <span style="color: rgb(203, 43, 43); font-weight: bold;">tolls</span>. Avoid them to save money!' 
+            : 'Popular intersections contain <span style="color: rgb(0, 199, 73); font-weight: bold;">tips</span>. Seek them out to earn more money!';
         
         // Create vehicle animation HTML using generateDollarRows method
         const vehicleBorderClass = `context-${context}`;
@@ -2209,14 +2209,14 @@ const newCityMessage = {
         message = `
         <div class="new-day-text">
             <div>
-                <h2>Today is a '${context === 'row' ? 'row' : 'column'} + ${objective === 'costs' ? "tolls day'" : "tips day'"} </h2>
-                <p>${tollTipMessage}</p>
-                <p>Traffic is ${trafficDirection}. This means that ${context}s tend to contain a lot of ${objective}s, or very few ${objective}s.</p>
+            <h2>Today is a '<strong>${context === 'row' ? 'row' : 'column'}</strong> + ${objective === 'costs' ? "tolls day'" : "tips day'"} </h2>
+            <p>${tollTipMessage}</p>
+            <p>Traffic is ${trafficDirection}. This means that <strong>${context}s</strong> tend to contain a lot of ${objective === 'costs' ? 'tolls' : 'tips'}, or very few ${objective === 'costs' ? 'tolls' : 'tips'}.</p>
             </div>
             <div class="vehicle-animation-container ${vehicleBorderClass}">
-                <div class="vehicle-display-box ${vehicleBorderClass}">
-                    ${vehicleHTML}
-                </div>
+            <div class="vehicle-display-box ${vehicleBorderClass}">
+                ${vehicleHTML}
+            </div>
             </div>
             <h2 id="continue-text" style="display: none;">Press spacebar to continue dispatching.</h2>
         </div>
@@ -4171,7 +4171,7 @@ const instructions11 = {
         return `
             <div class="instruction-section">
                 <h1>Bonus Payment:</h1>
-                <p>Remember: your aim is to maximise the total tips earned each day on tip days, and to minimise the total tolls paid each day on toll days. This is achieved by predicting which intersections will (or will not) pay a tip or require a toll, and hence by selecting jobs that you think will be most rewarding or least costly.</p>
+                <p>Remember: your aim is to maximise the total tips earned each day on <span style="color: rgb(0, 199, 73); font-weight: bold;">tip days</span>, and to minimise the total tolls paid each day on <span style="color: rgb(255, 0, 0); font-weight: bold;">toll days</span>. This is achieved by predicting which intersections will (or will not) pay a tip or require a toll, and hence by selecting jobs that you think will be most rewarding or least costly.</p>
                 <p>This means that when choosing a job, it helps to think about which intersections you might visit later on in that day. These are highlighted in <span style="color: rgb(240, 110, 254);">pink</span>, and shown in your upcoming dispatches.</p>
                 <p>At the end of the experiment, we will assess how well you chose jobs that were the most rewarding or least costly. This will determine whether you receive a bonus payment.</p>
                 <p>So, you should pay attention on every day of the experiment.</p>
