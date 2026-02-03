@@ -2387,32 +2387,36 @@ function calculateBonus() {
 
     // Calculate the average accuracy for the selected cities
     let totalAccuracy = 0;
-    selectedCities.forEach((cityIndex, gridIndex) => {
-        console.log("City Index:", cityIndex, "Grid Index:", gridIndex);
+    let totalTrials = 0;
+    
+    selectedCities.forEach((cityIndex) => {
+        // console.log("Processing City Index:", cityIndex);
         const trials = jsPsych.data.get().filterCustom(function(trial) {
-            return trial.city === cityIndex && trial.grid === gridIndex+1;
+            return trial.city === cityIndex;
         }).values();
-        console.log("Trials for City:", cityIndex, "Grid:", gridIndex, trials);
+        // console.log("Trials for City:", cityIndex, "Count:", trials.length, "Trials:", trials);
         if (trials.length === 0) {
-            console.warn(`No trials found for city ${cityIndex} in grid ${gridIndex}.`);
+            console.warn(`No trials found for city ${cityIndex}.`);
             return;
         }
         // sum the accuracy in these trials
-        const accuracy = trials.reduce((sum, trial) => {
+        const correctTrials = trials.reduce((sum, trial) => {
             return sum + (trial.chose_better_path ? 1 : 0);
-        }, 0) / trials.length; // Average accuracy for this grid
-        console.log("Accuracy for City:", cityIndex, "Grid:", gridIndex, accuracy);
+        }, 0);
+        const accuracy = correctTrials / trials.length; // Average accuracy for this city
+        // console.log("Accuracy for City:", cityIndex, "Correct:", correctTrials, "/", trials.length, "=", accuracy);
         totalAccuracy += accuracy;
+        totalTrials += 1;
     });
 
-    const averageAccuracy = totalAccuracy / numCitiesToEvaluate;
+    const averageAccuracy = totalTrials > 0 ? totalAccuracy / totalTrials : 0;
     jsPsych.data.addProperties({ bonus_accuracy: averageAccuracy });
 
 
     // debugging: print everything
     console.log("Selected Cities for Bonus Evaluation:", selectedCities);
     console.log("Number of Cities Evaluated:", numCitiesToEvaluate);
-    console.log("Total Accuracy:", totalAccuracy);
+    console.log("Total Accuracy (sum of per-city accuracies):", totalAccuracy);
     console.log("Average Accuracy:", averageAccuracy);
     console.log("Bonus Achieved (threshold: 0.7):", averageAccuracy > 0.7);
 
