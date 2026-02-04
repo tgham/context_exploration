@@ -42,7 +42,6 @@ class Farmer:
         
         ## initialise context prior prob
         self.context_prob = context_prior
-        # print('initialised with context prior:', self.context_prob)
 
 
     ### interactions with the environment
@@ -119,13 +118,15 @@ class Farmer:
             
             ### determine context indicators
 
-            ## simple case: certain prior
-            # self.col_world_prob = 1 ## tmp, i.e. probability of one context or another
 
             ## inference case: infer posterior probability, given observations
-            context_prior = self.context_prob
-            self.context_prob = sampler.context_posterior(context_prior=context_prior)
-            # print('sampler prior:', context_prior, ',', 'posterior:', self.context_prob)
+            if not self.known_context:
+                context_prior = self.context_prob
+                self.context_prob = sampler.context_posterior(context_prior=context_prior)
+
+            ## simple case: certain prior
+            elif self.known_context:
+                self.context_prob = 1.0 if self.known_context == 'column' else 0.0
 
             ## use inferred context to sample
             if not CE:
@@ -474,7 +475,7 @@ class Farmer:
 
         
     ## run agent on participant's trial sequence
-    def run(self, params, hyperparams, agent = 'CE', df_trials=None, envs=None,fit=True, progress=False):
+    def run(self, params, hyperparams, agent = 'CE', df_trials=None, envs=None,fit=True, progress=False, known_context=False):
         
         ## init expt info
         try:
@@ -497,8 +498,7 @@ class Farmer:
             greedy = hyperparams['greedy']
         else:
             greedy = True 
-
-
+        self.known_context = known_context
 
         ## initialise model's internal variables
         self.n_afc = n_afc ## can sort this out later
@@ -552,13 +552,10 @@ class Farmer:
 
         ## loop through cities
         for city in range(n_cities):
-
-            ## context prior resets
             context_prior = 0.5
 
             ## loop through days
             for day in range(n_days):
-                self.context_prior = context_prior
 
                 ## get the environment for this day
                 if envs:
@@ -570,10 +567,13 @@ class Farmer:
                 env_copy = copy.deepcopy(env)
                 env_copy.set_trial(0)
                 assert not hasattr(env_copy, 'obs'), 'env_copy.obs should not exist before the first trial: {}'.format(len(env_copy.obs),', city:', city+1, 'day:', day+1)
+                
+                ## context prior resets (only if context is unknown)
+                if not self.known_context:
+                    self.context_prob = context_prior
+                elif self.known_context:
+                    self.known_context = env_copy.context
 
-                ## otherwise, generate a new one
-                # else:
-                #     env = make_env(N, n_trials, expt_info, beta_params, metric)
 
                 ## FIX FOR OLD ENVS: rename some attributes (episode --> trial, etc.)
                 if hasattr(env_copy, 'n_episodes'):
@@ -589,7 +589,8 @@ class Farmer:
                 for t in range(n_trials):
 
                     ## reset env/trial
-                    self.context_prob = context_prior ## tmp fix: fix the prior to the prior that was used at the beginning of the grid (to prevent observations contributing to the posterior on multiple trials)
+                    if self.known_context is None: ## only reset if context is unknown
+                        self.context_prob = context_prior ## tmp fix: fix the prior to the prior that was used at the beginning of the grid (to prevent observations contributing to the posterior on multiple trials)
                     env_copy.reset()
                     env_copy.set_sim(True)
                     start = env_copy.current
@@ -761,49 +762,29 @@ class Farmer:
                         #             path_cost += sample_costs[state[0], state[1]]
                         #         sample_total_costs[s, path_id] = path_cost
 
+
+                        ### OR, vectorized sampling approach:
+
                         # --- 1. PRE-CALCULATION (Do this once outside the sampling loop) ---
                         # Create the Path Weight Matrix W (N_path x N^2)
-                        W = np.zeros((env_copy.n_afc, self.N**2))
-                        for path_id in range(env_copy.n_afc):
-                            path_states = env_copy.path_states[t][path_id]
-                            flat_indices = [state[0] * self.N + state[1] for state in path_states]
-                            W[path_id, flat_indices] = 1
-
-
-                        # --- 2. VECTORIZED SAMPLING (Replaces your N_samples loop) ---
-                        n_samples = 10000
-                        self.root_samples(obs = env_copy.obs, n_samples=n_samples, CE=False, combo=False)
-                        p_costs_flat = self.all_posterior_p_costs.reshape(n_samples, self.N**2)
-                        random_draws = np.random.random((n_samples, self.N**2))
-                        sample_costs_binary = (random_draws < p_costs_flat).astype(int) 
-                        sample_costs_vectorized = sample_costs_binary * self.high_cost + (1 - sample_costs_binary) * self.low_cost
-
-                        # Step 3: Vectorized Path Summation
-                        sample_total_costs = sample_costs_vectorized @ W.T 
-
-                        # if t==2:
-                        #     plt.figure()
-                        #     sns.histplot(sample_total_costs[:,0], color='blue', label='path A', stat='probability', kde=True)
-                        #     sns.histplot(sample_total_costs[:,1], color='orange', label='path B', stat='probability', kde=True)
-                        #     ## crash for debugging
-                        #     plt.show()
-                        #     assert False, 'crash for debugging'                                
-                        
-
-                        ### or, analytically using posterior means
-                        
-                        ## get array of p(cost) for states on each path
-                        # probs_per_path = np.zeros((env_copy.n_afc, len(env_copy.path_states[t][0]))) ## assuming that both paths are the same length
+                        # W = np.zeros((env_copy.n_afc, self.N**2))
                         # for path_id in range(env_copy.n_afc):
                         #     path_states = env_copy.path_states[t][path_id]
-                        #     for s, state in enumerate(path_states):
-                        #         probs_per_path[path_id, s] = self.posterior_mean_p_cost[state[0], state[1]]
+                        #     flat_indices = [state[0] * self.N + state[1] for state in path_states]
+                        #     W[path_id, flat_indices] = 1
 
-                        ## get difference between distributions over total costs
-                        metric = 'OT'
-                        # metric = 'p_sup'
-                        correct_path = np.argmax(env_copy.path_actual_costs[t]) 
-                        self.distr_diff[city, day, t] = path_distr_diff(sample_total_costs[:,0], sample_total_costs[:,1], metric, correct_path)
+
+                        # # --- 2. VECTORIZED SAMPLING (Replaces your N_samples loop) ---
+                        # n_samples = 10000
+                        # self.root_samples(obs = env_copy.obs, n_samples=n_samples, CE=False, combo=False)
+                        # p_costs_flat = self.all_posterior_p_costs.reshape(n_samples, self.N**2)
+                        # random_draws = np.random.random((n_samples, self.N**2))
+                        # sample_costs_binary = (random_draws < p_costs_flat).astype(int) 
+                        # sample_costs_vectorized = sample_costs_binary * self.high_cost + (1 - sample_costs_binary) * self.low_cost
+
+                        # # Step 3: Vectorized Path Summation
+                        # sample_total_costs = sample_costs_vectorized @ W.T 
+
 
                         ## or, only calculate the difference if the CE's belief does indeed favour the better path - i.e. if CE_aciton == correct_path
                         # if CE_action == correct_path:
