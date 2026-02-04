@@ -14,9 +14,15 @@ def plot_r(sampled_rewards, ax, title=None, cbar=False, binary = False):
                         cbar_kws={'ticks': [0, 1], 'label': 'p(toll)', 'shrink': 0.7})
         
     elif binary:
-        vmin = 0
-        vmax = 1
-        sns.heatmap(sampled_rewards, ax=ax, cbar=cbar, square=True, cmap=sns.color_palette(["lightgrey", "red"]), 
+        ## determine whether we're plotting costs or rewards
+        if np.min(sampled_rewards) < 0:
+            palette = sns.color_palette(["lightgrey", "red"])
+            sampled_rewards = np.where(sampled_rewards==-1, 1, 0)  ## convert to 1 for low cost, 0 for high cost
+        else:
+            palette = sns.color_palette(["lightgrey", "green"])
+        vmin = np.min(sampled_rewards)
+        vmax = np.max(sampled_rewards)
+        sns.heatmap(sampled_rewards, ax=ax, cbar=cbar, square=True, cmap=palette, 
             vmin=vmin, 
             vmax=vmax,
             cbar_kws={'ticks': [0, 1], 'label': 'p(low cost)', 'shrink': 0.7})
