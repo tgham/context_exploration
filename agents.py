@@ -33,7 +33,7 @@ from scipy.special import beta, logsumexp, digamma, comb, betaln
 ### base farmer model?
 class Farmer:
 
-    def __init__(self, N, context_prior=0.5, metric='cityblock'):
+    def __init__(self, N, context_prior=0.5, metric='cityblock', known_context=False):
 
         self.metric = metric
         self.N = N
@@ -42,6 +42,7 @@ class Farmer:
         
         ## initialise context prior prob
         self.context_prob = context_prior
+        self.known_context = known_context
 
 
     ### interactions with the environment
@@ -475,7 +476,7 @@ class Farmer:
 
         
     ## run agent on participant's trial sequence
-    def run(self, params, hyperparams, agent = 'CE', df_trials=None, envs=None,fit=True, progress=False, known_context=False):
+    def run(self, params, hyperparams, agent = 'CE', df_trials=None, envs=None,fit=True, progress=False):
         
         ## init expt info
         try:
@@ -498,7 +499,6 @@ class Farmer:
             greedy = hyperparams['greedy']
         else:
             greedy = True 
-        self.known_context = known_context
 
         ## initialise model's internal variables
         self.n_afc = n_afc ## can sort this out later
