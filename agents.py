@@ -214,199 +214,6 @@ class Farmer:
         context_prob = sampler.context_posterior(context_prior=self.context_prob)
         return context_prob
     
-    ## calculate the KL divergence summed over all grid
-    def grid_KL(self, prior_obs, posterior_obs, context = 'column'):
-
-        prior_sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, prior_obs, N=self.N)
-        posterior_sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, posterior_obs, N=self.N)
-
-        if prior_obs is None:
-            n_prior_obs = 0
-        else:
-            n_prior_obs = len(prior_obs)
-        n_posterior_obs = len(posterior_obs)
-
-        KLs = []
-        if context == 'column':
-            for i in range(self.N):
-
-                ## define prior params - that is, the params before the new observations are made
-                low_counts_prior = prior_sampler.low_counts_cols[i]
-                high_counts_prior = prior_sampler.high_counts_cols[i]
-                alpha_prior = prior_sampler.alpha_col + low_counts_prior
-                beta_prior = prior_sampler.beta_col + high_counts_prior
-
-                ## repeat for posterior params
-                low_counts_post = posterior_sampler.low_counts_cols[i]
-                high_counts_post = posterior_sampler.high_counts_cols[i]
-                alpha_post = posterior_sampler.alpha_col + low_counts_post
-                beta_post = posterior_sampler.beta_col + high_counts_post
-
-                ## calculate the difference in low and high counts
-                low_counts_diff = low_counts_post - low_counts_prior
-                high_counts_diff = high_counts_post - high_counts_prior
-
-                ## calculate the KL divergence
-                KL = self.KL_divergence(alpha_prior, beta_prior, alpha_post, beta_post, low_counts_diff, high_counts_diff) 
-                KLs.append(KL)
-
-        elif context == 'row':
-            for j in range(self.N):
-
-                ## define prior params - that is, the params before the new observations are made
-                low_counts_prior = prior_sampler.low_counts_rows[j]
-                high_counts_prior = prior_sampler.high_counts_rows[j]
-                alpha_prior = prior_sampler.alpha_row + low_counts_prior
-                beta_prior = prior_sampler.beta_row + high_counts_prior
-
-                ## repeat for posterior params
-                low_counts_post = posterior_sampler.low_counts_rows[j]
-                high_counts_post = posterior_sampler.high_counts_rows[j]
-                alpha_post = posterior_sampler.alpha_row + low_counts_post
-                beta_post = posterior_sampler.beta_row + high_counts_post
-
-                ## calculate the difference in low and high counts
-                low_counts_diff = low_counts_post - low_counts_prior
-                high_counts_diff = high_counts_post - high_counts_prior
-
-                ## calculate the KL divergence
-                KL = self.KL_divergence(alpha_prior, beta_prior, alpha_post, beta_post, low_counts_diff, high_counts_diff) 
-                KLs.append(KL)
-        
-        return np.sum(KLs)
-    
-
-    ## KL divergence between two beta distributions
-    def KL_divergence(self, alpha_q, beta_q, alpha_p, beta_p, low_counts_diff, high_counts_diff):
-
-        """
-        Calculate the KL divergence between a prior Q and posterior P beta distribution.
-        The prior is a beta distribution with parameters alpha and beta,
-        and the posterior is a beta distribution with parameters alpha + s and beta + f,
-        where s is the number of successes and f is the number of failures."""
-
-        assert alpha_q + low_counts_diff == alpha_p, 'alpha_q + s should equal alpha_p, but got {} + {} != {}'.format(alpha_q, low_counts_diff, alpha_p)
-        KL = np.log((beta(alpha_p, beta_p) / beta(alpha_q, beta_q))) - low_counts_diff*(digamma(alpha_q) - digamma(alpha_q + beta_q)) - high_counts_diff*(digamma(beta_q) - digamma(alpha_q + beta_q))
-
-        return KL
-    
-
-    ## calculate the expected KL of an obs sequence of length n 
-    # def expected_KL(self, prior_obs, new_obs, context):
-        
-    #     ## loop through possible sequences of n binary outcomes (0=low, 1=high)
-    #     EKL_total = 0.0
-    #     n_obs = len(new_obs)
-    #     for seq in product([self.low_cost, self.high_cost], repeat=n_obs):
-
-    #         ## initialise a farmer based on the prior observations (+ the new hypothetical obs)
-    #         prior_sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, prior_obs, N=self.N, CE=True) ## can use CE since we are only interested in the prior mean p and q
-    #         prior_sampler.simple_sample(col_context=context=='column')
-            
-    #         ## loop through hypothetical observations
-    #         obs_tmp = prior_obs.copy() if prior_obs is not None else np.array([])
-    #         p_seq = 1.0
-            
-    #         ### update the sampled after each hypothetical observation??
-    #         if context == 'column':
-    #             for oi, outcome in enumerate(seq):
-
-    #                 ## initialise a farmer based on the prior observations (+ the new hypothetical obs)
-    #                 # prior_sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, obs_tmp, N=self.N, CE=True) ## can use CE since we are only interested in the prior mean p and q
-                    
-    #                 ## append prior obs with hypothetical obs
-    #                 i, j, _ = new_obs[oi]
-    #                 obs_tmp = np.vstack([obs_tmp, [i,j, outcome]]) if len(obs_tmp)>0 else np.array([[i,j, outcome]])
-
-    #                 ## get prior predictive probability of a low cost in this state
-    #                 # prior_sampler.simple_sample(col_context=True)
-    #                 p_obs = prior_sampler.col_probs[0][int(j)]
-
-    #                 ## update prob of observing this sequence
-    #                 p_seq *= p_obs if outcome == self.low_cost else (1 - p_obs)
-
-
-
-    #         elif context == 'row':
-    #             for oi, outcome in enumerate(seq):
-
-    #                 ## initialise a farmer based on the prior observations (+ the new hypothetical obs)
-    #                 # prior_sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, obs_tmp, N=self.N, CE=True) ## can use CE since we are only interested in the prior mean p and q
-                    
-    #                 ## append prior obs with hypothetical obs
-    #                 i, j, _ = new_obs[oi]
-    #                 obs_tmp = np.vstack([obs_tmp, [i,j, outcome]]) if len(obs_tmp)>0 else np.array([[i,j, outcome]])
-
-    #                 ## get prior predictive probability of a low cost in this state
-    #                 # prior_sampler.simple_sample(col_context=False)
-    #                 p_obs = prior_sampler.row_probs[0][int(i)]
-
-    #                 ## update prob of observing this sequence
-    #                 p_seq *= p_obs if outcome == self.low_cost else (1 - p_obs)
-            
-    #         # Compute KL for this hypothetical final posterior
-    #         KL_seq = self.grid_KL(prior_obs, obs_tmp, context)
-    #         # print('seq:', seq, 'p_seq:', p_seq, 'KL_seq',KL_seq)
-    #         EKL_total += p_seq * KL_seq
-
-    #     return EKL_total
-
-    def beta_binomial_pmf(self, k, n, a, b):
-        """Beta-binomial predictive probability p(k | a, b, n)."""
-        return comb(n, k) * np.exp(betaln(a + k, b + n - k) - betaln(a, b))
-
-    def expected_KL(self, prior_obs, new_obs, context):
-        """
-        Compute the expected KL divergence for a planned set of observations
-        without enumerating all binary sequences, using the beta-binomial formula.
-        """
-        EKL_total = 0.0
-        
-        # Initialise prior sampler to get current alpha/beta params after prior_obs
-        prior_sampler = GridSampler(self.alpha_row, self.beta_row,
-                                    self.alpha_col, self.beta_col,
-                                    self.low_cost, self.high_cost,
-                                    prior_obs, N=self.N, CE=True)
-        prior_sampler.simple_sample(col_context=(context == 'column'))
-
-        # Group planned observations by row (row context) or col (column context)
-        if context == 'row':
-            group_key = lambda obs: obs[0]  # group by row index
-            alphas = prior_sampler.alpha_row
-            betas = prior_sampler.beta_row
-        else:
-            group_key = lambda obs: obs[1]  # group by column index
-            alphas = prior_sampler.alpha_col
-            betas = prior_sampler.beta_col
-
-        grouped = {}
-        for i, j, _ in new_obs:
-            key = group_key((i, j, None))
-            grouped.setdefault(key, []).append((i, j))
-        
-        # Iterate over each row/col group independently
-        for idx, obs_list in grouped.items():
-            n_i = len(obs_list)       # planned obs in this row/col
-            # a_i = alphas[idx]
-            # b_i = betas[idx]
-            a_i = alphas ## hacky - these need to be alpha + low_counts etc.
-            b_i = betas
-            
-            # Sum over k successes
-            E_KL_i = 0.0
-            for k in range(n_i + 1):
-                p_k = self.beta_binomial_pmf(k, n_i, a_i, b_i)
-                KL_k = self.KL_divergence(a_i, b_i, a_i + k, b_i + n_i - k, k, n_i-k)
-                E_KL_i += p_k * KL_k
-            print('n_i:', n_i, 'idx:', idx, 'obs_list:', obs_list, 'E_KL_i:', E_KL_i)
-            
-            EKL_total += E_KL_i
-        
-        return EKL_total
-
-
-
-
 
     ## dynamic programming
     def dp(self, posterior_p_cost, expected_cost=True):
@@ -528,6 +335,16 @@ class Farmer:
         self.path_len = np.zeros((n_cities, n_days, n_trials))
         self.day_costs = np.zeros((n_cities, n_days, n_trials)) ## i.e. the cost of the path chosen by the participant on that trial
         self.distr_diff = np.zeros((n_cities, n_days, n_trials)) 
+        
+        ## observations on the context-aligned and orthogonal arm of each path
+        self.aligned_arm_gen_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.aligned_arm_gen_no_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.orthogonal_arm_gen_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.orthogonal_arm_gen_no_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.aligned_arm_cf_gen_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.aligned_arm_cf_gen_no_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.orthogonal_arm_cf_gen_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.orthogonal_arm_cf_gen_no_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
 
         
         ## init params and hyperparams
@@ -538,9 +355,14 @@ class Farmer:
             exploration_constant = hyperparams['exploration_constant']
             discount_factor = hyperparams['discount_factor']
             n_iter = hyperparams['n_iter']
-        elif agent == 'CE':
+        elif (agent == 'CE'):
             self.temp = params[0]
             self.lapse = params[1]
+        elif (agent == 'CE_one_arm'):
+            self.temp = params[0]
+            self.lapse = params[1]
+            self.arm_weight = params[2]
+        
             # n_sims = hyperparams['n_sims']
             # n_iter = hyperparams['n_iter']
         # elif agent == 'human': ## hacky - need this for CE calcs
@@ -605,6 +427,7 @@ class Farmer:
                     if agent == 'human':
                         paths = env_copy.path_states[t].copy()
                         obs_list = [tuple(obs[:2]) for obs in env_copy.obs.tolist()]
+                        obs_list = list(set(obs_list)) # no repeated obs!
                         for i, path in enumerate(paths):
                             try:
                                 
@@ -619,6 +442,9 @@ class Farmer:
                                 self.path_past_overlaps[city, day, t, i] = path_past_overlap
                                 self.path_past_observed_costs[city, day, t, i] = path_past_observed_costs
                                 self.path_past_observed_no_costs[city, day, t, i] = path_past_observed_no_costs
+
+                                    
+
                         
                             ## sometimes need to convert each np array to list of tuples...
                             except:
@@ -634,6 +460,72 @@ class Farmer:
                                 self.path_past_observed_no_costs[city, day, t, i] = path_past_observed_no_costs
                             
                             assert self.path_past_overlaps[city, day, t, i] == self.path_past_observed_costs[city, day, t, i] + self.path_past_observed_no_costs[city, day, t, i], 'path {} past overlap does not match observed costs and no-costs\n path past overlap: {}, path observed costs: {}, path observed no-costs: {}'.format(i+1, self.path_past_overlaps[city, day, t, i], self.path_past_observed_costs[city, day, t, i], self.path_past_observed_no_costs[city, day, t, i])
+                            
+                            ### get the number of costs and no-costs on the row or column of each aligned arm
+                            aligned_col = None
+                            aligned_row = None
+                            
+                            # Find the row and column that stays constant on the path
+                            for idx in range(len(path) - 1):
+                                if path[idx][1] == path[idx + 1][1]:
+                                    main_col = path[idx][1]
+                                    break
+                            for idx in range(len(path) - 1):
+                                if path[idx][0] == path[idx + 1][0]:
+                                    main_row = path[idx][0]
+                                    break
+                            if env_copy.context == 'column':
+
+                                # Count costs and no-costs on the main column
+                                gen_costs = sum(1 for obs in obs_list if obs[1] == main_col and env_copy.costss[t][obs[0], obs[1]] == self.high_cost)
+                                gen_no_costs = sum(1 for obs in obs_list if obs[1] == main_col and env_copy.costss[t][obs[0], obs[1]] == self.low_cost)
+                                self.aligned_arm_gen_costs[city, day, t, i] = gen_costs
+                                self.aligned_arm_gen_no_costs[city, day, t, i] = gen_no_costs
+
+                                # now count costs and no-costs for every other column (i.e. orthogonal arm, which includes the row that stays constant along the orthogonal arm)
+                                gen_costs = sum(1 for obs in obs_list if obs[1] != main_col and obs[0] == main_row and env_copy.costss[t][obs[0], obs[1]] == self.high_cost)
+                                gen_no_costs = sum(1 for obs in obs_list if obs[1] != main_col and obs[0] == main_row and env_copy.costss[t][obs[0], obs[1]] == self.low_cost)
+                                self.orthogonal_arm_gen_costs[city, day, t, i] = gen_costs
+                                self.orthogonal_arm_gen_no_costs[city, day, t, i] = gen_no_costs
+
+
+                                ## same the row that stays constant along the orthogonal arm - i.e. gen under the counterfactual context
+                                gen_costs = sum(1 for obs in obs_list if obs[0] == main_row and env_copy.costss[t][obs[0], obs[1]] == self.high_cost)
+                                gen_no_costs = sum(1 for obs in obs_list if obs[0] == main_row and env_copy.costss[t][obs[0], obs[1]] == self.low_cost)
+                                self.orthogonal_arm_cf_gen_costs[city, day, t, i] = gen_costs
+                                self.orthogonal_arm_cf_gen_no_costs[city, day, t, i] = gen_no_costs
+
+                                # and then count costs and no-costs for every other row (i.e. aligned arm under the counterfactual context)
+                                gen_costs = sum(1 for obs in obs_list if obs[0] != main_row and obs[1] == main_col and env_copy.costss[t][obs[0], obs[1]] == self.high_cost)
+                                gen_no_costs = sum(1 for obs in obs_list if obs[0] != main_row and obs[1] == main_col and env_copy.costss[t][obs[0], obs[1]] == self.low_cost)
+                                self.aligned_arm_cf_gen_costs[city, day, t, i] = gen_costs
+                                self.aligned_arm_cf_gen_no_costs[city, day, t, i] = gen_no_costs
+
+                            elif env_copy.context == 'row':
+                                    
+                                # Count costs and no-costs on this row
+                                gen_costs = sum(1 for obs in obs_list if obs[0] == main_row and env_copy.costss[t][obs[0], obs[1]] == self.high_cost)
+                                gen_no_costs = sum(1 for obs in obs_list if obs[0] == main_row and env_copy.costss[t][obs[0], obs[1]] == self.low_cost)
+                                self.aligned_arm_gen_costs[city, day, t, i] = gen_costs
+                                self.aligned_arm_gen_no_costs[city, day, t, i] = gen_no_costs
+
+                                # now count costs and no-costs for every other row (i.e. orthogonal arm)
+                                gen_costs = sum(1 for obs in obs_list if obs[0] != main_row and obs[1] == main_col and env_copy.costss[t][obs[0], obs[1]] == self.high_cost)
+                                gen_no_costs = sum(1 for obs in obs_list if obs[0] != main_row and obs[1] == main_col and env_copy.costss[t][obs[0], obs[1]] == self.low_cost)
+                                self.orthogonal_arm_gen_costs[city, day, t, i] = gen_costs
+                                self.orthogonal_arm_gen_no_costs[city, day, t, i] = gen_no_costs
+
+                                ## same the column that stays constant along the orthogonal arm - i.e. gen under the counterfactual context
+                                gen_costs = sum(1 for obs in obs_list if obs[1] == main_col and env_copy.costss[t][obs[0], obs[1]] == self.high_cost)
+                                gen_no_costs = sum(1 for obs in obs_list if obs[1] == main_col and env_copy.costss[t][obs[0], obs[1]] == self.low_cost)
+                                self.orthogonal_arm_cf_gen_costs[city, day, t, i] = gen_costs
+                                self.orthogonal_arm_cf_gen_no_costs[city, day, t, i] = gen_no_costs
+
+                                # and then count costs and no-costs for every other column (i.e. orthogonal arm under the counterfactual context)
+                                gen_costs = sum(1 for obs in obs_list if obs[1] != main_col and obs[0] == main_row and env_copy.costss[t][obs[0], obs[1]] == self.high_cost)
+                                gen_no_costs = sum(1 for obs in obs_list if obs[1] != main_col and obs[0] == main_row and env_copy.costss[t][obs[0], obs[1]] == self.low_cost)
+                                self.aligned_arm_cf_gen_costs[city, day, t, i] = gen_costs
+                                self.aligned_arm_cf_gen_no_costs[city, day, t, i] = gen_no_costs
                     
                         ## misc
                         self.day_costs[city, day, t] = np.nansum(self.total_costs[city, day, :t+1]) ## i.e. costs observed so far today
@@ -708,6 +600,81 @@ class Farmer:
                                 # path_cost += env_copy.get_pred_cost(state) ## i.e. sample binary costs from the posterior pqs
                                 path_cost += self.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost ## or, use expected costs
                             path_costs.append(path_cost)
+
+                        ## choose the path with the lowest total cost
+                        max_cost = np.max(path_costs)
+                        action = argm(path_costs, max_cost)
+                        self.actions[city, day, t] = action
+                        self.Q_vals[city, day, t] = np.array(path_costs)
+                        self.p_choice[city, day, t] = self.softmax(np.array(path_costs))
+                        correct_path = np.argmax(env_copy.path_actual_costs[t])
+                        self.p_correct[city, day, t] = self.p_choice[city, day, t][correct_path]
+
+                        ## or, do probability matching if not greedy
+                        if not greedy:
+                            action = np.random.choice(np.arange(len(MCTS_Q)), p=softmax(MCTS_Q))
+                    
+                    elif agent == 'CE_one_arm':
+                        env_copy.set_sim(False)
+                        
+                        ## get posterior mean grid
+                        self.root_samples(obs=env_copy.obs, CE=True, combo=False)
+                        env_copy.receive_predictions(self.posterior_mean_p_cost)
+
+                        ## get the cost of each path under the posterior mean (weighted by arm_weight)
+                        path_costs = []
+                        for path_id in range(env_copy.n_afc):
+                            path_states = env_copy.path_states[t][path_id]
+                            aligned_states = set()
+                            orthogonal_states = set()
+                            corner_state = None
+                            
+                            ## separate aligned and orthogonal states
+                            for idx in range(len(path_states) - 1):
+                                current_state = path_states[idx]
+                                next_state = path_states[idx + 1]
+                                if env_copy.context == 'column':
+                                    aligned = (current_state[1] == next_state[1]) and (current_state[0] != next_state[0])
+                                elif env_copy.context == 'row':
+                                    aligned = (current_state[0] == next_state[0]) and (current_state[1] != next_state[1])
+                                else:
+                                    aligned = False
+
+                                if aligned:
+                                    aligned_states.add(tuple(current_state))
+                                    aligned_states.add(tuple(next_state))
+                                else:
+                                    orthogonal_states.add(tuple(current_state))
+                                    orthogonal_states.add(tuple(next_state))
+                            
+                            ## corner is the intersection: appears in both aligned and orthogonal segments
+                            corner_states = aligned_states.intersection(orthogonal_states)
+                            if len(corner_states) != 1:
+                                raise ValueError(f"Expected exactly one corner state, found {len(corner_states)} for path {path_id}.")
+                            corner_state = next(iter(corner_states))
+                            orthogonal_states.discard(corner_state)
+                            
+                            ## calculate weighted cost
+                            if self.arm_weight < -1 or self.arm_weight > 1:
+                                raise ValueError(f"arm_weight must be in [-1, 1], got {self.arm_weight}.")
+                            aligned_weight = 1 - max(0.0, -self.arm_weight)
+                            orthogonal_weight = 1 - max(0.0, self.arm_weight)
+                            path_cost = 0
+                            for state in aligned_states:
+                                path_cost += aligned_weight * (self.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost)
+                            for state in orthogonal_states:
+                                path_cost += orthogonal_weight * (self.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost)
+                            path_costs.append(path_cost)
+                            
+                            # print('path_states:', path_states)
+                            # print('aligned_states:', aligned_states)
+                            # print('context:', env_copy.context)
+                            # print('all path_costs:', [self.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost for state in path_states])
+                            # print('all aligned path_costs:', [self.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost for state in aligned_states])
+                            # print('path_cost:', path_cost)
+                            # print()
+                            # if t==3:
+                            #     raise Exception('check this')
 
                         ## choose the path with the lowest total cost
                         max_cost = np.max(path_costs)
@@ -810,7 +777,7 @@ class Farmer:
                         ## if the participant has made a choice, then we use their action (rather than the model's)
                         if not missed:
                             action = df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_chosen'].values[0]=='b'                        
-                            assert df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_A_expected_cost'].values[0] == env_copy.path_expected_costs[t][0], 'expected cost does not match ppt data\n env: {}, ppt: {}'.format(env_copy.path_expected_costs[t][0], df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_A_expected_cost'].values[0])
+                            assert np.isclose(df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_A_expected_cost'].values[0], env_copy.path_expected_costs[t][0], rtol=1e-5), 'expected cost does not match ppt data\n env: {}, ppt: {}'.format(env_copy.path_expected_costs[t][0], df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_A_expected_cost'].values[0])
 
                         else:
                             # print('missed in city {}, day {}, trial {}'.format(city+1, day+1, t+1))
