@@ -355,6 +355,7 @@ class Farmer:
         if agent == 'BAMCP':
             self.temp = params[0]
             self.lapse = params[1]
+            self.arm_weight = params[2]
             n_sims = hyperparams['n_sims']
             exploration_constant = hyperparams['exploration_constant']
             discount_factor = hyperparams['discount_factor']
@@ -745,27 +746,7 @@ class Farmer:
                         path_costs = []
                         for path_id in range(env_copy.n_afc):
                             path_states = env_copy.path_states[t][path_id]
-                            aligned_states = set()
-                            orthogonal_states = set()
-                            corner_state = None
-                            
-                            ## separate aligned and orthogonal states
-                            for idx in range(len(path_states) - 1):
-                                current_state = path_states[idx]
-                                next_state = path_states[idx + 1]
-                                if env_copy.context == 'column':
-                                    aligned = (current_state[1] == next_state[1]) and (current_state[0] != next_state[0])
-                                elif env_copy.context == 'row':
-                                    aligned = (current_state[0] == next_state[0]) and (current_state[1] != next_state[1])
-                                else:
-                                    aligned = False
-
-                                if aligned:
-                                    aligned_states.add(tuple(current_state))
-                                    aligned_states.add(tuple(next_state))
-                                else:
-                                    orthogonal_states.add(tuple(current_state))
-                                    orthogonal_states.add(tuple(next_state))
+                            aligned_states, orthogonal_states = env_copy.path_aligned_states[t][path_id], env_copy.path_orthogonal_states[t][path_id]
                             
                             ## corner is the intersection: appears in both aligned and orthogonal segments
                             corner_states = aligned_states.intersection(orthogonal_states)
@@ -775,8 +756,6 @@ class Farmer:
                             orthogonal_states.discard(corner_state)
                             
                             ## calculate weighted cost
-                            if self.arm_weight < -1 or self.arm_weight > 1:
-                                raise ValueError(f"arm_weight must be in [-1, 1], got {self.arm_weight}.")
                             aligned_weight = 1 - max(0.0, -self.arm_weight)
                             orthogonal_weight = 1 - max(0.0, self.arm_weight)
                             path_cost = 0
