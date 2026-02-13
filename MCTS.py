@@ -135,7 +135,6 @@ class MonteCarloTreeSearch():
         # assert np.array_equal(node.state[:2], self.actual_state), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.actual_state)
         self.check_state(node)
 
-
         ## create a record of the nodes/leaves visited in the tree
         self.tree_costs = [] ## i.e. the cost associated with each traversal of the tree *under the tree policy*. Hence, this does not include the cost of the current state, which is the starting point of the tree policy, nor does it include the cost of expansion.
         self.tree_path = [] ## i.e. the states and actions visited in the tree. This *does* include the root, because it is from the root that we move to the next leaf (and then next node). 
@@ -414,15 +413,8 @@ class MonteCarloTreeSearch():
     ## tree search --> action loop
     def search(self, n_sims=1000, n_iter=100, lazy=False):
 
-        ## root sampling of new posterior
-        # self.GP.root_sample(certainty_equivalent=True)
-
-        ## root sampling of new kernel
-        # K_inf = self.GP.sample_k()
-
         ## generate new set of root samples
         self.agent.root_samples(obs = self.env.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy, CE=False, combo=False)
-
 
         ## debugging plot
         # plt.figure()
@@ -617,19 +609,30 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         ## take path
         states, costs = self.env.take_path(action_sequence)
         assert np.array_equal(states[-1], self.env.goals[step_trial][path_id]), 'final state of path does not match goal\n final state: {}, goal: {}'.format(states[-1], self.env.goals[step_trial][path_id])
-        simulated_obs += [np.append(s, c) for s, c in zip(states, costs)]
 
         ## add back in the start state if it wasn't actually observed in non-sim space
-        # simulated_obs = [np.append(start_tmp, self.env.predicted_costs[start_tmp[0], start_tmp[1]])] + simulated_obs
-        # costs = [self.env.predicted_costs[start_tmp[0], start_tmp[1]]] + costs
+        states = [start_tmp] + states
+        costs = [self.env.predicted_costs[start_tmp[0], start_tmp[1]]] + costs
+
+        ## add costs to states to create simulated obs for the tree
+        simulated_obs += [np.append(s, c) for s, c in zip(states, costs)]
+
+        ## one-arm bias
+        aligned_states, orthogonal_states = self.env.path_aligned_states[step_trial][path_id], self.env.path_orthogonal_states[step_trial][path_id]
+        weighted_costs = self.agent.arm_reweighting(self.env.predicted_costs, aligned_states, orthogonal_states) 
+
         
         ## or, if compound costs
-        simulated_obs = [np.append(start_tmp, self.env.compound_cost(self.env.predicted_costs[start_tmp[0], start_tmp[1]], step_trial))] + simulated_obs
-        costs = [self.env.compound_cost(self.env.predicted_costs[start_tmp[0], start_tmp[1]], step_trial)] + costs 
-        self.tree_costs.append(np.sum(costs))
+        # simulated_obs = [np.append(start_tmp, self.env.compound_cost(self.env.predicted_costs[start_tmp[0], start_tmp[1]], step_trial))] + simulated_obs
+        # costs = [self.env.compound_cost(self.env.predicted_costs[start_tmp[0], start_tmp[1]], step_trial)] + costs 
+
+        ## save costs
+        # self.tree_costs.append(np.sum(costs))
+        self.tree_costs.append(np.sum(weighted_costs)) ## NB: we only use the weighted costs for the backup, rather than building the tree
         # if (action_leaf.trial==1) and (action_leaf.action==1):
         #     print(simulated_obs)
-        assert len(simulated_obs) == len(costs), 'sim obs and costs do not match\n sim obs: {}, costs: {}'.format(len(simulated_obs), len(costs))
+        assert len(simulated_obs) == len(weighted_costs), 'sim obs and costs do not match\n sim obs: {}, costs: {}'.format(len(simulated_obs), len(costs))
+        assert len(costs) == len(weighted_costs), 'costs and weighted costs do not match\n costs: {}, weighted costs: {}'.format(len(costs), len(weighted_costs))
         assert len(simulated_obs) == len(action_sequence)+1, 'sim obs and action sequence do not match\n sim obs: {}, action seq: {}'.format(len(simulated_obs), len(action_sequence)+1)
         terminated = action_leaf.terminated
         # if terminated:
@@ -640,6 +643,15 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         next_node_id = self.init_node_id(simulated_obs, init_info_state, step_trial)
         # n_total_obs = np.sum([len(self.env.path_states[trial][0]) for trial in range(action_leaf.trial+1)])
         # assert n_total_obs == np.sum(next_node_id), 'total obs and next node id do not match\n total obs: {}, next node id: {}'.format(n_total_obs, np.sum(next_node_id))
+
+        ## debugging
+        # if step_trial==0:
+        #     print(self.env.context)
+        #     print('costs:', costs)
+        #     print('weighted costs:', weighted_costs)
+        #     print('tree costs:', self.tree_costs)
+        #     print('simulated obs:', simulated_obs)
+        #     raise Exception
 
         ## since the agent has chosen a path to the goal, we need to move the environment to the next trial
         node_trial = step_trial+1
@@ -667,15 +679,19 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         ## first need to get the starting cost r, which is essentially the cost of path choice that corresponds to the action leaf
         first_trial = action_leaf.trial
         path_id = action_leaf.action
-        starting_cost = 0
-        for state in self.env.path_states[first_trial][path_id]:
-            # cost = self.env.get_pred_cost(state)
-            cost = self.env.predicted_costs[state[0], state[1]]
-            starting_cost += cost
-        total_cost = starting_cost
+        # starting_cost = 0
+        # for state in self.env.path_states[first_trial][path_id]:
+        #     # cost = self.env.get_pred_cost(state)
+        #     cost = self.env.predicted_costs[state[0], state[1]]
+        #     starting_cost += cost
+        # total_cost = starting_cost
 
-        ## compound costs per trial
-        total_cost = self.env.compound_cost(total_cost, first_trial)
+        # ## compound costs per trial
+        # total_cost = self.env.compound_cost(total_cost, first_trial)
+
+        ## or, arm-weighted costs
+        aligned_states, orthogonal_states = self.env.path_aligned_states[first_trial][path_id], self.env.path_orthogonal_states[first_trial][path_id]
+        total_cost = sum(self.agent.arm_reweighting(self.env.predicted_costs, aligned_states, orthogonal_states))
 
         ## if final trial, just stop here
         if action_leaf.terminated:
@@ -690,27 +706,32 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
             depth+=1
 
             ## GREEDY: get the total cost of the paths and return the better one
+            # path_costs = []
+            # for path_id in range(self.n_afc):
+            #     path_states = self.env.path_states[trial][path_id]
+            #     ro_cost = 0
+            #     for state in path_states:
+            #         # cost = self.env.get_pred_cost(state)
+            #         cost = self.env.predicted_costs[state[0], state[1]]
+            #         ro_cost += cost
+            #     path_costs.append(ro_cost)
+            # # best_ro_cost = np.max(path_costs) 
+            # best_ro_cost = self.env.compound_cost(np.max(path_costs), trial) ## or if using compound costs
+            # remaining_ro_costs.append(best_ro_cost)
+            # ro_choices.append(np.argmax(path_costs))
+            # total_cost += best_ro_cost * self.discount_factor**depth
+
+            ## or greedy but wrt/ arm-weighted cost
             path_costs = []
             for path_id in range(self.n_afc):
-                path_states = self.env.path_states[trial][path_id]
-                ro_cost = 0
-                for state in path_states:
-                    # cost = self.env.get_pred_cost(state)
-                    cost = self.env.predicted_costs[state[0], state[1]]
-                    ro_cost += cost
-                path_costs.append(ro_cost)
-            # first_step_action = self.tree_path[0][1]
-            # if first_step_action == 0:
-            #     first_step_cost = path_costs[0]
-            #     print('first step cost:', first_step_cost)
-            #     print('RO trial:', trial,', costs:',path_costs)
-            remaining_ro_costs.append(np.max(path_costs))
+                aligned_states, orthogonal_states = self.env.path_aligned_states[trial][path_id], self.env.path_orthogonal_states[trial][path_id]
+                path_cost = sum(self.agent.arm_reweighting(self.env.predicted_costs, aligned_states, orthogonal_states))
+                path_costs.append(path_cost)
+            best_ro_cost = np.max(path_costs)
+            remaining_ro_costs.append(best_ro_cost)
             ro_choices.append(np.argmax(path_costs))
-            
-            
-            # best_ro_cost = np.max(path_costs) 
-            best_ro_cost = self.env.compound_cost(np.max(path_costs), trial) ## or if using compound costs
             total_cost += best_ro_cost * self.discount_factor**depth
+
 
             ## RANDOM: randomly choose between the paths
             # path_id = np.random.choice(self.n_AFC)

@@ -26,14 +26,10 @@ import pandas as pd
 from scipy.special import beta, logsumexp, digamma, comb, betaln
 
 
-
-
-    
-
 ### base farmer model?
 class Farmer:
 
-    def __init__(self, N, context_prior=0.5, metric='cityblock'):
+    def __init__(self, N, context_prior=0.5, metric='cityblock', known_context=False):
 
         self.metric = metric
         self.N = N
@@ -42,7 +38,7 @@ class Farmer:
         
         ## initialise context prior prob
         self.context_prob = context_prior
-        # print('initialised with context prior:', self.context_prob)
+        self.known_context = known_context
 
 
     ### interactions with the environment
@@ -119,13 +115,15 @@ class Farmer:
             
             ### determine context indicators
 
-            ## simple case: certain prior
-            # self.col_world_prob = 1 ## tmp, i.e. probability of one context or another
 
             ## inference case: infer posterior probability, given observations
-            context_prior = self.context_prob
-            self.context_prob = sampler.context_posterior(context_prior=context_prior)
-            # print('sampler prior:', context_prior, ',', 'posterior:', self.context_prob)
+            if not self.known_context:
+                context_prior = self.context_prob
+                self.context_prob = sampler.context_posterior(context_prior=context_prior)
+
+            ## simple case: certain prior
+            elif self.known_context:
+                self.context_prob = 1.0 if self.known_context == 'column' else 0.0
 
             ## use inferred context to sample
             if not CE:
@@ -212,199 +210,6 @@ class Farmer:
         context_prob = sampler.context_posterior(context_prior=self.context_prob)
         return context_prob
     
-    ## calculate the KL divergence summed over all grid
-    def grid_KL(self, prior_obs, posterior_obs, context = 'column'):
-
-        prior_sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, prior_obs, N=self.N)
-        posterior_sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, posterior_obs, N=self.N)
-
-        if prior_obs is None:
-            n_prior_obs = 0
-        else:
-            n_prior_obs = len(prior_obs)
-        n_posterior_obs = len(posterior_obs)
-
-        KLs = []
-        if context == 'column':
-            for i in range(self.N):
-
-                ## define prior params - that is, the params before the new observations are made
-                low_counts_prior = prior_sampler.low_counts_cols[i]
-                high_counts_prior = prior_sampler.high_counts_cols[i]
-                alpha_prior = prior_sampler.alpha_col + low_counts_prior
-                beta_prior = prior_sampler.beta_col + high_counts_prior
-
-                ## repeat for posterior params
-                low_counts_post = posterior_sampler.low_counts_cols[i]
-                high_counts_post = posterior_sampler.high_counts_cols[i]
-                alpha_post = posterior_sampler.alpha_col + low_counts_post
-                beta_post = posterior_sampler.beta_col + high_counts_post
-
-                ## calculate the difference in low and high counts
-                low_counts_diff = low_counts_post - low_counts_prior
-                high_counts_diff = high_counts_post - high_counts_prior
-
-                ## calculate the KL divergence
-                KL = self.KL_divergence(alpha_prior, beta_prior, alpha_post, beta_post, low_counts_diff, high_counts_diff) 
-                KLs.append(KL)
-
-        elif context == 'row':
-            for j in range(self.N):
-
-                ## define prior params - that is, the params before the new observations are made
-                low_counts_prior = prior_sampler.low_counts_rows[j]
-                high_counts_prior = prior_sampler.high_counts_rows[j]
-                alpha_prior = prior_sampler.alpha_row + low_counts_prior
-                beta_prior = prior_sampler.beta_row + high_counts_prior
-
-                ## repeat for posterior params
-                low_counts_post = posterior_sampler.low_counts_rows[j]
-                high_counts_post = posterior_sampler.high_counts_rows[j]
-                alpha_post = posterior_sampler.alpha_row + low_counts_post
-                beta_post = posterior_sampler.beta_row + high_counts_post
-
-                ## calculate the difference in low and high counts
-                low_counts_diff = low_counts_post - low_counts_prior
-                high_counts_diff = high_counts_post - high_counts_prior
-
-                ## calculate the KL divergence
-                KL = self.KL_divergence(alpha_prior, beta_prior, alpha_post, beta_post, low_counts_diff, high_counts_diff) 
-                KLs.append(KL)
-        
-        return np.sum(KLs)
-    
-
-    ## KL divergence between two beta distributions
-    def KL_divergence(self, alpha_q, beta_q, alpha_p, beta_p, low_counts_diff, high_counts_diff):
-
-        """
-        Calculate the KL divergence between a prior Q and posterior P beta distribution.
-        The prior is a beta distribution with parameters alpha and beta,
-        and the posterior is a beta distribution with parameters alpha + s and beta + f,
-        where s is the number of successes and f is the number of failures."""
-
-        assert alpha_q + low_counts_diff == alpha_p, 'alpha_q + s should equal alpha_p, but got {} + {} != {}'.format(alpha_q, low_counts_diff, alpha_p)
-        KL = np.log((beta(alpha_p, beta_p) / beta(alpha_q, beta_q))) - low_counts_diff*(digamma(alpha_q) - digamma(alpha_q + beta_q)) - high_counts_diff*(digamma(beta_q) - digamma(alpha_q + beta_q))
-
-        return KL
-    
-
-    ## calculate the expected KL of an obs sequence of length n 
-    # def expected_KL(self, prior_obs, new_obs, context):
-        
-    #     ## loop through possible sequences of n binary outcomes (0=low, 1=high)
-    #     EKL_total = 0.0
-    #     n_obs = len(new_obs)
-    #     for seq in product([self.low_cost, self.high_cost], repeat=n_obs):
-
-    #         ## initialise a farmer based on the prior observations (+ the new hypothetical obs)
-    #         prior_sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, prior_obs, N=self.N, CE=True) ## can use CE since we are only interested in the prior mean p and q
-    #         prior_sampler.simple_sample(col_context=context=='column')
-            
-    #         ## loop through hypothetical observations
-    #         obs_tmp = prior_obs.copy() if prior_obs is not None else np.array([])
-    #         p_seq = 1.0
-            
-    #         ### update the sampled after each hypothetical observation??
-    #         if context == 'column':
-    #             for oi, outcome in enumerate(seq):
-
-    #                 ## initialise a farmer based on the prior observations (+ the new hypothetical obs)
-    #                 # prior_sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, obs_tmp, N=self.N, CE=True) ## can use CE since we are only interested in the prior mean p and q
-                    
-    #                 ## append prior obs with hypothetical obs
-    #                 i, j, _ = new_obs[oi]
-    #                 obs_tmp = np.vstack([obs_tmp, [i,j, outcome]]) if len(obs_tmp)>0 else np.array([[i,j, outcome]])
-
-    #                 ## get prior predictive probability of a low cost in this state
-    #                 # prior_sampler.simple_sample(col_context=True)
-    #                 p_obs = prior_sampler.col_probs[0][int(j)]
-
-    #                 ## update prob of observing this sequence
-    #                 p_seq *= p_obs if outcome == self.low_cost else (1 - p_obs)
-
-
-
-    #         elif context == 'row':
-    #             for oi, outcome in enumerate(seq):
-
-    #                 ## initialise a farmer based on the prior observations (+ the new hypothetical obs)
-    #                 # prior_sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, obs_tmp, N=self.N, CE=True) ## can use CE since we are only interested in the prior mean p and q
-                    
-    #                 ## append prior obs with hypothetical obs
-    #                 i, j, _ = new_obs[oi]
-    #                 obs_tmp = np.vstack([obs_tmp, [i,j, outcome]]) if len(obs_tmp)>0 else np.array([[i,j, outcome]])
-
-    #                 ## get prior predictive probability of a low cost in this state
-    #                 # prior_sampler.simple_sample(col_context=False)
-    #                 p_obs = prior_sampler.row_probs[0][int(i)]
-
-    #                 ## update prob of observing this sequence
-    #                 p_seq *= p_obs if outcome == self.low_cost else (1 - p_obs)
-            
-    #         # Compute KL for this hypothetical final posterior
-    #         KL_seq = self.grid_KL(prior_obs, obs_tmp, context)
-    #         # print('seq:', seq, 'p_seq:', p_seq, 'KL_seq',KL_seq)
-    #         EKL_total += p_seq * KL_seq
-
-    #     return EKL_total
-
-    def beta_binomial_pmf(self, k, n, a, b):
-        """Beta-binomial predictive probability p(k | a, b, n)."""
-        return comb(n, k) * np.exp(betaln(a + k, b + n - k) - betaln(a, b))
-
-    def expected_KL(self, prior_obs, new_obs, context):
-        """
-        Compute the expected KL divergence for a planned set of observations
-        without enumerating all binary sequences, using the beta-binomial formula.
-        """
-        EKL_total = 0.0
-        
-        # Initialise prior sampler to get current alpha/beta params after prior_obs
-        prior_sampler = GridSampler(self.alpha_row, self.beta_row,
-                                    self.alpha_col, self.beta_col,
-                                    self.low_cost, self.high_cost,
-                                    prior_obs, N=self.N, CE=True)
-        prior_sampler.simple_sample(col_context=(context == 'column'))
-
-        # Group planned observations by row (row context) or col (column context)
-        if context == 'row':
-            group_key = lambda obs: obs[0]  # group by row index
-            alphas = prior_sampler.alpha_row
-            betas = prior_sampler.beta_row
-        else:
-            group_key = lambda obs: obs[1]  # group by column index
-            alphas = prior_sampler.alpha_col
-            betas = prior_sampler.beta_col
-
-        grouped = {}
-        for i, j, _ in new_obs:
-            key = group_key((i, j, None))
-            grouped.setdefault(key, []).append((i, j))
-        
-        # Iterate over each row/col group independently
-        for idx, obs_list in grouped.items():
-            n_i = len(obs_list)       # planned obs in this row/col
-            # a_i = alphas[idx]
-            # b_i = betas[idx]
-            a_i = alphas ## hacky - these need to be alpha + low_counts etc.
-            b_i = betas
-            
-            # Sum over k successes
-            E_KL_i = 0.0
-            for k in range(n_i + 1):
-                p_k = self.beta_binomial_pmf(k, n_i, a_i, b_i)
-                KL_k = self.KL_divergence(a_i, b_i, a_i + k, b_i + n_i - k, k, n_i-k)
-                E_KL_i += p_k * KL_k
-            print('n_i:', n_i, 'idx:', idx, 'obs_list:', obs_list, 'E_KL_i:', E_KL_i)
-            
-            EKL_total += E_KL_i
-        
-        return EKL_total
-
-
-
-
 
     ## dynamic programming
     def dp(self, posterior_p_cost, expected_cost=True):
@@ -498,8 +303,6 @@ class Farmer:
         else:
             greedy = True 
 
-
-
         ## initialise model's internal variables
         self.n_afc = n_afc ## can sort this out later
         self.p_choice = np.zeros((n_cities, n_days, n_trials, self.n_afc))
@@ -523,24 +326,44 @@ class Farmer:
         ## for extracting some useful trial data...
         self.path_future_overlaps = np.zeros((n_cities, n_days, n_trials, self.n_afc))
         self.path_past_overlaps = np.zeros((n_cities, n_days, n_trials, self.n_afc))
-        self.path_past_observed_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
-        self.path_past_observed_no_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.path_past_observed_high_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.path_past_observed_low_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
         self.path_len = np.zeros((n_cities, n_days, n_trials))
         self.day_costs = np.zeros((n_cities, n_days, n_trials)) ## i.e. the cost of the path chosen by the participant on that trial
         self.distr_diff = np.zeros((n_cities, n_days, n_trials)) 
+        
+        ## observations on the context-aligned and orthogonal arm of each path
+        self.aligned_arm_actual_high_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.aligned_arm_actual_low_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.orthogonal_arm_actual_high_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.orthogonal_arm_actual_low_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.aligned_arm_gen_high_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.aligned_arm_gen_low_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.orthogonal_arm_gen_high_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.orthogonal_arm_gen_low_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.aligned_arm_cf_gen_high_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.aligned_arm_cf_gen_low_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.orthogonal_arm_cf_gen_high_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.orthogonal_arm_cf_gen_low_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
 
         
         ## init params and hyperparams
         if agent == 'BAMCP':
             self.temp = params[0]
             self.lapse = params[1]
+            self.arm_weight = params[2]
             n_sims = hyperparams['n_sims']
             exploration_constant = hyperparams['exploration_constant']
             discount_factor = hyperparams['discount_factor']
             n_iter = hyperparams['n_iter']
-        elif agent == 'CE':
+        elif (agent == 'CE'):
             self.temp = params[0]
             self.lapse = params[1]
+        elif (agent == 'CE_one_arm'):
+            self.temp = params[0]
+            self.lapse = params[1]
+            self.arm_weight = params[2]
+        
             # n_sims = hyperparams['n_sims']
             # n_iter = hyperparams['n_iter']
         # elif agent == 'human': ## hacky - need this for CE calcs
@@ -552,13 +375,10 @@ class Farmer:
 
         ## loop through cities
         for city in range(n_cities):
-
-            ## context prior resets
             context_prior = 0.5
 
             ## loop through days
             for day in range(n_days):
-                self.context_prior = context_prior
 
                 ## get the environment for this day
                 if envs:
@@ -567,13 +387,20 @@ class Farmer:
                     ## need to do some fixes for old envs
                     if env.expt == '2AFC':
                         env.expt = 'AFC'
+                    
+                    ## get context alignment of states
+                    env.get_alignment()
+
                 env_copy = copy.deepcopy(env)
                 env_copy.set_trial(0)
                 assert not hasattr(env_copy, 'obs'), 'env_copy.obs should not exist before the first trial: {}'.format(len(env_copy.obs),', city:', city+1, 'day:', day+1)
+                
+                ## context prior resets (only if context is unknown)
+                if not self.known_context:
+                    self.context_prob = context_prior
+                elif self.known_context:
+                    self.known_context = env_copy.context
 
-                ## otherwise, generate a new one
-                # else:
-                #     env = make_env(N, n_trials, expt_info, beta_params, metric)
 
                 ## FIX FOR OLD ENVS: rename some attributes (episode --> trial, etc.)
                 if hasattr(env_copy, 'n_episodes'):
@@ -589,7 +416,8 @@ class Farmer:
                 for t in range(n_trials):
 
                     ## reset env/trial
-                    self.context_prob = context_prior ## tmp fix: fix the prior to the prior that was used at the beginning of the grid (to prevent observations contributing to the posterior on multiple trials)
+                    if self.known_context is None: ## only reset if context is unknown
+                        self.context_prob = context_prior ## tmp fix: fix the prior to the prior that was used at the beginning of the grid (to prevent observations contributing to the posterior on multiple trials)
                     env_copy.reset()
                     env_copy.set_sim(True)
                     start = env_copy.current
@@ -604,6 +432,7 @@ class Farmer:
                     if agent == 'human':
                         paths = env_copy.path_states[t].copy()
                         obs_list = [tuple(obs[:2]) for obs in env_copy.obs.tolist()]
+                        obs_list = list(set(obs_list)) # no repeated obs!
                         for i, path in enumerate(paths):
                             try:
                                 
@@ -612,12 +441,13 @@ class Farmer:
                                 path_past_overlap = len(overlap)
 
                                 ## get the number of costs and no-costs that comprise these overlapping states
-                                path_past_observed_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.high_cost for obs in overlap)
-                                path_past_observed_no_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.low_cost for obs in overlap)
+                                path_past_observed_high_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.high_cost for obs in overlap)
+                                path_past_observed_low_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.low_cost for obs in overlap)
                                 self.path_future_overlaps[city, day, t, i] = env_copy.path_future_overlaps[t][i]
                                 self.path_past_overlaps[city, day, t, i] = path_past_overlap
-                                self.path_past_observed_costs[city, day, t, i] = path_past_observed_costs
-                                self.path_past_observed_no_costs[city, day, t, i] = path_past_observed_no_costs
+                                self.path_past_observed_high_costs[city, day, t, i] = path_past_observed_high_costs
+                                self.path_past_observed_low_costs[city, day, t, i] = path_past_observed_low_costs
+
                         
                             ## sometimes need to convert each np array to list of tuples...
                             except:
@@ -625,14 +455,194 @@ class Farmer:
                                 path = set(map(tuple, path))
                                 overlap = set(path).intersection(set(obs_list))
                                 path_past_overlap = len(overlap)
-                                path_past_observed_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.high_cost for obs in overlap)
-                                path_past_observed_no_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.low_cost for obs in overlap)
+                                path_past_observed_high_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.high_cost for obs in overlap)
+                                path_past_observed_low_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.low_cost for obs in overlap)
                                 self.path_future_overlaps[city, day, t, i] = env_copy.path_future_overlaps[t][i]
                                 self.path_past_overlaps[city, day, t, i] = path_past_overlap
-                                self.path_past_observed_costs[city, day, t, i] = path_past_observed_costs
-                                self.path_past_observed_no_costs[city, day, t, i] = path_past_observed_no_costs
+                                self.path_past_observed_high_costs[city, day, t, i] = path_past_observed_high_costs
+                                self.path_past_observed_low_costs[city, day, t, i] = path_past_observed_low_costs
                             
-                            assert self.path_past_overlaps[city, day, t, i] == self.path_past_observed_costs[city, day, t, i] + self.path_past_observed_no_costs[city, day, t, i], 'path {} past overlap does not match observed costs and no-costs\n path past overlap: {}, path observed costs: {}, path observed no-costs: {}'.format(i+1, self.path_past_overlaps[city, day, t, i], self.path_past_observed_costs[city, day, t, i], self.path_past_observed_no_costs[city, day, t, i])
+                            assert self.path_past_overlaps[city, day, t, i] == self.path_past_observed_high_costs[city, day, t, i] + self.path_past_observed_low_costs[city, day, t, i], 'path {} past overlap does not match observed costs and no-costs\n path past overlap: {}, path observed costs: {}, path observed no-costs: {}'.format(i+1, self.path_past_overlaps[city, day, t, i], self.path_past_observed_high_costs[city, day, t, i], self.path_past_observed_low_costs[city, day, t, i])
+                            
+
+                            ## get aligned vs orthogonal states
+                            path_states = env_copy.path_states[t][i]
+                            aligned_states, orthogonal_states = env_copy.path_aligned_states[t][i], env_copy.path_orthogonal_states[t][i]
+
+                            ## get info on costs on rows and columns
+                            observed_high_cost_cols = {obs[1] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == self.high_cost}
+                            observed_low_cost_cols = {obs[1] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == self.low_cost}
+                            observed_high_cost_rows = {obs[0] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == self.high_cost}
+                            observed_low_cost_rows = {obs[0] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == self.low_cost}
+                            observed_high_cost_states = {tuple(obs) for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == self.high_cost}
+                            observed_low_cost_states = {tuple(obs) for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == self.low_cost}
+
+                            if env_copy.context == 'column':
+                                
+                                ### actual costs
+                                
+                                ## count how many of these aligned states have actual high and low costs
+                                self.aligned_arm_actual_high_costs[city, day, t, i] = sum(1 for state in aligned_states if state in observed_high_cost_states)
+                                self.aligned_arm_actual_low_costs[city, day, t, i] = sum(1 for state in aligned_states if state in observed_low_cost_states)
+
+                                ## count how many of the orthogonal states have actual high and low costs
+                                self.orthogonal_arm_actual_high_costs[city, day, t, i] = sum(1 for state in orthogonal_states if state in observed_high_cost_states)
+                                self.orthogonal_arm_actual_low_costs[city, day, t, i] = sum(1 for state in orthogonal_states if state in observed_low_cost_states)
+
+                                
+                                ### gen costs
+                                
+                                ## count how many of these aligned states have observations on the main column
+                                self.aligned_arm_gen_high_costs[city, day, t, i] = sum(
+                                    1 for state in aligned_states
+                                    if (state[1] in observed_high_cost_cols) 
+                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
+                                )
+                                self.aligned_arm_gen_low_costs[city, day, t, i] = sum(
+                                    1 for state in aligned_states 
+                                    if (state[1] in observed_low_cost_cols)
+                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
+                                )
+
+                                ## count how many of the orthogonal states have observations on their respective columns
+                                self.orthogonal_arm_gen_high_costs[city, day, t, i] = sum(
+                                    1 for state in orthogonal_states 
+                                    if (state[1] in observed_high_cost_cols)
+                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
+                                )
+                                self.orthogonal_arm_gen_low_costs[city, day, t, i] = sum(
+                                    1 for state in orthogonal_states 
+                                    if (state[1] in observed_low_cost_cols)
+                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
+                                )
+
+
+                                ### counterfactual generalisation
+
+                                ## how many of the orthogonal states have observations on the main row
+                                self.orthogonal_arm_cf_gen_high_costs[city, day, t, i] = sum(
+                                    1 for state in orthogonal_states 
+                                    if (state[0] in observed_high_cost_rows)
+                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
+                                )
+                                self.orthogonal_arm_cf_gen_low_costs[city, day, t, i] = sum(
+                                    1 for state in orthogonal_states 
+                                    if (state[0] in observed_low_cost_rows)
+                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
+                                )
+
+                                ## and count how many of the aligned states have observations on their respective rows
+                                self.aligned_arm_cf_gen_high_costs[city, day, t, i] = sum(
+                                    1 for state in aligned_states 
+                                    if (state[0] in observed_high_cost_rows)
+                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
+                                )
+                                self.aligned_arm_cf_gen_low_costs[city, day, t, i] = sum(
+                                    1 for state in aligned_states 
+                                    if (state[0] in observed_low_cost_rows)
+                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
+                                )
+                                
+                                ## debugging...
+                                # if (t ==3) & (env_copy.objective =='rewards'):
+                                #     print('obs high cost rows:', observed_high_cost_rows)
+                                #     print('obs low cost rows:', observed_low_cost_rows)
+                                #     print('obs high cost cols:', observed_high_cost_cols)
+                                #     print('obs low cost cols:', observed_low_cost_cols)
+                                #     print('path states', path_states)
+                                #     print('aligned_states:', aligned_states)
+                                #     print('orthogonal_states:', orthogonal_states)
+                                #     print('aligned_arm_gen_high_costs:', self.aligned_arm_gen_high_costs[city, day, t, i])
+                                #     print('aligned_arm_gen_low_costs:', self.aligned_arm_gen_low_costs[city, day, t, i])
+                                #     print('orthogonal_arm_gen_high_costs:', self.orthogonal_arm_gen_high_costs[city, day, t, i])
+                                #     print('orthogonal_arm_gen_low_costs:', self.orthogonal_arm_gen_low_costs[city, day, t, i])
+                                #     raise Exception
+
+                            elif env_copy.context == 'row':
+
+                                ### actual costs
+
+                                ## count how many of these aligned states have actual high and low costs
+                                self.aligned_arm_actual_high_costs[city, day, t, i] = sum(
+                                    1 for state in aligned_states 
+                                    if state in observed_high_cost_states)
+                                self.aligned_arm_actual_low_costs[city, day, t, i] = sum(
+                                    1 for state in aligned_states if state in observed_low_cost_states)
+
+                                ## count how many of the orthogonal states have actual high and low costs
+                                self.orthogonal_arm_actual_high_costs[city, day, t, i] = sum(
+                                    1 for state in orthogonal_states if state in observed_high_cost_states)
+                                self.orthogonal_arm_actual_low_costs[city, day, t, i] = sum(
+                                    1 for state in orthogonal_states if state in observed_low_cost_states)
+
+                                
+                                ### gen costs
+                                
+                                ## count how many of these aligned states have observations on the main row
+                                self.aligned_arm_gen_high_costs[city, day, t, i] = sum(
+                                    1 for state in aligned_states 
+                                    if (state[0] in observed_high_cost_rows)
+                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
+                                )
+                                self.aligned_arm_gen_low_costs[city, day, t, i] = sum(
+                                    1 for state in aligned_states 
+                                    if (state[0] in observed_low_cost_rows)
+                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
+                                )
+
+                                ## count how many of the orthogonal states have observations on their respective rows
+                                self.orthogonal_arm_gen_high_costs[city, day, t, i] = sum(
+                                    1 for state in orthogonal_states 
+                                    if (state[0] in observed_high_cost_rows)
+                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
+                                )
+                                self.orthogonal_arm_gen_low_costs[city, day, t, i] = sum(
+                                    1 for state in orthogonal_states 
+                                    if (state[0] in observed_low_cost_rows)
+                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
+                                )
+
+                                
+                                ### counterfactual generalisation
+
+                                ## how many of the orthogonal states have observations on the main col
+                                self.orthogonal_arm_cf_gen_high_costs[city, day, t, i] = sum(
+                                    1 for state in orthogonal_states 
+                                    if (state[1] in observed_high_cost_cols)
+                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
+                                )
+                                self.orthogonal_arm_cf_gen_low_costs[city, day, t, i] = sum(
+                                    1 for state in orthogonal_states 
+                                    if (state[1] in observed_low_cost_cols)
+                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
+                                )
+
+                                ## and count how many of the aligned states have observations on their respective cols
+                                self.aligned_arm_cf_gen_high_costs[city, day, t, i] = sum(
+                                    1 for state in aligned_states 
+                                    if (state[1] in observed_high_cost_cols)
+                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
+                                )
+                                self.aligned_arm_cf_gen_low_costs[city, day, t, i] = sum(
+                                    1 for state in aligned_states 
+                                    if (state[1] in observed_low_cost_cols)
+                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
+                                )
+
+                                ## debugging...
+                                # if (t ==3) & (env_copy.objective =='rewards'):
+                                #     print('obs high cost rows:', observed_high_cost_rows)
+                                #     print('obs low cost rows:', observed_low_cost_rows)
+                                #     print('obs high cost cols:', observed_high_cost_cols)
+                                #     print('obs low cost cols:', observed_low_cost_cols)
+                                #     print('path states', path_states)
+                                #     print('aligned_states:', aligned_states)
+                                #     print('orthogonal_states:', orthogonal_states)
+                                #     print('aligned_arm_gen_high_costs:', self.aligned_arm_gen_high_costs[city, day, t, i])
+                                #     print('aligned_arm_gen_low_costs:', self.aligned_arm_gen_low_costs[city, day, t, i])
+                                #     print('orthogonal_arm_gen_high_costs:', self.orthogonal_arm_gen_high_costs[city, day, t, i])
+                                #     print('orthogonal_arm_gen_low_costs:', self.orthogonal_arm_gen_low_costs[city, day, t, i])
+                                #     raise Exception
                     
                         ## misc
                         self.day_costs[city, day, t] = np.nansum(self.total_costs[city, day, :t+1]) ## i.e. costs observed so far today
@@ -719,7 +729,49 @@ class Farmer:
 
                         ## or, do probability matching if not greedy
                         if not greedy:
-                            action = np.random.choice(np.arange(len(MCTS_Q)), p=softmax(MCTS_Q))
+                            action = np.random.choice(np.arange(len(path_costs)), p=softmax(path_costs))
+                    
+                    elif agent == 'CE_one_arm':
+                        env_copy.set_sim(False)
+                        
+                        ## get posterior mean grid
+                        self.root_samples(obs=env_copy.obs, CE=True, combo=False)
+                        env_copy.receive_predictions(self.posterior_mean_p_cost)
+
+                        ## get the cost of each path under the posterior mean (weighted by arm_weight)
+                        path_costs = []
+                        for path_id in range(env_copy.n_afc):
+                            path_states = env_copy.path_states[t][path_id]
+                            aligned_states, orthogonal_states = env_copy.path_aligned_states[t][path_id], env_copy.path_orthogonal_states[t][path_id]
+                            unweighted_pred_costs = self.posterior_mean_p_cost*env_copy.low_cost + (1-self.posterior_mean_p_cost)*env_copy.high_cost
+                            weighted_path_costs = self.arm_reweighting(unweighted_pred_costs, aligned_states, orthogonal_states)
+                            path_costs.append(np.sum(weighted_path_costs))
+                            
+                            ## debugging
+                            # print('path_states:', path_states)
+                            # print('aligned_states:', aligned_states)
+                            # print('context:', env_copy.context)
+                            # print('all path_costs:', [self.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost for state in path_states])
+                            # print('all aligned path_costs:', [self.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost for state in aligned_states])
+                            # print('all orthogonal path_costs:', [self.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost for state in orthogonal_states])
+                            # print('arm weight:', self.arm_weight)
+                            # print('path_cost:', weighted_path_cost)
+                            # print()
+                            # if t==3:
+                            #     raise Exception('check this')
+
+                        ## choose the path with the lowest total cost
+                        max_cost = np.max(path_costs)
+                        action = argm(path_costs, max_cost)
+                        self.actions[city, day, t] = action
+                        self.Q_vals[city, day, t] = np.array(path_costs)
+                        self.p_choice[city, day, t] = self.softmax(np.array(path_costs))
+                        correct_path = np.argmax(env_copy.path_actual_costs[t])
+                        self.p_correct[city, day, t] = self.p_choice[city, day, t][correct_path]
+
+                        ## or, do probability matching if not greedy
+                        if not greedy:
+                            action = np.random.choice(np.arange(len(path_costs)), p=softmax(path_costs))
 
                     elif agent == 'human':
                         
@@ -761,49 +813,29 @@ class Farmer:
                         #             path_cost += sample_costs[state[0], state[1]]
                         #         sample_total_costs[s, path_id] = path_cost
 
+
+                        ### OR, vectorized sampling approach:
+
                         # --- 1. PRE-CALCULATION (Do this once outside the sampling loop) ---
                         # Create the Path Weight Matrix W (N_path x N^2)
-                        W = np.zeros((env_copy.n_afc, self.N**2))
-                        for path_id in range(env_copy.n_afc):
-                            path_states = env_copy.path_states[t][path_id]
-                            flat_indices = [state[0] * self.N + state[1] for state in path_states]
-                            W[path_id, flat_indices] = 1
-
-
-                        # --- 2. VECTORIZED SAMPLING (Replaces your N_samples loop) ---
-                        n_samples = 10000
-                        self.root_samples(obs = env_copy.obs, n_samples=n_samples, CE=False, combo=False)
-                        p_costs_flat = self.all_posterior_p_costs.reshape(n_samples, self.N**2)
-                        random_draws = np.random.random((n_samples, self.N**2))
-                        sample_costs_binary = (random_draws < p_costs_flat).astype(int) 
-                        sample_costs_vectorized = sample_costs_binary * self.high_cost + (1 - sample_costs_binary) * self.low_cost
-
-                        # Step 3: Vectorized Path Summation
-                        sample_total_costs = sample_costs_vectorized @ W.T 
-
-                        # if t==2:
-                        #     plt.figure()
-                        #     sns.histplot(sample_total_costs[:,0], color='blue', label='path A', stat='probability', kde=True)
-                        #     sns.histplot(sample_total_costs[:,1], color='orange', label='path B', stat='probability', kde=True)
-                        #     ## crash for debugging
-                        #     plt.show()
-                        #     assert False, 'crash for debugging'                                
-                        
-
-                        ### or, analytically using posterior means
-                        
-                        ## get array of p(cost) for states on each path
-                        # probs_per_path = np.zeros((env_copy.n_afc, len(env_copy.path_states[t][0]))) ## assuming that both paths are the same length
+                        # W = np.zeros((env_copy.n_afc, self.N**2))
                         # for path_id in range(env_copy.n_afc):
                         #     path_states = env_copy.path_states[t][path_id]
-                        #     for s, state in enumerate(path_states):
-                        #         probs_per_path[path_id, s] = self.posterior_mean_p_cost[state[0], state[1]]
+                        #     flat_indices = [state[0] * self.N + state[1] for state in path_states]
+                        #     W[path_id, flat_indices] = 1
 
-                        ## get difference between distributions over total costs
-                        metric = 'OT'
-                        # metric = 'p_sup'
-                        correct_path = np.argmax(env_copy.path_actual_costs[t]) 
-                        self.distr_diff[city, day, t] = path_distr_diff(sample_total_costs[:,0], sample_total_costs[:,1], metric, correct_path)
+
+                        # # --- 2. VECTORIZED SAMPLING (Replaces your N_samples loop) ---
+                        # n_samples = 10000
+                        # self.root_samples(obs = env_copy.obs, n_samples=n_samples, CE=False, combo=False)
+                        # p_costs_flat = self.all_posterior_p_costs.reshape(n_samples, self.N**2)
+                        # random_draws = np.random.random((n_samples, self.N**2))
+                        # sample_costs_binary = (random_draws < p_costs_flat).astype(int) 
+                        # sample_costs_vectorized = sample_costs_binary * self.high_cost + (1 - sample_costs_binary) * self.low_cost
+
+                        # # Step 3: Vectorized Path Summation
+                        # sample_total_costs = sample_costs_vectorized @ W.T 
+
 
                         ## or, only calculate the difference if the CE's belief does indeed favour the better path - i.e. if CE_aciton == correct_path
                         # if CE_action == correct_path:
@@ -829,7 +861,7 @@ class Farmer:
                         ## if the participant has made a choice, then we use their action (rather than the model's)
                         if not missed:
                             action = df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_chosen'].values[0]=='b'                        
-                            assert df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_A_expected_cost'].values[0] == env_copy.path_expected_costs[t][0], 'expected cost does not match ppt data\n env: {}, ppt: {}'.format(env_copy.path_expected_costs[t][0], df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_A_expected_cost'].values[0])
+                            assert np.isclose(df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_A_expected_cost'].values[0], env_copy.path_expected_costs[t][0], rtol=1e-5), 'expected cost does not match ppt data\n env: {}, ppt: {}'.format(env_copy.path_expected_costs[t][0], df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_A_expected_cost'].values[0])
 
                         else:
                             # print('missed in city {}, day {}, trial {}'.format(city+1, day+1, t+1))
@@ -1021,3 +1053,33 @@ class Farmer:
         p_value = scipy.stats.chi2.sf(llr, df)
 
         return pseudo_r2, p_value
+
+
+    ## calculate weighted cost based on aligned vs orthogonal states
+    def arm_reweighting(self, costs, aligned_states, orthogonal_states):
+        """
+        Calculate weighted cost for a path based on aligned and orthogonal state costs.
+        
+        Args:
+            costs: NxN array of costs for each state in the grid
+            aligned_states: set of (row, col) tuples for states on the context-aligned arm
+            orthogonal_states: set of (row, col) tuples for states on the orthogonal arm
+            
+        Returns:
+            weighted_cost: the total weighted cost for the path
+        """
+        
+        ## calculate weights based on arm_weight parameter
+        # arm_weight > 0: favour aligned arm (reduce orthogonal weight)
+        # arm_weight < 0: favour orthogonal arm (reduce aligned weight)
+        aligned_weight = 1 - max(0.0, -self.arm_weight)
+        orthogonal_weight = 1 - max(0.0, self.arm_weight)
+        
+        ## calculate weighted cost
+        weighted_costs = []
+        for state in aligned_states:
+            weighted_costs.append(aligned_weight * costs[state[0], state[1]])
+        for state in orthogonal_states:
+            weighted_costs.append(orthogonal_weight * costs[state[0], state[1]])
+            
+        return weighted_costs

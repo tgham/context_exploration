@@ -195,6 +195,8 @@ class GridEnv(gym.Env):
             self.o_traj_total_costs = []
             self.o_traj_actions = []
             self.n_trials = n_trials
+            self.path_aligned_states = []  ## states on each path that are aligned with context
+            self.path_orthogonal_states = []  ## states on each path that are orthogonal to context
 
 
             ## if AFC, we use the same SG pair all the way through
@@ -284,6 +286,7 @@ class GridEnv(gym.Env):
                             path_actual_costs.append(path_actual_cost)
                         self.path_expected_costs.append(path_expected_costs)
                         self.path_actual_costs.append(path_actual_costs)
+                        
                         paths_found = True
 
                 except:
@@ -318,6 +321,9 @@ class GridEnv(gym.Env):
                 for t in range(self.n_trials):
                     for p, path in enumerate(self.path_states[t]):
                         self.path_states[t][p] = [tuple([int(x) for x in state]) for state in path]
+                
+                ## classify states as aligned or orthogonal for all paths across all trials
+                self.get_alignment()
                 
                 ## get info on path overlaps in AFC expt
                 if self.expt == 'AFC':
@@ -1389,3 +1395,73 @@ class GridEnv(gym.Env):
         manhattan_costs = [np.sum(horizontal_trajectory_costs), np.sum(vertical_trajectory_costs)]
 
         return manhattan_costs
+    
+
+    ## get information on which states are orthogonal vs aligned to the context
+    def get_alignment(self):
+        """
+        Classify states in paths as aligned or orthogonal to the context for all trials, 
+        and store them directly as attributes.
+        
+        For column context: aligned states are those where movement is vertical (row changes, column stays same)
+        For row context: aligned states are those where movement is horizontal (column changes, row stays same)
+            
+        Stores:
+            Populates self.path_aligned_states and self.path_orthogonal_states for all trials
+        """
+
+        ## init list
+        if not hasattr(self, 'path_aligned_states'):
+            self.path_aligned_states = []
+        if not hasattr(self, 'path_orthogonal_states'):
+            self.path_orthogonal_states = []
+            
+        # Process all trials
+        for trial_idx in range(self.n_trials):
+            trial_aligned_states = []
+            trial_orthogonal_states = []
+            
+            for path_states in self.path_states[trial_idx]:
+                aligned_states = set()
+                orthogonal_states = set()
+                
+                if len(path_states) < 2:
+                    trial_aligned_states.append(aligned_states)
+                    trial_orthogonal_states.append(orthogonal_states)
+                    continue
+                
+                # Iterate through consecutive state pairs to determine movement direction
+                for idx in range(len(path_states) - 1):
+                    current_state = path_states[idx]
+                    next_state = path_states[idx + 1]
+                    
+                    if self.context == 'column':
+                        # Aligned: vertical movement (column stays constant)
+                        if current_state[1] == next_state[1] and current_state[0] != next_state[0]:
+                            aligned_states.add(tuple(current_state))
+                            aligned_states.add(tuple(next_state))
+                        # Orthogonal: horizontal movement (row stays constant)
+                        elif current_state[0] == next_state[0] and current_state[1] != next_state[1]:
+                            orthogonal_states.add(tuple(current_state))
+                            orthogonal_states.add(tuple(next_state))
+                            
+                    elif self.context == 'row':
+                        # Aligned: horizontal movement (row stays constant)
+                        if current_state[0] == next_state[0] and current_state[1] != next_state[1]:
+                            aligned_states.add(tuple(current_state))
+                            aligned_states.add(tuple(next_state))
+                        # Orthogonal: vertical movement (column stays constant)
+                        elif current_state[1] == next_state[1] and current_state[0] != next_state[0]:
+                            orthogonal_states.add(tuple(current_state))
+                            orthogonal_states.add(tuple(next_state))
+                
+                # corner states should only be counted as aligned
+                corner_states = aligned_states.intersection(orthogonal_states)
+                orthogonal_states -= corner_states
+                
+                trial_aligned_states.append(aligned_states)
+                trial_orthogonal_states.append(orthogonal_states)
+            
+            # Store results as attributes
+            self.path_aligned_states.append(trial_aligned_states)
+            self.path_orthogonal_states.append(trial_orthogonal_states)
