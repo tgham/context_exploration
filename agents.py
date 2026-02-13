@@ -26,10 +26,6 @@ import pandas as pd
 from scipy.special import beta, logsumexp, digamma, comb, betaln
 
 
-
-
-    
-
 ### base farmer model?
 class Farmer:
 
@@ -747,30 +743,19 @@ class Farmer:
                         for path_id in range(env_copy.n_afc):
                             path_states = env_copy.path_states[t][path_id]
                             aligned_states, orthogonal_states = env_copy.path_aligned_states[t][path_id], env_copy.path_orthogonal_states[t][path_id]
+                            unweighted_pred_costs = self.posterior_mean_p_cost*env_copy.low_cost + (1-self.posterior_mean_p_cost)*env_copy.high_cost
+                            weighted_path_cost = self.arm_reweighting(unweighted_pred_costs, aligned_states, orthogonal_states)
+                            path_costs.append(weighted_path_cost)
                             
-                            ## corner is the intersection: appears in both aligned and orthogonal segments
-                            corner_states = aligned_states.intersection(orthogonal_states)
-                            if len(corner_states) != 1:
-                                raise ValueError(f"Expected exactly one corner state, found {len(corner_states)} for path {path_id}.")
-                            corner_state = next(iter(corner_states))
-                            orthogonal_states.discard(corner_state)
-                            
-                            ## calculate weighted cost
-                            aligned_weight = 1 - max(0.0, -self.arm_weight)
-                            orthogonal_weight = 1 - max(0.0, self.arm_weight)
-                            path_cost = 0
-                            for state in aligned_states:
-                                path_cost += aligned_weight * (self.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost)
-                            for state in orthogonal_states:
-                                path_cost += orthogonal_weight * (self.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost)
-                            path_costs.append(path_cost)
-                            
+                            ## debugging
                             # print('path_states:', path_states)
                             # print('aligned_states:', aligned_states)
                             # print('context:', env_copy.context)
                             # print('all path_costs:', [self.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost for state in path_states])
                             # print('all aligned path_costs:', [self.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost for state in aligned_states])
-                            # print('path_cost:', path_cost)
+                            # print('all orthogonal path_costs:', [self.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost for state in orthogonal_states])
+                            # print('arm weight:', self.arm_weight)
+                            # print('path_cost:', weighted_path_cost)
                             # print()
                             # if t==3:
                             #     raise Exception('check this')
@@ -1068,3 +1053,33 @@ class Farmer:
         p_value = scipy.stats.chi2.sf(llr, df)
 
         return pseudo_r2, p_value
+
+
+    ## calculate weighted cost based on aligned vs orthogonal states
+    def arm_reweighting(self, costs, aligned_states, orthogonal_states):
+        """
+        Calculate weighted cost for a path based on aligned and orthogonal state costs.
+        
+        Args:
+            costs: NxN array of costs for each state in the grid
+            aligned_states: set of (row, col) tuples for states on the context-aligned arm
+            orthogonal_states: set of (row, col) tuples for states on the orthogonal arm
+            
+        Returns:
+            weighted_cost: the total weighted cost for the path
+        """
+        
+        ## calculate weights based on arm_weight parameter
+        # arm_weight > 0: favour aligned arm (reduce orthogonal weight)
+        # arm_weight < 0: favour orthogonal arm (reduce aligned weight)
+        aligned_weight = 1 - max(0.0, -self.arm_weight)
+        orthogonal_weight = 1 - max(0.0, self.arm_weight)
+        
+        ## calculate weighted cost
+        weighted_cost = 0
+        for state in aligned_states:
+            weighted_cost += aligned_weight * costs[state[0], state[1]]
+        for state in orthogonal_states:
+            weighted_cost += orthogonal_weight * costs[state[0], state[1]]
+            
+        return weighted_cost
