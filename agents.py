@@ -744,8 +744,8 @@ class Farmer:
                             path_states = env_copy.path_states[t][path_id]
                             aligned_states, orthogonal_states = env_copy.path_aligned_states[t][path_id], env_copy.path_orthogonal_states[t][path_id]
                             unweighted_pred_costs = self.posterior_mean_p_cost*env_copy.low_cost + (1-self.posterior_mean_p_cost)*env_copy.high_cost
-                            weighted_path_cost = self.arm_reweighting(unweighted_pred_costs, aligned_states, orthogonal_states)
-                            path_costs.append(weighted_path_cost)
+                            weighted_path_costs = self.arm_reweighting(unweighted_pred_costs, aligned_states, orthogonal_states)
+                            path_costs.append(np.sum(weighted_path_costs))
                             
                             ## debugging
                             # print('path_states:', path_states)
@@ -1076,10 +1076,10 @@ class Farmer:
         orthogonal_weight = 1 - max(0.0, self.arm_weight)
         
         ## calculate weighted cost
-        weighted_cost = 0
+        weighted_costs = []
         for state in aligned_states:
-            weighted_cost += aligned_weight * costs[state[0], state[1]]
+            weighted_costs.append(aligned_weight * costs[state[0], state[1]])
         for state in orthogonal_states:
-            weighted_cost += orthogonal_weight * costs[state[0], state[1]]
+            weighted_costs.append(orthogonal_weight * costs[state[0], state[1]])
             
-        return weighted_cost
+        return weighted_costs
