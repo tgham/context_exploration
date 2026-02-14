@@ -911,13 +911,14 @@ class Farmer:
                             if not day_terminated:
                                 if next_node_id in MCTS.tree.root.action_leaves[action].children:
                                     MCTS.tree.prune(action, next_node_id)
-                                    assert np.array_equal(MCTS.tree.root.belief_state[2*MCTS.n_afc:], costs), 'error in root update\n root state: {} \n costs: {}'.format(MCTS.tree.root.belief_state[2*MCTS.n_afc:], costs)
+                                    # assert np.array_equal(MCTS.tree.root.belief_state[2*MCTS.n_afc:], costs), 'error in root update\n root state: {} \n costs: {}'.format(MCTS.tree.root.belief_state[2*MCTS.n_afc:], costs)
+                                    assert np.array_equal(MCTS.tree.root.belief_state[1:], costs), 'error in root update\n root state: {} \n costs: {}'.format(MCTS.tree.root.belief_state[2*MCTS.n_afc:], costs)
                                     tree_reset = False
                                 else:
                                     tree_reset = True
                         else:
                             tree_reset = True
-
+    
                     ## get the context prior - i.e. the probability with which samples were drawn
                     context_prior = self.context_prob
 
