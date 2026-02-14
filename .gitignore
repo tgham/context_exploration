@@ -5,7 +5,9 @@
 *.so
 *.o
 *.csv
+*.out
 *.pkl
+*.json
 *.dot
 *.png
 *.pstats

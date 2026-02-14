@@ -44,13 +44,10 @@ def agent_loop(p, agent_params, hyperparams, agents):
     sim_outs = []
 
     ## load env objects
-<<<<<<< HEAD
-    with open('useful_saves/expt_optimisation/simulated_envs/expt_2_rewards/env_objects/expt_2_env_objects_' + str(p) + '.pkl', 'rb') as f:
-=======
     # with open('useful_saves/expt_optimisation/simulated_envs/ppt_'+str(p)+'_envs.pkl', 'rb') as f:
     # with open('useful_saves/expt_optimisation/simulated_envs/env_objects/expt_2_env_objects_' + str(p) + '.pkl', 'rb') as f:
-    with open('useful_saves/expt_optimisation/simulated_envs/env_objects/expt_3_env_objects_' + str(p) + '.pkl', 'rb') as f:
->>>>>>> 6e73cda8174e39204993d961472bc52d90dc934c
+    with open('useful_saves/expt_optimisation/simulated_envs/expt_3/env_objects/expt_3_env_objects_' + str(p) + '.pkl', 'rb') as f: ## USE THIS IS GENERATING SEQS BEFORE SIMULATING
+    # with open('expt/assets/trial_sequences/expt_3/env_objects/expt_3_env_objects_' + str(p) + '.pkl', 'rb') as f: ## USE THIS USING THE SEQS THAT WE ALREADY GENERATED FOR PPTS
         env_objects = pickle.load(f)
 
     ## loop through agents
@@ -95,9 +92,9 @@ beta_params = {
     }
 
 ## trial info
-n_sim_participants = 240
-n_cities = 6
-n_days = 5
+n_sim_participants = 100
+n_cities = 32
+n_days = 1
 n_trials = 4
 expt = 'AFC'
 n_afc = 2
@@ -159,6 +156,7 @@ all_sim_out = {
         'CE_p_choice_B':[],
         'CE_p_choice_C':[],
         'CE_p_correct':[],
+        'distr_diff':[]
     }
 parallel = True
 n_cores = 128
@@ -168,9 +166,10 @@ create=True
 agent_params = [
     0.1, # temp
     0.1, # lapse
+    1, # arm weight
 ]
 hyperparams = {
-    'n_sims': 10000,
+    'n_sims': 25000,
     'exploration_constant': 1,
     'discount_factor': 1,
     'n_iter': 10,
@@ -181,7 +180,7 @@ hyperparams = {
     'N': N,
     'participant': None, ## hacky
 }
-agents = ['BAMCP', 'CE']   
+agents = ['BAMCP', 'CE', 'CE_one_arm']   
 
 ## generate dataset for each participant
 if create:
