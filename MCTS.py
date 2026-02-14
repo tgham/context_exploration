@@ -58,7 +58,7 @@ class MonteCarloTreeSearch():
         self.min_Q = np.zeros(self.env.n_trials) 
 
         ## add state node to the tree
-        self.tree.add_state_node(node_id=node_id, terminated=False, trial = self.actual_trial, n_afc = self.n_afc, parent=None)
+        self.tree.add_state_node(node_id=node_id, cost=None, terminated=False, trial = self.actual_trial, n_afc = self.n_afc, parent=None)
 
     ## create node id, which represents the agent's current state of knowledge, a flattened N*N*2 array representing which cells have a high or low cost
     def init_node_id(self, obs=None, init_info_state=None, trial = None):
@@ -167,7 +167,7 @@ class MonteCarloTreeSearch():
                 if next_node_id in action_leaf.children:
                     node = action_leaf.children[next_node_id]
                 else:
-                    node = self.tree.add_state_node(node_id=next_node_id, terminated=terminated, trial = node_trial, n_afc = self.n_afc, parent=action_leaf)
+                    node = self.tree.add_state_node(node_id=next_node_id, cost = costs, terminated=terminated, trial = node_trial, n_afc = self.n_afc, parent=action_leaf)
                     # if (node_trial==2) and action_leaf.action==0:
                     #     print('new node after action:', action_leaf.action, 'in trial:', node_trial, 'cost:', cost, 'terminated:', terminated)
                     #     print(node)
@@ -534,16 +534,25 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         super().__init__(env, agent, tree, exploration_constant, discount_factor)
 
     ## node_ids are defined by the informational state, i.e. the counts of low and high cost states in each cell
-    def init_node_id(self, obs=None, init_info_state = None, trial=None):
-        if init_info_state is None:
-            init_info_state = np.zeros((self.N, self.N, 2))
-        for i,j,c in obs:
-            i = int(i)
-            j = int(j)
-            cost_idx = 1 if c == self.high_cost else 0
-            init_info_state[i,j,cost_idx] += 1
-        node_id = tuple(init_info_state.flatten())
-        return node_id
+    ## uses sparse representation: frozenset of ((i, j), (low_count, high_count)) for observed cells only
+    ## parent_node_id can be a frozenset from a parent node, or None for the root
+    def init_node_id(self, obs=None, parent_node_id=None, trial=None):
+        # Initialize counts from parent node_id (sparse frozenset) if provided
+        if parent_node_id is not None:
+            counts = dict(parent_node_id)
+        else:
+            counts = {}
+        
+        # Add new observations
+        for i, j, c in obs:
+            i, j = int(i), int(j)
+            low, high = counts.get((i, j), (0, 0))
+            if c == self.high_cost:
+                counts[(i, j)] = (low, high + 1)
+            else:
+                counts[(i, j)] = (low + 1, high)
+        
+        return frozenset(counts.items())
     
     ## in AFC, there is no meaningful state of the MDP, so belief state just contains the trial number
     def check_node(self, node):
@@ -621,8 +630,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         #     print(action_leaf.trial, start_tmp, goal_tmp)
 
         ## get the next node id, i.e. the informational state after taking this path
-        init_info_state = np.array(action_leaf.parent_id).reshape(self.N, self.N, 2)
-        next_node_id = self.init_node_id(simulated_obs, init_info_state, step_trial)
+        next_node_id = self.init_node_id(simulated_obs, action_leaf.parent_id, step_trial)
         # n_total_obs = np.sum([len(self.env.path_states[trial][0]) for trial in range(action_leaf.trial+1)])
         # assert n_total_obs == np.sum(next_node_id), 'total obs and next node id do not match\n total obs: {}, next node id: {}'.format(n_total_obs, np.sum(next_node_id))
 
@@ -1195,9 +1203,8 @@ def simulate_agent(ppt, env_params=None, MCTS_params=None, sampler_params=None, 
 
                             ## update next node id
                             # next_node_id = MCTS.init_node_id(env_copy.obs.copy(), None, t)
-                            init_info_state = np.array(MCTS.tree.root.node_id).reshape(N, N, 2)
                             trial_obs = env_copy.trial_obs.copy()
-                            next_node_id = MCTS.init_node_id(trial_obs, init_info_state, t)
+                            next_node_id = MCTS.init_node_id(trial_obs, MCTS.tree.root.node_id, t)
 
 
                         ## check for backtracking

@@ -64,10 +64,11 @@ class Node:
 
     # __slots__ = ['state', 'n_state_visits', 'cost', 'terminated', 'node_id', 'parent_node_ids', 'N', 'untried_actions', 'action_leaves']
 
-    def __init__(self, node_id, terminated, trial, n_afc, N):
+    def __init__(self, node_id, cost, terminated, trial, n_afc, N):
         
         ## state info
         self.n_state_visits = 0
+        self.cost = cost ## this is given by the obs of the choice just made, e.g. the costs observed on taking the last path
         self.trial = trial
         self.terminated = terminated
         self.node_id = node_id
@@ -148,7 +149,7 @@ class Tree:
         return not node.terminated and len(node.untried_actions) > 0
 
     ## attach action leaf to child state
-    def add_state_node(self, node_id, terminated, trial, n_afc, parent=None):
+    def add_state_node(self, node_id, cost, terminated, trial, n_afc, parent=None):
 
         # ## check for existing state node
         # node_id = str(history)
@@ -158,7 +159,7 @@ class Tree:
 
         
         ## create a new node
-        node = Node(node_id=node_id, terminated=terminated, trial = trial, n_afc=n_afc, N=self.N)
+        node = Node(node_id=node_id, cost=cost, terminated=terminated, trial = trial, n_afc=n_afc, N=self.N)
         
         ## store parent-child relationships
         if parent is None:
@@ -232,11 +233,11 @@ class Tree:
                 return
             else:
                 # node_label = f"{node.belief_state}"
-                node_label = f"{node.trial}"
+                node_label = f"{node.cost}"
         else:
             # node_label = f"{node.belief_state}"
             # node_label = f"{node.node_id}"
-            node_label = f"{node.trial}"
+            node_label = f"{node.cost}"
         trial_label = f"{node.trial}"
 
         # Add branch marker
