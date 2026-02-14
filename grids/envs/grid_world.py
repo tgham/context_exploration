@@ -279,9 +279,8 @@ class GridEnv(gym.Env):
                             # path_cost = np.sum([self.p_costs[x, y]*self.high_cost + (1-self.p_costs[x, y])*self.low_cost for x, y in path]) 
 
                             ## pq = p(low cost)
-                            # path_expected_cost = np.sum([self.p_costs[x, y]*self.low_cost + (1-self.p_costs[x, y])*self.high_cost for x, y in path]) 
-                            path_expected_cost = np.sum([self.p_costs[x, y]*self.compound_cost(self.low_cost,t) + (1-self.p_costs[x, y])*self.compound_cost(self.high_cost,t) for x, y in path])  ## if using compound costs
-                            path_actual_cost = np.sum([self.compound_cost(self.costss[t][x, y],t) for x, y in path])
+                            path_expected_cost = np.sum([self.p_costs[x, y]*self.low_cost + (1-self.p_costs[x, y])*self.high_cost for x, y in path])
+                            path_actual_cost = np.sum([self.costss[t][x, y] for x, y in path])
                             path_expected_costs.append(path_expected_cost)
                             path_actual_costs.append(path_actual_cost)
                         self.path_expected_costs.append(path_expected_costs)
@@ -614,9 +613,6 @@ class GridEnv(gym.Env):
             except:
                 print('error: ', self.costs[self._agent_location[0]][self._agent_location[1]])
                 current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
-
-        ## if using compound costs
-        current_cost = self.compound_cost(current_cost, self._trial)
         self.trial_obs = np.array([[self._agent_location[0], self._agent_location[1], current_cost]])
         self.a_traj = [tuple(self._agent_location)]
 
@@ -1209,10 +1205,6 @@ class GridEnv(gym.Env):
         ## or, use pre-sampled costs
         current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
         predicted_cost = self.predicted_costs[self._agent_location[0], self._agent_location[1]]
-
-        ## costs are compounded with each trial??
-        current_cost = self.compound_cost(current_cost, self._trial)
-        predicted_cost = self.compound_cost(predicted_cost, self._trial)
 
         ## return the real cost if not simulating
         if not self.sim:

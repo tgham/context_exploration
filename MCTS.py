@@ -32,10 +32,10 @@ class MonteCarloTreeSearch():
         self.exploration_constants = [self.exploration_constant for t in range(self.env.n_trials)]
 
         ## or, scale exploration constant by the expected cost of the entire day
-        # n_steps = 0
-        # for trial in range(self.env.n_trials):
-        #     n_steps += len(self.env.path_states[trial][0])
-        # self.exploration_constant = exploration_constant * n_steps
+        # n_total_steps = sum([len(self.env.path_states[trial][0]) for trial in range(self.env.n_trials)])
+        # expected_cost_per_t = abs(np.mean([self.low_cost, self.high_cost]))
+        # self.exploration_constants = [exploration_constant * (expected_cost_per_t * n_total_steps) for t in range(self.env.n_trials)]
+        # print(self.exploration_constants)
 
         ## or, multiple exploration constants, each scaled by the expected cost of the day from that trial onwards
         expected_cost = np.abs(np.mean([self.low_cost, self.high_cost]))
@@ -44,13 +44,10 @@ class MonteCarloTreeSearch():
             n_steps = 0
             ec = exploration_constant
             for subseq_t in range(t, self.env.n_trials):
-                # expected_cost = np.abs(np.mean([self.env.compound_cost(self.low_cost, subseq_e),
-                #                                 self.env.compound_cost(self.high_cost, subseq_e)])) ## if using compound
                 n_steps += len(self.env.path_states[subseq_t][0])
                 ec += (expected_cost * n_steps)
             self.exploration_constants.append(ec)
         # print(self.exploration_constants)
-
 
         ## create id for root node
         node_id = self.init_node_id(self.env.obs, None, self.actual_trial)
@@ -64,6 +61,7 @@ class MonteCarloTreeSearch():
         ## add state node to the tree
         self.tree.add_state_node(state=self.actual_state, cost=starting_cost, node_id=node_id, goal = self.actual_goal, terminated=False, trial = self.actual_trial, n_afc = self.n_afc, parent=None)
 
+    ## create node id, which represents the agent's current state of knowledge, a flattened N*N*2 array representing which cells have a high or low cost
     def init_node_id(self, obs=None, init_info_state=None, trial = None):
         raise NotImplementedError('init_node_id not implemented in subclass')
 
@@ -569,24 +567,21 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
     ## node_ids are defined by the informational state, i.e. the counts of low and high cost states in each cell
     def init_node_id(self, obs=None, init_info_state = None, trial=None):
-        # info_state = np.zeros((self.N, self.N, 2))
-        # high_cost = self.high_cost
-        high_cost = self.env.compound_cost(self.high_cost, trial) ## if using compound costs
         if init_info_state is None:
             init_info_state = np.zeros((self.N, self.N, 2))
         for i,j,c in obs:
             i = int(i)
             j = int(j)
-            cost_idx = 1 if c == high_cost else 0
+            cost_idx = 1 if c == self.high_cost else 0
             init_info_state[i,j,cost_idx] += 1
         node_id = tuple(init_info_state.flatten())
         return node_id
     
+    
     def update_trial(self):
-        self.actual_trial = self.env.trial
-        # self.actual_state = self.env.current
-        self.actual_state = self.env.starts[self.actual_trial].copy()
-        self.actual_goal = self.env.goals[self.actual_trial].copy() ## in fact, this will probably be two goals
+        self.actual_trial = self.env.trial ## i.e. the trial that the agent is current faced with in the real env
+        self.actual_state = self.env.starts[self.actual_trial].copy() ## i.e. the two possible start states for this trial
+        self.actual_goal = self.env.goals[self.actual_trial].copy() ## i.e. the two possible goal states for this trial
 
     ## tree step
     def tree_step(self, action_leaf):
@@ -621,10 +616,6 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         aligned_states, orthogonal_states = self.env.path_aligned_states[step_trial][path_id], self.env.path_orthogonal_states[step_trial][path_id]
         weighted_costs = self.agent.arm_reweighting(self.env.predicted_costs, aligned_states, orthogonal_states) 
 
-        
-        ## or, if compound costs
-        # simulated_obs = [np.append(start_tmp, self.env.compound_cost(self.env.predicted_costs[start_tmp[0], start_tmp[1]], step_trial))] + simulated_obs
-        # costs = [self.env.compound_cost(self.env.predicted_costs[start_tmp[0], start_tmp[1]], step_trial)] + costs 
 
         ## save costs
         # self.tree_costs.append(np.sum(costs))
@@ -686,9 +677,6 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         #     starting_cost += cost
         # total_cost = starting_cost
 
-        # ## compound costs per trial
-        # total_cost = self.env.compound_cost(total_cost, first_trial)
-
         ## or, arm-weighted costs
         aligned_states, orthogonal_states = self.env.path_aligned_states[first_trial][path_id], self.env.path_orthogonal_states[first_trial][path_id]
         total_cost = sum(self.agent.arm_reweighting(self.env.predicted_costs, aligned_states, orthogonal_states))
@@ -716,7 +704,6 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
             #         ro_cost += cost
             #     path_costs.append(ro_cost)
             # # best_ro_cost = np.max(path_costs) 
-            # best_ro_cost = self.env.compound_cost(np.max(path_costs), trial) ## or if using compound costs
             # remaining_ro_costs.append(best_ro_cost)
             # ro_choices.append(np.argmax(path_costs))
             # total_cost += best_ro_cost * self.discount_factor**depth
