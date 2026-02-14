@@ -332,17 +332,6 @@ class MonteCarloTreeSearch():
         # action_leaves = [copy.deepcopy(node.action_leaves[a]) for a in node.action_leaves.keys()]
         # print(action_leaves[0])
 
-        ## some hacky fixes for free expt to prevent backtracking
-        if self.expt == 'free':
-
-            ## remove action that keeps you in your current state
-            action_leaves = [leaf for leaf in action_leaves if not np.array_equal(leaf.goal, leaf.start)]
-            
-            ## remove action that takes you back to previous state in the tree
-            if len(self.tree_path) > 0:
-                start = self.tree_path[-1][0]
-                action_leaves = [leaf for leaf in action_leaves if not np.array_equal(leaf.goal, start)]
-
         ## calculate Q-normalisation term??
         # leaf_perfs = [leaf.performance for leaf in action_leaves]
         # norm_term = np.max(leaf_perfs) - np.min(leaf_perfs)
