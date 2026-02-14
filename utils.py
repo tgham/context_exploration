@@ -64,10 +64,10 @@ class Node:
 
     # __slots__ = ['state', 'n_state_visits', 'cost', 'terminated', 'node_id', 'parent_node_ids', 'N', 'untried_actions', 'action_leaves']
 
-    def __init__(self, state, costs, node_id, goal, terminated, trial, n_afc, N):
+    def __init__(self, obs, node_id, goal, terminated, trial, n_afc, N):
         
         ## state info
-        self.belief_state = np.append(state, costs) ## in the AFC case, this amounts to current state + costs that have just been observed on prior simulated trial - i.e. the 'belief state'
+        self.belief_state = np.append(trial, obs) ## in the AFC case, this amounts to current state + obs that have just been made on prior simulated trial - i.e. the 'belief state'
         # if trial==1:
         #     print(self.belief_state)
         #     raise Exception
@@ -115,26 +115,26 @@ class Node:
     
 class Action_Node:
 
-    def __init__(self, prev_state, action, next_state, terminated, trial, parent_id):
-        self.prev_state = prev_state
+    def __init__(self, start, action, goal, terminated, trial, parent_id):
+        self.start = start
         self.action = action ## in AFC, this specifies the path ID (i.e. 0 or 1)
+        self.goal = goal
         self.total_simulation_cost = 0
         self.performance = None
         self.n_action_visits = 0
-        self.next_state = next_state
         self.terminated = terminated
         self.trial = trial
-        self.node_id = (self.prev_state, self.action) #+ str(self.next_state)
+        self.node_id = (self.start, self.action) #+ str(self.next_state)
         self.parent_id = parent_id
         self.children={}
         self.children_ids = []
 
     def __str__(self):
         # return "prev_state{}: (action={}, next_state={}, children={}, visits={}, performance={:0.4f})".format(
-        return "prev_state{}: (action={}, next_state={}, n_children={}, visits={}, performance={:0.3f})".format(
-                                                  self.prev_state,
+        return "start{}: (action={}, goal={}, n_children={}, visits={}, performance={:0.3f})".format(
+                                                  self.start,
                                                   self.action,
-                                                self.next_state,
+                                                self.goal,
                                                   len(self.children_ids),
                                                   self.n_action_visits,
                                                   self.performance,
@@ -153,7 +153,7 @@ class Tree:
         return not node.terminated and len(node.untried_actions) > 0
 
     ## attach action leaf to child state
-    def add_state_node(self, state, costs, node_id, goal, terminated, trial, n_afc, parent=None):
+    def add_state_node(self, obs, node_id, goal, terminated, trial, n_afc, parent=None):
 
         # ## check for existing state node
         # node_id = str(history)
@@ -162,8 +162,8 @@ class Tree:
         #     return self.nodes[node_id]
 
         
-        ## create a new state node
-        node = Node(state=state, costs=costs, node_id=node_id, goal=goal, terminated=terminated, trial = trial, n_afc=n_afc, N=self.N)
+        ## create a new node
+        node = Node(obs=obs, node_id=node_id, goal=goal, terminated=terminated, trial = trial, n_afc=n_afc, N=self.N)
         
         ## store parent-child relationships
         if parent is None:
@@ -271,7 +271,7 @@ class Tree:
 
             # Print the action label (only once per action)
             leaf = children[0][0]  # Assume all children of the same action share the same leaf
-            action_label = f"Action {action}, (n_v: {leaf.n_action_visits}, prev_state: {leaf.prev_state}, next_state: {leaf.next_state}, branch factor: {len(children)}, perf: {leaf.performance:.2f})"
+            action_label = f"Action {action}, (n_v: {leaf.n_action_visits}, start: {leaf.start}, goal: {leaf.goal}, branch factor: {len(children)}, perf: {leaf.performance:.2f})"
 
             # Highlight the best action in bold (use ANSI escape codes for bold text)
             if action == best_action:
