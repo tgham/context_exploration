@@ -79,46 +79,16 @@ class MonteCarloTreeSearch():
     ## myopic rollout
     def myopic_rollout(self, myopic_trial):
         raise NotImplementedError('myopic rollout not implemented in subclass')
+    
+    ## debugging method for checking if node's belief state matches the env state
+    def check_node(self, node):
+        raise NotImplementedError('check_node not implemented in subclass')
 
+    
     ## expand the action space of a node
     def expand(self, node):
-        assert self.env.sim, 'env is not in sim mode'
-
-        ## take action (or path) and get new state
-        action = node.untried_action()
-        if self.expt == 'free':
-            next_state, _, terminated, _, _ = self.env.step(action)
-
-            ## reset the environment to the actual state
-            # self.env.set_state(self.actual_state)
-
-            ## NB: in the 2AFC, we define 'next_state' as the goal. this doesn't really make sense in the context of free choice, but do so here for consistency.
-            goal = next_state.copy()
-
-        elif self.expt == 'AFC':
-            terminated = node.trial == self.env.n_trials-1 ## i.e. this action leaf corresponds to the action made in the final trial, so it leads to termination of the day
-            # next_state = node.belief_state[:2] #i.e. this stays the same since agent always regens to the same start state. may instead choose to fill this with the states that are actually traversed
-            # if not terminated:
-            #     next_state = self.env.goals[node.trial][action].copy()
-            # else:
-            #     next_state = self.env.goals[node.trial][action].copy()
-            goal = self.env.goals[node.trial][action].copy()
-            
-        ## update info for s-a leaf - i.e. the state-action pair
-        start = self.env.starts[node.trial][action].copy()
-        node.action_leaves[action] = Action_Node(start = start, action=action, goal = goal, terminated=terminated, trial=node.trial, parent_id=node.node_id)
-        node.action_leaves[action].performance = 0
-        node.action_leaves[action].norm_performance = 0
-
-        return node.action_leaves[action]
+        raise NotImplementedError('expand not implemented in subclass')
     
-    ## debugging method for checking if node and env states match
-    def check_state(self, node):
-        if self.expt == 'AFC':
-            # assert np.array_equal(node.belief_state[:2*self.n_afc].reshape(self.n_afc,2), self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node.belief_state[:2*self.n_afc].reshape(self.n_afc,2), self.env.current)
-            assert node.belief_state[0] == self.env.trial, 'mismatch between node and env trial\n node: {} \n env: {}'.format(node.belief_state[0], self.env.trial)
-        elif self.expt == 'free':
-            assert np.array_equal(node.belief_state[:2], self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.env.current) ### USE THIS IN THE SUBCLASS DEFINITION FOR THE FREE EXPT TOO
 
     ## take an action according to the tree policy, i.e. take the best UCT child and see where it takes you
     def tree_policy(self):
@@ -129,8 +99,7 @@ class MonteCarloTreeSearch():
         node_trial = self.env.trial
         goal = node.goal
         assert node_trial == node.trial, 'trial mismatch between env and tree\n env: {} \n tree: {}\n MCTS: {}'.format(node_trial, node.trial, self.actual_trial)
-        # assert np.array_equal(node.belief_state[:2], self.actual_state), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.actual_state)
-        self.check_state(node)
+        self.check_node(node)
 
         ## create a record of the nodes/leaves visited in the tree
         self.tree_costs = [] ## i.e. the cost associated with each traversal of the tree *under the tree policy*. Hence, this does not include the cost of the current state, which is the starting point of the tree policy, nor does it include the cost of expansion.
@@ -150,8 +119,7 @@ class MonteCarloTreeSearch():
         assert self.env.sim, 'env is not in sim mode'
         while not node.terminated:
             t+=1
-            # assert np.array_equal(node.belief_state[:2], self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.env.current)
-            self.check_state(node)
+            self.check_node(node)
 
             ## myopia - i.e. initiate rollout of all subsequent trials
             # if t == 2:
@@ -207,7 +175,6 @@ class MonteCarloTreeSearch():
 
                 ## debugging
                 assert np.array_equal(next_state, self.env.current), 'mismatch between env and tree state\n env: {} \n tree: {}'.format(self.env.current, next_state)
-
 
 
         ## if terminal node, there are no mode action leaves to choose from
@@ -506,6 +473,26 @@ class MonteCarloTreeSearch_Free(MonteCarloTreeSearch):
         self.actual_goal = self.env.goal
         self.actual_trial = self.env.trial
 
+    ## in free choice, there is a meaningful state of the MDP (i.e. agent's current position in grid), which is reflected in belief state
+    def check_node(self, node):
+        assert np.array_equal(node.belief_state[:2], self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.env.current)
+
+    ## in free choice, we have a meaningful notion of prev and next state (i.e. current location, and location after taking an action)
+    def expand(self, node):
+        assert self.env.sim, 'env is not in sim mode'
+
+        ## take action (or path) and get new state
+        action = node.untried_action()
+        prev_state = self.env.current.copy()
+        next_state, _, terminated, _, _ = self.env.step(action)
+            
+        ## update info for s-a leaf - i.e. the state-action pair
+        node.action_leaves[action] = Action_Node(start = prev_state, action=action, goal = next_state, terminated=terminated, trial=node.trial, parent_id=node.node_id)
+        node.action_leaves[action].performance = 0
+        node.action_leaves[action].norm_performance = 0
+
+        return node.action_leaves[action]
+
     ## tree step
     def tree_step(self, action_leaf):
         action = action_leaf.action
@@ -575,6 +562,28 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         node_id = tuple(init_info_state.flatten())
         return node_id
     
+    ## in AFC, there is no meaningful state of the MDP, so belief state just contains the trial number
+    def check_node(self, node):
+        # assert np.array_equal(node.belief_state[:2*self.n_afc].reshape(self.n_afc,2), self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node.belief_state[:2*self.n_afc].reshape(self.n_afc,2), self.env.current)
+        assert node.belief_state[0] == self.env.trial, 'mismatch between node and env trial\n node: {} \n env: {}'.format(node.belief_state[0], self.env.trial)
+
+    
+    ## in AFC, we define prev and next states in terms of the start and goal states for the chosen path
+    def expand(self, node):
+        assert self.env.sim, 'env is not in sim mode'
+
+        ### take action (or path) and get new state
+        action = node.untried_action()
+        terminated = node.trial == self.env.n_trials-1 ## i.e. this action leaf corresponds to the action made in the final trial, so it leads to termination of the day
+        goal = self.env.goals[node.trial][action].copy()
+            
+        ## update info for s-a leaf - i.e. the state-action pair
+        start = self.env.starts[node.trial][action].copy()
+        node.action_leaves[action] = Action_Node(start = start, action=action, goal = goal, terminated=terminated, trial=node.trial, parent_id=node.node_id)
+        node.action_leaves[action].performance = 0
+        node.action_leaves[action].norm_performance = 0
+
+        return node.action_leaves[action]
     
     def update_trial(self):
         self.actual_trial = self.env.trial ## i.e. the trial that the agent is current faced with in the real env
