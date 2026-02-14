@@ -64,17 +64,12 @@ class Node:
 
     # __slots__ = ['state', 'n_state_visits', 'cost', 'terminated', 'node_id', 'parent_node_ids', 'N', 'untried_actions', 'action_leaves']
 
-    def __init__(self, obs, node_id, goal, terminated, trial, n_afc, N):
+    def __init__(self, node_id, terminated, trial, n_afc, N):
         
         ## state info
-        self.belief_state = np.append(trial, obs) ## in the AFC case, this amounts to current state + obs that have just been made on prior simulated trial - i.e. the 'belief state'
-        # if trial==1:
-        #     print(self.belief_state)
-        #     raise Exception
         self.n_state_visits = 0
         self.trial = trial
         self.terminated = terminated
-        self.goal = goal
         self.node_id = node_id
         self.parent_node_ids = []
         self.N = N
@@ -153,7 +148,7 @@ class Tree:
         return not node.terminated and len(node.untried_actions) > 0
 
     ## attach action leaf to child state
-    def add_state_node(self, obs, node_id, goal, terminated, trial, n_afc, parent=None):
+    def add_state_node(self, node_id, terminated, trial, n_afc, parent=None):
 
         # ## check for existing state node
         # node_id = str(history)
@@ -163,7 +158,7 @@ class Tree:
 
         
         ## create a new node
-        node = Node(obs=obs, node_id=node_id, goal=goal, terminated=terminated, trial = trial, n_afc=n_afc, N=self.N)
+        node = Node(node_id=node_id, terminated=terminated, trial = trial, n_afc=n_afc, N=self.N)
         
         ## store parent-child relationships
         if parent is None:
@@ -236,10 +231,12 @@ class Tree:
             if node is None:
                 return
             else:
-                node_label = f"{node.belief_state}"
+                # node_label = f"{node.belief_state}"
+                node_label = f"{node.trial}"
         else:
-            node_label = f"{node.belief_state}"
+            # node_label = f"{node.belief_state}"
             # node_label = f"{node.node_id}"
+            node_label = f"{node.trial}"
         trial_label = f"{node.trial}"
 
         # Add branch marker
