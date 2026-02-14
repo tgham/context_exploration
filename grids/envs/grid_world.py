@@ -322,9 +322,6 @@ class GridEnv(gym.Env):
                     for p, path in enumerate(self.path_states[t]):
                         self.path_states[t][p] = [tuple([int(x) for x in state]) for state in path]
                 
-                ## classify states as aligned or orthogonal for all paths across all trials
-                self.get_alignment()
-                
                 ## get info on path overlaps in AFC expt
                 if self.expt == 'AFC':
                     self.most_overlap = []
@@ -474,6 +471,7 @@ class GridEnv(gym.Env):
                         self.same_overlaps = False
                         self._trial = 0
                         init_done = True
+                        self.get_alignment()
 
                     ## or, very very restrictive: as above, but also require first path to have more overlaps in total...
                     # total_first_overlaps = self.path_future_row_and_col_overlaps[0]
@@ -487,6 +485,7 @@ class GridEnv(gym.Env):
                     # self.same_overlaps = True
                     # init_done = True
                     # self._trial = 0
+                    # self.get_alignment()
 
             t+=1
             if t>500:
