@@ -27,7 +27,6 @@ class MonteCarloTreeSearch():
         self.tree = tree
         self.N = self.env.N
         self.discount_factor = discount_factor
-        starting_cost = self.env.costs[self.actual_state[0], self.actual_state[1]]
         self.exploration_constant = exploration_constant
         self.exploration_constants = [self.exploration_constant for t in range(self.env.n_trials)]
 
@@ -59,7 +58,7 @@ class MonteCarloTreeSearch():
         self.min_Q = np.zeros(self.env.n_trials) 
 
         ## add state node to the tree
-        self.tree.add_state_node(state=self.actual_state, cost=starting_cost, node_id=node_id, goal = self.actual_goal, terminated=False, trial = self.actual_trial, n_afc = self.n_afc, parent=None)
+        self.tree.add_state_node(state=self.actual_state, costs=None, node_id=node_id, goal = self.actual_goal, terminated=False, trial = self.actual_trial, n_afc = self.n_afc, parent=None)
 
     ## create node id, which represents the agent's current state of knowledge, a flattened N*N*2 array representing which cells have a high or low cost
     def init_node_id(self, obs=None, init_info_state=None, trial = None):
@@ -95,7 +94,7 @@ class MonteCarloTreeSearch():
 
         elif self.expt == 'AFC':
             terminated = node.trial == self.env.n_trials-1 ## i.e. this action leaf corresponds to the action made in the final trial, so it leads to termination of the day
-            # next_state = node.state[:2] #i.e. this stays the same since agent always regens to the same start state. may instead choose to fill this with the states that are actually traversed
+            # next_state = node.belief_state[:2] #i.e. this stays the same since agent always regens to the same start state. may instead choose to fill this with the states that are actually traversed
             if not terminated:
                 # next_state = self.env.starts[node.trial]
                 next_state = self.env.goals[node.trial][action].copy()
@@ -104,7 +103,6 @@ class MonteCarloTreeSearch():
                 next_state = self.env.goals[node.trial][action].copy()
             
         ## update info for s-a leaf - i.e. the state-action pair
-        # prev_state = node.state
         prev_state = self.env.starts[node.trial][action].copy()
         node.action_leaves[action] = Action_Node(prev_state = prev_state, action=action, next_state = next_state, terminated=terminated, trial=node.trial, parent_id=node.node_id)
         node.action_leaves[action].performance = 0
@@ -115,11 +113,11 @@ class MonteCarloTreeSearch():
     ## debugging method for checking if node and env states match
     def check_state(self, node):
         if self.expt == 'AFC':
-            # assert np.array_equal(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.starts[node.trial]), 'mismatch between node and env state\n node: {} \n env: {}'.format(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.starts[node.trial])
-            # assert np.array_equal(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node.state[:2*self.n_afc].reshape(2, self.n_afc), self.env.current)
-            assert np.array_equal(node.state[:2*self.n_afc].reshape(self.n_afc,2), self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node.state[:2*self.n_afc].reshape(self.n_afc,2), self.env.current)
+            # assert np.array_equal(node.belief_state[:2*self.n_afc].reshape(2, self.n_afc), self.env.starts[node.trial]), 'mismatch between node and env state\n node: {} \n env: {}'.format(node.belief_state[:2*self.n_afc].reshape(2, self.n_afc), self.env.starts[node.trial])
+            # assert np.array_equal(node.belief_state[:2*self.n_afc].reshape(2, self.n_afc), self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node.belief_state[:2*self.n_afc].reshape(2, self.n_afc), self.env.current)
+            assert np.array_equal(node.belief_state[:2*self.n_afc].reshape(self.n_afc,2), self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node.belief_state[:2*self.n_afc].reshape(self.n_afc,2), self.env.current)
         elif self.expt == 'free':
-            assert np.array_equal(node.state[:2], self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.env.current) ### USE THIS IN THE SUBCLASS DEFINITION FOR THE FREE EXPT TOO
+            assert np.array_equal(node.belief_state[:2], self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.env.current) ### USE THIS IN THE SUBCLASS DEFINITION FOR THE FREE EXPT TOO
 
     ## take an action according to the tree policy, i.e. take the best UCT child and see where it takes you
     def tree_policy(self):
@@ -130,7 +128,7 @@ class MonteCarloTreeSearch():
         node_trial = self.env.trial
         goal = node.goal
         assert node_trial == node.trial, 'trial mismatch between env and tree\n env: {} \n tree: {}\n MCTS: {}'.format(node_trial, node.trial, self.actual_trial)
-        # assert np.array_equal(node.state[:2], self.actual_state), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.actual_state)
+        # assert np.array_equal(node.belief_state[:2], self.actual_state), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.actual_state)
         self.check_state(node)
 
         ## create a record of the nodes/leaves visited in the tree
@@ -151,7 +149,7 @@ class MonteCarloTreeSearch():
         assert self.env.sim, 'env is not in sim mode'
         while not node.terminated:
             t+=1
-            # assert np.array_equal(node.state[:2], self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.env.current)
+            # assert np.array_equal(node.belief_state[:2], self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.env.current)
             self.check_state(node)
 
             ## myopia - i.e. initiate rollout of all subsequent trials
@@ -168,7 +166,7 @@ class MonteCarloTreeSearch():
             ## expansion step
             if self.tree.is_expandable(node):
                 action_leaf = self.expand(node)
-                self.tree_path.append(tuple([node.state, action_leaf.action]))
+                self.tree_path.append(tuple([node.belief_state, action_leaf.action]))
                 self.node_id_path.append(node.node_id)
 
                 ## update counts already?
@@ -188,13 +186,13 @@ class MonteCarloTreeSearch():
             else:
 
                 ## (some debugging vars)
-                state_tmp = node.state[:2]
+                state_tmp = node.belief_state[:2]
 
                 ## get the best child
                 action_leaf = self.best_child(node)
 
                 ## update the tree path
-                self.tree_path.append(tuple([node.state, action_leaf.action]))
+                self.tree_path.append(tuple([node.belief_state, action_leaf.action]))
                 self.node_id_path.append(node.node_id)
 
                 ## move in env
@@ -211,7 +209,7 @@ class MonteCarloTreeSearch():
 
                 ## debugging
                 assert np.array_equal(next_state, self.env.current), 'mismatch between env and tree state\n env: {} \n tree: {}'.format(self.env.current, next_state)
-                # assert np.array_equal(node.state[:2], next_state), 'error in tree policy step {}\n started in {}\n supposed to take action {} to {}\n ended up moving  to {}'.format(t, state_tmp, action_leaf.action, node.state[:2], action_leaf.next_state)
+                # assert np.array_equal(node.belief_state[:2], next_state), 'error in tree policy step {}\n started in {}\n supposed to take action {} to {}\n ended up moving  to {}'.format(t, state_tmp, action_leaf.action, node.belief_state[:2], action_leaf.next_state)
 
 
 
@@ -244,14 +242,14 @@ class MonteCarloTreeSearch():
 
         ## Loop through the tree path
         node = self.tree.root
-        for depth, (state, action) in enumerate(self.tree_path):
+        for depth, (belief_state, action) in enumerate(self.tree_path):
             
             ## Get the corresponding action leaf
             action_leaf = node.action_leaves[action]
 
             ## Sanity check: ensure the current node matches the state in the path
-            assert np.array_equal(node.state[:2], state[:2]), (
-                f'Tree path mismatch:\n node: {node.state[:2]} \n state: {state[:2]}'
+            assert np.array_equal(node.belief_state[:2], belief_state[:2]), (
+                f'Tree path mismatch:\n node: {node.belief_state[:2]} \n state: {belief_state[:2]}'
             )
 
             ## Discounted cost from the current node to the terminal node
@@ -1228,7 +1226,7 @@ def simulate_agent(ppt, env_params=None, MCTS_params=None, sampler_params=None, 
                             ## no need to prune at the end of the trial in free-choice expt, since the tree resets at this point
                             if not terminated:
                                 MCTS.tree.prune(action, next_node_id)
-                                assert np.array_equal(MCTS.tree.root.state[:2], current), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action)
+                                assert np.array_equal(MCTS.tree.root.belief_state[:2], current), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.belief_state, action)
 
                         elif expt=='AFC':
 
@@ -1237,8 +1235,8 @@ def simulate_agent(ppt, env_params=None, MCTS_params=None, sampler_params=None, 
 
                                 if next_node_id in MCTS.tree.root.action_leaves[action].children:
                                     MCTS.tree.prune(action, next_node_id)
-                                    # assert np.array_equal(MCTS.tree.root.state[2*MCTS.n_afc:], costs), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.state, action) 
-                                    assert np.array_equal(MCTS.tree.root.state[2*MCTS.n_afc:], costs), 'error in root update\n root state: {} \n costs: {}'.format(MCTS.tree.root.state[2*MCTS.n_afc:], costs)
+                                    # assert np.array_equal(MCTS.tree.root.belief_state[2*MCTS.n_afc:], costs), 'error in root update\n env is in: {} but tree is in: {}\n should have taken action {}'.format(current, MCTS.tree.root.belief_state, action) 
+                                    assert np.array_equal(MCTS.tree.root.belief_state[2*MCTS.n_afc:], costs), 'error in root update\n root state: {} \n costs: {}'.format(MCTS.tree.root.belief_state[2*MCTS.n_afc:], costs)
                                     tree_resets[ag] = False
                                     # print('successful prune after action {}. new root has two leaves with a total of {} children'.format(action, np.sum(len(MCTS.tree.root.action_leaves[a].children) for a in MCTS.tree.root.action_leaves.keys())))
                                     # for a in MCTS.tree.root.action_leaves.keys():

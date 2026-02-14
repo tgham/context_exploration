@@ -64,16 +64,17 @@ class Node:
 
     # __slots__ = ['state', 'n_state_visits', 'cost', 'terminated', 'node_id', 'parent_node_ids', 'N', 'untried_actions', 'action_leaves']
 
-    def __init__(self, state, cost, node_id, goal, terminated, trial, n_afc, N):
+    def __init__(self, state, costs, node_id, goal, terminated, trial, n_afc, N):
         
         ## state info
-        self.state = np.append(state, cost) ## in the AFC case, this amounts to current state + costs that have just been observed on prior simulated trial
+        self.belief_state = np.append(state, costs) ## in the AFC case, this amounts to current state + costs that have just been observed on prior simulated trial - i.e. the 'belief state'
+        # if trial==1:
+        #     print(self.belief_state)
+        #     raise Exception
         self.n_state_visits = 0
-        self.cost = cost
         self.trial = trial
         self.terminated = terminated
         self.goal = goal
-        # self.node_id = tuple(self.state)
         self.node_id = node_id
         self.parent_node_ids = []
         self.N = N
@@ -82,7 +83,7 @@ class Node:
         ## define valid actions
         self.untried_actions = list(range(n_afc))
         if n_afc == 4: # i.e. free choice, meaning we want to restrict wall movements
-            row, col,_ = self.state
+            row, col,_ = self.belief_state
             if row == self.N-1:
                 self.untried_actions.remove(0)
             if row == 0:
@@ -98,11 +99,10 @@ class Node:
 
     def __str__(self):
         action_leaves_msg = {action: np.round(leaf.performance,3) if leaf is not None else None for action, leaf in self.action_leaves.items()}
-        return "state {}: (trial={}, visits={}, terminated={})\n{})".format(
-                                                  self.state,
+        return "belief state {}: (trial={}, visits={}, terminated={})\n{})".format(
+                                                  self.belief_state,
                                                     self.trial,
                                                   self.n_state_visits,
-                                                #   self.cost,
                                                   self.terminated,
                                                   action_leaves_msg
                                                   )
@@ -153,7 +153,7 @@ class Tree:
         return not node.terminated and len(node.untried_actions) > 0
 
     ## attach action leaf to child state
-    def add_state_node(self, state, cost, node_id, goal, terminated, trial, n_afc, parent=None):
+    def add_state_node(self, state, costs, node_id, goal, terminated, trial, n_afc, parent=None):
 
         # ## check for existing state node
         # node_id = str(history)
@@ -163,7 +163,7 @@ class Tree:
 
         
         ## create a new state node
-        node = Node(state=state, cost=cost, node_id=node_id, goal=goal, terminated=terminated, trial = trial, n_afc=n_afc, N=self.N)
+        node = Node(state=state, costs=costs, node_id=node_id, goal=goal, terminated=terminated, trial = trial, n_afc=n_afc, N=self.N)
         
         ## store parent-child relationships
         if parent is None:
@@ -205,11 +205,11 @@ class Tree:
     def action_tree(self):
 
         self.tree_q = np.zeros((self.N,self.N,4)) + np.nan
-        for sstate in self.nodes.keys():
-            state = self.nodes[sstate].state
-            for a in self.nodes[sstate].action_leaves.keys():
+        for bs in self.nodes.keys():
+            belief_state = self.nodes[bs].belief_state
+            for a in self.nodes[bs].action_leaves.keys():
                 try:
-                    self.tree_q[state[0], state[1], a] = self.nodes[sstate].action_leaves[a].performance
+                    self.tree_q[belief_state[0], belief_state[1], a] = self.nodes[bs].action_leaves[a].performance
                 except:
                     pass
 
@@ -236,9 +236,9 @@ class Tree:
             if node is None:
                 return
             else:
-                node_label = f"{node.state}"
+                node_label = f"{node.belief_state}"
         else:
-            node_label = f"{node.state}"
+            node_label = f"{node.belief_state}"
             # node_label = f"{node.node_id}"
         trial_label = f"{node.trial}"
 
@@ -361,15 +361,15 @@ class Tree:
     # def prune(self):
 
     #     ## identify the root's children, i.e. the four adjacent states
-    #     # keep_nodes = [str(self.root.state)]
+    #     # keep_nodes = [str(self.root.belief_state)]
     #     keep_nodes = self.root.node_id
     #     for leaf in self.root.action_leaves.values():
     #         if leaf is not None:
     #             keep_nodes.append(str(leaf.next_state))
 
-    #     for sstate in list(self.nodes.keys()):
-    #         if str(self.nodes[sstate].state) not in keep_nodes:
-    #             del self.nodes[sstate]
+    #     for bs in list(self.nodes.keys()):
+    #         if str(self.nodes[bs].belief_state) not in keep_nodes:
+    #             del self.nodes[bs]
 
     def prune(self, action, next_state):
         
