@@ -81,7 +81,10 @@ def plot_RPE(RPE, ax, title=None, cbar = False):
     return ax
 
 ## plot path between two points
-def plot_traj(trajs, ax, expt='free',title=None):
+def plot_traj(trajs, ax, expt='free',title=None, path_colours = ['blue',
+                'green',
+                   'orange'
+                   ]):
     
     ## plot direct and optimal trajectories using different markers
     if expt=='free':
@@ -92,10 +95,7 @@ def plot_traj(trajs, ax, expt='free',title=None):
         n_afc = len(trajs)
         markers = ['*'] * n_afc
         # colours = ['blue', 'lime']
-        colours = ['blue',
-                'green',
-                   'orange'
-                   ][:n_afc]
+        colours = path_colours[:n_afc]
         # colours = ['white','white']
     path_letters = ['A','B']
     costs = ['L','H']
