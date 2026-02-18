@@ -1480,6 +1480,12 @@ def load_data(path):
     df_all['path_A_past_observed_low_costs'] = np.nan
     df_all['path_B_past_observed_low_costs'] = np.nan
 
+    df_all['path_A_aligned_arm_len'] = np.nan
+    df_all['path_B_aligned_arm_len'] = np.nan
+    df_all['path_A_orthogonal_arm_len'] = np.nan
+    df_all['path_B_orthogonal_arm_len'] = np.nan
+    
+    
     df_all['path_A_aligned_arm_actual_high_costs'] = np.nan
     df_all['path_B_aligned_arm_actual_high_costs'] = np.nan
     df_all['path_A_aligned_arm_actual_low_costs'] = np.nan
@@ -1515,8 +1521,6 @@ def load_data(path):
     df_all['day_cost'] = np.nan
     df_all['path_len'] = np.nan
     df_all['switched_axis'] = np.nan
-    df_all['aligned_path_long_edge'] = np.nan
-    df_all['orthogonal_path_long_edge'] = np.nan
     
     ## diffs, where this is always defined as vertical - horizontal
     df_all['past_overlaps_diff'] = np.nan 
@@ -1588,21 +1592,6 @@ def load_data(path):
             prev_choice_vertical = row['chose_vertical']
             prev_choice_more_future_rel_overlap = row['chose_more_future_rel_overlap']
             prev_choice_more_future_irrel_overlap = row['chose_more_future_irrel_overlap']
-
-        ## get the length of the aligned or orthogonal path's long edge
-        df_all['aligned_path_long_edge'] = df_all.apply(
-            lambda row: np.max(row['abstract_sequence_A']) if row['aligned_path'] == 'a' else np.max(row['abstract_sequence_B']) if row['aligned_path'] == 'b' else np.nan,
-            axis=1
-        )
-        df_all['orthogonal_path_long_edge'] = df_all.apply(
-            lambda row: np.max(row['abstract_sequence_A']) if row['orthogonal_path'] == 'a' else np.max(row['abstract_sequence_B']) if row['orthogonal_path'] == 'b' else np.nan,
-            axis=1
-        )
-        # df_all['orthogonal_path_long_edge'] = df_all.apply([
-        #     lambda row['abstract_sequence_A'].max if row['orthogonal_path'] == 'a' else np.max(row['abstract_sequence_B']) if row['orthogonal_path'] == 'b' else np.nan
-        # ], axis=1 
-        # )
-
         
         ### simulate each participant's choices to extract the missing trial info
 
@@ -1670,6 +1659,10 @@ def load_data(path):
         df_all.loc[df_all['pid'] == pid, 'path_B_past_observed_high_costs'] = agent.path_past_observed_high_costs[:,:,:,1].flatten()
         df_all.loc[df_all['pid'] == pid, 'path_A_past_observed_low_costs'] = agent.path_past_observed_low_costs[:,:,:,0].flatten()
         df_all.loc[df_all['pid'] == pid, 'path_B_past_observed_low_costs'] = agent.path_past_observed_low_costs[:,:,:,1].flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_A_aligned_arm_len'] = agent.aligned_arm_len[:,:,:,0].flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_B_aligned_arm_len'] = agent.aligned_arm_len[:,:,:,1].flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_A_orthogonal_arm_len'] = agent.orthogonal_arm_len[:,:,:,0].flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_B_orthogonal_arm_len'] = agent.orthogonal_arm_len[:,:,:,1].flatten()
         df_all.loc[df_all['pid'] == pid, 'path_A_aligned_arm_gen_high_costs'] = agent.aligned_arm_gen_high_costs[:,:,:,0].flatten()
         df_all.loc[df_all['pid'] == pid, 'path_B_aligned_arm_gen_high_costs'] = agent.aligned_arm_gen_high_costs[:,:,:,1].flatten()
         df_all.loc[df_all['pid'] == pid, 'path_A_aligned_arm_gen_low_costs'] = agent.aligned_arm_gen_low_costs[:,:,:,0].flatten()
@@ -1753,11 +1746,31 @@ def load_data(path):
                     , 'observed_low_costs_diff'] = df_all.loc[(df_all['aligned_path'] == 'b'), 'path_A_past_observed_low_costs'] - df_all.loc[(df_all['aligned_path'] == 'b'), 'path_B_past_observed_low_costs']
     df_all.loc[(df_all['aligned_path'] == 'a')
                     , 'observed_low_costs_diff'] = df_all.loc[(df_all['aligned_path'] == 'a'), 'path_B_past_observed_low_costs'] - df_all.loc[(df_all['aligned_path'] == 'a'), 'path_A_past_observed_low_costs']
+    df_all['observed_high_costs_total'] = df_all['path_A_past_observed_high_costs'] + df_all['path_B_past_observed_high_costs']
+    df_all['observed_low_costs_total'] = df_all['path_A_past_observed_low_costs'] + df_all['path_B_past_observed_low_costs']
 
     
     ## sanity check: total past overlaps should be the sum of path A and B past overlaps
     assert np.all(df_all['total_past_overlaps'] == df_all['path_A_past_overlaps'] + df_all['path_B_past_overlaps']), \
         'Total past overlaps should be the sum of path A and B past overlaps for participant ' + pid
+    
+    ## get lens of the arms
+    df_all['aligned_path_aligned_arm_len'] = df_all.apply(
+            lambda row: row['path_A_aligned_arm_len'] if row['aligned_path'] == 'a' else row['path_B_aligned_arm_len'] if row['aligned_path'] == 'b' else np.nan,
+            axis=1
+        )
+    df_all['aligned_path_orthogonal_arm_len'] = df_all.apply(
+        lambda row: row['path_A_orthogonal_arm_len'] if row['aligned_path'] == 'a' else row['path_B_orthogonal_arm_len'] if row['aligned_path'] == 'b' else np.nan,
+        axis=1
+    )
+    df_all['orthogonal_path_aligned_arm_len'] = df_all.apply(
+        lambda row: row['path_A_aligned_arm_len'] if row['orthogonal_path'] == 'a' else row['path_B_aligned_arm_len'] if row['orthogonal_path'] == 'b' else np.nan,
+        axis=1
+    )
+    df_all['orthogonal_path_orthogonal_arm_len'] = df_all.apply(
+        lambda row: row['path_A_orthogonal_arm_len'] if row['orthogonal_path'] == 'a' else row['path_B_orthogonal_arm_len'] if row['orthogonal_path'] == 'b' else np.nan,
+        axis=1
+    )
     
     ## get obs on the aligned/orthogonal arm 
     df_all['aligned_path_aligned_arm_actual_high_costs'] = df_all.apply(
@@ -1863,6 +1876,8 @@ def load_data(path):
 
 
     ## diffs (orthogonal - aligned)
+    df_all['aligned_arm_len_diff'] = df_all['orthogonal_path_aligned_arm_len'] - df_all['aligned_path_aligned_arm_len']
+    df_all['orthogonal_arm_len_diff'] = df_all['orthogonal_path_orthogonal_arm_len'] - df_all['aligned_path_orthogonal_arm_len']
     df_all['aligned_arm_actual_high_costs_diff'] = df_all['orthogonal_path_aligned_arm_actual_high_costs'] - df_all['aligned_path_aligned_arm_actual_high_costs']
     df_all['aligned_arm_actual_low_costs_diff'] = df_all['orthogonal_path_aligned_arm_actual_low_costs'] - df_all['aligned_path_aligned_arm_actual_low_costs']
     df_all['orthogonal_arm_actual_high_costs_diff'] = df_all['orthogonal_path_orthogonal_arm_actual_high_costs'] - df_all['aligned_path_orthogonal_arm_actual_high_costs']
@@ -1875,6 +1890,16 @@ def load_data(path):
     df_all['aligned_arm_cf_gen_low_costs_diff'] = df_all['orthogonal_path_aligned_arm_cf_gen_low_costs'] - df_all['aligned_path_aligned_arm_cf_gen_low_costs']
     df_all['orthogonal_arm_cf_gen_high_costs_diff'] = df_all['orthogonal_path_orthogonal_arm_cf_gen_high_costs'] - df_all['aligned_path_orthogonal_arm_cf_gen_high_costs']
     df_all['orthogonal_arm_cf_gen_low_costs_diff'] = df_all['orthogonal_path_orthogonal_arm_cf_gen_low_costs'] - df_all['aligned_path_orthogonal_arm_cf_gen_low_costs']
+
+    ## and totals...
+    df_all['aligned_arm_actual_high_costs_total'] = df_all['orthogonal_path_aligned_arm_actual_high_costs'] + df_all['aligned_path_aligned_arm_actual_high_costs']
+    df_all['aligned_arm_actual_low_costs_total'] = df_all['orthogonal_path_aligned_arm_actual_low_costs'] + df_all['aligned_path_aligned_arm_actual_low_costs']
+    df_all['orthogonal_arm_actual_high_costs_total'] = df_all['orthogonal_path_orthogonal_arm_actual_high_costs'] + df_all['aligned_path_orthogonal_arm_actual_high_costs']
+    df_all['orthogonal_arm_actual_low_costs_total'] = df_all['orthogonal_path_orthogonal_arm_actual_low_costs'] + df_all['aligned_path_orthogonal_arm_actual_low_costs']
+    df_all['aligned_arm_gen_high_costs_total'] = df_all['orthogonal_path_aligned_arm_gen_high_costs'] + df_all['aligned_path_aligned_arm_gen_high_costs']
+    df_all['aligned_arm_gen_low_costs_total'] = df_all['orthogonal_path_aligned_arm_gen_low_costs'] + df_all['aligned_path_aligned_arm_gen_low_costs']
+    df_all['orthogonal_arm_gen_high_costs_total'] = df_all['orthogonal_path_orthogonal_arm_gen_high_costs'] + df_all['aligned_path_orthogonal_arm_gen_high_costs']
+    df_all['orthogonal_arm_gen_low_costs_total'] = df_all['orthogonal_path_orthogonal_arm_gen_low_costs'] + df_all['aligned_path_orthogonal_arm_gen_low_costs']
 
     ## remove all non-choices?
     # df_all = df_all[df_all['path_chosen'].notna()]
