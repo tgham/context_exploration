@@ -130,6 +130,8 @@ class GridEnv(gym.Env):
                 self.high_cost, self.low_cost = 0, 1
             elif self.objective == 'costs':
                 self.high_cost, self.low_cost = -1, -0
+            elif self.objective == 'both':
+                self.high_cost, self.low_cost = -1, 1
             else:
                 raise ValueError('objective must be either rewards or costs')
             self.alpha_row = beta_params['alpha_row']
@@ -471,6 +473,7 @@ class GridEnv(gym.Env):
                         self._trial = 0
                         init_done = True
                         self.get_alignment()
+                        self.get_future_states()
 
                     ## or, very very restrictive: as above, but also require first path to have more overlaps in total...
                     # total_first_overlaps = self.path_future_row_and_col_overlaps[0]
@@ -485,6 +488,7 @@ class GridEnv(gym.Env):
                     # init_done = True
                     # self._trial = 0
                     # self.get_alignment()
+                    # self.get_future_states()
 
             t+=1
             if t>500:
@@ -794,8 +798,8 @@ class GridEnv(gym.Env):
                     if ((sampled_abstract_sequences[0][0]>sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]<sampled_abstract_sequences[1][1])) or ((sampled_abstract_sequences[0][0]<sampled_abstract_sequences[0][1]) and (sampled_abstract_sequences[1][0]>sampled_abstract_sequences[1][1])):
                         diff_axes = True
 
-                    ## choose the two longest vertical paths
-                    # sampled_abstract_sequences = [abstract_sequences[-1], abstract_sequences[-1]]
+                    ## choose the two of the longest vertical paths
+                    # sampled_abstract_sequences = [self.abstract_sequences[-2], self.abstract_sequences[-2]]
                     # diff_axes=True
     
             elif self.n_afc > 2:
@@ -991,6 +995,171 @@ class GridEnv(gym.Env):
         goals = [goals[i] for i in order]
         
         return sampled_abstract_sequences, path_actions, path_states, starts, goals
+    
+
+    def sample_paths_given_future_states(self, future_states):
+        """
+        Sample paths that only contain states from future_states.
+        Uses efficient enumeration instead of random sampling.
+        
+        Args:
+            future_states: N*N binary array where 1 indicates a valid state
+        """
+        
+        # Find all valid L-shaped paths (with at most 1 turn) from the future states
+        valid_paths = self._enumerate_valid_paths(future_states, self.path_len)
+        
+        if len(valid_paths) < self.n_afc:
+            raise RuntimeError(f"Not enough valid paths found in future_states. Found {len(valid_paths)}, need {self.n_afc}.")
+        
+        # Separate paths by dominant axis
+        vertical_dominant = []  # more vertical moves than horizontal
+        horizontal_dominant = []  # more horizontal moves than vertical
+        
+        for path_info in valid_paths:
+            path, actions, abstract_seq = path_info
+            num_vertical, num_horizontal = abstract_seq
+            if num_vertical > num_horizontal:
+                vertical_dominant.append(path_info)
+            elif num_horizontal > num_vertical:
+                horizontal_dominant.append(path_info)
+            # Skip L-shaped paths with equal arms for the diff_axes requirement
+        
+        if self.n_afc == 2 and (len(vertical_dominant) == 0 or len(horizontal_dominant) == 0):
+            raise RuntimeError("Cannot find paths with different dominant axes in future_states.")
+        
+        # Try to find a valid pair of paths
+        max_attempts = 1000
+        max_common_within_trial = 1
+        
+        for attempt in range(max_attempts):
+            if self.n_afc == 2:
+                # Pick one from each category
+                v_idx = np.random.randint(len(vertical_dominant))
+                h_idx = np.random.randint(len(horizontal_dominant))
+                selected = [vertical_dominant[v_idx], horizontal_dominant[h_idx]]
+            else:
+                # For n_afc > 2, randomly sample from all valid paths
+                indices = np.random.choice(len(valid_paths), size=self.n_afc, replace=False)
+                selected = [valid_paths[i] for i in indices]
+            
+            path_states = [sel[0] for sel in selected]
+            path_actions = [sel[1] for sel in selected]
+            sampled_abstract_sequences = [sel[2] for sel in selected]
+            starts = [path[0] for path in path_states]
+            goals = [path[-1] for path in path_states]
+            
+            # Check criteria
+            # 1. Different start and goal locations
+            n_distinct_starts = len(set([tuple(s) for s in starts]))
+            n_distinct_goals = len(set([tuple(g) for g in goals]))
+            if n_distinct_starts != self.n_afc or n_distinct_goals != self.n_afc:
+                continue
+            
+            # 2. Start/goal of one path not on another path
+            diff_starts = True
+            for i in range(self.n_afc):
+                path_A = set(map(tuple, path_states[i]))
+                for j in range(self.n_afc):
+                    if i != j:
+                        path_B = set(map(tuple, path_states[j]))
+                        if tuple(starts[i]) in path_B or tuple(goals[i]) in path_B or tuple(starts[j]) in path_A or tuple(goals[j]) in path_A:
+                            diff_starts = False
+                            break
+                if not diff_starts:
+                    break
+            if not diff_starts:
+                continue
+            
+            # 3. Check overlap within trial
+            path_states_tuples = [tuple(map(tuple, path)) for path in path_states]
+            n_common_within_trial, _ = self.check_overlap(path_states_tuples, 0)
+            if n_common_within_trial > max_common_within_trial:
+                continue
+            
+            # All criteria met!
+            break
+        else:
+            raise RuntimeError(f"Exceeded maximum attempts ({max_attempts}) while selecting valid path pairs from enumerated paths.")
+        
+        # Final randomisation of order
+        order = np.random.permutation(self.n_afc)
+        sampled_abstract_sequences = [sampled_abstract_sequences[i] for i in order]
+        path_states_tuples = [path_states_tuples[i] for i in order]
+        path_actions = [path_actions[i] for i in order]
+        starts = [starts[i] for i in order]
+        goals = [goals[i] for i in order]
+        
+        return sampled_abstract_sequences, path_actions, path_states_tuples, starts, goals
+
+    def _enumerate_valid_paths(self, future_states, path_len):
+        """
+        Enumerate all valid L-shaped paths (at most 1 turn) of given length 
+        that lie entirely within future_states.
+        
+        Returns:
+            List of (path, actions, abstract_seq) tuples where:
+                - path: numpy array of shape (path_len+1, 2) with coordinates
+                - actions: list of action indices
+                - abstract_seq: (num_vertical, num_horizontal) tuple
+        """
+        valid_paths = []
+        
+        # Get all valid starting points
+        valid_coords = np.argwhere(future_states == 1)
+        
+        # For each abstract sequence (num_right moves, num_up moves) with at most 1 turn
+        for abstract_seq in self.abstract_sequences:
+            num_right, num_up = abstract_seq
+            
+            # Try all 4 transformations and 2 reverse options
+            for transformation in ['none', 'x', 'y', 'xy']:
+                for reverse in [False, True]:
+                    
+                    # For each potential starting point
+                    for start_coord in valid_coords:
+                        start = start_coord.copy()
+                        path, actions = self.generate_concrete_sequence(
+                            num_right, num_up, 
+                            start=start, 
+                            transformation=transformation, 
+                            reverse=reverse
+                        )
+                        
+                        # Check if entire path is within bounds and in future_states
+                        if np.any(path < 0) or np.any(path >= self.N):
+                            continue
+                        
+                        # Check all states are in future_states
+                        all_valid = True
+                        for state in path:
+                            if future_states[state[0], state[1]] != 1:
+                                all_valid = False
+                                break
+                        
+                        if all_valid:
+                            # Determine the actual abstract sequence after transformation/reverse
+                            # by counting vertical vs horizontal moves
+                            if len(path) > 1:
+                                diffs = np.diff(path, axis=0)
+                                num_vertical = np.sum(np.abs(diffs[:, 0]))  # changes in row
+                                num_horizontal = np.sum(np.abs(diffs[:, 1]))  # changes in column
+                                actual_abstract = (num_vertical, num_horizontal)
+                            else:
+                                actual_abstract = (0, 0)
+                            
+                            valid_paths.append((path, actions, actual_abstract))
+        
+        # Remove duplicates (same path coordinates)
+        unique_paths = []
+        seen = set()
+        for path, actions, abstract_seq in valid_paths:
+            path_tuple = tuple(map(tuple, path))
+            if path_tuple not in seen:
+                seen.add(path_tuple)
+                unique_paths.append((path, actions, abstract_seq))
+        
+        return unique_paths
 
 
 
@@ -1456,3 +1625,32 @@ class GridEnv(gym.Env):
             # Store results as attributes
             self.path_aligned_states.append(trial_aligned_states)
             self.path_orthogonal_states.append(trial_orthogonal_states)
+
+
+    ## get grid of upcoming states
+    def get_future_states(self):
+        """
+        For each trial, compute which intersections may potentially be visited on any of the upcoming trials.
+        
+        Stores:
+            self.future_intersections: List of n_trials N*N binary arrays. 
+                For trial t, future_states[t][x, y] = 1 if state (x, y) 
+                appears on any path in any trial from t+1 onwards, 0 otherwise.
+                The final trial has all zeros (no upcoming trials).
+        """
+        self.future_states = []
+        
+        for t in range(self.n_trials):
+            # Create an N*N binary array for this trial
+            future_grid = np.zeros((self.N, self.N), dtype=int)
+            
+            # Look at all future trials (t+1 onwards)
+            for future_t in range(t + 1, self.n_trials):
+                # Look at all paths in the future trial
+                for path in self.path_states[future_t]:
+                    # Mark each state on this path
+                    for state in path:
+                        future_grid[state[0], state[1]] = 1
+            
+            self.future_states.append(future_grid)
+        
