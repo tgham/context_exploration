@@ -168,9 +168,6 @@ class MonteCarloTreeSearch():
                     node = action_leaf.children[next_node_id]
                 else:
                     node = self.tree.add_state_node(node_id=next_node_id, cost = costs, terminated=terminated, trial = node_trial, n_afc = self.n_afc, parent=action_leaf)
-                    # if (node_trial==2) and action_leaf.action==0:
-                    #     print('new node after action:', action_leaf.action, 'in trial:', node_trial, 'cost:', cost, 'terminated:', terminated)
-                    #     print(node)
 
                 ## debugging
                 assert np.array_equal(next_state, self.env.current), 'mismatch between env and tree state\n env: {} \n tree: {}'.format(self.env.current, next_state)
@@ -186,11 +183,6 @@ class MonteCarloTreeSearch():
         self.env.set_trial(self.actual_trial)
         assert np.array_equal(self.env.current, self.actual_state), 'env state not reverted properly'
         assert self.env.trial == self.actual_trial, 'env trial not reverted properly'
-
-        ## save tree obs for subsequent rollouts
-        # self.tree_obs = self.env.obs_tmp.copy()
-        # self.env.flush_obs()
-        # assert len(self.tree_obs) == len(self.env.obs)+len(self.tree_actions), 'tree obs and path lengths do not match\n tree obs: {}, env.obs: {}, tree path: {}'.format(len(self.tree_obs), len(self.env.obs),len(self.tree_actions))
 
         return action_leaf
 
@@ -246,36 +238,12 @@ class MonteCarloTreeSearch():
             to_append = [np.nan] * self.n_afc
             to_append[first_action] = self.tree_costs[depth]
             self.conditional_tree_cost_tracker[action][depth].append(to_append)
-            # if first_action == 0:
-            #     self.conditional_tree_cost_tracker[action][depth].append([self.tree_costs[depth], np.nan])
-            # elif first_action == 1:
-            #     self.conditional_tree_cost_tracker[action][depth].append([np.nan, self.tree_costs[depth]])
-            # elif first_action == 2:
-            #     self.conditional_tree_cost_tracker[action][depth].append([self.tree_costs[depth], self.tree_costs[depth]])
 
             ## debugging: save max and min Q values to normalise Qs
             if action_leaf.performance > self.max_Q[depth]:
                 self.max_Q[depth] = action_leaf.performance
             if action_leaf.performance < self.min_Q[depth]:
                 self.min_Q[depth] = action_leaf.performance
-            
-
-            ## update norm performance
-            # action_leaves = [leaf for leaf in node.action_leaves.values() if leaf is not None]
-            # elif len(action_leaves) == 1:
-            #     # If there is only one leaf, set its norm_performance to 1
-            #     action_leaves[0].norm_performance = 0
-            # else:
-            #     pass
-            # max_perf = np.max([child.performance for child in node.action_leaves.values() if child is not None])
-            # min_perf = np.min([child.performance for child in node.action_leaves.values() if child is not None])
-            # norm_term = max_perf - min_perf
-            # for leaf in node.action_leaves.values():
-            #     if leaf is not None:
-            #         if norm_term == 0:
-            #             leaf.norm_performance = 0
-            #         else:
-            #             leaf.norm_performance = (leaf.performance - min_perf) / norm_term
 
             ## Move to the next node in the path if not at the end
             if depth < tree_len - 1:
@@ -534,9 +502,10 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         super().__init__(env, agent, tree, exploration_constant, discount_factor)
 
     ## node_ids are defined by the informational state, i.e. the counts of low and high cost states in each cell
-    ## uses sparse representation: frozenset of ((i, j), (low_count, high_count)) for observed cells only
-    ## parent_node_id can be a frozenset from a parent node, or None for the root
     def init_node_id(self, obs=None, parent_node_id=None, trial=None):
+        
+        ## uses sparse representation: frozenset of ((i, j), (low_count, high_count)) for observed cells only
+
         # Initialize counts from parent node_id (sparse frozenset) if provided
         if parent_node_id is not None:
             counts = dict(parent_node_id)

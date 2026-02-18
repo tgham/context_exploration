@@ -142,10 +142,8 @@ class GridSampler:
         ## precompute the number of high and low costs for each row and column
         self.low_counts_rows = np.array([np.sum([cost == self.low_cost for (_, _, cost) in self.row_to_obs[i]]) for i in range(self.N)])
         self.low_counts_cols = np.array([np.sum([cost == self.low_cost for (_, _, cost) in self.col_to_obs[j]]) for j in range(self.N)])
-        # self.high_counts_rows = np.array([np.sum([cost == self.high_cost for (_, _, cost) in self.row_to_obs[i]]) for i in range(self.N)])
-        # self.high_counts_cols = np.array([np.sum([cost == self.high_cost for (_, _, cost) in self.col_to_obs[j]]) for j in range(self.N)])
-        self.high_counts_rows = np.array([np.sum([cost != self.low_cost for (_, _, cost) in self.row_to_obs[i]]) for i in range(self.N)])
-        self.high_counts_cols = np.array([np.sum([cost != self.low_cost for (_, _, cost) in self.col_to_obs[j]]) for j in range(self.N)])
+        self.high_counts_rows = np.array([np.sum([cost == self.high_cost for (_, _, cost) in self.row_to_obs[i]]) for i in range(self.N)])
+        self.high_counts_cols = np.array([np.sum([cost == self.high_cost for (_, _, cost) in self.col_to_obs[j]]) for j in range(self.N)])
 
 
     def init_pqs(self):
