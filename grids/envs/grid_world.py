@@ -474,6 +474,7 @@ class GridEnv(gym.Env):
                         init_done = True
                         self.get_alignment()
                         self.get_future_states()
+                        self.enumerate_valid_paths()
 
                     ## or, very very restrictive: as above, but also require first path to have more overlaps in total...
                     # total_first_overlaps = self.path_future_row_and_col_overlaps[0]
@@ -489,6 +490,7 @@ class GridEnv(gym.Env):
                     # self._trial = 0
                     # self.get_alignment()
                     # self.get_future_states()
+                    # self.enumerate_valid_paths()
 
             t+=1
             if t>500:
@@ -997,26 +999,26 @@ class GridEnv(gym.Env):
         return sampled_abstract_sequences, path_actions, path_states, starts, goals
     
 
-    def sample_paths_given_future_states(self, future_states):
+    def sample_paths_given_future_states(self, t):
         """
-        Sample paths that only contain states from future_states.
-        Uses efficient enumeration instead of random sampling.
+        Sample paths that only contain states from future_states for trial t.
+        Uses precomputed valid paths from enumerate_valid_paths().
         
         Args:
-            future_states: N*N binary array where 1 indicates a valid state
+            t: Trial index to sample paths for
         """
         
-        # Find all valid L-shaped paths (with at most 1 turn) from the future states
-        valid_paths = self._enumerate_valid_paths(future_states, self.path_len)
+        if not hasattr(self, 'valid_future_path_info') or self.valid_future_path_info is None:
+            raise RuntimeError("valid_future_path_info is not precomputed. Call enumerate_valid_paths() first.")
         
-        if len(valid_paths) < self.n_afc:
-            raise RuntimeError(f"Not enough valid paths found in future_states. Found {len(valid_paths)}, need {self.n_afc}.")
+        if len(self.valid_future_path_info[t]) < self.n_afc:
+            raise RuntimeError(f"Not enough valid paths found in future_states for trial {t}. Found {len(self.valid_future_path_info[t])}, need {self.n_afc}.")
         
         # Separate paths by dominant axis
         vertical_dominant = []  # more vertical moves than horizontal
         horizontal_dominant = []  # more horizontal moves than vertical
         
-        for path_info in valid_paths:
+        for path_info in self.valid_future_path_info[t]:
             path, actions, abstract_seq = path_info
             num_vertical, num_horizontal = abstract_seq
             if num_vertical > num_horizontal:
@@ -1040,8 +1042,8 @@ class GridEnv(gym.Env):
                 selected = [vertical_dominant[v_idx], horizontal_dominant[h_idx]]
             else:
                 # For n_afc > 2, randomly sample from all valid paths
-                indices = np.random.choice(len(valid_paths), size=self.n_afc, replace=False)
-                selected = [valid_paths[i] for i in indices]
+                indices = np.random.choice(len(self.valid_future_path_info[t]), size=self.n_afc, replace=False)
+                selected = [self.valid_future_path_info[t][i] for i in indices]
             
             path_states = [sel[0] for sel in selected]
             path_actions = [sel[1] for sel in selected]
@@ -1083,84 +1085,102 @@ class GridEnv(gym.Env):
             raise RuntimeError(f"Exceeded maximum attempts ({max_attempts}) while selecting valid path pairs from enumerated paths.")
         
         # Final randomisation of order
-        order = np.random.permutation(self.n_afc)
-        sampled_abstract_sequences = [sampled_abstract_sequences[i] for i in order]
-        path_states_tuples = [path_states_tuples[i] for i in order]
-        path_actions = [path_actions[i] for i in order]
-        starts = [starts[i] for i in order]
-        goals = [goals[i] for i in order]
+        # order = np.random.permutation(self.n_afc)
+        # sampled_abstract_sequences = [sampled_abstract_sequences[i] for i in order]
+        # path_states_tuples = [path_states_tuples[i] for i in order]
+        # path_actions = [path_actions[i] for i in order]
+        # starts = [starts[i] for i in order]
+        # goals = [goals[i] for i in order]
+
+        ## for consistency, let's keep the first one vertically dominant and the second one horizontally dominant (if n_afc=2)
+        if self.n_afc == 2:
+            if sampled_abstract_sequences[0][0] < sampled_abstract_sequences[0][1]:
+                sampled_abstract_sequences[0], sampled_abstract_sequences[1] = sampled_abstract_sequences[1], sampled_abstract_sequences[0]
+                path_states_tuples[0], path_states_tuples[1] = path_states_tuples[1], path_states_tuples[0]
+                path_actions[0], path_actions[1] = path_actions[1], path_actions[0]
+                starts[0], starts[1] = starts[1], starts[0]
+                goals[0], goals[1] = goals[1], goals[0]
         
         return sampled_abstract_sequences, path_actions, path_states_tuples, starts, goals
 
-    def _enumerate_valid_paths(self, future_states, path_len):
+    def enumerate_valid_paths(self):
         """
-        Enumerate all valid L-shaped paths (at most 1 turn) of given length 
-        that lie entirely within future_states.
+        For each trial, enumerate all valid L-shaped paths (at most 1 turn) of the required length 
+        that lie entirely within future_states for that trial.
         
-        Returns:
-            List of (path, actions, abstract_seq) tuples where:
-                - path: numpy array of shape (path_len+1, 2) with coordinates
-                - actions: list of action indices
-                - abstract_seq: (num_vertical, num_horizontal) tuple
+        Requires self.future_states to be precomputed (via get_future_states).
+        
+        Stores:
+            self.valid_future_path_info: List of n_trials lists, where each inner list contains
+                (path, actions, abstract_seq) tuples:
+                    - path: numpy array of shape (path_len+1, 2) with coordinates
+                    - actions: list of action indices
+                    - abstract_seq: (num_vertical, num_horizontal) tuple
         """
-        valid_paths = []
+        if not hasattr(self, 'future_states') or self.future_states is None:
+            raise RuntimeError("future_states not computed. Call get_future_states() first.")
         
-        # Get all valid starting points
-        valid_coords = np.argwhere(future_states == 1)
+        self.valid_future_path_info = []
         
-        # For each abstract sequence (num_right moves, num_up moves) with at most 1 turn
-        for abstract_seq in self.abstract_sequences:
-            num_right, num_up = abstract_seq
+        for t in range(self.n_trials):
+            future_states = self.future_states[t]
+            valid_paths_tmp = []
             
-            # Try all 4 transformations and 2 reverse options
-            for transformation in ['none', 'x', 'y', 'xy']:
-                for reverse in [False, True]:
-                    
-                    # For each potential starting point
-                    for start_coord in valid_coords:
-                        start = start_coord.copy()
-                        path, actions = self.generate_concrete_sequence(
-                            num_right, num_up, 
-                            start=start, 
-                            transformation=transformation, 
-                            reverse=reverse
-                        )
+            # Get all valid starting points for this trial
+            valid_coords = np.argwhere(future_states == 1)
+            
+            # For each abstract sequence (num_right moves, num_up moves) with at most 1 turn
+            for abstract_seq in self.abstract_sequences:
+                num_right, num_up = abstract_seq
+                
+                # Try all 4 transformations and 2 reverse options
+                for transformation in ['none', 'x', 'y', 'xy']:
+                    for reverse in [False, True]:
                         
-                        # Check if entire path is within bounds and in future_states
-                        if np.any(path < 0) or np.any(path >= self.N):
-                            continue
-                        
-                        # Check all states are in future_states
-                        all_valid = True
-                        for state in path:
-                            if future_states[state[0], state[1]] != 1:
-                                all_valid = False
-                                break
-                        
-                        if all_valid:
-                            # Determine the actual abstract sequence after transformation/reverse
-                            # by counting vertical vs horizontal moves
-                            if len(path) > 1:
-                                diffs = np.diff(path, axis=0)
-                                num_vertical = np.sum(np.abs(diffs[:, 0]))  # changes in row
-                                num_horizontal = np.sum(np.abs(diffs[:, 1]))  # changes in column
-                                actual_abstract = (num_vertical, num_horizontal)
-                            else:
-                                actual_abstract = (0, 0)
+                        # For each potential starting point
+                        for start_coord in valid_coords:
+                            start = start_coord.copy()
+                            path, actions = self.generate_concrete_sequence(
+                                num_right, num_up, 
+                                start=start, 
+                                transformation=transformation, 
+                                reverse=reverse
+                            )
                             
-                            valid_paths.append((path, actions, actual_abstract))
-        
-        # Remove duplicates (same path coordinates)
-        unique_paths = []
-        seen = set()
-        for path, actions, abstract_seq in valid_paths:
-            path_tuple = tuple(map(tuple, path))
-            if path_tuple not in seen:
-                seen.add(path_tuple)
-                unique_paths.append((path, actions, abstract_seq))
-        
-        return unique_paths
-
+                            # Check if entire path is within bounds and in future_states
+                            if np.any(path < 0) or np.any(path >= self.N):
+                                continue
+                            
+                            # Check all states are in future_states
+                            all_valid = True
+                            for state in path:
+                                if future_states[state[0], state[1]] != 1:
+                                    all_valid = False
+                                    break
+                            
+                            if all_valid:
+                                # Determine the actual abstract sequence after transformation/reverse
+                                # by counting vertical vs horizontal moves
+                                if len(path) > 1:
+                                    diffs = np.diff(path, axis=0)
+                                    num_vertical = np.sum(np.abs(diffs[:, 0]))  # changes in row
+                                    num_horizontal = np.sum(np.abs(diffs[:, 1]))  # changes in column
+                                    actual_abstract = (num_vertical, num_horizontal)
+                                else:
+                                    actual_abstract = (0, 0)
+                                
+                                valid_paths_tmp.append((path, actions, actual_abstract))
+            
+            # Remove duplicates (same path coordinates) for this trial
+            trial_valid_paths = []
+            seen = set()
+            for path, actions, abstract_seq in valid_paths_tmp:
+                path_tuple = tuple(map(tuple, path))
+                if path_tuple not in seen:
+                    seen.add(path_tuple)
+                    trial_valid_paths.append((path, actions, abstract_seq))
+            
+            self.valid_future_path_info.append(trial_valid_paths)
 
 
     ## count number of overlapping states
