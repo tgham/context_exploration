@@ -49,7 +49,7 @@ class MonteCarloTreeSearch():
         # print(self.exploration_constants)
 
         ## create id for root node
-        node_id = self.init_node_id(self.env.obs, None, self.actual_trial)
+        node_id = self.init_node_id(self.env.obs, None, self.root_trial)
 
         ## some debugging metrics
         self.exploratory_steps = 0
@@ -57,8 +57,16 @@ class MonteCarloTreeSearch():
         self.max_Q = np.zeros(self.env.n_trials) - np.inf
         self.min_Q = np.zeros(self.env.n_trials) 
 
+        ## PA-BAMCP: root node also needs to contain paths, actions, starts and goals for that trial
+        path_actions = self.env.path_actions[self.root_trial].copy()
+        path_states = self.env.path_states[self.root_trial].copy()
+        path_starts = self.env.starts[self.root_trial].copy()
+        path_goals = self.env.goals[self.root_trial].copy()
+
         ## add state node to the tree
-        self.tree.add_state_node(node_id=node_id, cost=None, terminated=False, trial = self.actual_trial, n_afc = self.n_afc, parent=None)
+        self.tree.add_state_node(node_id=node_id, cost=None, terminated=False, trial = self.root_trial, n_afc = self.n_afc, parent=None, 
+                                path_actions=path_actions, path_states=path_states, path_starts=path_starts, path_goals=path_goals
+                                 )
 
     ## create node id, which represents the agent's current state of knowledge, a flattened N*N*2 array representing which cells have a high or low cost
     def init_node_id(self, obs=None, init_info_state=None, trial = None):
@@ -97,7 +105,7 @@ class MonteCarloTreeSearch():
         node = self.tree.root
         t = 0
         node_trial = self.env.trial
-        assert node_trial == node.trial, 'trial mismatch between env and tree\n env: {} \n tree: {}\n MCTS: {}'.format(node_trial, node.trial, self.actual_trial)
+        assert node_trial == node.trial, 'trial mismatch between env and tree\n env: {} \n tree: {}\n MCTS: {}'.format(node_trial, node.trial, self.root_trial)
         self.check_node(node)
 
         ## create a record of the nodes/leaves visited in the tree
@@ -124,11 +132,11 @@ class MonteCarloTreeSearch():
             # if t == 2:
 
             #     ## revert env
-            #     self.env.set_state(self.actual_state)
-            #     self.env.set_goal(self.actual_goal)
-            #     self.env.set_trial(self.actual_trial)
-            #     assert np.array_equal(self.env.current, self.actual_state), 'env state not reverted properly'
-            #     assert self.env.trial == self.actual_trial, 'env trial not reverted properly'
+            #     self.env.set_state(self.root_state)
+            #     self.env.set_goal(self.root_goal)
+            #     self.env.set_trial(self.root_trial)
+            #     assert np.array_equal(self.env.current, self.root_state), 'env state not reverted properly'
+            #     assert self.env.trial == self.root_trial, 'env trial not reverted properly'
             #     return False
 
             ## expansion step
@@ -142,11 +150,11 @@ class MonteCarloTreeSearch():
                 # node.n_state_visits += 1
 
                 ## revert env
-                self.env.set_state(self.actual_state)
-                self.env.set_goal(self.actual_goal)
-                self.env.set_trial(self.actual_trial)
-                assert np.array_equal(self.env.current, self.actual_state), 'env state not reverted properly'
-                assert self.env.trial == self.actual_trial, 'env trial not reverted properly. should be in {}, but actually in {}'.format(self.actual_trial, self.env.trial)
+                self.env.set_state(self.root_state)
+                self.env.set_goal(self.root_goal)
+                self.env.set_trial(self.root_trial)
+                assert np.array_equal(self.env.current, self.root_state), 'env state not reverted properly'
+                assert self.env.trial == self.root_trial, 'env trial not reverted properly. should be in {}, but actually in {}'.format(self.root_trial, self.env.trial)
 
                 return action_leaf
                 
@@ -161,13 +169,27 @@ class MonteCarloTreeSearch():
                 self.node_id_path.append(node.node_id)
 
                 ## move in env
-                next_state, costs, terminated, node_trial, next_node_id = self.tree_step(action_leaf)
+                _, costs, terminated, node_trial, next_node_id = self.tree_step(action_leaf)
 
                 # see if the next state node already exists as a child of this action leaf
                 if next_node_id in action_leaf.children:
                     node = action_leaf.children[next_node_id]
                 else:
-                    node = self.tree.add_state_node(node_id=next_node_id, cost = costs, terminated=terminated, trial = node_trial, n_afc = self.n_afc, parent=action_leaf)
+
+                    ## full BAMCP: trial info for next node is just inherited from the env
+                    # next_path_actions = self.env.path_actions[node_trial].copy()
+                    # next_path_states = self.env.path_states[node_trial].copy()
+                    # next_path_starts = self.env.starts[node_trial].copy()
+                    # next_path_goals = self.env.goals[node_trial].copy()
+
+                    ## PA-BAMCP: trial info for the next node is sampled ()
+                    # if node_trial<self.env.n_trials:
+                    _, next_path_actions, next_path_states, next_path_starts, next_path_goals = self.env.sample_paths_given_future_states(self.root_trial)
+
+
+                    node = self.tree.add_state_node(node_id=next_node_id, cost = costs, terminated=terminated, trial = node_trial, n_afc = self.n_afc, parent=action_leaf,
+                                        path_actions=next_path_actions, path_states=next_path_states, path_starts=next_path_starts, path_goals=next_path_goals
+                                                    )
 
                 ## debugging NB NEED TO FIGURE THIS OUT FOR PA-BAMCP
                 # print(next_state, self.env.current, self.env.starts)
@@ -179,11 +201,11 @@ class MonteCarloTreeSearch():
             action_leaf = None
 
         ## revert env
-        self.env.set_state(self.actual_state)
-        self.env.set_goal(self.actual_goal)
-        self.env.set_trial(self.actual_trial)
-        assert np.array_equal(self.env.current, self.actual_state), 'env state not reverted properly'
-        assert self.env.trial == self.actual_trial, 'env trial not reverted properly'
+        self.env.set_state(self.root_state)
+        self.env.set_goal(self.root_goal)
+        self.env.set_trial(self.root_trial)
+        assert np.array_equal(self.env.current, self.root_state), 'env state not reverted properly'
+        assert self.env.trial == self.root_trial, 'env trial not reverted properly'
 
         return action_leaf
 
@@ -349,28 +371,27 @@ class MonteCarloTreeSearch():
                 self.conditional_tree_cost_tracker[a].append([])
 
         ## init for path sampling in PA-BAMCP (i.e. no need to sample paths for the root, since we are actively considering these)
-        actual_trial = self.env.trial
+        root_trial = self.env.trial
         self.env.sampled_path_actions = {
-            actual_trial: self.env.path_actions[actual_trial].copy()
+            root_trial: self.env.path_actions[root_trial].copy()
         }
         self.env.sampled_path_states = {
-            actual_trial: self.env.path_states[actual_trial].copy()
+            root_trial: self.env.path_states[root_trial].copy()
         }
         self.env.sampled_starts = {
-            actual_trial: self.env.starts[actual_trial].copy()
+            root_trial: self.env.starts[root_trial].copy()
         }
         self.env.sampled_goals = {
-            actual_trial: self.env.goals[actual_trial].copy()
+            root_trial: self.env.goals[root_trial].copy()
         }
 
         ## if PA-BAMCP, we need to sample new paths at the beginning of each simulation
-        for t in range(actual_trial+1, self.env.n_trials):
-            _, sampled_path_actions, sampled_path_states, sampled_starts, sampled_goals = self.env.sample_paths_given_future_states(actual_trial)
-            self.env.sampled_path_actions[t] = sampled_path_actions
-            self.env.sampled_path_states[t] = sampled_path_states
-            self.env.sampled_starts[t] = sampled_starts
-            self.env.sampled_goals[t] = sampled_goals
-        
+        # for t in range(root_trial+1, self.env.n_trials):
+        #     _, sampled_path_actions, sampled_path_states, sampled_starts, sampled_goals = self.env.sample_paths_given_future_states(root_trial)
+        #     self.env.sampled_path_actions[t] = sampled_path_actions
+        #     self.env.sampled_path_states[t] = sampled_path_states
+        #     self.env.sampled_starts[t] = sampled_starts
+        #     self.env.sampled_goals[t] = sampled_goals
         
         ## loop through simulations
         for s in range(n_sims):
@@ -440,13 +461,13 @@ class MonteCarloTreeSearch_Free(MonteCarloTreeSearch):
         super().__init__(env, agent, tree, exploration_constant, discount_factor)
 
     def init_node_id(self, obs=None, init_info_state = None, trial=None):
-        node_id = tuple(np.append(self.actual_state, self.env.costs[self.actual_state[0], self.actual_state[1]]))
+        node_id = tuple(np.append(self.root_state, self.env.costs[self.root_state[0], self.root_state[1]]))
         return node_id
     
     def update_trial(self):
-        self.actual_state = self.env.current
-        self.actual_goal = self.env.goal
-        self.actual_trial = self.env.trial
+        self.root_state = self.env.current
+        self.root_goal = self.env.goal
+        self.root_trial = self.env.trial
 
     ## in free choice, there is a meaningful state of the MDP (i.e. agent's current position in grid), which is reflected in belief state
     def check_node(self, node):
@@ -473,7 +494,7 @@ class MonteCarloTreeSearch_Free(MonteCarloTreeSearch):
         action = action_leaf.action
         next_state, cost, terminated, _, _ = self.env.step(action)
         self.tree_costs.append(cost)
-        node_trial = self.actual_trial ##??
+        node_trial = self.root_trial ##??
         next_node_id = tuple(np.append(next_state, cost))
         return next_state, cost, terminated, node_trial, next_node_id
     
@@ -511,7 +532,7 @@ class MonteCarloTreeSearch_Free(MonteCarloTreeSearch):
             current = np.clip(current + direction, 0, self.N - 1)
             
             ## return cost once goal is reached (i.e. don't use the cost of the goal state)
-            if np.array_equal(current, self.actual_goal):
+            if np.array_equal(current, self.root_goal):
                 self.tree_costs.append(total_cost)
                 return total_cost
             
@@ -561,22 +582,45 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         ### take action (or path) and get new state
         action = node.untried_action()
         terminated = node.trial == self.env.n_trials-1 ## i.e. this action leaf corresponds to the action made in the final trial, so it leads to termination of the day
-        # goal = self.env.goals[node.trial][action].copy()
-        goal = self.env.sampled_goals[node.trial][action].copy()
             
-        ## update info for s-a leaf - i.e. the state-action pair
+        ### update info for s-a leaf - i.e. the state-action pair
+
+        ## full BAMCP:
         # start = self.env.starts[node.trial][action].copy()
-        start = self.env.sampled_starts[node.trial][action].copy()
+        # goal = self.env.goals[node.trial][action].copy()
+
+        ## PA-BAMCP:
+        start = node.path_starts[action].copy()
+        goal = node.path_goals[action].copy()
+        # print(node.trial, start, goal)
+        # raise Exception('check if start and goal are correct')
+
         node.action_leaves[action] = Action_Node(start = start, action=action, goal = goal, terminated=terminated, trial=node.trial, parent_id=node.node_id)
         node.action_leaves[action].performance = 0
         node.action_leaves[action].norm_performance = 0
 
+        ### PA-BAMCP: expansion of node attaches a sampled pair of paths to the leaf
+
+        ## first trial is inherited from the node
+        node.action_leaves[action].all_path_actions[node.trial] = node.path_actions.copy()
+        node.action_leaves[action].all_path_states[node.trial] = node.path_states.copy()
+        node.action_leaves[action].all_path_starts[node.trial] = node.path_starts.copy()
+        node.action_leaves[action].all_path_goals[node.trial] = node.path_goals.copy()
+
+        ## sample paths for all upcoming trials and attach to the leaf
+        for upcoming_t in range(node.trial+1, self.env.n_trials):
+            _, sampled_path_actions, sampled_path_states, sampled_starts, sampled_goals = self.env.sample_paths_given_future_states(node.trial) ## +1 because we want to sample paths for the upcoming trials.
+            node.action_leaves[action].all_path_actions[upcoming_t] = sampled_path_actions
+            node.action_leaves[action].all_path_states[upcoming_t] = sampled_path_states
+            node.action_leaves[action].all_path_starts[upcoming_t] = sampled_starts
+            node.action_leaves[action].all_path_goals[upcoming_t] = sampled_goals
+
         return node.action_leaves[action]
     
     def update_trial(self):
-        self.actual_trial = self.env.trial ## i.e. the trial that the agent is current faced with in the real env
-        self.actual_state = self.env.starts[self.actual_trial].copy() ## i.e. the two possible start states for this trial
-        self.actual_goal = self.env.goals[self.actual_trial].copy() ## i.e. the two possible goal states for this trial
+        self.root_trial = self.env.trial ## i.e. the trial that the agent is current faced with in the real env
+        self.root_state = self.env.starts[self.root_trial].copy() ## i.e. the two possible start states for this trial
+        self.root_goal = self.env.goals[self.root_trial].copy() ## i.e. the two possible goal states for this trial
 
     ## tree step
     def tree_step(self, action_leaf):
@@ -584,7 +628,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         ## get some initial info about the step
         step_trial = action_leaf.trial
         path_id = action_leaf.action
-        assert self.env.trial == action_leaf.trial, 'trial mismatch between env and tree\n env: {} \n tree: {}\n MCTS: {}'.format(self.env.trial, action_leaf.trial, self.actual_trial)
+        assert self.env.trial == action_leaf.trial, 'trial mismatch between env and tree\n env: {} \n tree: {}\n MCTS: {}'.format(self.env.trial, action_leaf.trial, self.root_trial)
 
         ## full BAMCP: use actual upcoming paths
         # start_tmp = self.env.starts[step_trial][path_id].copy()
@@ -592,9 +636,9 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         # action_sequence = self.env.path_actions[step_trial][path_id]
 
         ## PA-BAMCP: sample two paths 
-        start_tmp = self.env.sampled_starts[step_trial][path_id].copy()
-        goal_tmp = self.env.sampled_goals[step_trial][path_id].copy()
-        action_sequence = self.env.sampled_path_actions[step_trial][path_id]
+        start_tmp = action_leaf.all_path_starts[step_trial][path_id].copy()
+        goal_tmp = action_leaf.all_path_goals[step_trial][path_id].copy()
+        action_sequence = action_leaf.all_path_actions[step_trial][path_id].copy()
 
         self.env.set_state(start_tmp)
         self.env.set_goal(goal_tmp)
@@ -656,7 +700,8 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
             # next_state = self.env.starts[node_trial].copy()
             
             ## PA-BAMCP
-            next_state = self.env.sampled_starts[node_trial].copy()
+            # next_state = self.env.sampled_starts[node_trial].copy()
+            next_state = None ## sort this out later, but it seems we don't really need this for this task
 
             self.env.set_trial(node_trial)
             self.env.soft_reset()
@@ -688,9 +733,9 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         #     starting_cost += cost
         # total_cost = starting_cost
 
-        ## or PA-BAMCP: use sampled upcoming paths
+        ## or PA-BAMCP: use sampled upcoming paths 
         starting_cost = 0
-        for state in self.env.sampled_path_states[first_trial][path_id]:
+        for state in action_leaf.all_path_states[first_trial][path_id]:
             cost = self.env.predicted_costs[state[0], state[1]]
             starting_cost += cost
         total_cost = starting_cost
@@ -715,7 +760,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
             path_costs = []
             for path_id in range(self.n_afc):
                 # path_states = self.env.path_states[trial][path_id] ## full BAMCP
-                path_states = self.env.sampled_path_states[trial][path_id] ## PA-BAMCP
+                path_states = action_leaf.all_path_states[trial][path_id] ## PA-BAMCP
                 ro_cost = 0
                 for state in path_states:
                     cost = self.env.predicted_costs[state[0], state[1]]
