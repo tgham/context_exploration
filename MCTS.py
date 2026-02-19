@@ -60,12 +60,12 @@ class MonteCarloTreeSearch():
         ## PA-BAMCP: root node also needs to contain paths, actions, starts and goals for that trial
         path_actions = self.env.path_actions[self.root_trial].copy()
         path_states = self.env.path_states[self.root_trial].copy()
-        path_starts = self.env.starts[self.root_trial].copy()
-        path_goals = self.env.goals[self.root_trial].copy()
+        starts = self.env.starts[self.root_trial].copy()
+        goals = self.env.goals[self.root_trial].copy()
 
         ## add state node to the tree
         self.tree.add_state_node(node_id=node_id, cost=None, terminated=False, trial = self.root_trial, n_afc = self.n_afc, parent=None, 
-                                path_actions=path_actions, path_states=path_states, path_starts=path_starts, path_goals=path_goals
+                                path_actions=path_actions, path_states=path_states, starts=starts, goals=goals
                                  )
 
     ## create node id, which represents the agent's current state of knowledge, a flattened N*N*2 array representing which cells have a high or low cost
@@ -182,13 +182,10 @@ class MonteCarloTreeSearch():
                     # next_path_starts = self.env.starts[node_trial].copy()
                     # next_path_goals = self.env.goals[node_trial].copy()
 
-                    ## PA-BAMCP: trial info for the next node is sampled ()
-                    # if node_trial<self.env.n_trials:
-                    _, next_path_actions, next_path_states, next_path_starts, next_path_goals = self.env.sample_paths_given_future_states(self.root_trial)
-
-
+                    ## PA-BAMCP: trial info for the next node (i.e. the node to which the action leaf leads) is sampled
+                    _, next_path_actions, next_path_states, next_starts, next_goals = self.env.sample_paths_given_future_states(self.root_trial)
                     node = self.tree.add_state_node(node_id=next_node_id, cost = costs, terminated=terminated, trial = node_trial, n_afc = self.n_afc, parent=action_leaf,
-                                        path_actions=next_path_actions, path_states=next_path_states, path_starts=next_path_starts, path_goals=next_path_goals
+                                        path_actions=next_path_actions, path_states=next_path_states, starts=next_starts, goals=next_goals
                                                     )
 
                 ## debugging NB NEED TO FIGURE THIS OUT FOR PA-BAMCP
@@ -590,30 +587,18 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         # goal = self.env.goals[node.trial][action].copy()
 
         ## PA-BAMCP:
-        start = node.path_starts[action].copy()
-        goal = node.path_goals[action].copy()
-        # print(node.trial, start, goal)
-        # raise Exception('check if start and goal are correct')
+        start = node.starts[action].copy()
+        goal = node.goals[action].copy()
 
         node.action_leaves[action] = Action_Node(start = start, action=action, goal = goal, terminated=terminated, trial=node.trial, parent_id=node.node_id)
         node.action_leaves[action].performance = 0
         node.action_leaves[action].norm_performance = 0
 
         ### PA-BAMCP: expansion of node attaches a sampled pair of paths to the leaf
-
-        ## first trial is inherited from the node
-        node.action_leaves[action].all_path_actions[node.trial] = node.path_actions.copy()
-        node.action_leaves[action].all_path_states[node.trial] = node.path_states.copy()
-        node.action_leaves[action].all_path_starts[node.trial] = node.path_starts.copy()
-        node.action_leaves[action].all_path_goals[node.trial] = node.path_goals.copy()
-
-        ## sample paths for all upcoming trials and attach to the leaf
-        for upcoming_t in range(node.trial+1, self.env.n_trials):
-            _, sampled_path_actions, sampled_path_states, sampled_starts, sampled_goals = self.env.sample_paths_given_future_states(node.trial) ## +1 because we want to sample paths for the upcoming trials.
-            node.action_leaves[action].all_path_actions[upcoming_t] = sampled_path_actions
-            node.action_leaves[action].all_path_states[upcoming_t] = sampled_path_states
-            node.action_leaves[action].all_path_starts[upcoming_t] = sampled_starts
-            node.action_leaves[action].all_path_goals[upcoming_t] = sampled_goals
+        node.action_leaves[action].start = start
+        node.action_leaves[action].goal = goal
+        node.action_leaves[action].path_actions = node.path_actions[action]
+        node.action_leaves[action].path_states = node.path_states[action]
 
         return node.action_leaves[action]
     
@@ -636,9 +621,9 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         # action_sequence = self.env.path_actions[step_trial][path_id]
 
         ## PA-BAMCP: sample two paths 
-        start_tmp = action_leaf.all_path_starts[step_trial][path_id].copy()
-        goal_tmp = action_leaf.all_path_goals[step_trial][path_id].copy()
-        action_sequence = action_leaf.all_path_actions[step_trial][path_id].copy()
+        start_tmp = action_leaf.start.copy()
+        goal_tmp = action_leaf.goal.copy()
+        action_sequence = action_leaf.path_actions.copy()
 
         self.env.set_state(start_tmp)
         self.env.set_goal(goal_tmp)
@@ -735,7 +720,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
         ## or PA-BAMCP: use sampled upcoming paths 
         starting_cost = 0
-        for state in action_leaf.all_path_states[first_trial][path_id]:
+        for state in action_leaf.path_states:
             cost = self.env.predicted_costs[state[0], state[1]]
             starting_cost += cost
         total_cost = starting_cost
@@ -760,7 +745,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
             path_costs = []
             for path_id in range(self.n_afc):
                 # path_states = self.env.path_states[trial][path_id] ## full BAMCP
-                path_states = action_leaf.all_path_states[trial][path_id] ## PA-BAMCP
+                _, _, path_states, _, _ = self.env.sample_paths_given_future_states(self.root_trial) ## PA-BAMCP
                 ro_cost = 0
                 for state in path_states:
                     cost = self.env.predicted_costs[state[0], state[1]]

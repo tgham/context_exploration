@@ -65,7 +65,7 @@ class Node:
     # __slots__ = ['state', 'n_state_visits', 'cost', 'terminated', 'node_id', 'parent_node_ids', 'N', 'untried_actions', 'action_leaves']
 
     def __init__(self, node_id, cost, terminated, trial, n_afc, N,
-                    path_actions=None, path_states=None, path_starts=None, path_goals=None
+                    path_actions=None, path_states=None, starts=None, goals=None
                  ):
         
         ## state info
@@ -77,11 +77,11 @@ class Node:
         self.parent_node_ids = []
         self.N = N
 
-        ## path info for PA-BAMCP
+        ## path info for PA-BAMCP - for the pair of (sampled) paths, what are the actions, states, starts and goals?
         self.path_actions = path_actions
         self.path_states = path_states
-        self.path_starts = path_starts
-        self.path_goals = path_goals
+        self.starts = starts 
+        self.goals = goals
 
         ## define valid actions
         self.untried_actions = list(range(n_afc))
@@ -132,12 +132,6 @@ class Action_Node:
         self.children={}
         self.children_ids = []
 
-        ## PA-BAMCP: need to sample future paths
-        self.all_path_actions = {}
-        self.all_path_states = {}
-        self.all_path_starts = {}
-        self.all_path_goals = {}
-
     def __str__(self):
         # return "prev_state{}: (action={}, next_state={}, children={}, visits={}, performance={:0.4f})".format(
         return "start{}: (action={}, goal={}, n_children={}, visits={}, performance={:0.3f})".format(
@@ -163,19 +157,12 @@ class Tree:
 
     ## attach action leaf to child state
     def add_state_node(self, node_id, cost, terminated, trial, n_afc, parent=None, 
-                                path_actions=None, path_states=None, path_starts=None, path_goals=None
+                                path_actions=None, path_states=None, starts=None, goals=None
                        ):
-
-        # ## check for existing state node
-        # node_id = str(history)
-        # if node_id in self.nodes:
-        #     # print(state,"already exists")
-        #     return self.nodes[node_id]
-
         
         ## create a new node
         node = Node(node_id=node_id, cost=cost, terminated=terminated, trial = trial, n_afc=n_afc, N=self.N,
-                    path_actions=path_actions, path_states=path_states, path_starts=path_starts, path_goals=path_goals
+                    path_actions=path_actions, path_states=path_states, starts=starts, goals=goals
                     )
         
         ## store parent-child relationships
