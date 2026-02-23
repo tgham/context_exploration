@@ -102,8 +102,8 @@ class Node:
 
     def __str__(self):
         action_leaves_msg = {action: np.round(leaf.performance,3) if leaf is not None else None for action, leaf in self.action_leaves.items()}
-        return "belief state {}: (trial={}, visits={}, terminated={})\n{})".format(
-                                                  self.belief_state,
+        return "starts {}: (trial={}, visits={}, terminated={})\n{})".format(
+                                                  self.starts,
                                                     self.trial,
                                                   self.n_state_visits,
                                                   self.terminated,

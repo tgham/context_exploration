@@ -178,13 +178,25 @@ class MonteCarloTreeSearch():
                 else:
 
                     ## full BAMCP: trial info for next node is just inherited from the env (need to sort this out...)
-                    # next_path_actions = self.env.path_actions[node_trial].copy()
-                    # next_path_states = self.env.path_states[node_trial].copy()
-                    # next_starts = self.env.starts[node_trial].copy()
-                    # next_goals = self.env.goals[node_trial].copy()
+                    # if not terminated:
+                    #     next_path_actions = self.env.path_actions[node_trial].copy()
+                    #     next_path_states = self.env.path_states[node_trial].copy()
+                    #     next_starts = self.env.starts[node_trial].copy()
+                    #     next_goals = self.env.goals[node_trial].copy()
+                    # else:
+                        # next_path_actions= None
+                    #     next_path_states= None
+                    #     next_starts = None
+                    #     next_goals = None
 
                     ## PA-BAMCP: trial info for the next node (i.e. the node to which the action leaf leads) is sampled
-                    _, next_path_actions, next_path_states, next_starts, next_goals = self.env.sample_paths_given_future_states(self.root_trial)
+                    if not terminated:
+                        _, next_path_actions, next_path_states, next_starts, next_goals = self.env.sample_paths_given_future_states(self.root_trial)
+                    else:
+                        next_path_actions= None
+                        next_path_states= None
+                        next_starts = None
+                        next_goals = None
 
                     ## create new node
                     node = self.tree.add_state_node(node_id=next_node_id, cost = costs, terminated=terminated, trial = node_trial, n_afc = self.n_afc, parent=action_leaf,
