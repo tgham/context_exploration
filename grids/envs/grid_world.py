@@ -472,7 +472,7 @@ class GridEnv(gym.Env):
                         self.same_overlaps = False
                         self._trial = 0
                         init_done = True
-                        self.get_alignment()
+                        self.path_aligned_states, self.path_orthogonal_states = self.get_alignment(self.path_states)
                         self.get_future_states()
                         self.enumerate_valid_paths()
 
@@ -488,7 +488,7 @@ class GridEnv(gym.Env):
                     # self.same_overlaps = True
                     # init_done = True
                     # self._trial = 0
-                    # self.get_alignment()
+                    # self.path_aligned_states, self.path_orthogonal_states = self.get_alignment(self.path_states)
                     # self.get_future_states()
                     # self.enumerate_valid_paths()
 
@@ -1578,7 +1578,7 @@ class GridEnv(gym.Env):
     
 
     ## get information on which states are orthogonal vs aligned to the context
-    def get_alignment(self):
+    def get_alignment(self, path_states):
         """
         Classify states in paths as aligned or orthogonal to the context for all trials, 
         and store them directly as attributes.
@@ -1591,29 +1591,33 @@ class GridEnv(gym.Env):
         """
 
         ## init list
-        if not hasattr(self, 'path_aligned_states'):
-            self.path_aligned_states = []
-        if not hasattr(self, 'path_orthogonal_states'):
-            self.path_orthogonal_states = []
+        # if not hasattr(self, 'path_aligned_states'):
+        #     self.path_aligned_states = []
+        # if not hasattr(self, 'path_orthogonal_states'):
+        #     self.path_orthogonal_states = []
+        path_aligned_states = []
+        path_orthogonal_states = []
             
         # Process all trials
-        for trial_idx in range(self.n_trials):
+        n_trials_tmp = len(path_states)
+        for trial_idx in range(n_trials_tmp):
             trial_aligned_states = []
             trial_orthogonal_states = []
-            
-            for path_states in self.path_states[trial_idx]:
+            n_afc_tmp = len(path_states[trial_idx])
+            for choice_idx in range(n_afc_tmp):
+                ps = path_states[trial_idx][choice_idx]
                 aligned_states = set()
                 orthogonal_states = set()
                 
-                if len(path_states) < 2:
-                    trial_aligned_states.append(aligned_states)
-                    trial_orthogonal_states.append(orthogonal_states)
-                    continue
+                # if len(ps) < 2:
+                #     trial_aligned_states.append(aligned_states)
+                #     trial_orthogonal_states.append(orthogonal_states)
+                #     continue
                 
                 # Iterate through consecutive state pairs to determine movement direction
-                for idx in range(len(path_states) - 1):
-                    current_state = path_states[idx]
-                    next_state = path_states[idx + 1]
+                for idx in range(len(ps) - 1):
+                    current_state = ps[idx]
+                    next_state = ps[idx + 1]
                     
                     if self.context == 'column':
                         # Aligned: vertical movement (column stays constant)
@@ -1643,8 +1647,14 @@ class GridEnv(gym.Env):
                 trial_orthogonal_states.append(orthogonal_states)
             
             # Store results as attributes
-            self.path_aligned_states.append(trial_aligned_states)
-            self.path_orthogonal_states.append(trial_orthogonal_states)
+            path_aligned_states.append(trial_aligned_states)
+            path_orthogonal_states.append(trial_orthogonal_states)
+
+        ## sometimes, we're only returning aligned and orthogonal states for a single trial, and a single choice, so we can just return the sets for that trial and choice rather than the whole list of lists
+        if n_trials_tmp == 1 and n_afc_tmp == 1:
+            return path_aligned_states[0][0], path_orthogonal_states[0][0]
+
+        return path_aligned_states, path_orthogonal_states
 
 
     ## get grid of upcoming states
