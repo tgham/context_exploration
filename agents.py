@@ -738,11 +738,11 @@ class Farmer:
                         else:
                             MCTS.update_trial()
                             tree_resets=True
-                        assert t == MCTS.actual_trial, 'trial mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(t, MCTS.env.trial)
+                        assert t == MCTS.root_trial, 'trial mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(t, MCTS.root_trial)
                         assert MCTS.env.sim == True, 'env not in sim mode'
 
                         ## search
-                        MCTS.actual_state = current
+                        MCTS.root_state = current
                         action, MCTS_Q = MCTS.search(n_sims, n_iter=n_iter)
                         self.actions[city, day, t] = action
                         self.Q_vals[city, day, t] = MCTS_Q
