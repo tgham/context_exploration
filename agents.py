@@ -391,7 +391,7 @@ class Farmer:
                         env.expt = 'AFC'
                     
                     ## get context alignment of states
-                    env.get_alignment()
+                    env.path_aligned_states, env.path_orthogonal_states = env.get_alignment(env.path_states)
 
                 env_copy = copy.deepcopy(env)
                 env_copy.set_trial(0)
@@ -500,24 +500,24 @@ class Farmer:
                                 self.aligned_arm_gen_high_costs[city, day, t, i] = sum(
                                     1 for state in aligned_states
                                     if (state[1] in observed_high_cost_cols) 
-                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
+                                    # and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
                                 )
                                 self.aligned_arm_gen_low_costs[city, day, t, i] = sum(
                                     1 for state in aligned_states 
                                     if (state[1] in observed_low_cost_cols)
-                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
+                                    # and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
                                 )
 
                                 ## count how many of the orthogonal states have observations on their respective columns
                                 self.orthogonal_arm_gen_high_costs[city, day, t, i] = sum(
                                     1 for state in orthogonal_states 
                                     if (state[1] in observed_high_cost_cols)
-                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
+                                    # and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
                                 )
                                 self.orthogonal_arm_gen_low_costs[city, day, t, i] = sum(
                                     1 for state in orthogonal_states 
                                     if (state[1] in observed_low_cost_cols)
-                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
+                                    # and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
                                 )
 
                                 ## or, count the number of observations that fall on the main column
@@ -566,24 +566,24 @@ class Farmer:
                                 self.orthogonal_arm_cf_gen_high_costs[city, day, t, i] = sum(
                                     1 for state in orthogonal_states 
                                     if (state[0] in observed_high_cost_rows)
-                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
+                                    # and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
                                 )
                                 self.orthogonal_arm_cf_gen_low_costs[city, day, t, i] = sum(
                                     1 for state in orthogonal_states 
                                     if (state[0] in observed_low_cost_rows)
-                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
+                                    # and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
                                 )
 
                                 ## and count how many of the aligned states have observations on their respective rows
                                 self.aligned_arm_cf_gen_high_costs[city, day, t, i] = sum(
                                     1 for state in aligned_states 
                                     if (state[0] in observed_high_cost_rows)
-                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
+                                    # and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
                                 )
                                 self.aligned_arm_cf_gen_low_costs[city, day, t, i] = sum(
                                     1 for state in aligned_states 
                                     if (state[0] in observed_low_cost_rows)
-                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
+                                    # and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
                                 )
                                 
                                 ## debugging...
@@ -981,7 +981,7 @@ class Farmer:
 
                         ## prune tree (not always successful due to high branching factor, or if participant made no choice in which case reset the tree)
                         if not missed:
-                            init_info_state = np.array(MCTS.tree.root.node_id).reshape(N, N, 2)
+                            init_info_state = MCTS.tree.root.node_id
                             trial_obs = env_copy.trial_obs.copy()
                             next_node_id = MCTS.init_node_id(trial_obs, init_info_state, t)
                             if not day_terminated:
