@@ -989,7 +989,7 @@ class Farmer:
                                     MCTS.tree.prune(action, next_node_id)
                                     # assert np.array_equal(MCTS.tree.root.belief_state[2*MCTS.n_afc:], costs), 'error in root update\n root state: {} \n costs: {}'.format(MCTS.tree.root.belief_state[2*MCTS.n_afc:], costs)
                                     # assert np.array_equal(MCTS.tree.root.belief_state[1:], costs), 'error in root update\n root state: {} \n costs: {}'.format(MCTS.tree.root.belief_state[2*MCTS.n_afc:], costs)
-                                    assert MCTS.tree.root.trial == t, 'trial mismatch after pruning\n env trial: {}, MCTS trial: {}'.format(t, MCTS.tree.root.trial) ## this might actually be t+1
+                                    assert MCTS.tree.root.trial == t+1, 'trial mismatch after pruning\n env trial: {}, MCTS trial: {}'.format(t, MCTS.tree.root.trial)
                                     tree_reset = False
                                 else:
                                     tree_reset = True

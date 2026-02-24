@@ -373,7 +373,7 @@ class Tree:
     #         if str(self.nodes[bs].belief_state) not in keep_nodes:
     #             del self.nodes[bs]
 
-    def prune(self, action, next_state):
+    def prune(self, action, next_node_id):
         
         ## delete actions not taken
         actions_to_delete = [a for a in self.root.action_leaves.keys() if (a != action) and (self.root.action_leaves[a] is not None)]
@@ -381,10 +381,10 @@ class Tree:
             del self.root.action_leaves[a]
 
         ## delete subtree for the other state children reachable from the root-action pair
-        self.root.action_leaves[action].children = {tuple(next_state): self.root.action_leaves[action].children[tuple(next_state)]}
+        self.root.action_leaves[action].children = {next_node_id: self.root.action_leaves[action].children[next_node_id]}
 
         ## update the root
-        self.root = self.root.action_leaves[action].children[tuple(next_state)]
+        self.root = self.root.action_leaves[action].children[next_node_id]
         
 
 

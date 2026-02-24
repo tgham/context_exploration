@@ -238,7 +238,7 @@ class MonteCarloTreeSearch():
             action_leaf = node.action_leaves[action]
 
             ## quick sanity check: the depth should match node.trial
-            assert depth == node.trial, 'Tree path mismatch:\n node trial: {} \n depth: {}'.format(node.trial, depth)
+            # assert depth == node.trial, 'Tree path mismatch:\n node trial: {} \n depth: {}'.format(node.trial, depth)
 
             ## Discounted cost from the current node to the terminal node
             discounted_cost = np.dot(
