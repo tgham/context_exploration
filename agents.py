@@ -377,7 +377,8 @@ class Farmer:
 
         ## loop through cities
         for city in range(n_cities):
-            context_prior = 0.5
+            if not self.known_context:
+                context_prior = 0.5
 
             ## loop through days
             for day in range(n_days):
@@ -560,6 +561,7 @@ class Farmer:
                                 #     print('low', self.orthogonal_arm_gen_low_costs[city, day, t, i])
                                 #     raise Exception
 
+                                
                                 ### counterfactual generalisation
 
                                 ## how many of the orthogonal states have observations on the main row
@@ -737,8 +739,8 @@ class Farmer:
                             MCTS = MonteCarloTreeSearch_AFC(env=env_copy, agent=self, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
                         else:
                             MCTS.update_trial()
-                            tree_resets=True
-                        assert t == MCTS.root_trial, 'trial mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(t, MCTS.root_trial)
+                        assert t == MCTS.root_trial, 'trial mismatch between sim and MCTS\n sim: {} \n MCTS: {}'.format(t, MCTS.root_trial)
+                        assert MCTS.env.trial == MCTS.root_trial, 'trial mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(env_copy.trial, MCTS.root_trial)
                         assert MCTS.env.sim == True, 'env not in sim mode'
 
                         ## search
@@ -749,7 +751,15 @@ class Farmer:
                         self.p_choice[city, day, t] = self.softmax(MCTS_Q)
                         correct_path = np.argmax(env_copy.path_actual_costs[t])
                         self.p_correct[city, day, t] = self.p_choice[city, day, t][correct_path]
-                        self.leaf_visits[city, day, t] = MCTS.tree.root.action_leaves[action].n_action_visits
+                        for a in range(self.n_afc):
+                            self.leaf_visits[city, day, t, a] = MCTS.tree.root.action_leaves[a].n_action_visits
+
+                        # debug plot
+                        # fig, axs = plt.subplots(1,1, figsize=(5,5))
+                        # plot_r(self.posterior_mean_p_cost, axs, title = 'Posterior reward distribution\nmean root sample\npost obs')
+                        # plot_traj([env.path_states[t][c] for c in range(self.n_afc)], ax = axs)
+                        # plot_obs(env_copy.obs, ax = axs, text=True)
+                        # plt.show()
 
                         ## or, do probability matching if not greedy
                         if not greedy:
