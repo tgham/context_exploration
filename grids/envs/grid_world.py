@@ -1683,4 +1683,55 @@ class GridEnv(gym.Env):
                         future_grid[state[0], state[1]] = 1
             
             self.future_states.append(future_grid)
+
+
+    def get_future_axis_overlaps(self, trial, path):
+        """
+        For a given trial and path, count the number of future states that fall on the path's 
+        columns or rows (context-dependent relevant vs irrelevant).
+        
+        - In column context: relevant = count of future states on path's columns,
+                             irrelevant = count of future states on path's rows
+        - In row context: relevant = count of future states on path's rows,
+                          irrelevant = count of future states on path's columns
+        
+        Args:
+            trial: The trial index
+            path: List of (row, col) tuples representing the path states
+            
+        Returns:
+            n_relevant_future_overlaps: Number of future states on context-relevant axis
+            n_irrelevant_future_overlaps: Number of future states on context-irrelevant axis
+        """
+        if not hasattr(self, 'future_states') or self.future_states is None:
+            raise RuntimeError("future_states not computed. Call get_future_states() first.")
+        
+        # Get future states grid for this trial
+        future_grid = self.future_states[trial]
+        
+        # Get coordinates of future states
+        future_coords = np.argwhere(future_grid == 1)
+        future_states_set = {(coord[0], coord[1]) for coord in future_coords}
+        
+        # Get the set of columns and rows in the path
+        path_cols = {state[1] for state in path}
+        path_rows = {state[0] for state in path}
+        
+        # Count future states that fall on the path's columns
+        n_future_on_path_cols = sum(1 for state in future_states_set if state[1] in path_cols)
+        
+        # Count future states that fall on the path's rows
+        n_future_on_path_rows = sum(1 for state in future_states_set if state[0] in path_rows)
+        
+        # Return relevant and irrelevant based on context
+        if self.context == 'column':
+            n_relevant_future_overlaps = n_future_on_path_cols
+            n_irrelevant_future_overlaps = n_future_on_path_rows
+        elif self.context == 'row':
+            n_relevant_future_overlaps = n_future_on_path_rows
+            n_irrelevant_future_overlaps = n_future_on_path_cols
+        else:
+            raise ValueError(f"Unknown context: {self.context}")
+        
+        return n_relevant_future_overlaps, n_irrelevant_future_overlaps
         
