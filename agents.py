@@ -343,19 +343,16 @@ class Farmer:
         self.aligned_arm_gen_low_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
         self.orthogonal_arm_gen_high_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
         self.orthogonal_arm_gen_low_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
-        self.aligned_arm_cf_gen_high_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
-        self.aligned_arm_cf_gen_low_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
-        self.orthogonal_arm_cf_gen_high_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
-        self.orthogonal_arm_cf_gen_low_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
         self.aligned_arm_len = np.zeros((n_cities, n_days, n_trials, self.n_afc))
         self.orthogonal_arm_len = np.zeros((n_cities, n_days, n_trials, self.n_afc))
 
-        
         ## init params and hyperparams
         if agent == 'BAMCP':
             self.temp = params[0]
             self.lapse = params[1]
             self.arm_weight = params[2]
+            self.horizon = params[3]
+            self.real_future_paths = params[4]
             n_sims = hyperparams['n_sims']
             exploration_constant = hyperparams['exploration_constant']
             discount_factor = hyperparams['discount_factor']
@@ -523,6 +520,7 @@ class Farmer:
                                     if (state[1] in observed_low_cost_cols)
                                     # and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
                                 )
+                                
 
                             elif env_copy.context == 'row':
 
@@ -567,6 +565,10 @@ class Farmer:
                                     if (state[0] in observed_low_cost_rows)
                                     and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
                                 )
+                            
+                            ## axis overlaps with future states
+                            self.path_future_rel_overlaps[city, day, t, i] = env_copy.path_future_rel_overlaps[t][i]
+                            self.path_future_irrel_overlaps[city, day, t, i] = env_copy.path_future_irrel_overlaps[t][i]
                     
                         ## misc
                         self.day_costs[city, day, t] = np.nansum(self.total_costs[city, day, :t+1]) ## i.e. costs observed so far today
@@ -582,7 +584,7 @@ class Farmer:
                         ## reset tree (or reuse it)
                         if tree_reset:
                             tree = Tree(N)
-                            MCTS = MonteCarloTreeSearch_AFC(env=env_copy, agent=self, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor)
+                            MCTS = MonteCarloTreeSearch_AFC(env=env_copy, agent=self, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor, horizon=self.horizon, real_future_paths=self.real_future_paths)
                         else:
                             MCTS.update_trial()
                         assert t == MCTS.root_trial, 'trial mismatch between sim and MCTS\n sim: {} \n MCTS: {}'.format(t, MCTS.root_trial)
@@ -698,19 +700,6 @@ class Farmer:
                             unweighted_pred_costs = self.posterior_mean_p_cost*env_copy.low_cost + (1-self.posterior_mean_p_cost)*env_copy.high_cost
                             weighted_path_costs = self.arm_reweighting(unweighted_pred_costs, aligned_states, orthogonal_states)
                             path_costs.append(np.sum(weighted_path_costs))
-                            
-                            ## debugging
-                            # print('path_states:', path_states)
-                            # print('aligned_states:', aligned_states)
-                            # print('context:', env_copy.context)
-                            # print('all path_costs:', [self.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost for state in path_states])
-                            # print('all aligned path_costs:', [self.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost for state in aligned_states])
-                            # print('all orthogonal path_costs:', [self.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost for state in orthogonal_states])
-                            # print('arm weight:', self.arm_weight)
-                            # print('path_cost:', weighted_path_cost)
-                            # print()
-                            # if t==3:
-                            #     raise Exception('check this')
 
                         ## choose the path with the lowest total cost
                         max_cost = np.max(path_costs)
@@ -720,6 +709,16 @@ class Farmer:
                         self.p_choice[city, day, t] = self.softmax(np.array(path_costs))
                         correct_path = np.argmax(env_copy.path_actual_costs[t])
                         self.p_correct[city, day, t] = self.p_choice[city, day, t][correct_path]
+
+                        ## debugging
+                        # print(t,': CE_one_arm path costs:', path_costs, ', p_choice:', self.p_choice[city, day, t])
+                        # fig, axs = plt.subplots(1,1, figsize=(5,5))
+                        # plot_r(self.posterior_mean_p_cost, axs, title = 'Posterior reward distribution\nmean root sample\npost obs')
+                        # plot_traj([env.path_states[t][c] for c in range(self.n_afc)], ax = axs)
+                        # plot_obs(env_copy.obs, ax = axs, text=True)
+                        # plt.show()
+                        # if t==3:
+                        #     raise Exception('check this')
 
                         ## or, do probability matching if not greedy
                         if not greedy:
