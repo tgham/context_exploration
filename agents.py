@@ -325,6 +325,8 @@ class Farmer:
 
         ## for extracting some useful trial data...
         self.path_future_overlaps = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.path_future_rel_overlaps = np.zeros((n_cities, n_days, n_trials, self.n_afc))
+        self.path_future_irrel_overlaps = np.zeros((n_cities, n_days, n_trials, self.n_afc))
         self.path_past_overlaps = np.zeros((n_cities, n_days, n_trials, self.n_afc))
         self.path_past_observed_high_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
         self.path_past_observed_low_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
@@ -450,6 +452,7 @@ class Farmer:
                                 self.path_past_overlaps[city, day, t, i] = path_past_overlap
                                 self.path_past_observed_high_costs[city, day, t, i] = path_past_observed_high_costs
                                 self.path_past_observed_low_costs[city, day, t, i] = path_past_observed_low_costs
+                                
 
                         
                             ## sometimes need to convert each np array to list of tuples...
@@ -521,88 +524,6 @@ class Farmer:
                                     # and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
                                 )
 
-                                ## or, count the number of observations that fall on the main column
-                                # aligned_col = next(iter(aligned_states))[1] if len(aligned_states) > 0 else None
-                                # orthogonal_cols = set(state[1] for state in orthogonal_states)
-                                # # orthogonal_row = orthogonal_states[0][0] if len(orthogonal_states) > 0 else None
-                                # self.aligned_arm_gen_high_costs[city, day, t, i] = sum(
-                                #     # 1 for obs in obs_list
-                                #     # if (obs[1] == aligned_col) 
-                                #     # and (env_copy.costss[t][obs[0], obs[1]] == self.high_cost)
-                                #     1 for col in observed_high_cost_cols
-                                #     if col == aligned_col
-                                # )
-                                # self.aligned_arm_gen_low_costs[city, day, t, i] = sum(
-                                #     # 1 for obs in obs_list
-                                #     # if (obs[1] == aligned_col) 
-                                #     # and (env_copy.costss[t][obs[0], obs[1]] == self.low_cost)
-                                #     1 for col in observed_low_cost_cols
-                                #     if col == aligned_col
-                                # )
-                                # self.orthogonal_arm_gen_high_costs[city, day, t, i] = sum(
-                                #     # 1 for obs in obs_list
-                                #     # if (obs[1] in orthogonal_cols)
-                                #     # and (env_copy.costss[t][obs[0], obs[1]] == self.high_cost)
-                                #     1 for col in observed_high_cost_cols
-                                #     if col in orthogonal_cols
-                                # )
-                                # self.orthogonal_arm_gen_low_costs[city, day, t, i] = sum(
-                                #     # 1 for obs in obs_list
-                                #     # if (obs[1] in orthogonal_cols)
-                                #     # and (env_copy.costss[t][obs[0], obs[1]] == self.low_cost)
-                                #     1 for col in observed_low_cost_cols
-                                #     if col in orthogonal_cols
-                                # )
-                                # if t==3:
-                                #     print('aligned_col:', aligned_col)
-                                #     print('orthogonal_cols:', orthogonal_cols)
-                                #     print(obs_list)
-                                #     print('high', self.orthogonal_arm_gen_high_costs[city, day, t, i])
-                                #     print('low', self.orthogonal_arm_gen_low_costs[city, day, t, i])
-                                #     raise Exception
-
-                                
-                                ### counterfactual generalisation
-
-                                ## how many of the orthogonal states have observations on the main row
-                                self.orthogonal_arm_cf_gen_high_costs[city, day, t, i] = sum(
-                                    1 for state in orthogonal_states 
-                                    if (state[0] in observed_high_cost_rows)
-                                    # and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
-                                )
-                                self.orthogonal_arm_cf_gen_low_costs[city, day, t, i] = sum(
-                                    1 for state in orthogonal_states 
-                                    if (state[0] in observed_low_cost_rows)
-                                    # and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
-                                )
-
-                                ## and count how many of the aligned states have observations on their respective rows
-                                self.aligned_arm_cf_gen_high_costs[city, day, t, i] = sum(
-                                    1 for state in aligned_states 
-                                    if (state[0] in observed_high_cost_rows)
-                                    # and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
-                                )
-                                self.aligned_arm_cf_gen_low_costs[city, day, t, i] = sum(
-                                    1 for state in aligned_states 
-                                    if (state[0] in observed_low_cost_rows)
-                                    # and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
-                                )
-                                
-                                ## debugging...
-                                # if (t ==3) & (env_copy.objective =='rewards'):
-                                #     print('obs high cost rows:', observed_high_cost_rows)
-                                #     print('obs low cost rows:', observed_low_cost_rows)
-                                #     print('obs high cost cols:', observed_high_cost_cols)
-                                #     print('obs low cost cols:', observed_low_cost_cols)
-                                #     print('path states', path_states)
-                                #     print('aligned_states:', aligned_states)
-                                #     print('orthogonal_states:', orthogonal_states)
-                                #     print('aligned_arm_gen_high_costs:', self.aligned_arm_gen_high_costs[city, day, t, i])
-                                #     print('aligned_arm_gen_low_costs:', self.aligned_arm_gen_low_costs[city, day, t, i])
-                                #     print('orthogonal_arm_gen_high_costs:', self.orthogonal_arm_gen_high_costs[city, day, t, i])
-                                #     print('orthogonal_arm_gen_low_costs:', self.orthogonal_arm_gen_low_costs[city, day, t, i])
-                                #     raise Exception
-
                             elif env_copy.context == 'row':
 
                                 ### actual costs
@@ -646,81 +567,6 @@ class Farmer:
                                     if (state[0] in observed_low_cost_rows)
                                     and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
                                 )
-
-                                ## or, count the number of observations that fall on the main row
-                                # aligned_row = next(iter(aligned_states))[0] if len(aligned_states) > 0 else None
-                                # orthogonal_rows = set(state[0] for state in orthogonal_states)
-                                # # orthogonal_col = orthogonal_states[0][1] if len(orthogonal_states) > 0 else None
-                                # self.aligned_arm_gen_high_costs[city, day, t, i] = sum(
-                                #     # 1 for obs in obs_list
-                                #     # if (obs[0] == aligned_row) 
-                                #     # and (env_copy.costss[t][obs[0], obs[1]] == self.high_cost)
-                                #     1 for row in observed_high_cost_rows
-                                #     if row == aligned_row
-                                # )
-                                # self.aligned_arm_gen_low_costs[city, day, t, i] = sum(
-                                #     # 1 for obs in obs_list
-                                #     # if (obs[0] == aligned_row) 
-                                #     # and (env_copy.costss[t][obs[0], obs[1]] == self.low_cost)
-                                #     1 for row in observed_low_cost_rows
-                                #     if row == aligned_row
-                                # )
-                                # self.orthogonal_arm_gen_high_costs[city, day, t, i] = sum(
-                                #     # 1 for obs in obs_list
-                                #     # if (obs[0] in orthogonal_rows)
-                                #     # and (env_copy.costss[t][obs[0], obs[1]] == self.high_cost)
-                                #     1 for row in observed_high_cost_rows
-                                #     if row in orthogonal_rows
-                                # )
-                                # self.orthogonal_arm_gen_low_costs[city, day, t, i] = sum(
-                                #     # 1 for obs in obs_list
-                                #     # if (obs[0] in orthogonal_rows)
-                                #     # and (env_copy.costss[t][obs[0], obs[1]] == self.low_cost)
-                                #     1 for row in observed_low_cost_rows
-                                #     if row in orthogonal_rows
-                                # )
-
-                                
-                                ### counterfactual generalisation
-
-                                ## how many of the orthogonal states have observations on the main col
-                                self.orthogonal_arm_cf_gen_high_costs[city, day, t, i] = sum(
-                                    1 for state in orthogonal_states 
-                                    if (state[1] in observed_high_cost_cols)
-                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
-                                )
-                                self.orthogonal_arm_cf_gen_low_costs[city, day, t, i] = sum(
-                                    1 for state in orthogonal_states 
-                                    if (state[1] in observed_low_cost_cols)
-                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
-                                )
-
-                                ## and count how many of the aligned states have observations on their respective cols
-                                self.aligned_arm_cf_gen_high_costs[city, day, t, i] = sum(
-                                    1 for state in aligned_states 
-                                    if (state[1] in observed_high_cost_cols)
-                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
-                                )
-                                self.aligned_arm_cf_gen_low_costs[city, day, t, i] = sum(
-                                    1 for state in aligned_states 
-                                    if (state[1] in observed_low_cost_cols)
-                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
-                                )
-
-                                ## debugging...
-                                # if (t ==3) & (env_copy.objective =='rewards'):
-                                #     print('obs high cost rows:', observed_high_cost_rows)
-                                #     print('obs low cost rows:', observed_low_cost_rows)
-                                #     print('obs high cost cols:', observed_high_cost_cols)
-                                #     print('obs low cost cols:', observed_low_cost_cols)
-                                #     print('path states', path_states)
-                                #     print('aligned_states:', aligned_states)
-                                #     print('orthogonal_states:', orthogonal_states)
-                                #     print('aligned_arm_gen_high_costs:', self.aligned_arm_gen_high_costs[city, day, t, i])
-                                #     print('aligned_arm_gen_low_costs:', self.aligned_arm_gen_low_costs[city, day, t, i])
-                                #     print('orthogonal_arm_gen_high_costs:', self.orthogonal_arm_gen_high_costs[city, day, t, i])
-                                #     print('orthogonal_arm_gen_low_costs:', self.orthogonal_arm_gen_low_costs[city, day, t, i])
-                                #     raise Exception
                     
                         ## misc
                         self.day_costs[city, day, t] = np.nansum(self.total_costs[city, day, :t+1]) ## i.e. costs observed so far today
@@ -754,7 +600,7 @@ class Farmer:
                         for a in range(self.n_afc):
                             self.leaf_visits[city, day, t, a] = MCTS.tree.root.action_leaves[a].n_action_visits
 
-                        # debug plot
+                        ## debug plot
                         # fig, axs = plt.subplots(1,1, figsize=(5,5))
                         # plot_r(self.posterior_mean_p_cost, axs, title = 'Posterior reward distribution\nmean root sample\npost obs')
                         # plot_traj([env.path_states[t][c] for c in range(self.n_afc)], ax = axs)
@@ -786,6 +632,19 @@ class Farmer:
                         self.CE_p_choice[city, day, t] = self.softmax(np.array(CE_path_costs))
                         self.CE_p_correct[city, day, t] = self.CE_p_choice[city, day, t][correct_path]
 
+                        ## debug plot
+                        # # print(t,': BAMCP Q vals:', MCTS_Q, 'CE path costs:', CE_path_costs, 'actual path costs:', env_copy.path_actual_costs[t])
+                        # print(t,': BAMCP Q vals:', MCTS_Q, ', p_correct:', self.p_correct[city, day, t])
+                        # # for a in range(self.n_afc):
+                        # #     print(MCTS.tree.root.action_leaves[a])
+                        # #     print(env_copy.starts[t][a])
+                        # #     print(env_copy.goals[t][a])
+                        # fig, axs = plt.subplots(1,1, figsize=(5,5))
+                        # plot_r(self.posterior_mean_p_cost, axs, title = 'Posterior reward distribution\nmean root sample\npost obs')
+                        # plot_traj([env.path_states[t][c] for c in range(self.n_afc)], ax = axs)
+                        # plot_obs(env_copy.obs, ax = axs, text=True)
+                        # plt.show()
+
 
                     elif agent == 'CE':
                         env_copy.set_sim(False)
@@ -816,6 +675,13 @@ class Farmer:
                         ## or, do probability matching if not greedy
                         if not greedy:
                             action = np.random.choice(np.arange(len(path_costs)), p=softmax(path_costs))
+
+                        ## debug plot
+                        # fig, axs = plt.subplots(1,1, figsize=(5,5))
+                        # plot_r(self.posterior_mean_p_cost, axs, title = 'Posterior reward distribution\nmean root sample\npost obs')
+                        # plot_traj([env.path_states[t][c] for c in range(self.n_afc)], ax = axs)
+                        # plot_obs(env_copy.obs, ax = axs, text=True)
+                        # plt.show()
                     
                     elif agent == 'CE_one_arm':
                         env_copy.set_sim(False)
