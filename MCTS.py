@@ -16,7 +16,7 @@ from plotter import *
 ## base class 
 class MonteCarloTreeSearch():
 
-    def __init__(self, env, agent, tree, exploration_constant=2, discount_factor=0.99):
+    def __init__(self, env, agent, tree, exploration_constant=2, discount_factor=0.99, horizon=None, real_future_paths=True):
         self.env = env
         self.expt = env.expt
         self.n_afc = self.env.n_afc
@@ -29,6 +29,13 @@ class MonteCarloTreeSearch():
         self.discount_factor = discount_factor
         self.exploration_constant = exploration_constant
         self.exploration_constants = [self.exploration_constant for t in range(self.env.n_trials)]
+        self.real_future_paths = real_future_paths
+        
+        ## if horizon isn't specified, default to n_trials
+        if horizon is None:
+            self.horizon = self.env.n_trials
+        else:
+            self.horizon = horizon
 
         ## or, scale exploration constant by the expected cost of the entire day
         # n_total_steps = sum([len(self.env.path_states[trial][0]) for trial in range(self.env.n_trials)])
@@ -178,25 +185,27 @@ class MonteCarloTreeSearch():
                 else:
 
                     ## full BAMCP: trial info for next node is just inherited from the env (need to sort this out...)
-                    # if not terminated:
-                    #     next_path_actions = self.env.path_actions[node_trial].copy()
-                    #     next_path_states = self.env.path_states[node_trial].copy()
-                    #     next_starts = self.env.starts[node_trial].copy()
-                    #     next_goals = self.env.goals[node_trial].copy()
-                    # else:
-                    #     next_path_actions= None
-                    #     next_path_states= None
-                    #     next_starts = None
-                    #     next_goals = None
+                    if self.real_future_paths:
+                        if not terminated:
+                            next_path_actions = self.env.path_actions[node_trial].copy()
+                            next_path_states = self.env.path_states[node_trial].copy()
+                            next_starts = self.env.starts[node_trial].copy()
+                            next_goals = self.env.goals[node_trial].copy()
+                        else:
+                            next_path_actions= None
+                            next_path_states= None
+                            next_starts = None
+                            next_goals = None
 
                     ## PA-BAMCP: trial info for the next node (i.e. the node to which the action leaf leads) is sampled
-                    if not terminated:
-                        _, next_path_actions, next_path_states, next_starts, next_goals = self.env.sample_paths_given_future_states(self.root_trial)
                     else:
-                        next_path_actions= None
-                        next_path_states= None
-                        next_starts = None
-                        next_goals = None
+                        if not terminated:
+                            _, next_path_actions, next_path_states, next_starts, next_goals = self.env.sample_paths_given_future_states(self.root_trial)
+                        else:
+                            next_path_actions= None
+                            next_path_states= None
+                            next_starts = None
+                            next_goals = None
 
                     ## create new node
                     node = self.tree.add_state_node(node_id=next_node_id, cost = costs, terminated=terminated, trial = node_trial, n_afc = self.n_afc, parent=action_leaf,
@@ -455,8 +464,10 @@ class MonteCarloTreeSearch_Free(MonteCarloTreeSearch):
         node.action_leaves[action].norm_performance = 0
 
         ## one-armed weighting: store the aligned and orthogonal states
-        # node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states = self.env.path_aligned_states[node.trial][action], self.env.path_orthogonal_states[node.trial][action] ## full BAMCP
-        node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states = self.env.get_alignment([[node.path_states[action]]]) ## PA-BAMCP
+        if self.real_future_paths:
+            node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states = self.env.path_aligned_states[node.trial][action], self.env.path_orthogonal_states[node.trial][action] ## full BAMCP
+        else:
+            node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states = self.env.get_alignment([[node.path_states[action]]]) ## PA-BAMCP
 
         return node.action_leaves[action]
 
@@ -514,8 +525,8 @@ class MonteCarloTreeSearch_Free(MonteCarloTreeSearch):
 
 class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
-    def __init__(self, env, agent, tree, exploration_constant=2, discount_factor=0.99):
-        super().__init__(env, agent, tree, exploration_constant, discount_factor)
+    def __init__(self, env, agent, tree, exploration_constant=2, discount_factor=0.99, horizon=None, real_future_paths=True):
+        super().__init__(env, agent, tree, exploration_constant, discount_factor, horizon, real_future_paths)
 
     ## node_ids are defined by the informational state, i.e. the counts of low and high cost states in each cell
     def init_node_id(self, obs=None, parent_node_id=None, trial=None):
@@ -557,27 +568,31 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         ### update info for s-a leaf - i.e. the state-action pair
 
         ## full BAMCP:
-        # start = self.env.starts[node.trial][action].copy()
-        # goal = self.env.goals[node.trial][action].copy()
-        # assert np.array_equal(start, node.starts[action]), 'mismatch between node and env start states\n node: {} \n env: {}'.format(node.starts[action], start)
+        if self.real_future_paths:
+            start = self.env.starts[node.trial][action].copy()
+            goal = self.env.goals[node.trial][action].copy()
+            assert np.array_equal(start, node.starts[action]), 'mismatch between node and env start states\n node: {} \n env: {}'.format(node.starts[action], start)
 
         ## PA-BAMCP:
-        start = node.starts[action].copy()
-        goal = node.goals[action].copy()
+        else:
+            start = node.starts[action].copy()
+            goal = node.goals[action].copy()
 
         node.action_leaves[action] = Action_Node(start = start, action=action, goal = goal, terminated=terminated, trial=node.trial, parent_id=node.node_id)
         node.action_leaves[action].performance = 0
         node.action_leaves[action].norm_performance = 0
 
-        ### expansion of node attaches a sampled pair of paths to the leaf
+        ### expansion of node attaches a (potentially sampled) pair of paths to the leaf
         node.action_leaves[action].start = start
         node.action_leaves[action].goal = goal
         node.action_leaves[action].path_actions = node.path_actions[action]
         node.action_leaves[action].path_states = node.path_states[action]
         
         ## one-armed weighting: store the aligned and orthogonal states
-        # node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states = self.env.path_aligned_states[node.trial][action], self.env.path_orthogonal_states[node.trial][action] ## full BAMCP
-        node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states = self.env.get_alignment([[node.path_states[action]]]) ## PA-BAMCP
+        if self.real_future_paths:
+            node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states = self.env.path_aligned_states[node.trial][action], self.env.path_orthogonal_states[node.trial][action] ## full BAMCP
+        else:
+            node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states = self.env.get_alignment([[node.path_states[action]]]) ## PA-BAMCP
         
         return node.action_leaves[action]
     
@@ -614,15 +629,17 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         assert self.env.trial == action_leaf.trial, 'trial mismatch between env and tree\n env: {} \n tree: {}\n MCTS: {}'.format(self.env.trial, action_leaf.trial, self.root_trial)
 
         ## full BAMCP: use actual upcoming paths
-        # start_tmp = self.env.starts[step_trial][path_id].copy()
-        # goal_tmp = self.env.goals[step_trial][path_id].copy()
-        # action_sequence = self.env.path_actions[step_trial][path_id]
-        # assert np.array_equal(start_tmp, action_leaf.start), 'mismatch between node and env start states\n node: {} \n env: {}'.format(action_leaf.start, start_tmp)
+        if self.real_future_paths:
+            start_tmp = self.env.starts[step_trial][path_id].copy()
+            goal_tmp = self.env.goals[step_trial][path_id].copy()
+            action_sequence = self.env.path_actions[step_trial][path_id]
+            assert np.array_equal(start_tmp, action_leaf.start), 'mismatch between node and env start states\n node: {} \n env: {}'.format(action_leaf.start, start_tmp)
 
         ## PA-BAMCP: sample two paths 
-        start_tmp = action_leaf.start.copy()
-        goal_tmp = action_leaf.goal.copy()
-        action_sequence = action_leaf.path_actions.copy()
+        else:
+            start_tmp = action_leaf.start.copy()
+            goal_tmp = action_leaf.goal.copy()
+            action_sequence = action_leaf.path_actions.copy()
 
         self.env.set_state(start_tmp)
         self.env.set_goal(goal_tmp)
@@ -644,8 +661,10 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         simulated_obs += [np.append(s, c) for s, c in zip(states, costs)]
 
         ## one-arm bias 
-        # aligned_states, orthogonal_states = self.env.path_aligned_states[step_trial][path_id], self.env.path_orthogonal_states[step_trial][path_id] ## full BAMCP
-        aligned_states, orthogonal_states = action_leaf.aligned_states, action_leaf.orthogonal_states ## PA-BAMCP
+        if self.real_future_paths:
+            aligned_states, orthogonal_states = self.env.path_aligned_states[step_trial][path_id], self.env.path_orthogonal_states[step_trial][path_id] ## full BAMCP
+        else:
+            aligned_states, orthogonal_states = action_leaf.aligned_states, action_leaf.orthogonal_states ## PA-BAMCP
         weighted_costs = self.agent.arm_reweighting(self.env.predicted_costs, aligned_states, orthogonal_states)
 
         ## save costs
@@ -678,12 +697,6 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         node_trial = step_trial+1
         if not terminated:
 
-            ## full BAMCP
-            # next_state = self.env.starts[node_trial].copy()
-            
-            ## PA-BAMCP
-            # next_state = self.env.sampled_starts[node_trial].copy()
-
             next_state = None ## sort this out later, but it seems we don't really need this for this task
 
             self.env.set_trial(node_trial)
@@ -710,10 +723,12 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         path_id = action_leaf.action
 
         ## full BAMCP: use actual upcoming paths
-        # first_path_states = self.env.path_states[first_trial][path_id]
+        if self.real_future_paths:
+            first_path_states = self.env.path_states[first_trial][path_id]
 
         ## PA-BAMCP: sample paths
-        first_path_states = action_leaf.path_states
+        else:
+            first_path_states = action_leaf.path_states
 
         ## unweighted
         # starting_costs = [self.env.predicted_costs[state[0], state[1]] for state in first_path_states]
@@ -742,10 +757,12 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
             for path_id in range(self.n_afc):
 
                 ## full BAMCP - greedy choice wrt/ predicted costs of actual paths
-                # path_states = self.env.path_states[trial][path_id]
+                if self.real_future_paths:
+                    path_states = self.env.path_states[trial][path_id]
 
                 ## PA-BAMCP - greedy choice wrt/ predicted costs of sampled paths
-                path_states = sampled_path_states[path_id]
+                else:
+                    path_states = sampled_path_states[path_id]
 
                 ## unweighted
                 costs = [self.env.predicted_costs[state[0], state[1]] for state in path_states]
@@ -765,12 +782,14 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
             ### RANDOM: randomly choose between the paths
 
             # ## full BAMCP - random choice between actual upcoming paths
-            # # path_id = np.random.choice(self.n_afc)
-            # # path_states = self.env.path_states[trial][path_id] ## full BAMCP
+            # if self.real_future_paths:
+            #     path_id = np.random.choice(self.n_afc)
+            #     path_states = self.env.path_states[trial][path_id] ## full BAMCP
 
             # ## PA-BAMCP - choose between randomly sampled upcoming paths
-            # path_id = np.random.choice(self.n_afc)
-            # path_states = sampled_path_states[path_id] ## PA-BAMCP
+            # else:
+            #     path_id = np.random.choice(self.n_afc)
+                # path_states = sampled_path_states[path_id] ## PA-BAMCP
 
             # ## unweighted
             # # costs = [self.env.predicted_costs[state[0], state[1]] for state in path_states]
