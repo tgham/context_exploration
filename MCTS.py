@@ -31,9 +31,9 @@ class MonteCarloTreeSearch():
         self.exploration_constants = [self.exploration_constant for t in range(self.env.n_trials)]
         self.real_future_paths = real_future_paths
         
-        ## if horizon isn't specified, default to n_trials
+        ## if horizon isn't specified, default to n_trials-1 (i.e. look to the end of the day, which is up to n_trials-1 from the root)
         if horizon is None:
-            self.horizon = self.env.n_trials
+            self.horizon = self.env.n_trials-1 
         else:
             self.horizon = horizon
 
@@ -563,7 +563,10 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
         ### take action (or path) and get new state
         action = node.untried_action()
-        terminated = node.trial == self.env.n_trials-1 ## i.e. this action leaf corresponds to the action made in the final trial, so it leads to termination of the day
+        # terminated = node.trial == self.env.n_trials-1 ## i.e. this action leaf corresponds to the action made in the final trial, so it leads to termination of the day
+
+        ## or, we terminate depending on horizon
+        terminated = node.trial == np.min([self.root_trial + self.horizon, self.env.n_trials-1]) ## i.e. this action leaf corresponds to a trial that is at or beyond the horizon, so it leads to termination of the day
             
         ### update info for s-a leaf - i.e. the state-action pair
 
@@ -748,7 +751,8 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         depth = 0
         remaining_ro_costs = []
         ro_choices=[]
-        for trial in range(first_trial+1, self.env.n_trials):
+        # for trial in range(first_trial+1, self.env.n_trials):
+        for trial in range(first_trial+1, np.min([self.root_trial + self.horizon + 1, self.env.n_trials])): ## horizon-limited
             depth+=1
             _, _, sampled_path_states, _, _ = self.env.sample_paths_given_future_states(self.root_trial) ## PA-BAMCP
 
@@ -805,7 +809,8 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
 
         self.tree_costs.append(total_cost)
-        assert len(remaining_ro_costs)+first_trial+1 == self.env.n_trials, 'remaining RO costs do not match number of trials\n n remaining RO costs: {}, n trials: {}'.format(len(remaining_ro_costs), self.env.n_trials)
+        # assert len(remaining_ro_costs)+first_trial+1 == self.env.n_trials, 'remaining RO costs do not match number of trials\n n remaining RO costs: {}, n trials: {}'.format(len(remaining_ro_costs), self.env.n_trials)
+        assert len(remaining_ro_costs)+first_trial+1 == self.root_trial+self.horizon+1, 'remaining RO costs do not match number of trials\n n remaining RO costs: {}, n trials: {}'.format(len(remaining_ro_costs), self.root_trial+self.horizon)
         return total_cost 
     
     ## myopic rollout - i.e. tree has been cut off at a certain depth, after which point you just do greedy rollouts
