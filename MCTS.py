@@ -23,8 +23,8 @@ class MonteCarloTreeSearch():
         self.agent = agent
         self.low_cost = self.env.low_cost
         self.high_cost = self.env.high_cost
-        self.update_trial()
         self.tree = tree
+        self.update_trial()
         self.N = self.env.N
         self.discount_factor = discount_factor
         self.exploration_constant = exploration_constant
@@ -184,7 +184,7 @@ class MonteCarloTreeSearch():
                     #     next_starts = self.env.starts[node_trial].copy()
                     #     next_goals = self.env.goals[node_trial].copy()
                     # else:
-                        # next_path_actions= None
+                    #     next_path_actions= None
                     #     next_path_states= None
                     #     next_starts = None
                     #     next_goals = None
@@ -202,10 +202,6 @@ class MonteCarloTreeSearch():
                     node = self.tree.add_state_node(node_id=next_node_id, cost = costs, terminated=terminated, trial = node_trial, n_afc = self.n_afc, parent=action_leaf,
                                         path_actions=next_path_actions, path_states=next_path_states, starts=next_starts, goals=next_goals
                                                     )
-
-                ## debugging NB NEED TO FIGURE THIS OUT FOR PA-BAMCP
-                # print(next_state, self.env.current, self.env.starts)
-                # assert np.array_equal(next_state, self.env.current), 'mismatch between env and tree state\n env: {} \n tree: {}'.format(self.env.current, next_state)
 
 
         ## if terminal node, there are no mode action leaves to choose from
@@ -361,12 +357,19 @@ class MonteCarloTreeSearch():
     ## tree search --> action loop
     def search(self, n_sims=1000, n_iter=100, lazy=False):
 
+        ## check root
+        assert self.root_trial == self.env.trial, 'trial mismatch between env and tree at start of search\n env trial: {} \n tree trial: {}'.format(self.env.trial, self.root_trial)
+        for a in range(self.n_afc):
+            assert np.array_equal(self.tree.root.starts[a], self.env.starts[self.root_trial][a]), 'start state mismatch for action {}\n env start: {} \n tree start: {}'.format(a, self.env.starts[self.root_trial][a], self.tree.root.starts[a])
+            assert np.array_equal(self.tree.root.goals[a], self.env.goals[self.root_trial][a]), 'goal state mismatch for action {}\n env goal: {} \n tree goal: {}'.format(a, self.env.goals[self.root_trial][a], self.tree.root.goals[a])
+            assert np.array_equal(self.tree.root.path_states[a], self.env.path_states[self.root_trial][a]), 'path state mismatch for action {}\n env path: {} \n tree path: {}'.format(a, self.env.path_states[self.root_trial][a], self.tree.root.path_states[a])
+
         ## generate new set of root samples
         self.agent.root_samples(obs = self.env.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy, CE=False, combo=False)
 
-        ## debugging plot
+        # debugging plot
         # plt.figure()
-        # plot_r(posterior_mean_p_cost.reshape(self.N,self.N), ax = plt.subplot(), title='posterior sample')
+        # plot_r(self.agent.posterior_mean_p_cost.reshape(self.N,self.N), ax = plt.subplot(), title='posterior sample')
         # plt.show()
 
         ## debugging Q-vals
@@ -383,9 +386,6 @@ class MonteCarloTreeSearch():
         
         ## loop through simulations
         for s in range(n_sims):
-
-            ## CHEATING: give agent full knowledge of grid probabilities
-            # posterior_p_cost = self.env.p_costs
             
             ## root sampling of new posterior
             posterior_p_cost = self.agent.all_posterior_p_costs[s]
@@ -393,20 +393,9 @@ class MonteCarloTreeSearch():
                 self.agent.dp(posterior_p_cost, expected_cost=True)
             self.env.receive_predictions(posterior_p_cost)
 
-            ## debugging plot
-            # plt.figure()
-            # # plot_r(self.env.posterior_sample.reshape(self.N,self.N), ax = plt.subplot(), title='posterior sample')
-            # plot_action_tree(self.env.Q_inf, self.env.get_obs()['agent'], self.env.get_obs()['goal'], ax = plt.subplot(), title='DP_inf')
-
             ## selection, expansion, simulation
             action_leaf = self.tree_policy()
             self.rollout_policy(action_leaf)
-            
-            ## myopic?
-            # if action_leaf == False:
-            #     self.myopic_rollout(1)
-            # else:
-            #     self.rollout_policy(action_leaf)
             
             ##backup
             self.backup()
@@ -426,16 +415,6 @@ class MonteCarloTreeSearch():
         assert not np.isnan(np.nansum(MCTS_estimates)), 'no MCTS estimates for {}'.format(self.tree.root)
         max_MCTS = np.nanmax(MCTS_estimates)
         action = argm(MCTS_estimates, max_MCTS)
-        
-        ## set root for next search
-        # next_state = self.tree.root.action_leaves[action].next_state
-        # next_root = self.tree.nodes[str(next_state)]
-
-        ## calculate the entropy over actions
-        # action_probs = np.exp(MCTS_estimates) / np.sum(np.exp(MCTS_estimates))
-        # entropy = -np.nansum(action_probs * np.log(action_probs))
-        # print('action probs:', action_probs)
-        # print('entropy:', entropy)
 
         return action, MCTS_estimates
     
@@ -476,8 +455,7 @@ class MonteCarloTreeSearch_Free(MonteCarloTreeSearch):
         node.action_leaves[action].norm_performance = 0
 
         ## one-armed weighting: store the aligned and orthogonal states
-        # node.action_leaves[action].aligned_states = self.env.path_aligned_states[node.trial][action] ## full BAMCP
-        # node.action_leaves[action].orthogonal_states = self.env.path_orthogonal_states[node.trial][action] ## full BAMCP
+        # node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states = self.env.path_aligned_states[node.trial][action], self.env.path_orthogonal_states[node.trial][action] ## full BAMCP
         node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states = self.env.get_alignment([[node.path_states[action]]]) ## PA-BAMCP
 
         return node.action_leaves[action]
@@ -598,8 +576,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         node.action_leaves[action].path_states = node.path_states[action]
         
         ## one-armed weighting: store the aligned and orthogonal states
-        # node.action_leaves[action].aligned_states = self.env.path_aligned_states[node.trial][action] ## full BAMCP
-        # node.action_leaves[action].orthogonal_states = self.env.path_orthogonal_states[node.trial][action] ## full BAMCP
+        # node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states = self.env.path_aligned_states[node.trial][action], self.env.path_orthogonal_states[node.trial][action] ## full BAMCP
         node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states = self.env.get_alignment([[node.path_states[action]]]) ## PA-BAMCP
         
         return node.action_leaves[action]
@@ -608,6 +585,25 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         self.root_trial = self.env.trial ## i.e. the trial that the agent is current faced with in the real env
         self.root_state = self.env.starts[self.root_trial].copy() ## i.e. the two possible start states for this trial
         self.root_goal = self.env.goals[self.root_trial].copy() ## i.e. the two possible goal states for this trial
+
+        ## PA-BAMCP: root's trial info now needs to accurately reflect the env
+        if self.tree.root is not None:
+            for a in range(self.n_afc):
+
+                ## update node
+                self.tree.root.starts[a] = self.env.starts[self.root_trial][a].copy()
+                self.tree.root.goals[a] = self.env.goals[self.root_trial][a].copy()
+                self.tree.root.path_states[a] = self.env.path_states[self.root_trial][a]
+                self.tree.root.path_actions[a] = self.env.path_actions[self.root_trial][a]
+
+                ## update action leaf (if it exists)
+                if self.tree.root.action_leaves[a] is not None:
+                    self.tree.root.action_leaves[a].start = self.env.starts[self.root_trial][a].copy()
+                    self.tree.root.action_leaves[a].goal = self.env.goals[self.root_trial][a].copy()
+                    self.tree.root.action_leaves[a].path_states = self.env.path_states[self.root_trial][a]
+                    self.tree.root.action_leaves[a].path_actions = self.env.path_actions[self.root_trial][a]
+                    self.tree.root.action_leaves[a].aligned_states = self.env.path_aligned_states[self.root_trial][a]
+                    self.tree.root.action_leaves[a].orthogonal_states = self.env.path_orthogonal_states[self.root_trial][a]
 
     ## tree step
     def tree_step(self, action_leaf):
@@ -638,8 +634,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
         ## take path
         states, costs = self.env.take_path(action_sequence)
-        # print('start_tmp:', start_tmp, 'goal_tmp:', goal_tmp, 'final state of path:', states[-1], 'actual starts:', self.env.starts[step_trial], 'actual goals:', self.env.goals[step_trial])
-        # assert np.array_equal(states[-1], goal_tmp), 'final state of path does not match goal\n final state: {}, goal: {}'.format(states[-1], goal_tmp) ## COMMENTED OUT FOR PA-BAMCP FOR NOW
+        assert np.array_equal(states[-1], goal_tmp), 'final state of path does not match goal\n final state: {}, goal: {}'.format(states[-1], goal_tmp)
 
         ## add back in the start state if it wasn't actually observed in non-sim space
         states = [start_tmp] + states
@@ -688,6 +683,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
             
             ## PA-BAMCP
             # next_state = self.env.sampled_starts[node_trial].copy()
+
             next_state = None ## sort this out later, but it seems we don't really need this for this task
 
             self.env.set_trial(node_trial)
@@ -746,7 +742,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
             for path_id in range(self.n_afc):
 
                 ## full BAMCP - greedy choice wrt/ predicted costs of actual paths
-                # path_states = self.env.path_states[trial][path_id] ## full BAMCP
+                # path_states = self.env.path_states[trial][path_id]
 
                 ## PA-BAMCP - greedy choice wrt/ predicted costs of sampled paths
                 path_states = sampled_path_states[path_id]
