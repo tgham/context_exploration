@@ -23,7 +23,7 @@ import pickle
 import copy
 
 from utils import make_env, Node, Tree, argm, data_keys, grid_keys, parse_lists, KL_divergence, profile_func, KL_sim, value_iteration, generate_ppt_sequence
-from MCTS import MonteCarloTreeSearch, MonteCarloTreeSearch_Free, MonteCarloTreeSearch_AFC, simulate_agent
+from MCTS import MonteCarloTreeSearch, MonteCarloTreeSearch_Free, MonteCarloTreeSearch_AFC
 
 import IPython
 
@@ -52,7 +52,7 @@ def agent_loop(p, agent_params, hyperparams, agents):
 
     ## loop through agents
     for agent in agents:
-        farmer = Farmer(N)
+        farmer = Farmer(N, known_context = True) ## known context if expt 3
         sim_out = farmer.run(agent_params, hyperparams, agent=agent, df_trials=None, envs=env_objects, fit=False, progress=False)
         sim_outs.append(sim_out)
     
@@ -92,7 +92,7 @@ beta_params = {
     }
 
 ## trial info
-n_sim_participants = 100
+n_sim_participants = 2
 n_cities = 32
 n_days = 1
 n_trials = 4
@@ -158,18 +158,20 @@ all_sim_out = {
         'CE_p_correct':[],
         'distr_diff':[]
     }
-parallel = True
+parallel = False
 n_cores = 128
-create=True
+create=False
 
 ## init agent and expt
 agent_params = [
     0.1, # temp
     0.1, # lapse
     1, # arm weight
+    1, # horizon
+    True, # real future paths
 ]
 hyperparams = {
-    'n_sims': 25000,
+    'n_sims': 10000,
     'exploration_constant': 1,
     'discount_factor': 1,
     'n_iter': 10,
@@ -180,7 +182,11 @@ hyperparams = {
     'N': N,
     'participant': None, ## hacky
 }
-agents = ['BAMCP', 'CE', 'CE_one_arm']   
+agents = [
+    # 'BAMCP', 
+    # 'CE', 
+    'CE_one_arm'
+    ]   
 
 ## generate dataset for each participant
 if create:
