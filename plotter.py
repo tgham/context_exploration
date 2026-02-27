@@ -81,7 +81,7 @@ def plot_RPE(RPE, ax, title=None, cbar = False):
     return ax
 
 ## plot path between two points
-def plot_traj(trajs, ax, expt='free',title=None, path_colours = ['blue',
+def plot_traj(trajs, ax, expt='AFC',title=None, path_colours = ['blue',
                 'green',
                    'orange'
                    ]):
