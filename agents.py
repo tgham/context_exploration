@@ -868,6 +868,10 @@ class Farmer:
                                     tree_reset = False
                                 else:
                                     tree_reset = True
+
+                                ## hacky: unless full BAMCP with real future paths and full horizon, reset the tree
+                                if (not self.real_future_paths) or (self.horizon < (n_trials-t)):
+                                    tree_reset = True
                         else:
                             tree_reset = True
 

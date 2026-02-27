@@ -607,23 +607,24 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         self.root_goal = self.env.goals[self.root_trial].copy() ## i.e. the two possible goal states for this trial
 
         ## PA-BAMCP: root's trial info now needs to accurately reflect the env
-        if self.tree.root is not None:
-            for a in range(self.n_afc):
+        # if self.tree.root is not None:
+        #     print(self.root_trial,self.tree.root.starts, self.env.starts[self.root_trial])
+        #     for a in range(self.n_afc):
 
-                ## update node
-                self.tree.root.starts[a] = self.env.starts[self.root_trial][a].copy()
-                self.tree.root.goals[a] = self.env.goals[self.root_trial][a].copy()
-                self.tree.root.path_states[a] = self.env.path_states[self.root_trial][a]
-                self.tree.root.path_actions[a] = self.env.path_actions[self.root_trial][a]
+        #         ## update node
+        #         self.tree.root.starts[a] = self.env.starts[self.root_trial][a].copy()
+        #         self.tree.root.goals[a] = self.env.goals[self.root_trial][a].copy()
+        #         self.tree.root.path_states[a] = self.env.path_states[self.root_trial][a]
+        #         self.tree.root.path_actions[a] = self.env.path_actions[self.root_trial][a]
 
-                ## update action leaf (if it exists)
-                if self.tree.root.action_leaves[a] is not None:
-                    self.tree.root.action_leaves[a].start = self.env.starts[self.root_trial][a].copy()
-                    self.tree.root.action_leaves[a].goal = self.env.goals[self.root_trial][a].copy()
-                    self.tree.root.action_leaves[a].path_states = self.env.path_states[self.root_trial][a]
-                    self.tree.root.action_leaves[a].path_actions = self.env.path_actions[self.root_trial][a]
-                    self.tree.root.action_leaves[a].aligned_states = self.env.path_aligned_states[self.root_trial][a]
-                    self.tree.root.action_leaves[a].orthogonal_states = self.env.path_orthogonal_states[self.root_trial][a]
+        #         ## update action leaf (if it exists)
+        #         if self.tree.root.action_leaves[a] is not None:
+        #             self.tree.root.action_leaves[a].start = self.env.starts[self.root_trial][a].copy()
+        #             self.tree.root.action_leaves[a].goal = self.env.goals[self.root_trial][a].copy()
+        #             self.tree.root.action_leaves[a].path_states = self.env.path_states[self.root_trial][a]
+        #             self.tree.root.action_leaves[a].path_actions = self.env.path_actions[self.root_trial][a]
+        #             self.tree.root.action_leaves[a].aligned_states = self.env.path_aligned_states[self.root_trial][a]
+        #             self.tree.root.action_leaves[a].orthogonal_states = self.env.path_orthogonal_states[self.root_trial][a]
 
     ## tree step
     def tree_step(self, action_leaf):
@@ -811,7 +812,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
         self.tree_costs.append(total_cost)
         # assert len(remaining_ro_costs)+first_trial+1 == self.env.n_trials, 'remaining RO costs do not match number of trials\n n remaining RO costs: {}, n trials: {}'.format(len(remaining_ro_costs), self.env.n_trials)
-        assert len(remaining_ro_costs)+first_trial+1 == self.root_trial+self.horizon+1, 'remaining RO costs do not match number of trials\n n remaining RO costs: {}, n trials: {}'.format(len(remaining_ro_costs), self.root_trial+self.horizon)
+        assert len(remaining_ro_costs)+first_trial+1 == np.min([self.root_trial + self.horizon + 1, self.env.n_trials]), 'remaining RO costs do not match number of trials\n n remaining RO costs: {}, n trials: {}'.format(len(remaining_ro_costs), np.min([self.root_trial + self.horizon + 1, self.env.n_trials]))
         return total_cost 
     
     ## myopic rollout - i.e. tree has been cut off at a certain depth, after which point you just do greedy rollouts
