@@ -48,12 +48,13 @@ class MonteCarloTreeSearch():
         self.exploration_constants = []
         for t in range(self.env.n_trials):
             n_steps = 0
-            ec = exploration_constant
-            for subseq_t in range(t, self.env.n_trials):
+            total_exp_cost = 0
+            # for subseq_t in range(t, self.env.n_trials):
+            for subseq_t in range(t, min(t+self.horizon+1, self.env.n_trials)):
                 n_steps += len(self.env.path_states[subseq_t][0])
-                ec += (expected_cost * n_steps)
-            self.exploration_constants.append(ec)
-        # print(self.exploration_constants)
+                total_exp_cost += (expected_cost * n_steps)
+            self.exploration_constants.append(total_exp_cost * exploration_constant)
+        # print('exploration constants:', self.exploration_constants)
 
         ## create id for root node
         node_id = self.init_node_id(self.env.obs, None, self.root_trial)
@@ -485,6 +486,7 @@ class MonteCarloTreeSearch_Free(MonteCarloTreeSearch):
 
         ## if no action leaf because tree policy has reached a terminal node, return None
         if action_leaf is None:
+            print('no action leaf, reached terminal node')
             return None
 
         ## init
@@ -806,7 +808,6 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
             # remaining_ro_costs.append(ro_cost)
             # ro_choices.append(path_id)
             # total_cost += ro_cost * self.discount_factor**depth
-
 
         self.tree_costs.append(total_cost)
         # assert len(remaining_ro_costs)+first_trial+1 == self.env.n_trials, 'remaining RO costs do not match number of trials\n n remaining RO costs: {}, n trials: {}'.format(len(remaining_ro_costs), self.env.n_trials)
