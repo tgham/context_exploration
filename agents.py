@@ -40,7 +40,6 @@ class Farmer:
         self.context_prob = context_prior
         self.known_context = known_context
 
-
     ### interactions with the environment
 
     ## function for receiving info from env
@@ -351,6 +350,7 @@ class Farmer:
             self.temp = params[0]
             self.lapse = params[1]
             self.arm_weight = params[2]
+            self._cache_arm_weights()
             self.horizon = params[3]
             self.real_future_paths = params[4]
             n_sims = hyperparams['n_sims']
@@ -361,12 +361,14 @@ class Farmer:
             self.temp = params[0]
             self.lapse = params[1]
             self.arm_weight = None
+            self._cache_arm_weights()
             self.horizon = None
             self.real_future_paths = None
         elif (agent == 'CE_one_arm'):
             self.temp = params[0]
             self.lapse = params[1]
             self.arm_weight = params[2]
+            self._cache_arm_weights()
             self.horizon = None
             self.real_future_paths = None
 
@@ -1023,29 +1025,34 @@ class Farmer:
 
 
     ## calculate weighted cost based on aligned vs orthogonal states
-    def arm_reweighting(self, costs, aligned_states, orthogonal_states):
+    def _cache_arm_weights(self):
+        """Cache the aligned/orthogonal weights based on arm_weight parameter."""
+        if self.arm_weight is None:
+            self._aligned_weight = 1.0
+            self._orthogonal_weight = 1.0
+        else:
+            # arm_weight > 0: favour aligned arm (reduce orthogonal weight)
+            # arm_weight < 0: favour orthogonal arm (reduce aligned weight)
+            self._aligned_weight = 1 - max(0.0, -self.arm_weight)
+            self._orthogonal_weight = 1 - max(0.0, self.arm_weight)
+    
+    ## calculate weighted cost based on aligned vs orthogonal states
+    def arm_reweighting(self, costs, aligned_arr, orth_arr):
         """
         Calculate weighted cost for a path based on aligned and orthogonal state costs.
         
         Args:
             costs: NxN array of costs for each state in the grid
-            aligned_states: set of (row, col) tuples for states on the context-aligned arm
-            orthogonal_states: set of (row, col) tuples for states on the orthogonal arm
+            aligned_arr: numpy array of shape (n, 2) for states on the context-aligned arm
+            orth_arr: numpy array of shape (n, 2) for states on the orthogonal arm
             
         Returns:
-            weighted_cost: the total weighted cost for the path
+            weighted_costs: list of weighted costs for all states on the path
         """
         
-        ## calculate weights based on arm_weight parameter
-        # arm_weight > 0: favour aligned arm (reduce orthogonal weight)
-        # arm_weight < 0: favour orthogonal arm (reduce aligned weight)
-        aligned_weight = 1 - max(0.0, -self.arm_weight)
-        orthogonal_weight = 1 - max(0.0, self.arm_weight)
         
-        ## calculate weighted cost (vectorized)
-        aligned_arr = np.array(list(aligned_states))
-        orth_arr = np.array(list(orthogonal_states))
-        aligned_costs = aligned_weight * costs[aligned_arr[:, 0], aligned_arr[:, 1]]
-        orth_costs = orthogonal_weight * costs[orth_arr[:, 0], orth_arr[:, 1]]
+        ## calculate weighted cost (arrays already pre-converted)
+        aligned_costs = self._aligned_weight * costs[aligned_arr[:, 0], aligned_arr[:, 1]]
+        orth_costs = self._orthogonal_weight * costs[orth_arr[:, 0], orth_arr[:, 1]]
             
         return aligned_costs.tolist() + orth_costs.tolist()
