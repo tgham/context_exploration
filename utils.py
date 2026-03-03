@@ -673,7 +673,8 @@ def profile_func(func, *args, **kwargs):
     print(f"Profiling complete. Visualization saved as {png_file}")
 
 
-## cached function for moving to the next state
+## JIT-compiled function for moving to the next state
+@njit
 def get_next_state(current, direction, N):
     next_state = np.clip(
         current + direction,

@@ -17,7 +17,7 @@ from plotter import *
 class MonteCarloTreeSearch():
 
     def __init__(self, env, agent, tree, exploration_constant=2, discount_factor=0.99, horizon=None, real_future_paths=True):
-        self.env = env
+        self.env = env.unwrapped
         self.expt = env.expt
         self.n_afc = self.env.n_afc
         self.agent = agent
@@ -116,8 +116,9 @@ class MonteCarloTreeSearch():
         ## initialise the tree
         node = self.tree.root
         t = 0
-        node_trial = self.env.trial
-        assert node_trial == node.trial, 'trial mismatch between env and tree\n env: {} \n tree: {}\n MCTS: {}'.format(node_trial, node.trial, self.root_trial)
+        node_trial = node.trial
+        # assert node_trial == self.env.trial, 'trial mismatch between env and tree\n env: {} \n tree: {}\n MCTS: {}'.format(self.env.trial, node_trial, self.root_trial)
+        assert node_trial == self.root_trial, 'trial mismatch between env and tree\n env: {} \n tree: {}\n MCTS: {}'.format(self.env.trial, node_trial, self.root_trial)
         self.check_node(node)
 
         ## create a record of the nodes/leaves visited in the tree
@@ -165,7 +166,7 @@ class MonteCarloTreeSearch():
                 self.env.set_state(self.root_state)
                 self.env.set_goal(self.root_goal)
                 self.env.set_trial(self.root_trial)
-                assert np.array_equal(self.env.current, self.root_state), 'env state not reverted properly'
+                assert (self.env.current[0], self.env.current[1]) == (self.root_state[0], self.root_state[1]), 'env state not reverted properly'
                 assert self.env.trial == self.root_trial, 'env trial not reverted properly. should be in {}, but actually in {}'.format(self.root_trial, self.env.trial)
 
                 return action_leaf
@@ -225,7 +226,7 @@ class MonteCarloTreeSearch():
         self.env.set_state(self.root_state)
         self.env.set_goal(self.root_goal)
         self.env.set_trial(self.root_trial)
-        assert np.array_equal(self.env.current, self.root_state), 'env state not reverted properly'
+        assert (self.env.current[0], self.env.current[1]) == (self.root_state[0], self.root_state[1]), 'env state not reverted properly'
         assert self.env.trial == self.root_trial, 'env trial not reverted properly'
 
         return action_leaf
@@ -333,12 +334,8 @@ class MonteCarloTreeSearch():
         # ## or, based on min and max of current estimates of Qs at that depth
         # # min_Q, max_Q = self.tree.min_max_Q(node=self.tree.root, depth=action_leaf.trial, current_depth=0)
 
-        norm_term = max_Q - min_Q
-        if norm_term == 0 or norm_term==np.inf:
-            # exploitation_term = action_leaf.performance
-            exploitation_term = 0.5
-        else:
-            exploitation_term = (action_leaf.performance - min_Q) / norm_term
+        norm_term = max_Q - min_Q + 1e-8 ## add small constant to avoid divide by zero
+        exploitation_term = (action_leaf.performance - min_Q) / norm_term
         exploration_term = self.exploration_constant * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
         
         # print('depth:', action_leaf.trial, 'min Q:', min_Q, 'max Q:', max_Q, 'performance:', action_leaf.performance, 'Q = ', exploitation_term + exploration_term)
@@ -464,7 +461,7 @@ class MonteCarloTreeSearch_Free(MonteCarloTreeSearch):
         super().__init__(env, agent, tree, exploration_constant, discount_factor)
 
     def init_node_id(self, obs=None, init_info_state = None, trial=None):
-        node_id = tuple(np.append(self.root_state, self.env.costs[self.root_state[0], self.root_state[1]]))
+        node_id = (self.root_state[0], self.root_state[1], self.env.costs[self.root_state[0], self.root_state[1]])
         return node_id
     
     def update_trial(self):
@@ -474,7 +471,7 @@ class MonteCarloTreeSearch_Free(MonteCarloTreeSearch):
 
     ## in free choice, there is a meaningful state of the MDP (i.e. agent's current position in grid), which is reflected in belief state
     def check_node(self, node):
-        assert np.array_equal(node.belief_state[:2], self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.env.current)
+        assert (node.belief_state[0], node.belief_state[1]) == (self.env.current[0], self.env.current[1]), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.env.current)
 
     ## in free choice, we have a meaningful notion of prev and next state (i.e. current location, and location after taking an action)
     def expand(self, node):
@@ -504,7 +501,7 @@ class MonteCarloTreeSearch_Free(MonteCarloTreeSearch):
         next_state, cost, terminated, _, _ = self.env.step(action)
         self.tree_costs.append(cost)
         node_trial = self.root_trial ##??
-        next_node_id = tuple(np.append(next_state, cost))
+        next_node_id = (next_state[0], next_state[1], cost)
         return next_state, cost, terminated, node_trial, next_node_id
     
     ## rollout policy
@@ -542,7 +539,7 @@ class MonteCarloTreeSearch_Free(MonteCarloTreeSearch):
             current = np.clip(current + direction, 0, self.N - 1)
             
             ## return cost once goal is reached (i.e. don't use the cost of the goal state)
-            if np.array_equal(current, self.root_goal):
+            if current[0] == self.root_goal[0] and current[1] == self.root_goal[1]:
                 self.tree_costs.append(total_cost)
                 return total_cost
             
@@ -602,7 +599,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         if self.real_future_paths:
             start = self.env.starts[node.trial][action].copy()
             goal = self.env.goals[node.trial][action].copy()
-            assert np.array_equal(start, node.starts[action]), 'mismatch between node and env start states\n node: {} \n env: {}'.format(node.starts[action], start)
+            assert (start[0], start[1]) == (node.starts[action][0], node.starts[action][1]), 'mismatch between node and env start states\n node: {} \n env: {}'.format(node.starts[action], start)
 
         ## PA-BAMCP:
         else:
@@ -665,7 +662,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
             start_tmp = self.env.starts[step_trial][path_id].copy()
             goal_tmp = self.env.goals[step_trial][path_id].copy()
             action_sequence = self.env.path_actions[step_trial][path_id]
-            assert np.array_equal(start_tmp, action_leaf.start), 'mismatch between node and env start states\n node: {} \n env: {}'.format(action_leaf.start, start_tmp)
+            assert (start_tmp[0], start_tmp[1]) == (action_leaf.start[0], action_leaf.start[1]), 'mismatch between node and env start states\n node: {} \n env: {}'.format(action_leaf.start, start_tmp)
 
         ## PA-BAMCP: sample two paths 
         else:
@@ -683,14 +680,14 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
         ## take path
         states, costs = self.env.take_path(action_sequence)
-        assert np.array_equal(states[-1], goal_tmp), 'final state of path does not match goal\n final state: {}, goal: {}'.format(states[-1], goal_tmp)
+        assert (states[-1][0], states[-1][1]) == (goal_tmp[0], goal_tmp[1]), 'final state of path does not match goal\n final state: {}, goal: {}'.format(states[-1], goal_tmp)
 
         ## add back in the start state if it wasn't actually observed in non-sim space
         states = [start_tmp] + states
         costs = [self.env.predicted_costs[start_tmp[0], start_tmp[1]]] + costs
 
         ## add costs to states to create simulated obs for the tree
-        simulated_obs += [np.append(s, c) for s, c in zip(states, costs)]
+        simulated_obs += [(s[0], s[1], c) for s, c in zip(states, costs)]
 
         ## one-arm bias 
         if self.real_future_paths:
