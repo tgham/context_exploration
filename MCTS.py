@@ -29,6 +29,9 @@ class MonteCarloTreeSearch():
         self.discount_factor = discount_factor
         self.exploration_constant = exploration_constant
         self.real_future_paths = real_future_paths
+
+        ## hacky fix of alignment issue
+        self.env.path_aligned_states, self.env.path_orthogonal_states = self.env.get_alignment(self.env.path_states)
         
         ## if horizon isn't specified, default to n_trials-1 (i.e. look to the end of the day, which is up to n_trials-1 from the root)
         if horizon is None:
@@ -347,41 +350,15 @@ class MonteCarloTreeSearch():
     ## argmax based on UCT values? 
     def best_child(self, node):
     
-        ## get action children
-        action_leaves = [node.action_leaves[a] for a in node.action_leaves.keys()]
+        ## get action children - iterate directly over values
+        action_leaves = list(node.action_leaves.values())
 
-        ## create deep copy of action leaves
-        # action_leaves = [copy.deepcopy(node.action_leaves[a]) for a in node.action_leaves.keys()]
-        # print(action_leaves[0])
-
-        ## calculate Q-normalisation term??
-        # leaf_perfs = [leaf.performance for leaf in action_leaves]
-        # norm_term = np.max(leaf_perfs) - np.min(leaf_perfs)
-        # for a, leaf in enumerate(action_leaves):
-        #     if norm_term == 0:
-        #         action_leaves[a].performance = 0
-        #     else:
-        #         action_leaves[a].performance = (leaf.performance - np.min(leaf_perfs)) / norm_term
-        # norm_term = np.max(leaf_perfs) - np.min(leaf_perfs)
-        # Q_diff = np.abs(np.max(leaf_perfs) - np.min(leaf_perfs))
-        # norm_term = np.max([Q_diff, 1])
-        # norm_term = np.min(leaf_perfs)
-        # norm_term = 1
-
-        ## calculate UCT for each action leaf
-        # UCTs = [self.compute_UCT(node, leaf) for leaf in action_leaves]
-        UCTs = [self.compute_UCT(node, leaf, node.min_Q, node.max_Q) for leaf in action_leaves]
-        max_UCT = np.max(UCTs)
+        ## calculate UCT for each action leaf - inline for small lists
+        min_Q, max_Q = node.min_Q, node.max_Q
+        UCTs = [self.compute_UCT(node, leaf, min_Q, max_Q) for leaf in action_leaves]
+        max_UCT = max(UCTs)
         max_idx = argm(UCTs, max_UCT)
         best_child = action_leaves[max_idx]
-
-        ## check if the chosen leaf is the one with the highest performance, or is exploratory
-        # leaf_perfs = [leaf.performance for leaf in action_leaves]
-        # if best_child.performance == np.max(leaf_perfs):
-        #     self.exploitative_steps += 1
-        # else:
-        #     self.exploratory_steps += 1
-        #     print('exploratory step taken at node trial {}, action {}, leaf perfs {}, UCTs {}'.format(node.trial, best_child.action, leaf_perfs, UCTs))
 
         return best_child
 
@@ -564,14 +541,18 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         else:
             counts = {}
         
-        # Add new observations
-        for i, j, c in obs:
-            i, j = int(i), int(j)
-            low, high = counts.get((i, j), (0, 0))
-            if c == self.high_cost:
-                counts[(i, j)] = (low, high + 1)
+        # Add new observations - optimized loop
+        high_cost = self.high_cost
+        for obs_item in obs:
+            i, j, c = int(obs_item[0]), int(obs_item[1]), obs_item[2]
+            key = (i, j)
+            prev = counts.get(key)
+            if prev is None:
+                counts[key] = (0, 1) if c == high_cost else (1, 0)
+            elif c == high_cost:
+                counts[key] = (prev[0], prev[1] + 1)
             else:
-                counts[(i, j)] = (low + 1, high)
+                counts[key] = (prev[0] + 1, prev[1])
         
         return frozenset(counts.items())
     
@@ -619,6 +600,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         ## one-armed weighting: store the aligned and orthogonal states
         if self.real_future_paths:
             node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states = self.env.path_aligned_states[node.trial][action], self.env.path_orthogonal_states[node.trial][action] ## full BAMCP
+            # print('got alignment info: ', node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states)
         else:
             node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states = self.env.get_alignment([[node.path_states[action]]]) ## PA-BAMCP
         
