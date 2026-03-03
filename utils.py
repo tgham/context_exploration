@@ -487,8 +487,10 @@ def value_iteration(dp_costs, goal, max_iters=1000, theta=0.0001, discount=0.99)
 
 ## random choice between multiple minima/maxima
 def argm(x, extreme_val):
-    indices = np.where(x == extreme_val)[0]
-    return np.random.choice(indices)
+    indices = np.flatnonzero(x == extreme_val)
+    if len(indices) == 1:
+        return indices[0]
+    return indices[np.random.randint(len(indices))]
 
 ## calculate the angle between two nodes
 def node_angle(a,b):
