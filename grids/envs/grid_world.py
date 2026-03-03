@@ -601,8 +601,6 @@ class GridEnv(gym.Env):
         #     ## or start from nothing
         #     # self.a_traj = []
             
-        self.action_scores = []
-        
         # return observation, info
 
     ## init trial - i.e. in the AFC task, once a start has been chosen, initialise the start, goal and obs for that trial
@@ -1358,30 +1356,6 @@ class GridEnv(gym.Env):
     def step(self, action):
 
         self.terminated = False
-
-        
-        ## get the score of the current action (only necessary if not simulating)
-        if not self.sim:
-
-            ## action score given by true Q-values, as defined by DP solution
-            if self.expt == 'free': 
-                current_Q_vals = self.Q_true[self._agent_location[0], self._agent_location[1], :]
-                
-                ## get the ranking of the best actions to take under the *true* optimal policy, given the agent's current position
-                # action_ranking = rankdata(current_Q_vals, method='max') - 1
-
-                # ## get the score of the action that will  actually be taken, given the ranking of the optimal actions
-                # action_score = action_ranking[action] + 1
-                # action_score /= self.n_actions ## may be more suitable to divide by len(actions) in case of wall states
-
-                ## or, score the action based on the normalised Q-values of the available actions
-                norm_Q_vals = (current_Q_vals - np.nanmin(current_Q_vals)) / (np.nanmax(current_Q_vals) - np.nanmin(current_Q_vals))
-                action_score = norm_Q_vals[action]
-
-            ## action score is for the whole path (need to do this later...)
-            elif self.expt == 'AFC':
-                action_score = 1
-
         
         ## take the actual action 
         direction = self.action_to_direction[action] 
@@ -1409,10 +1383,6 @@ class GridEnv(gym.Env):
             ## update observation and trajectory arrays - i.e. agent observes along the way
             self.a_traj.append((i, j))
             self.trial_obs = np.vstack([self.trial_obs, [i, j, current_cost]])
-
-            ## store info on optimality of the choice, given the agent's current position
-            # self.action_scores.append(action_score)
-
 
         ## return the predicted cost if simulating
         elif self.sim:
@@ -1443,13 +1413,6 @@ class GridEnv(gym.Env):
                 ## sum of costs of route EXC START AND END
                 # self.a_traj_costs = [self.costs[x, y] for x, y in self.a_traj[1:-1]]
                 # self.a_traj_total_cost = np.sum(self.a_traj_costs)
-
-                ## scores for the trial
-                self.action_score = np.nanmean(self.action_scores)
-                if self.expt == 'free':
-                    self.cost_ratio = self.o_traj_total_costs[self._trial] / self.a_traj_total_cost
-                elif self.expt == 'AFC':
-                    self.cost_ratio = 1 ## sort this out later
 
                 ## update trial counter
                 self._trial += 1
