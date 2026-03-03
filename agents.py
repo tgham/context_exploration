@@ -360,16 +360,15 @@ class Farmer:
         elif (agent == 'CE'):
             self.temp = params[0]
             self.lapse = params[1]
+            self.arm_weight = None
+            self.horizon = None
+            self.real_future_paths = None
         elif (agent == 'CE_one_arm'):
             self.temp = params[0]
             self.lapse = params[1]
             self.arm_weight = params[2]
-        
-            # n_sims = hyperparams['n_sims']
-            # n_iter = hyperparams['n_iter']
-        # elif agent == 'human': ## hacky - need this for CE calcs
-        #     n_sims = hyperparams['n_sims']
-        #     n_iter = hyperparams['n_iter']
+            self.horizon = None
+            self.real_future_paths = None
 
         if progress:
             pbar = tqdm(total=n_cities*n_days*n_trials, desc='Running {} agent'.format(agent), leave=False)
@@ -930,6 +929,11 @@ class Farmer:
                 'leaf_visits_a':[],
                 'leaf_visits_b':[],
                 'leaf_visits_c':[],
+                'temp': [],
+                'lapse': [],
+                'arm_weight': [],
+                'horizon': [],
+                'real_future_paths': []
             }
             for c in range(n_cities):
                 for d in range(n_days):
@@ -955,6 +959,12 @@ class Farmer:
                         sim_out['CE_p_choice_B'].append(self.CE_p_choice[c][d][t][1])
                         sim_out['CE_Q_a'].append(self.CE_Q_vals[c][d][t][0])
                         sim_out['CE_Q_b'].append(self.CE_Q_vals[c][d][t][1])
+                        sim_out['temp'].append(self.temp)
+                        sim_out['lapse'].append(self.lapse)
+                        sim_out['arm_weight'].append(self.arm_weight)
+                        sim_out['horizon'].append(self.horizon)
+                        sim_out['real_future_paths'].append(self.real_future_paths)
+
                         if self.n_afc==3:
                             sim_out['p_choice_C'].append(self.p_choice[c][d][t][2])
                             sim_out['leaf_visits_c'].append(self.leaf_visits[c][d][t][2])

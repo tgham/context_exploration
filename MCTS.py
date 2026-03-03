@@ -28,7 +28,6 @@ class MonteCarloTreeSearch():
         self.N = self.env.N
         self.discount_factor = discount_factor
         self.exploration_constant = exploration_constant
-        self.exploration_constants = [self.exploration_constant for t in range(self.env.n_trials)]
         self.real_future_paths = real_future_paths
         
         ## if horizon isn't specified, default to n_trials-1 (i.e. look to the end of the day, which is up to n_trials-1 from the root)
@@ -62,8 +61,12 @@ class MonteCarloTreeSearch():
         ## some debugging metrics
         self.exploratory_steps = 0
         self.exploitative_steps = 0
-        self.max_Q = np.zeros(self.env.n_trials) - np.inf
-        self.min_Q = np.zeros(self.env.n_trials) 
+        if self.high_cost < 0:
+            self.max_Q = np.zeros(self.env.n_trials) - np.inf
+            self.min_Q = np.zeros(self.env.n_trials) 
+        else:
+            self.max_Q = np.zeros(self.env.n_trials) 
+            self.min_Q = np.zeros(self.env.n_trials) + np.inf
 
         
         ### node needs to contain paths, actions, starts and goals for that trial so that these can be inherited by the action node
@@ -281,19 +284,32 @@ class MonteCarloTreeSearch():
             self.conditional_tree_cost_tracker[action][depth].append(to_append)
 
             ## debugging: save max and min Q values to normalise Qs
-            if action_leaf.performance > self.max_Q[depth]:
-                self.max_Q[depth] = action_leaf.performance
-            if action_leaf.performance < self.min_Q[depth]:
-                self.min_Q[depth] = action_leaf.performance
+            # if action_leaf.performance > self.max_Q[depth]:
+            #     self.max_Q[depth] = action_leaf.performance
+            # if action_leaf.performance < self.min_Q[depth]:
+            #     self.min_Q[depth] = action_leaf.performance
+            
+            ## as above but save per-node min and max Qs
+            if action_leaf.performance > node.max_Q:
+                node.max_Q = action_leaf.performance
+            if action_leaf.performance < node.min_Q:
+                node.min_Q = action_leaf.performance
 
             ## Move to the next node in the path if not at the end
             if depth < tree_len - 1:
                 next_node_id = self.node_id_path[depth+1]
                 node = action_leaf.children[next_node_id]
 
+        ## track the cumulative return, i.e. the discounted cost that is applied to the root node
+        # discounted_return = np.dot(self.tree_costs, discount_factors)
+        # if self.tree_actions[0] == 0:
+        #     self.return_tracker.append([discounted_return, np.nan])
+        # else:
+        #     self.return_tracker.append([np.nan, discounted_return])
+
 
     ## calculate E-E value
-    def compute_UCT(self, node, action_leaf): 
+    def compute_UCT(self, node, action_leaf, min_Q=None, max_Q=None): 
         assert action_leaf.n_action_visits > 0 or action_leaf.terminated, 'action leaf has not been visited: {}'.format(action_leaf)
         
         ## standard case
@@ -301,26 +317,33 @@ class MonteCarloTreeSearch():
         # exploration_term = self.exploration_constant * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
 
         ## or, depth-dependent exploration constant
-        exploitation_term = action_leaf.performance
-        exploration_term = self.exploration_constants[action_leaf.trial] * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
+        # exploitation_term = action_leaf.performance
+        # exploration_term = self.exploration_constants[action_leaf.trial] * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
         
         ### or, min-max normalisation of Qs, 
 
-        ## based on overall min and max Q values (i.e. min and max of all estimates ever recorded at that depth)
+        # ## based on overall min and max Q values (i.e. min and max of all estimates ever recorded at that depth)
         # min_Q = self.min_Q[action_leaf.trial]
         # max_Q = self.max_Q[action_leaf.trial]
+
+        ## or, based on min and max for that node
+        # min_Q = action_leaf.min_Q
+        # max_Q = action_leaf.max_Q
 
         # ## or, based on min and max of current estimates of Qs at that depth
         # # min_Q, max_Q = self.tree.min_max_Q(node=self.tree.root, depth=action_leaf.trial, current_depth=0)
 
-        # norm_term = max_Q - min_Q
-        # if norm_term == 0 or norm_term==np.inf:
-        #     exploitation_term = action_leaf.performance
-        # else:
-        #     exploitation_term = (action_leaf.performance - min_Q) / norm_term
-        # exploration_term = self.exploration_constants[action_leaf.trial] * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
+        norm_term = max_Q - min_Q
+        if norm_term == 0 or norm_term==np.inf:
+            # exploitation_term = action_leaf.performance
+            exploitation_term = 0.5
+        else:
+            exploitation_term = (action_leaf.performance - min_Q) / norm_term
+        exploration_term = self.exploration_constant * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
         
-        # print('exploration term:', exploration_term, 'exploitation term:', exploitation_term)
+        # print('depth:', action_leaf.trial, 'min Q:', min_Q, 'max Q:', max_Q, 'performance:', action_leaf.performance, 'Q = ', exploitation_term + exploration_term)
+        # print('node depth:', action_leaf.trial, 'exploration term:', exploration_term, 'exploitation term:', exploitation_term)
+        
         return exploitation_term + exploration_term
 
     
@@ -349,17 +372,19 @@ class MonteCarloTreeSearch():
         # norm_term = 1
 
         ## calculate UCT for each action leaf
-        UCTs = [self.compute_UCT(node, leaf) for leaf in action_leaves]
-        # print('node trial:', node.trial, ', diff in UCTs:', np.max(UCTs) - np.min(UCTs))
+        # UCTs = [self.compute_UCT(node, leaf) for leaf in action_leaves]
+        UCTs = [self.compute_UCT(node, leaf, node.min_Q, node.max_Q) for leaf in action_leaves]
         max_UCT = np.max(UCTs)
         max_idx = argm(UCTs, max_UCT)
         best_child = action_leaves[max_idx]
 
         ## check if the chosen leaf is the one with the highest performance, or is exploratory
+        # leaf_perfs = [leaf.performance for leaf in action_leaves]
         # if best_child.performance == np.max(leaf_perfs):
         #     self.exploitative_steps += 1
         # else:
         #     self.exploratory_steps += 1
+        #     print('exploratory step taken at node trial {}, action {}, leaf perfs {}, UCTs {}'.format(node.trial, best_child.action, leaf_perfs, UCTs))
 
         return best_child
 
@@ -384,6 +409,7 @@ class MonteCarloTreeSearch():
 
         ## debugging Q-vals
         self.Q_tracker = []
+        self.return_tracker = []
         self.first_node_updates = []
         self.first_node_updates_by_depth = []
         self.tree_cost_tracker = []
@@ -788,7 +814,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
             
             ### RANDOM: randomly choose between the paths
 
-            # ## full BAMCP - random choice between actual upcoming paths
+            ## full BAMCP - random choice between actual upcoming paths
             # if self.real_future_paths:
             #     path_id = np.random.choice(self.n_afc)
             #     path_states = self.env.path_states[trial][path_id] ## full BAMCP
@@ -796,7 +822,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
             # ## PA-BAMCP - choose between randomly sampled upcoming paths
             # else:
             #     path_id = np.random.choice(self.n_afc)
-                # path_states = sampled_path_states[path_id] ## PA-BAMCP
+            #     path_states = sampled_path_states[path_id] ## PA-BAMCP
 
             # ## unweighted
             # # costs = [self.env.predicted_costs[state[0], state[1]] for state in path_states]
@@ -809,6 +835,8 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
             # remaining_ro_costs.append(ro_cost)
             # ro_choices.append(path_id)
             # total_cost += ro_cost * self.discount_factor**depth
+        # print(total_cost)
+        # raise Exception
 
         self.tree_costs.append(total_cost)
         # assert len(remaining_ro_costs)+first_trial+1 == self.env.n_trials, 'remaining RO costs do not match number of trials\n n remaining RO costs: {}, n trials: {}'.format(len(remaining_ro_costs), self.env.n_trials)

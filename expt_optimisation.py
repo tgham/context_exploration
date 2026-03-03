@@ -39,7 +39,16 @@ warnings.filterwarnings('ignore')
 
 
 ## need this for paralellising because of the way the loops are structured...
-def agent_loop(p, agent_params, hyperparams, agents):
+def agent_loop(p, agent_params_list, hyperparams, agent_param_combos):
+    """
+    Run simulation for a single participant across all agent/parameter combinations.
+    
+    Args:
+        p: participant index
+        agent_params_list: list of parameter settings, each a list [temp, lapse, arm_weight, horizon, real_future]
+        hyperparams: dictionary of hyperparameters
+        agent_param_combos: list of (agent_name, param_idx) tuples
+    """
     N = hyperparams['N']
     sim_outs = []
 
@@ -50,8 +59,9 @@ def agent_loop(p, agent_params, hyperparams, agents):
     # with open('expt/assets/trial_sequences/expt_3/env_objects/expt_3_env_objects_' + str(p) + '.pkl', 'rb') as f: ## USE THIS USING THE SEQS THAT WE ALREADY GENERATED FOR PPTS
         env_objects = pickle.load(f)
 
-    ## loop through agents
-    for agent in agents:
+    ## loop through agent/parameter combinations
+    for agent, param_idx in agent_param_combos:
+        agent_params = agent_params_list[param_idx]
         farmer = Farmer(N, known_context = True) ## known context if expt 3
         sim_out = farmer.run(agent_params, hyperparams, agent=agent, df_trials=None, envs=env_objects, fit=False, progress=False)
         sim_outs.append(sim_out)
@@ -133,6 +143,11 @@ if n_afc==3:
 all_sim_out = {
         'participant':[],
         'agent':[],
+        'temp':[],
+        'lapse':[],
+        'arm_weight':[],
+        'horizon':[],
+        'real_future_paths':[],
         'city':[],
         'day':[],
         'trial':[],
@@ -163,15 +178,41 @@ n_cores = 128
 create=True
 
 ## init agent and expt
-agent_params = [
-    1, # temp
-    0, # lapse
-    1, # arm weight
-    1, # horizon
-    True, # real future paths
-]
+## Define parameter variations to sweep over
+param_settings = {
+    'temp': [0.1],           # temperature values to try
+    'lapse': [0.1],          # lapse rate values to try
+    'arm_weight': [
+                    0,
+                    # 1
+                    ],  
+    'horizon': [
+                1, 
+                # 3
+                ],
+    'real_future': [
+                    True
+                    # ,False
+                    ],   # whether to use real future paths
+}
+
+## Generate all combinations of parameter settings
+param_combinations = list(itertools.product(
+    param_settings['temp'],
+    param_settings['lapse'],
+    param_settings['arm_weight'],
+    param_settings['horizon'],
+    param_settings['real_future']
+))
+
+## Convert to list of lists for indexing
+agent_params_list = [list(combo) for combo in param_combinations]
+print(f"Running {len(agent_params_list)} parameter combinations:")
+for i, params in enumerate(agent_params_list):
+    print(f"  [{i}] temp={params[0]}, lapse={params[1]}, arm_weight={params[2]}, horizon={params[3]}, real_future={params[4]}")
+
 hyperparams = {
-    'n_sims': 10000,
+    'n_sims': 100,
     'exploration_constant': 1,
     'discount_factor': 1,
     'n_iter': 10,
@@ -184,9 +225,15 @@ hyperparams = {
 }
 agents = [
     'BAMCP', 
-    'CE', 
+    # 'CE', 
     'CE_one_arm'
-    ]   
+    ]
+
+## Generate all agent/parameter combinations (Each combo is (agent_name, param_idx))
+agent_param_combos = [(agent, param_idx) 
+                      for agent in agents 
+                      for param_idx in range(len(agent_params_list))]
+print(f"Total agent/parameter combinations per participant: {len(agent_param_combos)}")   
 
 ## generate dataset for each participant
 if create:
@@ -234,8 +281,8 @@ if __name__ == '__main__':
         # for p in tqdm(range(1, n_participants+1)):
         for p in tqdm(range(1, n_sim_participants)):
 
-            ## loop through agents
-            sim_out = agent_loop(p, agent_params, hyperparams, agents)
+            ## loop through agents and parameter combinations
+            sim_out = agent_loop(p, agent_params_list, hyperparams, agent_param_combos)
             save_sim(sim_out)
 
     elif parallel:
@@ -244,7 +291,8 @@ if __name__ == '__main__':
         n_cores = np.min([n_cores, n_sim_participants])
         with mp.Pool(n_cores) as pool:
             print('Parallel simulation:', n_cities, ' cities, ', n_days,', days, ',n_trials,' trials, ',hyperparams['n_sims'],' simulations per trial')
-            sim_out = [pool.apply_async(agent_loop, args=(p, agent_params, hyperparams, agents),
+            print(f'Running {len(agents)} agents x {len(agent_params_list)} param settings = {len(agent_param_combos)} combinations per participant')
+            sim_out = [pool.apply_async(agent_loop, args=(p, agent_params_list, hyperparams, agent_param_combos),
                                             callback = save_sim) for p in range(1, n_sim_participants+1)]
             pool.close()
             pool.join()
@@ -258,9 +306,6 @@ df_sim = pd.DataFrame(all_sim_out)
 
 
 ## save simulated grids + results
-df_sim.to_csv('useful_saves/expt_optimisation/sim_results/{}AFC_{}x{}_env_{}_arm_weight_{}_horizon_{}_future_paths_{}_sim_ppts_{}_cities_{}_days_{}_trials_{}_sims_results.csv'.format(n_afc,N,N,
-                                                                                       agent_params[2],
-                                                                                       agent_params[3],
-                                                                                       ['sampled','real'][agent_params[4]],
+df_sim.to_csv('useful_saves/expt_optimisation/sim_results/{}AFC_{}x{}_env_{}_sim_ppts_{}_cities_{}_days_{}_trials_{}_sims_results.csv'.format(n_afc,N,N,
                                                                                        n_sim_participants, 
                                                                                        n_cities, n_days, n_trials,hyperparams['n_sims']))
