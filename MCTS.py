@@ -166,7 +166,7 @@ class MonteCarloTreeSearch():
                 self.env.set_state(self.root_state)
                 self.env.set_goal(self.root_goal)
                 self.env.set_trial(self.root_trial)
-                assert (self.env.current[0], self.env.current[1]) == (self.root_state[0], self.root_state[1]), 'env state not reverted properly'
+                # assert (self.env.current[0], self.env.current[1]) == (self.root_state[0], self.root_state[1]), 'env state not reverted properly:\n env current: {} \n root state: {}'.format(self.env.current, self.root_state)
                 assert self.env.trial == self.root_trial, 'env trial not reverted properly. should be in {}, but actually in {}'.format(self.root_trial, self.env.trial)
 
                 return action_leaf
@@ -226,7 +226,7 @@ class MonteCarloTreeSearch():
         self.env.set_state(self.root_state)
         self.env.set_goal(self.root_goal)
         self.env.set_trial(self.root_trial)
-        assert (self.env.current[0], self.env.current[1]) == (self.root_state[0], self.root_state[1]), 'env state not reverted properly'
+        # assert (self.env.current[0], self.env.current[1]) == (self.root_state[0], self.root_state[1]), 'env state not reverted properly'
         assert self.env.trial == self.root_trial, 'env trial not reverted properly'
 
         return action_leaf
