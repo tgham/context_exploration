@@ -353,7 +353,7 @@ class MonteCarloTreeSearch():
         ## get action children - iterate directly over values
         action_leaves = list(node.action_leaves.values())
 
-        ## calculate UCT for each action leaf - inline for small lists
+        ## calculate UCT for each action leaf
         min_Q, max_Q = node.min_Q, node.max_Q
         UCTs = [self.compute_UCT(node, leaf, min_Q, max_Q) for leaf in action_leaves]
         max_UCT = max(UCTs)
@@ -759,7 +759,8 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         # for trial in range(first_trial+1, self.env.n_trials):
         for trial in range(first_trial+1, np.min([self.root_trial + self.horizon + 1, self.env.n_trials])): ## horizon-limited
             depth+=1
-            _, _, sampled_path_states, _, _ = self.env.sample_paths_given_future_states(self.root_trial) ## PA-BAMCP
+            if not self.real_future_paths:
+                _, _, sampled_path_states, _, _ = self.env.sample_paths_given_future_states(self.root_trial) ## PA-BAMCP
 
             ### greedy: get the total cost of the paths and return the better one
             path_costs = []
@@ -777,7 +778,10 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
                 costs = [self.env.predicted_costs[state[0], state[1]] for state in path_states]
 
                 ## arm-weighted
-                aligned_states, orthogonal_states = self.env.get_alignment([[path_states]])
+                if self.real_future_paths:
+                    aligned_states, orthogonal_states = self.env.path_aligned_states[trial][path_id], self.env.path_orthogonal_states[trial][path_id] ## full BAMCP
+                else:
+                    aligned_states, orthogonal_states = self.env.get_alignment([[path_states]])
                 ro_cost = self.agent.arm_reweighting(self.env.predicted_costs, aligned_states, orthogonal_states)
                 
                 path_costs.append(ro_cost)
