@@ -1,6 +1,7 @@
 from enum import Enum
 import gymnasium as gym
 from gymnasium import spaces
+gym.logger.set_level(40)  # Sets logger to 'Error' only, silencing warnings
 import numpy as np
 from plotter import *
 import matplotlib.pyplot as plt
@@ -368,9 +369,9 @@ class GridEnv(gym.Env):
                                     intersection = set(path).intersection(set(next_path))
                                     
                                     ## if path and next_path share start and end, remove them from the intersection
-                                    if np.array_equal(path[0], next_path[0]):
+                                    if (path[0][0], path[0][1]) == (next_path[0][0], next_path[0][1]):
                                         intersection = intersection - set([path[0]])
-                                    if np.array_equal(path[-1], next_path[-1]):
+                                    if (path[-1][0], path[-1][1]) == (next_path[-1][0], next_path[-1][1]):
                                         intersection = intersection - set([path[-1]])
 
 
@@ -669,7 +670,7 @@ class GridEnv(gym.Env):
                 new = True
             else:
                 for s, g in zip(self.starts, self.goals):
-                    if np.array_equal(agent_location, s) or np.array_equal(goal_location, g):
+                    if (agent_location[0], agent_location[1]) == (s[0], s[1]) or (goal_location[0], goal_location[1]) == (g[0], g[1]):
                         new = False
                     else:
                         new = True
@@ -1345,8 +1346,12 @@ class GridEnv(gym.Env):
         # self.predicted_costs = predicted_costs.reshape(self.N, self.N)
         self.predicted_p_costs = predicted_p_costs.reshape(self.N, self.N)
 
-        ## fill in the grid with highs and lows based on predicted_p_costs
-        self.predicted_costs = np.array([self.high_cost if r>self.predicted_p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
+        ## fill in the grid with highs and lows based on predicted_p_costs (vectorized)
+        self.predicted_costs = np.where(
+            np.random.random((self.N, self.N)) > self.predicted_p_costs,
+            self.high_cost,
+            self.low_cost
+        )
 
 
     ## take a step in the environment
@@ -1414,7 +1419,8 @@ class GridEnv(gym.Env):
 
 
         # An trial is done iff the agent has reached the goal
-        if np.array_equal(self._agent_location, self._goal_location):
+        # if self._agent_location[0] == self._goal_location[0] and self._agent_location[1] == self._goal_location[1]:
+        if (self._agent_location[0], self._agent_location[1]) == (self._goal_location[0], self._goal_location[1]):
             self.terminated = True
             if self.expt=='free':
                 cost=0 ## cost of final state is 0 (MIGHT WANT TO CHANGE THIS...)
@@ -1516,7 +1522,8 @@ class GridEnv(gym.Env):
             o_traj_costs.append(expected_cost)
 
             ## check if goal has been reached (THIS SHOULD COME BEFORE THE APPEND IF WE DON'T WANT TO INCLUDE THE GOAL STATE
-            if np.array_equal(current, goal):
+            # if current[0] == goal[0] and current[1] == goal[1]:
+            if (current[0], current[1]) == (goal[0], goal[1]):
                 break
 
         ## calculate the total cost of the trajectory INC START AND END
