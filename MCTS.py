@@ -671,24 +671,22 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         ## add costs to states to create simulated obs for the tree
         simulated_obs += [(s[0], s[1], c) for s, c in zip(states, costs)]
 
-        ## one-arm bias 
+        ## one-arm bias
         if self.real_future_paths:
             aligned_states, orthogonal_states = self.env.path_aligned_states[step_trial][path_id], self.env.path_orthogonal_states[step_trial][path_id] ## full BAMCP
         else:
             aligned_states, orthogonal_states = action_leaf.aligned_states, action_leaf.orthogonal_states ## PA-BAMCP
-        weighted_costs = self.agent.arm_reweighting(self.env.predicted_costs, aligned_states, orthogonal_states)
+        total_weighted_cost = self.agent.arm_reweighting(self.env.predicted_costs, aligned_states, orthogonal_states)
 
         ## save costs
-        # self.tree_costs.append(np.sum(costs))
-        self.tree_costs.append(np.sum(weighted_costs)) ## NB: we only use the weighted costs for the backup, rather than building the tree
-        # if (action_leaf.trial==1) and (action_leaf.action==1):
-        #     print(simulated_obs)
-        assert len(simulated_obs) == len(weighted_costs), 'sim obs and costs do not match\n sim obs: {}, costs: {}'.format(len(simulated_obs), len(costs))
-        assert len(costs) == len(weighted_costs), 'costs and weighted costs do not match\n costs: {}, weighted costs: {}'.format(len(costs), len(weighted_costs))
+        self.tree_costs.append(total_weighted_cost)
+        
+        ## assertions (length checks commented out for performance)
+        # n_weighted = len(aligned_states) + len(orthogonal_states)
+        # assert len(simulated_obs) == n_weighted, 'sim obs and costs do not match\n sim obs: {}, weighted: {}'.format(len(simulated_obs), n_weighted)
+        # assert len(costs) == n_weighted, 'costs and weighted costs do not match\n costs: {}, weighted: {}'.format(len(costs), n_weighted)
         assert len(simulated_obs) == len(action_sequence)+1, 'sim obs and action sequence do not match\n sim obs: {}, action seq: {}'.format(len(simulated_obs), len(action_sequence)+1)
         terminated = action_leaf.terminated
-        # if terminated:
-        #     print(action_leaf.trial, start_tmp, goal_tmp)
 
         ## get the next node id, i.e. the informational state after taking this path
         next_node_id = self.init_node_id(simulated_obs, action_leaf.parent_id, step_trial)
@@ -747,8 +745,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
         ## weighted
         aligned_states, orthogonal_states = action_leaf.aligned_states, action_leaf.orthogonal_states
-        starting_costs = self.agent.arm_reweighting(self.env.predicted_costs, aligned_states, orthogonal_states)
-        total_cost = sum(starting_costs)
+        total_cost = self.agent.arm_reweighting(self.env.predicted_costs, aligned_states, orthogonal_states)
 
         ## if final trial, just stop here
         if action_leaf.terminated:
@@ -781,9 +778,8 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
                 ## arm-weighted
                 aligned_states, orthogonal_states = self.env.get_alignment([[path_states]])
-                costs = self.agent.arm_reweighting(self.env.predicted_costs, aligned_states, orthogonal_states)
+                ro_cost = self.agent.arm_reweighting(self.env.predicted_costs, aligned_states, orthogonal_states)
                 
-                ro_cost = sum(costs)
                 path_costs.append(ro_cost)
             best_ro_cost = np.max(path_costs) 
             remaining_ro_costs.append(best_ro_cost)

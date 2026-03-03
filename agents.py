@@ -699,8 +699,10 @@ class Farmer:
                             path_states = env_copy.path_states[t][path_id]
                             aligned_states, orthogonal_states = env_copy.path_aligned_states[t][path_id], env_copy.path_orthogonal_states[t][path_id]
                             unweighted_pred_costs = self.posterior_mean_p_cost*env_copy.low_cost + (1-self.posterior_mean_p_cost)*env_copy.high_cost
-                            weighted_path_costs = self.arm_reweighting(unweighted_pred_costs, aligned_states, orthogonal_states)
-                            path_costs.append(np.sum(weighted_path_costs))
+                            # weighted_path_costs = self.arm_reweighting(unweighted_pred_costs, aligned_states, orthogonal_states)
+                            # path_costs.append(np.sum(weighted_path_costs))
+                            total_weighted_path_costs = self.arm_reweighting(unweighted_pred_costs, aligned_states, orthogonal_states)
+                            path_costs.append(total_weighted_path_costs)
 
                         ## choose the path with the lowest total cost
                         max_cost = np.max(path_costs)
@@ -1039,7 +1041,7 @@ class Farmer:
     ## calculate weighted cost based on aligned vs orthogonal states
     def arm_reweighting(self, costs, aligned_arr, orth_arr):
         """
-        Calculate weighted cost for a path based on aligned and orthogonal state costs.
+        Calculate sum of weighted costs for a path based on aligned and orthogonal state costs.
         
         Args:
             costs: NxN array of costs for each state in the grid
@@ -1047,12 +1049,8 @@ class Farmer:
             orth_arr: numpy array of shape (n, 2) for states on the orthogonal arm
             
         Returns:
-            weighted_costs: list of weighted costs for all states on the path
+            float: sum of weighted costs for the path
         """
-        
-        
-        ## calculate weighted cost (arrays already pre-converted)
-        aligned_costs = self._aligned_weight * costs[aligned_arr[:, 0], aligned_arr[:, 1]]
-        orth_costs = self._orthogonal_weight * costs[orth_arr[:, 0], orth_arr[:, 1]]
-            
-        return aligned_costs.tolist() + orth_costs.tolist()
+        aligned_sum = self._aligned_weight * costs[aligned_arr[:, 0], aligned_arr[:, 1]].sum()
+        orth_sum = self._orthogonal_weight * costs[orth_arr[:, 0], orth_arr[:, 1]].sum()
+        return aligned_sum + orth_sum
