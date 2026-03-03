@@ -1386,27 +1386,29 @@ class GridEnv(gym.Env):
         ## take the actual action 
         direction = self.action_to_direction[action] 
 
-        ## move to the new state
-        # self._agent_location = np.clip(
-        #     self._agent_location + direction, 0, self.N - 1
-        # )
-        self._agent_location = get_next_state(self._agent_location, direction, self.N)
+        ## move to the new state - optimized clip
+        new_loc = self._agent_location + direction
+        # Clip to grid bounds [0, N-1]
+        i, j = new_loc[0], new_loc[1]
+        N_max = self.N - 1
+        if i < 0: i = 0
+        elif i > N_max: i = N_max
+        if j < 0: j = 0
+        elif j > N_max: j = N_max
+        new_loc[0], new_loc[1] = i, j
+        self._agent_location = new_loc
 
-        ## get the predicted and actual costs of the new state, sampling using the p(cost) values
-        # current_cost = self.get_cost(self._agent_location)
-        # predicted_cost = self.get_pred_cost(self._agent_location)
-
-        ## or, use pre-sampled costs
-        current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
-        predicted_cost = self.predicted_costs[self._agent_location[0], self._agent_location[1]]
+        ## get the predicted and actual costs of the new state using pre-sampled costs
+        current_cost = self.costs[i, j]
+        predicted_cost = self.predicted_costs[i, j]
 
         ## return the real cost if not simulating
         if not self.sim:
-            cost = current_cost.copy()
+            cost = current_cost
             
             ## update observation and trajectory arrays - i.e. agent observes along the way
-            self.a_traj.append(tuple(self._agent_location))
-            self.trial_obs = np.vstack([self.trial_obs, [self._agent_location[0], self._agent_location[1], current_cost]])
+            self.a_traj.append((i, j))
+            self.trial_obs = np.vstack([self.trial_obs, [i, j, current_cost]])
 
             ## store info on optimality of the choice, given the agent's current position
             # self.action_scores.append(action_score)
@@ -1414,8 +1416,7 @@ class GridEnv(gym.Env):
 
         ## return the predicted cost if simulating
         elif self.sim:
-            # cost = current_cost
-            cost = predicted_cost.copy()
+            cost = predicted_cost
 
 
         # An trial is done iff the agent has reached the goal
@@ -1650,14 +1651,18 @@ class GridEnv(gym.Env):
                 corner_states = aligned_states.intersection(orthogonal_states)
                 orthogonal_states -= corner_states
                 
-                trial_aligned_states.append(aligned_states)
-                trial_orthogonal_states.append(orthogonal_states)
+                # Pre-convert sets to numpy arrays for faster arm_reweighting
+                aligned_arr = np.array(list(aligned_states)) if aligned_states else np.empty((0, 2), dtype=int)
+                orthogonal_arr = np.array(list(orthogonal_states)) if orthogonal_states else np.empty((0, 2), dtype=int)
+                
+                trial_aligned_states.append(aligned_arr)
+                trial_orthogonal_states.append(orthogonal_arr)
             
             # Store results as attributes
             path_aligned_states.append(trial_aligned_states)
             path_orthogonal_states.append(trial_orthogonal_states)
 
-        ## sometimes, we're only returning aligned and orthogonal states for a single trial, and a single choice, so we can just return the sets for that trial and choice rather than the whole list of lists
+        ## sometimes, we're only returning aligned and orthogonal states for a single trial, and a single choice, so we can just return the arrays for that trial and choice rather than the whole list of lists
         if n_trials_tmp == 1 and n_afc_tmp == 1:
             return path_aligned_states[0][0], path_orthogonal_states[0][0]
 
