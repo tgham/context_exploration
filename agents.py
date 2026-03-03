@@ -1042,11 +1042,11 @@ class Farmer:
         aligned_weight = 1 - max(0.0, -self.arm_weight)
         orthogonal_weight = 1 - max(0.0, self.arm_weight)
         
-        ## calculate weighted cost
+        ## calculate weighted cost (vectorized)
         weighted_costs = []
-        for state in aligned_states:
-            weighted_costs.append(aligned_weight * costs[state[0], state[1]])
-        for state in orthogonal_states:
-            weighted_costs.append(orthogonal_weight * costs[state[0], state[1]])
+        aligned_arr = np.array(list(aligned_states))
+        weighted_costs.extend(aligned_weight * costs[aligned_arr[:, 0], aligned_arr[:, 1]])
+        orth_arr = np.array(list(orthogonal_states))
+        weighted_costs.extend(orthogonal_weight * costs[orth_arr[:, 0], orth_arr[:, 1]])
             
         return weighted_costs
