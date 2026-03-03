@@ -92,7 +92,7 @@ beta_params = {
     }
 
 ## trial info
-n_sim_participants = 2
+n_sim_participants = 100
 n_cities = 32
 n_days = 1
 n_trials = 4
@@ -158,14 +158,14 @@ all_sim_out = {
         'CE_p_correct':[],
         'distr_diff':[]
     }
-parallel = False
+parallel = True
 n_cores = 128
-create=False
+create=True
 
 ## init agent and expt
 agent_params = [
-    0.1, # temp
-    0.1, # lapse
+    1, # temp
+    0, # lapse
     1, # arm weight
     1, # horizon
     True, # real future paths
@@ -183,8 +183,8 @@ hyperparams = {
     'participant': None, ## hacky
 }
 agents = [
-    # 'BAMCP', 
-    # 'CE', 
+    'BAMCP', 
+    'CE', 
     'CE_one_arm'
     ]   
 
@@ -258,7 +258,9 @@ df_sim = pd.DataFrame(all_sim_out)
 
 
 ## save simulated grids + results
-df_sim.to_csv('useful_saves/expt_optimisation/sim_results/{}AFC_{}x{}_env_{}-{}-{}-{}_beta_{}_sim_ppts_{}_cities_{}_days_{}_trials_{}_sims_results.csv'.format(n_afc,N,N,
-                                                                                       beta_params['alpha_row'], beta_params['beta_row'], beta_params['alpha_col'], beta_params['beta_col'],
+df_sim.to_csv('useful_saves/expt_optimisation/sim_results/{}AFC_{}x{}_env_{}_arm_weight_{}_horizon_{}_future_paths_{}_sim_ppts_{}_cities_{}_days_{}_trials_{}_sims_results.csv'.format(n_afc,N,N,
+                                                                                       agent_params[2],
+                                                                                       agent_params[3],
+                                                                                       ['sampled','real'][agent_params[4]],
                                                                                        n_sim_participants, 
                                                                                        n_cities, n_days, n_trials,hyperparams['n_sims']))
