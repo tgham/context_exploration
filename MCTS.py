@@ -359,7 +359,7 @@ class MonteCarloTreeSearch():
 
 
     ## tree search --> action loop
-    def search(self, n_sims=1000, n_iter=100, lazy=False):
+    def search(self, n_samples=1000):
 
         ## check root
         assert self.root_trial == self.env.trial, 'trial mismatch between env and tree at start of search\n env trial: {} \n tree trial: {}'.format(self.env.trial, self.root_trial)
@@ -369,7 +369,7 @@ class MonteCarloTreeSearch():
             assert np.array_equal(self.tree.root.path_states[a], self.env.path_states[self.root_trial][a]), 'path state mismatch for action {}\n env path: {} \n tree path: {}'.format(a, self.env.path_states[self.root_trial][a], self.tree.root.path_states[a])
 
         ## generate new set of root samples
-        self.agent.root_samples(obs = self.env.obs, n_samples=n_sims, n_iter=n_iter, lazy=lazy, CE=False, combo=False)
+        self.agent.root_samples(obs = self.env.obs, n_samples=n_samples, CE=False)
 
         # debugging plot
         # plt.figure()
@@ -390,7 +390,7 @@ class MonteCarloTreeSearch():
                 self.conditional_tree_cost_tracker[a].append([])
         
         ## loop through simulations
-        for s in range(n_sims):
+        for s in range(n_samples):
             
             ## root sampling of new posterior
             posterior_p_cost = self.agent.all_posterior_p_costs[s]
@@ -774,7 +774,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         for o, outcome in enumerate(ordered_outcomes):
             sim_obs = env_copy.obs.copy()
             sim_obs[-1, -1] = outcome
-            self.root_samples(sim_obs, n_samples=self.n_sims, n_iter=self.n_iter, lazy=self.lazy, CE=self.CE)
+            self.root_samples(sim_obs, n_samples=self.n_samples, CE=self.CE)
             posterior_samples = np.vstack([np.array(self.all_posterior_ps).T, np.array(self.all_posterior_qs).T])
             
             ## posterior log det

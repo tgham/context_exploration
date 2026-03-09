@@ -58,7 +58,7 @@ class Farmer:
 
 
     ## generate full set of root samples
-    def root_samples(self, obs=None, n_samples=1000, n_iter=100, lazy=True, CE=False, combo=False):
+    def root_samples(self, obs=None, n_samples=1000, CE=False):
         
         ## hacky: obs should not contain duplicates!
         obs = np.unique(obs, axis=0).tolist() if obs is not None else []
@@ -69,125 +69,82 @@ class Farmer:
         self.all_posterior_qs = np.zeros((n_samples, self.N))
         self.all_posterior_p_costs = np.zeros((n_samples, self.N, self.N))
 
-        ## if combinatorial task
-        if combo:
-
-            if len(obs) > 0:
-
-                ## lazy
-                if lazy:
-
-                    ## loop through samples
-                    for s in range(n_samples):
-                        self.all_posterior_ps[s,:], self.all_posterior_qs[s,:] = sampler.lazy_sample(n_iter = n_iter)
-                        self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
-
-                ## full 
-                else:
-
-                    ## loop through samples
-                    for s in range(n_samples):
-                        self.all_posterior_ps[s,:], self.all_posterior_qs[s,:] = sampler.full_sample(n_iter = n_iter)
-                        self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
-
-
-            ## if no obs, just sample from prior
-            else:
-                for s in range(n_samples):
-                    self.all_posterior_ps[s,:] = np.random.beta(sampler.alpha_row, sampler.beta_row, size=self.N)
-                    self.all_posterior_qs[s,:] = np.random.beta(sampler.alpha_col, sampler.beta_col, size=self.N)
-                    self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
-
-                ## TMP: half the samples are from the correct prior, half are from the incorrect prior
-                # for s in range(n_samples//2):
-                #     self.all_posterior_ps[s,:] = np.random.beta(sampler.alpha_row, sampler.beta_row, size=self.N)
-                #     self.all_posterior_qs[s,:] = np.random.beta(sampler.alpha_col, sampler.beta_col, size=self.N)
-                #     self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
-                # for s in range(n_samples//2, n_samples):
-                #     self.all_posterior_ps[s,:] = np.random.beta(sampler.alpha_col, sampler.beta_col, size=self.N)
-                #     self.all_posterior_qs[s,:] = np.random.beta(sampler.alpha_row, sampler.beta_row, size=self.N)
-                #     self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
-                # np.random.shuffle(self.all_posterior_p_costs)
-
-        ## simpler task
-        else:
             
-            ### determine context indicators
+        ### determine context indicators
 
+        ## inference case: infer posterior probability, given observations
+        if not self.known_context:
+            context_prior = self.context_prob
+            self.context_prob = sampler.context_posterior(context_prior=context_prior)
 
-            ## inference case: infer posterior probability, given observations
-            if not self.known_context:
-                context_prior = self.context_prob
-                self.context_prob = sampler.context_posterior(context_prior=context_prior)
+        ## simple case: certain prior
+        elif self.known_context:
+            self.context_prob = 1.0 if self.known_context == 'column' else 0.0
 
-            ## simple case: certain prior
-            elif self.known_context:
-                self.context_prob = 1.0 if self.known_context == 'column' else 0.0
+        ## use inferred context to sample
+        if not CE:
+            self.context_indicators = np.random.binomial(1, self.context_prob, size=n_samples) 
+            col_context = self.context_indicators.astype(bool)
 
-            ## use inferred context to sample
-            if not CE:
-                self.context_indicators = np.random.binomial(1, self.context_prob, size=n_samples) 
-                col_context = self.context_indicators.astype(bool)
+            ## looping method...
+            # for s in range(n_samples):
+            #     self.all_posterior_ps[s,:], self.all_posterior_qs[s,:] = sampler.sample(col_context=col_context[s])
+            #     self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
 
-                ## looping method...
-                # for s in range(n_samples):
-                #     self.all_posterior_ps[s,:], self.all_posterior_qs[s,:] = sampler.simple_sample(col_context=col_context[s])
-                #     self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
+            #     ## temp fix: this posterior should also be filled in with 1s and 0s for states where a low and high cost have been observed respectively
+            #     for i,j,c in obs:
+            #         i = int(i)
+            #         j = int(j)
+            #         prob = 1 if c == self.low_cost else 0
+            #         self.all_posterior_p_costs[s][i,j] = prob
 
-                #     ## temp fix: this posterior should also be filled in with 1s and 0s for states where a low and high cost have been observed respectively
-                #     for i,j,c in obs:
-                #         i = int(i)
-                #         j = int(j)
-                #         prob = 1 if c == self.low_cost else 0
-                #         self.all_posterior_p_costs[s][i,j] = prob
+            ## or, all at once?
+            n_col_samples = np.sum(self.context_indicators)
+            n_row_samples = n_samples - n_col_samples
+            posterior_ps_col, posterior_qs_col = sampler.sample(col_context=True, n_samples=n_col_samples)
+            posterior_ps_row, posterior_qs_row = sampler.sample(col_context=False, n_samples=n_row_samples)
+            self.all_posterior_ps[:n_col_samples,:] = posterior_ps_col
+            self.all_posterior_ps[n_col_samples:,:] = posterior_ps_row
+            self.all_posterior_qs[:n_col_samples,:] = posterior_qs_col
+            self.all_posterior_qs[n_col_samples:,:] = posterior_qs_row
 
-                ## or, all at once?
-                n_col_samples = np.sum(self.context_indicators)
-                n_row_samples = n_samples - n_col_samples
-                posterior_ps_col, posterior_qs_col = sampler.simple_sample(col_context=True, n_samples=n_col_samples)
-                posterior_ps_row, posterior_qs_row = sampler.simple_sample(col_context=False, n_samples=n_row_samples)
-                self.all_posterior_ps[:n_col_samples,:] = posterior_ps_col
-                self.all_posterior_ps[n_col_samples:,:] = posterior_ps_row
-                self.all_posterior_qs[:n_col_samples,:] = posterior_qs_col
-                self.all_posterior_qs[n_col_samples:,:] = posterior_qs_row
+            ## shuffle them all in the same way
+            idx = np.random.permutation(n_samples)
+            self.all_posterior_ps = self.all_posterior_ps[idx]
+            self.all_posterior_qs = self.all_posterior_qs[idx]
+            self.context_indicators = np.zeros(n_samples)
+            self.context_indicators[:n_col_samples] = 1
+            self.context_indicators = self.context_indicators[idx].astype(bool)
 
-                ## shuffle them all in the same way
-                idx = np.random.permutation(n_samples)
-                self.all_posterior_ps = self.all_posterior_ps[idx]
-                self.all_posterior_qs = self.all_posterior_qs[idx]
-                self.context_indicators = np.zeros(n_samples)
-                self.context_indicators[:n_col_samples] = 1
-                self.context_indicators = self.context_indicators[idx].astype(bool)
+            ## posterior costs - i.e. the outer product of each sample's p and q
+            self.all_posterior_p_costs = np.einsum('si,sj->sij', self.all_posterior_ps, self.all_posterior_qs)
 
-                ## posterior costs - i.e. the outer product of each sample's p and q
-                self.all_posterior_p_costs = np.einsum('si,sj->sij', self.all_posterior_ps, self.all_posterior_qs)
+            ## temp fix: this posterior should also be filled in with 1s and 0s for states where a low and high cost have been observed respectively
+            for i,j,c in obs:
+                i = int(i)
+                j = int(j)
+                prob = 1 if c == self.low_cost else 0
+                self.all_posterior_p_costs[:,i,j] = prob
+        
+            ## posterior means 
+            self.posterior_mean_p_cost = np.mean(self.all_posterior_p_costs, axis=0)
+            self.posterior_mean_p = np.mean(self.all_posterior_ps, axis=0)
+            self.posterior_mean_q = np.mean(self.all_posterior_qs, axis=0)
 
-                ## temp fix: this posterior should also be filled in with 1s and 0s for states where a low and high cost have been observed respectively
-                for i,j,c in obs:
-                    i = int(i)
-                    j = int(j)
-                    prob = 1 if c == self.low_cost else 0
-                    self.all_posterior_p_costs[:,i,j] = prob
-            
-                ## posterior means 
-                self.posterior_mean_p_cost = np.mean(self.all_posterior_p_costs, axis=0)
-                self.posterior_mean_p = np.mean(self.all_posterior_ps, axis=0)
-                self.posterior_mean_q = np.mean(self.all_posterior_qs, axis=0)
+        ## if CE, no need to loop through samples - just get posterior mean under each context, and then calculate weighted average
+        elif CE:
+            posterior_ps_col, posterior_qs_col = sampler.sample(col_context=True)
+            posterior_ps_row, posterior_qs_row = sampler.sample(col_context=False)
+            self.posterior_mean_p_cost = self.context_prob * np.outer(posterior_ps_col, posterior_qs_col) + (1-self.context_prob) * np.outer(posterior_ps_row, posterior_qs_row)
+            self.posterior_mean_p = self.context_prob * posterior_ps_col + (1-self.context_prob) * posterior_ps_row
+            self.posterior_mean_q = self.context_prob * posterior_qs_col + (1-self.context_prob) * posterior_qs_row
 
-            ## if CE, no need to loop through samples - just get posterior mean under each context, and then calculate weighted average
-            elif CE:
-                posterior_ps_col, posterior_qs_col = sampler.simple_sample(col_context=True)
-                posterior_ps_row, posterior_qs_row = sampler.simple_sample(col_context=False)
-                self.posterior_mean_p_cost = self.context_prob * np.outer(posterior_ps_col, posterior_qs_col) + (1-self.context_prob) * np.outer(posterior_ps_row, posterior_qs_row)
-                self.posterior_mean_p = self.context_prob * posterior_ps_col + (1-self.context_prob) * posterior_ps_row
-                self.posterior_mean_q = self.context_prob * posterior_qs_col + (1-self.context_prob) * posterior_qs_row
-
-                ## temp fix: this posterior should also be filled in with 1s and 0s for states where a low and high cost have been observed respectively
-                for i,j,c in obs:
-                    i = int(i)
-                    j = int(j)
-                    prob = 1 if c == self.low_cost else 0
-                    self.posterior_mean_p_cost[i,j] = prob
+            ## temp fix: this posterior should also be filled in with 1s and 0s for states where a low and high cost have been observed respectively
+            for i,j,c in obs:
+                i = int(i)
+                j = int(j)
+                prob = 1 if c == self.low_cost else 0
+                self.posterior_mean_p_cost[i,j] = prob
 
         ## debugging plot - kde of samples
         # fig, axs = plt.subplots(1, 2, figsize=(10, 5))
@@ -353,10 +310,9 @@ class Farmer:
             self._cache_arm_weights()
             self.horizon = params[3]
             self.real_future_paths = params[4]
-            n_sims = hyperparams['n_sims']
+            n_samples = hyperparams['n_samples']
             exploration_constant = hyperparams['exploration_constant']
             discount_factor = hyperparams['discount_factor']
-            n_iter = hyperparams['n_iter']
         elif (agent == 'CE'):
             self.temp = params[0]
             self.lapse = params[1]
@@ -594,7 +550,7 @@ class Farmer:
 
                         ## search
                         MCTS.root_state = current
-                        action, MCTS_Q = MCTS.search(n_sims, n_iter=n_iter)
+                        action, MCTS_Q = MCTS.search(n_samples)
                         self.actions[city, day, t] = action
                         self.Q_vals[city, day, t] = MCTS_Q
                         self.p_choice[city, day, t] = self.softmax(MCTS_Q)
@@ -653,7 +609,7 @@ class Farmer:
                         env_copy.set_sim(False)
                         
                         ## get posterior mean grid
-                        self.root_samples(obs=env_copy.obs, CE=True, combo=False)
+                        self.root_samples(obs=env_copy.obs, CE=True)
                         env_copy.receive_predictions(self.posterior_mean_p_cost)
 
                         ## get the cost of each path under the posterior mean
@@ -690,7 +646,7 @@ class Farmer:
                         env_copy.set_sim(False)
                         
                         ## get posterior mean grid
-                        self.root_samples(obs=env_copy.obs, CE=True, combo=False)
+                        self.root_samples(obs=env_copy.obs, CE=True)
                         env_copy.receive_predictions(self.posterior_mean_p_cost)
 
                         ## get the cost of each path under the posterior mean (weighted by arm_weight)
@@ -733,7 +689,7 @@ class Farmer:
                         # env_copy.receive_predictions(np.zeros((N, N)))
 
                         ## or, we might actually calculate the CE-correct answer under the human's observations
-                        self.root_samples(obs=env_copy.obs, CE=True, combo=False)
+                        self.root_samples(obs=env_copy.obs, CE=True)
                         env_copy.receive_predictions(self.posterior_mean_p_cost)
                         path_costs = []
                         for path_id in range(env_copy.n_afc):
@@ -752,7 +708,7 @@ class Farmer:
 
                         # ## sample PMFs over total costs for each path
                         # n_samples = 50000
-                        # self.root_samples(obs = env_copy.obs, n_samples=n_samples, CE=False, combo=False)
+                        # self.root_samples(obs = env_copy.obs, n_samples=n_samples, CE=False)
                         # sample_total_costs = np.zeros((n_samples, env_copy.n_afc))
                         # for s in range(n_samples):
                             
@@ -781,7 +737,7 @@ class Farmer:
 
                         # # --- 2. VECTORIZED SAMPLING (Replaces your N_samples loop) ---
                         # n_samples = 10000
-                        # self.root_samples(obs = env_copy.obs, n_samples=n_samples, CE=False, combo=False)
+                        # self.root_samples(obs = env_copy.obs, n_samples=n_samples, CE=False)
                         # p_costs_flat = self.all_posterior_p_costs.reshape(n_samples, self.N**2)
                         # random_draws = np.random.random((n_samples, self.N**2))
                         # sample_costs_binary = (random_draws < p_costs_flat).astype(int) 
