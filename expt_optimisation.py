@@ -193,15 +193,15 @@ create=False
 ## init agent and expt
 ## Define parameter variations to sweep over
 param_settings = {
-    'temp': [0.1],           # temperature values to try
-    'lapse': [0.1],          # lapse rate values to try
+    'temp': [1],           # temperature values to try
+    'lapse': [0],          # lapse rate values to try
     'arm_weight': [
                     0,
                     # 1
                     ],  
     'horizon': [
-                1, 
-                # 3
+                # 1, 
+                3
                 ],
     'real_future': [
                     True

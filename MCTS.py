@@ -504,7 +504,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         # costs = [self.env.predicted_costs[start_tmp[0], start_tmp[1]]] + costs
 
         ## add costs to states to create simulated obs for the tree
-        simulated_obs += [(s[0], s[1], c) for s, c in zip(states, costs)]
+        simulated_obs = [(s[0], s[1], costs[i]) for i, s in enumerate(states)]
 
         ## one-arm bias
         if self.real_future_paths:
