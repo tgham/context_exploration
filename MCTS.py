@@ -132,11 +132,6 @@ class MonteCarloTreeSearch():
         ## create a copy of the env
         # env_copy = copy.deepcopy(self.env)
         # assert env_copy.sim, 'env copy is not in sim mode'
-        # if self.expt == 'AFC':
-        #     # env_tmp = copy.deepcopy(self.env)
-        #     env_tmp = self.env
-        # elif self.expt == 'free':
-        #     env_tmp = self.env
         
         ## loop until you reach a leaf node or terminal state
         assert self.env.sim, 'env is not in sim mode'
@@ -399,8 +394,6 @@ class MonteCarloTreeSearch():
             
             ## root sampling of new posterior
             posterior_p_cost = self.agent.all_posterior_p_costs[s]
-            if self.expt=='free': ## only need to do this in the free-choice expt
-                self.agent.dp(posterior_p_cost, expected_cost=True)
             self.env.receive_predictions(posterior_p_cost)
 
             ## selection, expansion, simulation
@@ -427,103 +420,6 @@ class MonteCarloTreeSearch():
         action = argm(MCTS_estimates, max_MCTS)
 
         return action, MCTS_estimates
-    
-
-### subclasses for different experiments
-
-## free exploration
-class MonteCarloTreeSearch_Free(MonteCarloTreeSearch):
-    
-    def __init__(self, env, agent, tree, exploration_constant=2, discount_factor=0.99):
-        super().__init__(env, agent, tree, exploration_constant, discount_factor)
-
-    def init_node_id(self, obs=None, init_info_state = None, trial=None):
-        node_id = (self.root_state[0], self.root_state[1], self.env.costs[self.root_state[0], self.root_state[1]])
-        return node_id
-    
-    def update_trial(self):
-        self.root_state = self.env.current
-        self.root_goal = self.env.goal
-        self.root_trial = self.env.trial
-
-    ## in free choice, there is a meaningful state of the MDP (i.e. agent's current position in grid), which is reflected in belief state
-    def check_node(self, node):
-        assert (node.belief_state[0], node.belief_state[1]) == (self.env.current[0], self.env.current[1]), 'mismatch between node and env state\n node: {} \n env: {}'.format(node, self.env.current)
-
-    ## in free choice, we have a meaningful notion of prev and next state (i.e. current location, and location after taking an action)
-    def expand(self, node):
-        assert self.env.sim, 'env is not in sim mode'
-
-        ## take action (or path) and get new state
-        action = node.untried_action()
-        prev_state = self.env.current.copy()
-        next_state, _, terminated, _, _ = self.env.step(action)
-            
-        ## update info for s-a leaf - i.e. the state-action pair
-        node.action_leaves[action] = Action_Node(start = prev_state, action=action, goal = next_state, terminated=terminated, trial=node.trial, parent_id=node.node_id)
-        node.action_leaves[action].performance = 0
-        node.action_leaves[action].norm_performance = 0
-
-        ## one-armed weighting: store the aligned and orthogonal states
-        if self.real_future_paths:
-            node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states = self.env.path_aligned_states[node.trial][action], self.env.path_orthogonal_states[node.trial][action] ## full BAMCP
-        else:
-            node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states = self.env.get_alignment([[node.path_states[action]]]) ## PA-BAMCP
-
-        return node.action_leaves[action]
-
-    ## tree step
-    def tree_step(self, action_leaf):
-        action = action_leaf.action
-        next_state, cost, terminated, _, _ = self.env.step(action)
-        self.tree_costs.append(cost)
-        node_trial = self.root_trial ##??
-        next_node_id = (next_state[0], next_state[1], cost)
-        return next_state, cost, terminated, node_trial, next_node_id
-    
-    ## rollout policy
-    def rollout_policy(self, action_leaf):
-
-        ## if no action leaf because tree policy has reached a terminal node, return None
-        if action_leaf is None:
-            print('no action leaf, reached terminal node')
-            return None
-
-        ## init
-        total_cost = 0
-        depth = 0
-
-        ## rolling out from goal location, can just end here
-        if action_leaf.terminated:
-            self.tree_costs.append(total_cost)
-            return total_cost
-
-        # get the next state and goal
-        current = action_leaf.next_state.copy()
-        # goal = self.env.goal
-
-        ## begin with cost of current state
-        total_cost+=self.env.get_pred_cost(current)
-
-        ## get costs of optimal route
-        while True:
-            depth+=1
-            i, j = current
-            action = int(self.agent.A_inf[i, j])  # Ensure action index is int
-            
-            # Take action and update current state
-            direction = self.env.action_to_direction[action]
-            current = np.clip(current + direction, 0, self.N - 1)
-            
-            ## return cost once goal is reached (i.e. don't use the cost of the goal state)
-            if current[0] == self.root_goal[0] and current[1] == self.root_goal[1]:
-                self.tree_costs.append(total_cost)
-                return total_cost
-            
-            ## update costs
-            cost = self.env.get_pred_cost(current)
-            total_cost += cost*self.discount_factor**depth
-    
 
 class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 

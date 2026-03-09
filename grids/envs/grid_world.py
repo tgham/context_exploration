@@ -38,7 +38,7 @@ class Actions(Enum):
 
 class GridEnv(gym.Env):
 
-    def __init__(self, N, n_trials=1, expt_info={'type':'free'}, beta_params=None, metric = 'cityblock', size=5, seed=None):
+    def __init__(self, N, n_trials=1, expt_info={'type':'AFC'}, beta_params=None, metric = 'cityblock', size=5, seed=None):
         
         ## seed
         if seed is not None:
@@ -125,7 +125,6 @@ class GridEnv(gym.Env):
         init_done = False
         t=0
         while not init_done:
-            SG_found = False
             paths_found = False
             if self.objective == 'rewards':
                 self.high_cost, self.low_cost = 0, 1
@@ -202,100 +201,73 @@ class GridEnv(gym.Env):
             self.path_orthogonal_states = []  ## states on each path that are orthogonal to context
 
 
-            ## if AFC, we use the same SG pair all the way through
-            if self.expt=='AFC':
-                try:
-                    start, goal = self.sample_SG()
-                    SG_found=True
-                except:
-                    continue
-
             ## generate relevant trial info for each trial
             for t in range(n_trials):
 
                 try:
-                
-                    ## free movement
-                    if self.expt == 'free':
-                        start, goal = self.sample_SG()
-                        self.starts.append(start)
-                        self.goals.append(goal)
-                        SG_found=True
-                        paths_found=True
+                    max_turns=1
+                    sampled_abstract_sequences, path_actions, path_states, starts, goals = self.sample_paths()
+                    self.starts.append(starts)
+                    self.goals.append(goals)
+                    self.path_states.append(path_states)
+                    self.path_actions.append(path_actions)
+                    self.sampled_abstract_sequences.append(sampled_abstract_sequences)
 
-                        ## get info about optimal path
-                        o_traj, o_traj_costs, o_traj_total_cost, o_traj_actions = self.optimal_trajectory(start, goal)
-                        self.o_trajs.append(o_traj)
-                        self.o_traj_costs.append(o_traj_costs)
-                        self.o_traj_total_costs.append(o_traj_total_cost)
-                        self.o_traj_actions.append(o_traj_actions)
-
-                    ## AFC
-                    elif self.expt=='AFC':
-                        max_turns=1
-                        sampled_abstract_sequences, path_actions, path_states, starts, goals = self.sample_paths()
-                        self.starts.append(starts)
-                        self.goals.append(goals)
-                        self.path_states.append(path_states)
-                        self.path_actions.append(path_actions)
-                        self.sampled_abstract_sequences.append(sampled_abstract_sequences)
-
-                        ## more info on A and B wrt/ orientation and context
+                    ## more info on A and B wrt/ orientation and context
+                    
+                    dominant_axis_list = [self.dominant_axis_A, self.dominant_axis_B, self.dominant_axis_C]
+                    for si, s_a_s in enumerate(sampled_abstract_sequences):
+                        alignment_tmp = []
                         
-                        dominant_axis_list = [self.dominant_axis_A, self.dominant_axis_B, self.dominant_axis_C]
-                        for si, s_a_s in enumerate(sampled_abstract_sequences):
-                            alignment_tmp = []
-                            
-                            # determine the dominant axis - i.e. is the path more vertical or horizontal?
-                            if s_a_s[0]> s_a_s[1]:
-                                dominant_axis_list[si].append('vertical')
-                                if self.context == 'row':
-                                    alignment_tmp.append('orthogonal')
-                                elif self.context == 'column':
-                                    alignment_tmp.append('aligned')
-                            elif s_a_s[0]< s_a_s[1]:
-                                dominant_axis_list[si].append('horizontal')
-                                if self.context == 'row':
-                                    alignment_tmp.append('aligned')
-                                elif self.context == 'column':
-                                    alignment_tmp.append('orthogonal')
-                            elif s_a_s[0]==s_a_s[1]:
-                                dominant_axis_list[si].append('L-shaped')
-                                alignment_tmp.append('L-shaped')
-                            self.context_alignment.append(alignment_tmp)
-                        SG_found = True
+                        # determine the dominant axis - i.e. is the path more vertical or horizontal?
+                        if s_a_s[0]> s_a_s[1]:
+                            dominant_axis_list[si].append('vertical')
+                            if self.context == 'row':
+                                alignment_tmp.append('orthogonal')
+                            elif self.context == 'column':
+                                alignment_tmp.append('aligned')
+                        elif s_a_s[0]< s_a_s[1]:
+                            dominant_axis_list[si].append('horizontal')
+                            if self.context == 'row':
+                                alignment_tmp.append('aligned')
+                            elif self.context == 'column':
+                                alignment_tmp.append('orthogonal')
+                        elif s_a_s[0]==s_a_s[1]:
+                            dominant_axis_list[si].append('L-shaped')
+                            alignment_tmp.append('L-shaped')
+                        self.context_alignment.append(alignment_tmp)
 
 
-                        ## get info about optimal path (WILL CHANGE THIS LATER SINCE THE NOTION OF OPTIMAL IS DIFFERENT FOR AFC)
-                        # o_traj, o_traj_costs, o_traj_total_cost, o_traj_actions = self.optimal_trajectory(start, goal)
-                        self.o_trajs.append([])
-                        self.o_traj_costs.append([])
-                        self.o_traj_total_costs.append(np.nan)
-                        self.o_traj_actions.append([])
+                    ## get info about optimal path (WILL CHANGE THIS LATER SINCE THE NOTION OF OPTIMAL IS DIFFERENT FOR AFC)
+                    # o_traj, o_traj_costs, o_traj_total_cost, o_traj_actions = self.optimal_trajectory(start, goal)
+                    self.o_trajs.append([])
+                    self.o_traj_costs.append([])
+                    self.o_traj_total_costs.append(np.nan)
+                    self.o_traj_actions.append([])
 
-                        ## save expected costs of the paths
-                        path_actual_costs = []
-                        path_expected_costs = []
-                        for path in self.path_states[t]:
-                            
-                            ## pq = p(high cost)
-                            # path_cost = np.sum([self.p_costs[x, y]*self.high_cost + (1-self.p_costs[x, y])*self.low_cost for x, y in path]) 
-
-                            ## pq = p(low cost)
-                            path_expected_cost = np.sum([self.p_costs[x, y]*self.low_cost + (1-self.p_costs[x, y])*self.high_cost for x, y in path])
-                            path_actual_cost = np.sum([self.costss[t][x, y] for x, y in path])
-                            path_expected_costs.append(path_expected_cost)
-                            path_actual_costs.append(path_actual_cost)
-                        self.path_expected_costs.append(path_expected_costs)
-                        self.path_actual_costs.append(path_actual_costs)
+                    ## save expected costs of the paths
+                    path_actual_costs = []
+                    path_expected_costs = []
+                    for path in self.path_states[t]:
                         
-                        paths_found = True
+                        ## pq = p(high cost)
+                        # path_cost = np.sum([self.p_costs[x, y]*self.high_cost + (1-self.p_costs[x, y])*self.low_cost for x, y in path]) 
+
+                        ## pq = p(low cost)
+                        path_expected_cost = np.sum([self.p_costs[x, y]*self.low_cost + (1-self.p_costs[x, y])*self.high_cost for x, y in path])
+                        path_actual_cost = np.sum([self.costss[t][x, y] for x, y in path])
+                        path_expected_costs.append(path_expected_cost)
+                        path_actual_costs.append(path_actual_cost)
+                    self.path_expected_costs.append(path_expected_costs)
+                    self.path_actual_costs.append(path_actual_costs)
+                    
+                    paths_found = True
 
                 except:
                     break
 
             ## hacky: randomise the order of the SGs and paths, so that A and B are not always in the same order
-            # if self.expt=='AFC' and SG_found and paths_found:
+            # if self.expt=='AFC' and paths_found:
             #     for t in range(self.n_trials):
             #         order = np.random.permutation(self.n_afc)
             #         self.starts[t] = [self.starts[t][i] for i in order]
@@ -324,178 +296,177 @@ class GridEnv(gym.Env):
                     for p, path in enumerate(self.path_states[t]):
                         self.path_states[t][p] = [tuple([int(x) for x in state]) for state in path]
                 
-                ## get info on path overlaps in AFC expt
-                if self.expt == 'AFC':
-                    self.most_overlap = []
-                    self.path_future_overlaps = []
-                    self.path_future_row_overlaps = np.zeros((self.n_trials, self.n_afc))
-                    self.path_future_col_overlaps = np.zeros((self.n_trials, self.n_afc))
-                    self.path_future_row_and_col_overlaps = np.zeros((self.n_trials, self.n_afc))
-                    self.path_future_rel_overlaps = np.zeros((self.n_trials, self.n_afc))
-                    self.path_future_irrel_overlaps = np.zeros((self.n_trials, self.n_afc))
+                ## get info on path overlaps 
+                self.most_overlap = []
+                self.path_future_overlaps = []
+                self.path_future_row_overlaps = np.zeros((self.n_trials, self.n_afc))
+                self.path_future_col_overlaps = np.zeros((self.n_trials, self.n_afc))
+                self.path_future_row_and_col_overlaps = np.zeros((self.n_trials, self.n_afc))
+                self.path_future_rel_overlaps = np.zeros((self.n_trials, self.n_afc))
+                self.path_future_irrel_overlaps = np.zeros((self.n_trials, self.n_afc))
 
-                    ## check that no starts or goals are shared across trials
-                    all_starts = [tuple(s) for trial_starts in self.starts for s in trial_starts]
-                    all_goals = [tuple(g) for trial_goals in self.goals for g in trial_goals]
-                    n_distinct_starts = len(set(all_starts))
-                    n_distinct_goals = len(set(all_goals))
-                    n_distinct_starts_and_goals = len(set(all_starts + all_goals))
-                    if (n_distinct_starts != self.n_afc * self.n_trials) or (n_distinct_goals != self.n_afc * self.n_trials) or (n_distinct_starts_and_goals != 2 * self.n_afc * self.n_trials):
-                        continue
-                        
-                    for t in range(self.n_trials-1):
-
-                        ### calculate the number of states in the current path that appear in the future set
-
-                        ## no repeats (e.g. if [x,y] appears in trials 2 and 3, only count it once)
-                        # future_states = []
-                        # for next_t in range(t+1, self.n_trials):
-                        #     for next_path in self.path_states[next_t]:
-                        #         future_states.extend(next_path)
-                        # n_intersections = []
-                        # for path in self.path_states[t]:
-                        #     intersections = set(path).intersection(set(future_states))
-                        #     n_intersections.append(len(intersections) -2) ## -2 if start and end are shared
-                        # self.path_n_intersections.append(n_intersections)
-
-                        ## overlaps
-                        n_overlaps = []
-                        for path in self.path_states[t]:
-                            path = path.copy()
-                            intersections = []
-                            for next_t in range(t+1, self.n_trials):
-                                for next_path in self.path_states[next_t]:
-                                    next_path = next_path.copy()
-                                    intersection = set(path).intersection(set(next_path))
-                                    
-                                    ## if path and next_path share start and end, remove them from the intersection
-                                    if (path[0][0], path[0][1]) == (next_path[0][0], next_path[0][1]):
-                                        intersection = intersection - set([path[0]])
-                                    if (path[-1][0], path[-1][1]) == (next_path[-1][0], next_path[-1][1]):
-                                        intersection = intersection - set([path[-1]])
-
-
-                                    ## allow double counting (e.g. if [x,y] appears in trials 2 and 3, count it twice)
-                                    # intersections.extend(intersection)
-
-                                    ## or, prevent double counting of states by seeing if they have already been counted (e.g. if [x,y] appears in trials 2 and 3, count it once))
-                                    for state in intersection:
-                                        if state not in intersections:
-                                            intersections.append(state)
-                            n_overlaps.append(len(intersections))
-                        self.path_future_overlaps.append(n_overlaps)
-                        self.most_overlap.append(np.argmax(n_overlaps))
-                
-
-
-                        ## for each path, check how many subsequently visited states are on rows or columns covered by these paths
-                        for p, path in enumerate(self.path_states[t]):
-                            row_overlap = []
-                            col_overlap = []
-
-                            ## get the rows and columns that are covered by the first path
-                            p_rows = [state[0] for state in path]
-                            p_cols = [state[1] for state in path]
-
-                            ## loop through the future paths and check how many of them cover these rows and columns
-                            for next_t in range(t+1, self.n_trials):
-                                rel_overlap_tmp = []
-                                irrel_overlap_tmp = []
-                                for next_path in self.path_states[next_t]:
-                                    for state in next_path:
-                                        if state[0] in p_rows:
-                                            row_overlap.append(state)
-                                            if self.context=='row':
-                                                rel_overlap_tmp.append(state)
-                                            elif self.context=='column':
-                                                irrel_overlap_tmp.append(state)
-                                        if state[1] in p_cols:
-                                            col_overlap.append(state)
-                                            if self.context=='column':
-                                                rel_overlap_tmp.append(state)
-                                            elif self.context=='row':
-                                                irrel_overlap_tmp.append(state)
-
-                                ## count total number of overlapping states (inc duplicates)
-                            #     self.path_future_rel_irrel[t, next_t, p, 0] = len(rel_overlap_tmp)
-                            #     self.path_future_rel_irrel[t, next_t, p, 1] = len(irrel_overlap_tmp)
-                            # total_row_overlap = len(row_overlap)
-                            # total_col_overlap = len(col_overlap)
-
-                            ## count total number of overlapping states (exc duplicates)
-                            total_row_overlap = len(set(row_overlap))
-                            total_col_overlap = len(set(col_overlap))
-                            self.path_future_row_overlaps[t, p] = total_row_overlap
-                            self.path_future_col_overlaps[t, p] = total_col_overlap
-                            if self.context == 'row':
-                                self.path_future_rel_overlaps[t, p] = total_row_overlap
-                                self.path_future_irrel_overlaps[t, p] = total_col_overlap
-                            elif self.context == 'column':
-                                self.path_future_rel_overlaps[t, p] = total_col_overlap
-                                self.path_future_irrel_overlaps[t, p] = total_row_overlap
-
-                    ## trivially, the final trial has no future overlaps
-                    self.path_future_overlaps.append([0 for a in range(self.n_afc)]) 
-                    self.path_future_row_overlaps[-1, :] = np.zeros(self.n_afc)
-                    self.path_future_col_overlaps[-1, :] = np.zeros(self.n_afc)
-                    self.path_future_row_and_col_overlaps[-1, :] = np.zeros(self.n_afc)
-                    self.path_future_rel_overlaps[-1, :] = np.zeros(self.n_afc)
-                    self.path_future_irrel_overlaps[-1, :] = np.zeros(self.n_afc)
-
+                ## check that no starts or goals are shared across trials
+                all_starts = [tuple(s) for trial_starts in self.starts for s in trial_starts]
+                all_goals = [tuple(g) for trial_goals in self.goals for g in trial_goals]
+                n_distinct_starts = len(set(all_starts))
+                n_distinct_goals = len(set(all_goals))
+                n_distinct_starts_and_goals = len(set(all_starts + all_goals))
+                if (n_distinct_starts != self.n_afc * self.n_trials) or (n_distinct_goals != self.n_afc * self.n_trials) or (n_distinct_starts_and_goals != 2 * self.n_afc * self.n_trials):
+                    continue
                     
-                    ## for the relevant context, get the ratio between paths of relevant future overlaps, and then irrelevant future overlaps
-                    relevant_first_overlaps = self.path_future_rel_overlaps[0]
-                    irrelevant_first_overlaps = self.path_future_irrel_overlaps[0]
-                    relevant_overlap_ratio = np.max(relevant_first_overlaps) / np.min(relevant_first_overlaps)
-                    irrelevant_overlap_ratio = np.max(irrelevant_first_overlaps) / np.min(irrelevant_first_overlaps)
-                    overlap_ratio_tol = 2
+                for t in range(self.n_trials-1):
 
-                    ## must be at least overlap_ratio_tol times as many overlaps in one path than the other
-                    # if relevant_overlap_ratio >= overlap_ratio_tol:
-                    #     self.same_overlaps = False
-                    #     self._trial = 0
-                    #     init_done = True
+                    ### calculate the number of states in the current path that appear in the future set
 
-                    ## or, even more restrictive: the context-aligned path must have more relevant overlaps
-                    # if (relevant_overlap_ratio >= overlap_ratio_tol) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]):
-                    #     self.same_overlaps = False
-                    #     self._trial = 0
-                    #     init_done = True
+                    ## no repeats (e.g. if [x,y] appears in trials 2 and 3, only count it once)
+                    # future_states = []
+                    # for next_t in range(t+1, self.n_trials):
+                    #     for next_path in self.path_states[next_t]:
+                    #         future_states.extend(next_path)
+                    # n_intersections = []
+                    # for path in self.path_states[t]:
+                    #     intersections = set(path).intersection(set(future_states))
+                    #     n_intersections.append(len(intersections) -2) ## -2 if start and end are shared
+                    # self.path_n_intersections.append(n_intersections)
 
-                    ## or, very restrictive: the context-aligned path must have more relevant overlaps, BUT the other path must have more irrelevant overlaps?
-                    # if (relevant_overlap_ratio >= overlap_ratio_tol) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]) & (irrelevant_overlap_ratio>=overlap_ratio_tol) & (irrelevant_first_overlaps[1]<irrelevant_first_overlaps[0]):
-                    #     self.same_overlaps = False
-                    #     self._trial = 0
-                    #     init_done = True
-
-                    ## as above, but no constraint on ordering - i.e. one of them must have more relevant overlaps, and the other must have more irrelevant overlaps
-                    if (relevant_overlap_ratio >= overlap_ratio_tol) & (irrelevant_overlap_ratio>=overlap_ratio_tol) & (((relevant_first_overlaps[0]<relevant_first_overlaps[1]) & (irrelevant_first_overlaps[0]>irrelevant_first_overlaps[1])) or ((relevant_first_overlaps[0]>relevant_first_overlaps[1]) & (irrelevant_first_overlaps[0]<irrelevant_first_overlaps[1]))):
-                        self.same_overlaps = False
-                        self._trial = 0
-                        init_done = True
-                        self.path_aligned_states, self.path_orthogonal_states = self.get_alignment(self.path_states)
-                        self.get_future_states()
-                        self.enumerate_valid_paths()
-
-                    ## or, very very restrictive: as above, but also require first path to have more overlaps in total...
-                    # total_first_overlaps = self.path_future_row_and_col_overlaps[0]
-                    # if (relevant_overlap_ratio >= overlap_ratio_tol) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]) & (irrelevant_overlap_ratio>=overlap_ratio_tol) & (irrelevant_first_overlaps[1]<irrelevant_first_overlaps[0]) & (total_first_overlaps[0]>total_first_overlaps[1]):
-                    #     self.same_overlaps = False
-                    #     self._trial = 0
-                    #     init_done = True
+                    ## overlaps
+                    n_overlaps = []
+                    for path in self.path_states[t]:
+                        path = path.copy()
+                        intersections = []
+                        for next_t in range(t+1, self.n_trials):
+                            for next_path in self.path_states[next_t]:
+                                next_path = next_path.copy()
+                                intersection = set(path).intersection(set(next_path))
+                                
+                                ## if path and next_path share start and end, remove them from the intersection
+                                if (path[0][0], path[0][1]) == (next_path[0][0], next_path[0][1]):
+                                    intersection = intersection - set([path[0]])
+                                if (path[-1][0], path[-1][1]) == (next_path[-1][0], next_path[-1][1]):
+                                    intersection = intersection - set([path[-1]])
 
 
-                    ## or just skip this if debugging...
-                    # self.same_overlaps = True
-                    # init_done = True
-                    # self._trial = 0
-                    # self.path_aligned_states, self.path_orthogonal_states = self.get_alignment(self.path_states)
-                    # self.get_future_states()
-                    # self.enumerate_valid_paths()
+                                ## allow double counting (e.g. if [x,y] appears in trials 2 and 3, count it twice)
+                                # intersections.extend(intersection)
+
+                                ## or, prevent double counting of states by seeing if they have already been counted (e.g. if [x,y] appears in trials 2 and 3, count it once))
+                                for state in intersection:
+                                    if state not in intersections:
+                                        intersections.append(state)
+                        n_overlaps.append(len(intersections))
+                    self.path_future_overlaps.append(n_overlaps)
+                    self.most_overlap.append(np.argmax(n_overlaps))
+            
+
+
+                    ## for each path, check how many subsequently visited states are on rows or columns covered by these paths
+                    for p, path in enumerate(self.path_states[t]):
+                        row_overlap = []
+                        col_overlap = []
+
+                        ## get the rows and columns that are covered by the first path
+                        p_rows = [state[0] for state in path]
+                        p_cols = [state[1] for state in path]
+
+                        ## loop through the future paths and check how many of them cover these rows and columns
+                        for next_t in range(t+1, self.n_trials):
+                            rel_overlap_tmp = []
+                            irrel_overlap_tmp = []
+                            for next_path in self.path_states[next_t]:
+                                for state in next_path:
+                                    if state[0] in p_rows:
+                                        row_overlap.append(state)
+                                        if self.context=='row':
+                                            rel_overlap_tmp.append(state)
+                                        elif self.context=='column':
+                                            irrel_overlap_tmp.append(state)
+                                    if state[1] in p_cols:
+                                        col_overlap.append(state)
+                                        if self.context=='column':
+                                            rel_overlap_tmp.append(state)
+                                        elif self.context=='row':
+                                            irrel_overlap_tmp.append(state)
+
+                            ## count total number of overlapping states (inc duplicates)
+                        #     self.path_future_rel_irrel[t, next_t, p, 0] = len(rel_overlap_tmp)
+                        #     self.path_future_rel_irrel[t, next_t, p, 1] = len(irrel_overlap_tmp)
+                        # total_row_overlap = len(row_overlap)
+                        # total_col_overlap = len(col_overlap)
+
+                        ## count total number of overlapping states (exc duplicates)
+                        total_row_overlap = len(set(row_overlap))
+                        total_col_overlap = len(set(col_overlap))
+                        self.path_future_row_overlaps[t, p] = total_row_overlap
+                        self.path_future_col_overlaps[t, p] = total_col_overlap
+                        if self.context == 'row':
+                            self.path_future_rel_overlaps[t, p] = total_row_overlap
+                            self.path_future_irrel_overlaps[t, p] = total_col_overlap
+                        elif self.context == 'column':
+                            self.path_future_rel_overlaps[t, p] = total_col_overlap
+                            self.path_future_irrel_overlaps[t, p] = total_row_overlap
+
+                ## trivially, the final trial has no future overlaps
+                self.path_future_overlaps.append([0 for a in range(self.n_afc)]) 
+                self.path_future_row_overlaps[-1, :] = np.zeros(self.n_afc)
+                self.path_future_col_overlaps[-1, :] = np.zeros(self.n_afc)
+                self.path_future_row_and_col_overlaps[-1, :] = np.zeros(self.n_afc)
+                self.path_future_rel_overlaps[-1, :] = np.zeros(self.n_afc)
+                self.path_future_irrel_overlaps[-1, :] = np.zeros(self.n_afc)
+
+                
+                ## for the relevant context, get the ratio between paths of relevant future overlaps, and then irrelevant future overlaps
+                relevant_first_overlaps = self.path_future_rel_overlaps[0]
+                irrelevant_first_overlaps = self.path_future_irrel_overlaps[0]
+                relevant_overlap_ratio = np.max(relevant_first_overlaps) / np.min(relevant_first_overlaps)
+                irrelevant_overlap_ratio = np.max(irrelevant_first_overlaps) / np.min(irrelevant_first_overlaps)
+                overlap_ratio_tol = 2
+
+                ## must be at least overlap_ratio_tol times as many overlaps in one path than the other
+                # if relevant_overlap_ratio >= overlap_ratio_tol:
+                #     self.same_overlaps = False
+                #     self._trial = 0
+                #     init_done = True
+
+                ## or, even more restrictive: the context-aligned path must have more relevant overlaps
+                # if (relevant_overlap_ratio >= overlap_ratio_tol) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]):
+                #     self.same_overlaps = False
+                #     self._trial = 0
+                #     init_done = True
+
+                ## or, very restrictive: the context-aligned path must have more relevant overlaps, BUT the other path must have more irrelevant overlaps?
+                # if (relevant_overlap_ratio >= overlap_ratio_tol) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]) & (irrelevant_overlap_ratio>=overlap_ratio_tol) & (irrelevant_first_overlaps[1]<irrelevant_first_overlaps[0]):
+                #     self.same_overlaps = False
+                #     self._trial = 0
+                #     init_done = True
+
+                ## as above, but no constraint on ordering - i.e. one of them must have more relevant overlaps, and the other must have more irrelevant overlaps
+                if (relevant_overlap_ratio >= overlap_ratio_tol) & (irrelevant_overlap_ratio>=overlap_ratio_tol) & (((relevant_first_overlaps[0]<relevant_first_overlaps[1]) & (irrelevant_first_overlaps[0]>irrelevant_first_overlaps[1])) or ((relevant_first_overlaps[0]>relevant_first_overlaps[1]) & (irrelevant_first_overlaps[0]<irrelevant_first_overlaps[1]))):
+                    self.same_overlaps = False
+                    self._trial = 0
+                    init_done = True
+                    self.path_aligned_states, self.path_orthogonal_states = self.get_alignment(self.path_states)
+                    self.get_future_states()
+                    self.enumerate_valid_paths()
+
+                ## or, very very restrictive: as above, but also require first path to have more overlaps in total...
+                # total_first_overlaps = self.path_future_row_and_col_overlaps[0]
+                # if (relevant_overlap_ratio >= overlap_ratio_tol) & (relevant_first_overlaps[1]>relevant_first_overlaps[0]) & (irrelevant_overlap_ratio>=overlap_ratio_tol) & (irrelevant_first_overlaps[1]<irrelevant_first_overlaps[0]) & (total_first_overlaps[0]>total_first_overlaps[1]):
+                #     self.same_overlaps = False
+                #     self._trial = 0
+                #     init_done = True
+
+
+                ## or just skip this if debugging...
+                # self.same_overlaps = True
+                # init_done = True
+                # self._trial = 0
+                # self.path_aligned_states, self.path_orthogonal_states = self.get_alignment(self.path_states)
+                # self.get_future_states()
+                # self.enumerate_valid_paths()
 
             t+=1
             if t>500:
-                raise ValueError('couldnt initialise env. SG: ', SG_found, 'paths: ', paths_found)
+                raise ValueError('couldnt initialise env. paths: ', paths_found)
 
         self.sim = False
 
@@ -544,21 +515,6 @@ class GridEnv(gym.Env):
             self._agent_location = np.array(self.starts[self._trial])
             self._goal_location = np.array(self.goals[self._trial])
 
-            
-            ## get true Q vals (PROBABLY only need to do this if we're interested in optimal paths, as in the free-choice expt)
-            if self.expt=='free':
-                
-                ## pq = p(high cost)
-                # dp_costs = self.p_costs*self.high_cost + (1-self.p_costs)*self.low_cost ## standard case (i.e. pq = p(high cost))
-                # dp_costs[self._goal_location[0], self._goal_location[1]] = 0
-
-                ## pq = p(low cost)
-                dp_costs = self.p_costs*self.low_cost + (1-self.p_costs)*self.high_cost
-                dp_costs[self._goal_location[0], self._goal_location[1]] = 0
-
-                self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=self._goal_location)
-                # self.optimal_trajectory(self._agent_location, self._goal_location)
-
         ## initialise trial info
         self.terminated = False
         # observation = self.get_obs()
@@ -583,25 +539,6 @@ class GridEnv(gym.Env):
             if not hasattr(self, 'obs') or self.obs is None:
                 self.obs = np.array([])
 
-
-        ## dynamic programming to get the true optimal trajectory
-        # if not self.sim:
-        #     dp_costs = self.costs.copy()
-        #     self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=self._goal_location)
-
-        #     ## get the costs of this optimal trajectory
-        #     self.optimal_trajectory()
-
-        ## initialise actual trajectory as list of tuples (MIGHT NEED THIS FOR THE FREE CHOICE EXPT?)
-        # if not self.sim:
-
-        #     ## start from start
-        #     self.a_traj = [tuple(self._agent_location)]
-
-        #     ## or start from nothing
-        #     # self.a_traj = []
-            
-        # return observation, info
 
     ## init trial - i.e. in the AFC task, once a start has been chosen, initialise the start, goal and obs for that trial
     def init_trial(self, action):
@@ -644,11 +581,10 @@ class GridEnv(gym.Env):
         angle_bounds = [45*(1+angle_tolerance), 45*(1-angle_tolerance)]
         row_or_col = 1
         t = 0
-        worth_it = False
         new = False
         new_rc = False
         route_optimality_tolerance = 1
-        while (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (not worth_it) or (not new) or (not new_rc):
+        while (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (not new) or (not new_rc):
             agent_location = self.np_random.integers(0, self.N, size=2, dtype=int)
             goal_location = self.np_random.integers(
                 0, self.N, size=2, dtype=int
@@ -687,35 +623,6 @@ class GridEnv(gym.Env):
             ## checkpoint before doing DP
             if (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (not new) or (not new_rc):
                 continue
-
-            ### comparison of optimal vs manhattan routes (only necessary if we're interested in the optimal path, as in the free-choice expt)
-            if self.expt == 'free':
-
-                # ## standard case (i.e. pq = p(high cost))
-                # dp_costs = self.p_costs*self.high_cost + (1-self.p_costs)*self.low_cost 
-                # dp_costs[goal_location[0], goal_location[1]] = 0
-                
-                ## alternative case (i.e. pq = p(low cost))
-                dp_costs = self.p_costs*self.low_cost + (1-self.p_costs)*self.high_cost
-                dp_costs[goal_location[0], goal_location[1]] = 0
-
-                self.V_true, self.Q_true, self.A_true = value_iteration(dp_costs=dp_costs, goal=goal_location)
-                o_traj, o_traj_costs, o_traj_total_cost, o_traj_actions = self.optimal_trajectory(agent_location, goal_location)
-
-
-                ## by length
-                # n_steps_opt = len(self.o_traj)-1
-                # worth_it = n_steps_opt > dist
-
-                ## or, by cost (i.e. vs manhattan vertical-first or horizontal-first)
-                manhattan_costs = self.manhattan_trajectory(agent_location, goal_location)
-                # worth_it = (manhattan_costs[0]/o_traj_total_cost) >= route_optimality_tolerance and (manhattan_costs[1]/o_traj_total_cost) >= route_optimality_tolerance ## p(high cost)
-                # worth_it = (manhattan_costs[0]/o_traj_total_cost) <= route_optimality_tolerance and (manhattan_costs[1]/o_traj_total_cost) >= route_optimality_tolerance ## p(low cost)
-                worth_it = (o_traj_total_cost/manhattan_costs[0]) <= route_optimality_tolerance and (o_traj_total_cost/manhattan_costs[1]) <= route_optimality_tolerance ## p(low cost)
-
-            ## or, if we're interested in AFC, then we don't need to do this
-            elif self.expt == 'AFC':
-                worth_it = True
 
             t+=1
             if t>200:
@@ -1393,8 +1300,6 @@ class GridEnv(gym.Env):
         # if self._agent_location[0] == self._goal_location[0] and self._agent_location[1] == self._goal_location[1]:
         if (self._agent_location[0], self._agent_location[1]) == (self._goal_location[0], self._goal_location[1]):
             self.terminated = True
-            if self.expt=='free':
-                cost=0 ## cost of final state is 0 (MIGHT WANT TO CHANGE THIS...)
         
             ## update observation array only once the trial is complete
             if not self.sim:
