@@ -1614,4 +1614,24 @@ class GridEnv(gym.Env):
             raise ValueError(f"Unknown context: {self.context}")
         
         return n_relevant_future_overlaps, n_irrelevant_future_overlaps
+
+
+    ## calculate weighted cost based on aligned vs orthogonal states
+    def arm_reweighting(self, costs, aligned_arr, orth_arr, aligned_weight=1.0, orthogonal_weight=1.0):
+        """
+        Calculate sum of weighted costs for a path based on aligned and orthogonal state costs.
+        
+        Args:
+            costs: NxN array of costs for each state in the grid
+            aligned_arr: numpy array of shape (n, 2) for states on the context-aligned arm
+            orth_arr: numpy array of shape (n, 2) for states on the orthogonal arm
+            aligned_weight: weight to apply to aligned arm costs (default 1.0)
+            orthogonal_weight: weight to apply to orthogonal arm costs (default 1.0)
+            
+        Returns:
+            float: sum of weighted costs for the path
+        """
+        aligned_sum = aligned_weight * costs[aligned_arr[:, 0], aligned_arr[:, 1]].sum()
+        orth_sum = orthogonal_weight * costs[orth_arr[:, 0], orth_arr[:, 1]].sum()
+        return aligned_sum + orth_sum
         

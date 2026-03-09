@@ -572,7 +572,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
             aligned_states, orthogonal_states = self.env.path_aligned_states[step_trial][path_id], self.env.path_orthogonal_states[step_trial][path_id] ## full BAMCP
         else:
             aligned_states, orthogonal_states = action_leaf.aligned_states, action_leaf.orthogonal_states ## PA-BAMCP
-        total_weighted_cost = self.agent.arm_reweighting(self.env.predicted_costs, aligned_states, orthogonal_states)
+        total_weighted_cost = self.env.arm_reweighting(self.env.predicted_costs, aligned_states, orthogonal_states, self.agent._aligned_weight, self.agent._orthogonal_weight)
 
         ## save costs
         self.tree_costs.append(total_weighted_cost)
@@ -641,7 +641,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
         ## weighted
         aligned_states, orthogonal_states = action_leaf.aligned_states, action_leaf.orthogonal_states
-        total_cost = self.agent.arm_reweighting(self.env.predicted_costs, aligned_states, orthogonal_states)
+        total_cost = self.env.arm_reweighting(self.env.predicted_costs, aligned_states, orthogonal_states, self.agent._aligned_weight, self.agent._orthogonal_weight)
 
         ## if final trial, just stop here
         if action_leaf.terminated:
@@ -678,7 +678,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
                 ## arm-weighted
                 aligned_states_tmp, orthogonal_states_tmp = aligned_states[path_id], orthogonal_states[path_id]
-                ro_cost = self.agent.arm_reweighting(self.env.predicted_costs, aligned_states_tmp, orthogonal_states_tmp)
+                ro_cost = self.env.arm_reweighting(self.env.predicted_costs, aligned_states_tmp, orthogonal_states_tmp, self.agent._aligned_weight, self.agent._orthogonal_weight)
                 
                 path_costs.append(ro_cost)
             best_ro_cost = np.max(path_costs) 
