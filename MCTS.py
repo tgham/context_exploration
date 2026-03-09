@@ -495,12 +495,13 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         # simulated_obs = [np.append(start_tmp, self.env.predicted_costs[start_tmp[0], start_tmp[1]])] ## if the agent hasn't already observed the start state
 
         ## take path
-        states, costs = self.env.take_path(action_sequence)
+        # states, costs = self.env.take_path(action_sequence)
+        states, costs = self.env.path_step(path_id)
         assert (states[-1][0], states[-1][1]) == (goal_tmp[0], goal_tmp[1]), 'final state of path does not match goal\n final state: {}, goal: {}'.format(states[-1], goal_tmp)
 
         ## add back in the start state if it wasn't actually observed in non-sim space
-        states = [start_tmp] + states
-        costs = [self.env.predicted_costs[start_tmp[0], start_tmp[1]]] + costs
+        # states = [start_tmp] + states
+        # costs = [self.env.predicted_costs[start_tmp[0], start_tmp[1]]] + costs
 
         ## add costs to states to create simulated obs for the tree
         simulated_obs += [(s[0], s[1], c) for s, c in zip(states, costs)]

@@ -1322,6 +1322,68 @@ class GridEnv(gym.Env):
             states.append(current)
             costs.append(cost)
         return states, costs
+    
+    ## take path using pre-computed path_states (avoids looping through individual step calls)
+    def path_step(self, action):
+        """
+        
+        Args:
+            action: index of the path to take from path_states[self._trial]
+        
+        Returns:
+            states: list of states visited
+            costs: list of costs at each state
+        """
+        path = self.path_states[self._trial][action]
+        
+        # Convert path to numpy array for vectorized indexing
+        path_arr = np.array(path)
+        xs, ys = path_arr[:, 0], path_arr[:, 1]
+        
+        # Get all costs at once using advanced indexing
+        if self.sim:
+            costs = self.predicted_costs[xs, ys]
+        else:
+            costs = self.costs[xs, ys]
+        
+        # Update agent location to final state
+        self._agent_location = path_arr[-1]
+        
+        # Set goal location to the final state of the path
+        self._goal_location = path_arr[-1]
+        
+        # Mark as terminated (path is complete)
+        self.terminated = True
+        
+        # If not simulating, update observations and trajectory
+        if not self.sim:
+
+            # Extend trajectory with all states
+            self.a_traj.extend(path)
+            
+            # Build trial_obs array for all new states at once
+            new_obs = np.column_stack([xs, ys, costs])
+            # self.trial_obs = np.vstack([self.trial_obs, new_obs]) ## only do this if the agent's starting location is observed in init_trial
+            self.trial_obs = new_obs
+            
+            # Update observation array (same logic as step)
+            if self._trial == 0:
+                assert len(self.obs) == 0, 'obs should be empty at the start of the trial'
+            
+            if len(self.obs) == 0:  # first trial, so just copy the trial_obs
+                self.obs = self.trial_obs.copy()
+            else:  # otherwise, append the trial_obs to the obs from previous trials
+                self.obs = np.vstack([self.obs, self.trial_obs])
+            
+            # Sum of costs of route INC START AND END (vectorized)
+            traj_arr = np.array(self.a_traj)
+            self.a_traj_costs = self.costs[traj_arr[:, 0], traj_arr[:, 1]].tolist()
+            self.a_traj_total_cost = np.sum(self.a_traj_costs)
+            
+            # Update trial counter
+            self._trial += 1
+        
+        return path, costs.tolist()
         
 
 

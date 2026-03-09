@@ -898,9 +898,10 @@ class Farmer:
                         goal = env_copy.goal
                         assert np.array_equal(start, env_copy.starts[t][action]), 'current state does not match start state in city {} day {} trial {}\n current: {}, start: {}.\n all starts: {}\n all goals:{}'.format(city, day, t, env_copy.current, env_copy.starts[t][action], env_copy.starts, env_copy.goals)
                         action_sequence = env_copy.path_actions[t][action]
-                        _, _ = env_copy.take_path(action_sequence)
+                        # _, _ = env_copy.take_path(action_sequence)
+                        states, costs = env_copy.path_step(action)
                         current = env_copy.current
-                        costs = env_copy.trial_obs[:,-1]
+                        assert np.array_equal(costs, env_copy.trial_obs[:,-1]), 'costs do not match trial observations\n costs: {}, trial_obs: {}'.format(costs, env_copy.trial_obs[:,-1])
                         assert len(costs) == len(action_sequence)+1, 'costs and action sequence do not match\n costs: {}, action sequence: {}'.format(len(costs), len(action_sequence))
                         path_cost = np.sum(costs)
                         self.total_costs[city, day, t] = path_cost
