@@ -16,11 +16,12 @@ from plotter import *
 ## base class 
 class MonteCarloTreeSearch():
 
-    def __init__(self, env, agent, tree, exploration_constant=2, discount_factor=0.99, horizon=None, real_future_paths=True):
+    def __init__(self, env, tree, exploration_constant=2, discount_factor=0.99, horizon=None, real_future_paths=True, aligned_weight=1.0, orthogonal_weight=1.0):
         self.env = env.unwrapped
         self.expt = env.expt
         self.n_afc = self.env.n_afc
-        self.agent = agent
+        self.aligned_weight = aligned_weight
+        self.orthogonal_weight = orthogonal_weight
         self.low_cost = self.env.low_cost
         self.high_cost = self.env.high_cost
         self.tree = tree
@@ -358,73 +359,10 @@ class MonteCarloTreeSearch():
         return best_child
 
 
-    ## tree search --> action loop
-    def search(self, n_samples=1000):
-
-        ## check root
-        assert self.root_trial == self.env.trial, 'trial mismatch between env and tree at start of search\n env trial: {} \n tree trial: {}'.format(self.env.trial, self.root_trial)
-        for a in range(self.n_afc):
-            assert np.array_equal(self.tree.root.starts[a], self.env.starts[self.root_trial][a]), 'start state mismatch for action {}\n env start: {} \n tree start: {}'.format(a, self.env.starts[self.root_trial][a], self.tree.root.starts[a])
-            assert np.array_equal(self.tree.root.goals[a], self.env.goals[self.root_trial][a]), 'goal state mismatch for action {}\n env goal: {} \n tree goal: {}'.format(a, self.env.goals[self.root_trial][a], self.tree.root.goals[a])
-            assert np.array_equal(self.tree.root.path_states[a], self.env.path_states[self.root_trial][a]), 'path state mismatch for action {}\n env path: {} \n tree path: {}'.format(a, self.env.path_states[self.root_trial][a], self.tree.root.path_states[a])
-
-        ## generate new set of root samples
-        self.agent.root_samples(obs = self.env.obs, n_samples=n_samples, CE=False)
-
-        # debugging plot
-        # plt.figure()
-        # plot_r(self.agent.posterior_mean_p_cost.reshape(self.N,self.N), ax = plt.subplot(), title='posterior sample')
-        # plt.show()
-
-        ## debugging Q-vals
-        self.Q_tracker = []
-        self.return_tracker = []
-        self.first_node_updates = []
-        self.first_node_updates_by_depth = []
-        self.tree_cost_tracker = []
-        self.conditional_tree_cost_tracker = [[] for _ in range(self.n_afc)]
-        for t in range(self.env.n_trials):
-            self.first_node_updates_by_depth.append([])
-            self.tree_cost_tracker.append([])
-            for a in range(self.n_afc):
-                self.conditional_tree_cost_tracker[a].append([])
-        
-        ## loop through simulations
-        for s in range(n_samples):
-            
-            ## root sampling of new posterior
-            posterior_p_cost = self.agent.all_posterior_p_costs[s]
-            self.env.receive_predictions(posterior_p_cost)
-
-            ## selection, expansion, simulation
-            action_leaf = self.tree_policy()
-            self.rollout_policy(action_leaf)
-            
-            ##backup
-            self.backup()
-
-            ## update Q tracker
-            try:
-                Qs = [self.tree.root.action_leaves[a].performance for a in self.tree.root.action_leaves.keys()]
-                self.Q_tracker.append(Qs)
-            except:
-                pass
-
-        
-        ## action selection
-        MCTS_estimates = np.full(self.n_afc, np.nan)
-        for action, leaf in self.tree.root.action_leaves.items():
-            MCTS_estimates[action] = leaf.performance
-        assert not np.isnan(np.nansum(MCTS_estimates)), 'no MCTS estimates for {}'.format(self.tree.root)
-        max_MCTS = np.nanmax(MCTS_estimates)
-        action = argm(MCTS_estimates, max_MCTS)
-
-        return action, MCTS_estimates
-
 class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
-    def __init__(self, env, agent, tree, exploration_constant=2, discount_factor=0.99, horizon=None, real_future_paths=True):
-        super().__init__(env, agent, tree, exploration_constant, discount_factor, horizon, real_future_paths)
+    def __init__(self, env, tree, exploration_constant=2, discount_factor=0.99, horizon=None, real_future_paths=True, aligned_weight=1.0, orthogonal_weight=1.0):
+        super().__init__(env, tree, exploration_constant, discount_factor, horizon, real_future_paths, aligned_weight, orthogonal_weight)
 
     ## node_ids are defined by the informational state, i.e. the counts of low and high cost states in each cell
     def init_node_id(self, obs=None, parent_node_id=None, trial=None):
@@ -572,7 +510,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
             aligned_states, orthogonal_states = self.env.path_aligned_states[step_trial][path_id], self.env.path_orthogonal_states[step_trial][path_id] ## full BAMCP
         else:
             aligned_states, orthogonal_states = action_leaf.aligned_states, action_leaf.orthogonal_states ## PA-BAMCP
-        total_weighted_cost = self.env.arm_reweighting(self.env.predicted_costs, aligned_states, orthogonal_states, self.agent._aligned_weight, self.agent._orthogonal_weight)
+        total_weighted_cost = self.env.arm_reweighting(self.env.predicted_costs, aligned_states, orthogonal_states, self.aligned_weight, self.orthogonal_weight)
 
         ## save costs
         self.tree_costs.append(total_weighted_cost)
@@ -641,7 +579,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
         ## weighted
         aligned_states, orthogonal_states = action_leaf.aligned_states, action_leaf.orthogonal_states
-        total_cost = self.env.arm_reweighting(self.env.predicted_costs, aligned_states, orthogonal_states, self.agent._aligned_weight, self.agent._orthogonal_weight)
+        total_cost = self.env.arm_reweighting(self.env.predicted_costs, aligned_states, orthogonal_states, self.aligned_weight, self.orthogonal_weight)
 
         ## if final trial, just stop here
         if action_leaf.terminated:
@@ -678,7 +616,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
                 ## arm-weighted
                 aligned_states_tmp, orthogonal_states_tmp = aligned_states[path_id], orthogonal_states[path_id]
-                ro_cost = self.env.arm_reweighting(self.env.predicted_costs, aligned_states_tmp, orthogonal_states_tmp, self.agent._aligned_weight, self.agent._orthogonal_weight)
+                ro_cost = self.env.arm_reweighting(self.env.predicted_costs, aligned_states_tmp, orthogonal_states_tmp, self.aligned_weight, self.orthogonal_weight)
                 
                 path_costs.append(ro_cost)
             best_ro_cost = np.max(path_costs) 

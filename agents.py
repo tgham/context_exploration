@@ -29,9 +29,10 @@ from scipy.special import beta, logsumexp, digamma, comb, betaln
 ### base farmer model?
 class Farmer:
 
-    def __init__(self, N, context_prior=0.5, metric='cityblock', known_context=False):
+    def __init__(self, N, context_prior=0.5, known_context=False,
+                 temp=None, lapse=None, arm_weight=None, horizon=None, real_future_paths=None,
+                 exploration_constant=None, discount_factor=None, n_samples=None):
 
-        self.metric = metric
         self.N = N
         self.n_actions = 4
         self.action_to_direction = {0: np.array([1,0]), 1: np.array([0, 1]), 2: np.array([-1, 0]), 3: np.array([0, -1])}
@@ -39,6 +40,47 @@ class Farmer:
         ## initialise context prior prob
         self.context_prob = context_prior
         self.known_context = known_context
+
+        ## behavioural parameters
+        self.temp = temp
+        self.lapse = lapse
+        self.arm_weight = arm_weight
+        self._cache_arm_weights()
+
+        ## MCTS parameters
+        self.horizon = horizon
+        self.real_future_paths = real_future_paths
+        self.exploration_constant = exploration_constant
+        self.discount_factor = discount_factor
+        self.n_samples = n_samples
+
+        ## MCTS object (will be initialised when running BAMCP agent)
+        self.mcts = None
+
+
+    ## initialise MCTS object for tree search
+    def init_mcts(self, env, reset=True):
+        """
+        Initialise or update the MCTS object for tree search.
+        
+        Args:
+            env: The environment to use for MCTS.
+            reset: If True, create a new MCTS object. If False, update the existing one.
+        """
+        if reset:
+            tree = Tree(self.N)
+            self.mcts = MonteCarloTreeSearch_AFC(
+                env=env, 
+                tree=tree, 
+                exploration_constant=self.exploration_constant, 
+                discount_factor=self.discount_factor, 
+                horizon=self.horizon, 
+                real_future_paths=self.real_future_paths, 
+                aligned_weight=self._aligned_weight, 
+                orthogonal_weight=self._orthogonal_weight
+            )
+        else:
+            self.mcts.update_trial()
 
     ### interactions with the environment
 
@@ -217,12 +259,11 @@ class Farmer:
         if np.random.rand() < eps:
             return self.random_policy()
         else:
-            # distances = cdist([current], [goal], metric=self.metric).flatten()
             ## get adjacent states
             next_states = np.clip(np.array([current + self.action_to_direction[i] for i in range(self.n_actions)]), 0, self.N-1)
             
             ## choose whichever one is closest to the goal
-            distances = cdist(next_states, [goal], metric=self.metric).flatten()
+            distances = cdist(next_states, [goal], metric='cityblock').flatten()
             min_distance = np.min(distances)
             action = argm(distances, min_distance)
             # print(next_states, distances, min_distance, action)
@@ -232,6 +273,82 @@ class Farmer:
     def softmax(self, Q):
         CPs = (1-self.lapse) * softmax(Q/self.temp) + self.lapse/len(Q)
         return CPs
+
+
+    ## MCTS search method - performs tree search using this agent's internal MCTS object
+    def search(self):
+        """
+        Perform MCTS search using this agent's internal MCTS object.
+        
+        Args:
+            n_samples: Number of MCTS samples to use for the search.
+            
+        Returns:
+            action: The selected action.
+            MCTS_estimates: The Q-value estimates for each action.
+        """
+        if self.mcts is None:
+            raise ValueError("MCTS object has not been initialized. Call run() with agent='BAMCP' first.")
+
+        ## check root
+        assert self.mcts.root_trial == self.mcts.env.trial, 'trial mismatch between env and tree at start of search\n env trial: {} \n tree trial: {}'.format(self.mcts.env.trial, self.mcts.root_trial)
+        for a in range(self.mcts.n_afc):
+            assert np.array_equal(self.mcts.tree.root.starts[a], self.mcts.env.starts[self.mcts.root_trial][a]), 'start state mismatch for action {}\n env start: {} \n tree start: {}'.format(a, self.mcts.env.starts[self.mcts.root_trial][a], self.mcts.tree.root.starts[a])
+            assert np.array_equal(self.mcts.tree.root.goals[a], self.mcts.env.goals[self.mcts.root_trial][a]), 'goal state mismatch for action {}\n env goal: {} \n tree goal: {}'.format(a, self.mcts.env.goals[self.mcts.root_trial][a], self.mcts.tree.root.goals[a])
+            assert np.array_equal(self.mcts.tree.root.path_states[a], self.mcts.env.path_states[self.mcts.root_trial][a]), 'path state mismatch for action {}\n env path: {} \n tree path: {}'.format(a, self.mcts.env.path_states[self.mcts.root_trial][a], self.mcts.tree.root.path_states[a])
+
+        ## generate new set of root samples
+        self.root_samples(obs = self.mcts.env.obs, n_samples=self.n_samples, CE=False)
+
+        # debugging plot
+        # plt.figure()
+        # plot_r(self.posterior_mean_p_cost.reshape(self.N,self.N), ax = plt.subplot(), title='posterior sample')
+        # plt.show()
+
+        ## debugging Q-vals
+        self.mcts.Q_tracker = []
+        self.mcts.return_tracker = []
+        self.mcts.first_node_updates = []
+        self.mcts.first_node_updates_by_depth = []
+        self.mcts.tree_cost_tracker = []
+        self.mcts.conditional_tree_cost_tracker = [[] for _ in range(self.mcts.n_afc)]
+        for t in range(self.mcts.env.n_trials):
+            self.mcts.first_node_updates_by_depth.append([])
+            self.mcts.tree_cost_tracker.append([])
+            for a in range(self.mcts.n_afc):
+                self.mcts.conditional_tree_cost_tracker[a].append([])
+        
+        ## loop through simulations
+        for s in range(self.n_samples):
+            
+            ## root sampling of new posterior
+            posterior_p_cost = self.all_posterior_p_costs[s]
+            self.mcts.env.receive_predictions(posterior_p_cost)
+
+            ## selection, expansion, simulation
+            action_leaf = self.mcts.tree_policy()
+            self.mcts.rollout_policy(action_leaf)
+            
+            ##backup
+            self.mcts.backup()
+
+            ## update Q tracker
+            try:
+                Qs = [self.mcts.tree.root.action_leaves[a].performance for a in self.mcts.tree.root.action_leaves.keys()]
+                self.mcts.Q_tracker.append(Qs)
+            except:
+                pass
+
+        
+        ## action selection
+        MCTS_estimates = np.full(self.mcts.n_afc, np.nan)
+        for action, leaf in self.mcts.tree.root.action_leaves.items():
+            MCTS_estimates[action] = leaf.performance
+        assert not np.isnan(np.nansum(MCTS_estimates)), 'no MCTS estimates for {}'.format(self.mcts.tree.root)
+        max_MCTS = np.nanmax(MCTS_estimates)
+        action = argm(MCTS_estimates, max_MCTS)
+
+        return action, MCTS_estimates
 
         
     ## run agent on participant's trial sequence
@@ -302,31 +419,24 @@ class Farmer:
         self.aligned_arm_len = np.zeros((n_cities, n_days, n_trials, self.n_afc))
         self.orthogonal_arm_len = np.zeros((n_cities, n_days, n_trials, self.n_afc))
 
-        ## init params and hyperparams
-        if agent == 'BAMCP':
-            self.temp = params[0]
-            self.lapse = params[1]
-            self.arm_weight = params[2]
-            self._cache_arm_weights()
-            self.horizon = params[3]
-            self.real_future_paths = params[4]
-            n_samples = hyperparams['n_samples']
-            exploration_constant = hyperparams['exploration_constant']
-            discount_factor = hyperparams['discount_factor']
-        elif (agent == 'CE'):
-            self.temp = params[0]
-            self.lapse = params[1]
-            self.arm_weight = None
-            self._cache_arm_weights()
-            self.horizon = None
-            self.real_future_paths = None
-        elif (agent == 'CE_one_arm'):
-            self.temp = params[0]
-            self.lapse = params[1]
-            self.arm_weight = params[2]
-            self._cache_arm_weights()
-            self.horizon = None
-            self.real_future_paths = None
+        # ## init params and hyperparams
+        # if agent == 'BAMCP':
+        #     ## parameters should already be set at agent initialisation
+        #     pass
+        # elif (agent == 'CE'):
+        #     self.temp = params[0]
+        #     self.lapse = params[1]
+        #     self.arm_weight = None
+        #     self._cache_arm_weights()
+        #     self.horizon = None
+        #     self.real_future_paths = None
+        # elif (agent == 'CE_one_arm'):
+        #     self.temp = params[0]
+        #     self.lapse = params[1]
+        #     self.arm_weight = params[2]
+        #     self._cache_arm_weights()
+        #     self.horizon = None
+        #     self.real_future_paths = None
 
         if progress:
             pbar = tqdm(total=n_cities*n_days*n_trials, desc='Running {} agent'.format(agent), leave=False)
@@ -367,7 +477,7 @@ class Farmer:
 
                 ## initialise planner
                 if agent == 'BAMCP':
-                    MCTS = None
+                    self.mcts = None
                     tree_reset = True
 
 
@@ -539,25 +649,21 @@ class Farmer:
                     if agent == 'BAMCP':
 
                         ## reset tree (or reuse it)
-                        if tree_reset:
-                            tree = Tree(N)
-                            MCTS = MonteCarloTreeSearch_AFC(env=env_copy, agent=self, tree=tree, exploration_constant=exploration_constant, discount_factor=discount_factor, horizon=self.horizon, real_future_paths=self.real_future_paths)
-                        else:
-                            MCTS.update_trial()
-                        assert t == MCTS.root_trial, 'trial mismatch between sim and MCTS\n sim: {} \n MCTS: {}'.format(t, MCTS.root_trial)
-                        assert MCTS.env.trial == MCTS.root_trial, 'trial mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(env_copy.trial, MCTS.root_trial)
-                        assert MCTS.env.sim == True, 'env not in sim mode'
+                        self.init_mcts(env=env_copy, reset=tree_reset)
+                        assert t == self.mcts.root_trial, 'trial mismatch between sim and MCTS\n sim: {} \n MCTS: {}'.format(t, self.mcts.root_trial)
+                        assert self.mcts.env.trial == self.mcts.root_trial, 'trial mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(env_copy.trial, self.mcts.root_trial)
+                        assert self.mcts.env.sim == True, 'env not in sim mode'
 
                         ## search
-                        MCTS.root_state = current
-                        action, MCTS_Q = MCTS.search(n_samples)
+                        self.mcts.root_state = current
+                        action, MCTS_Q = self.search()
                         self.actions[city, day, t] = action
                         self.Q_vals[city, day, t] = MCTS_Q
                         self.p_choice[city, day, t] = self.softmax(MCTS_Q)
                         correct_path = np.argmax(env_copy.path_actual_costs[t])
                         self.p_correct[city, day, t] = self.p_choice[city, day, t][correct_path]
                         for a in range(self.n_afc):
-                            self.leaf_visits[city, day, t, a] = MCTS.tree.root.action_leaves[a].n_action_visits
+                            self.leaf_visits[city, day, t, a] = self.mcts.tree.root.action_leaves[a].n_action_visits
 
                         ## debug plot
                         # fig, axs = plt.subplots(1,1, figsize=(5,5))
@@ -749,7 +855,7 @@ class Farmer:
 
                         ## or, only calculate the difference if the CE's belief does indeed favour the better path - i.e. if CE_aciton == correct_path
                         # if CE_action == correct_path:
-                        #     self.distr_diff[city, day, t] = path_distr_diff(sample_total_costs[:,0], sample_total_costs[:,1], metric, correct_path)
+                        #     self.distr_diff[city, day, t] = path_distr_diff(sample_total_costs[:,0], sample_total_costs[:,1], correct_path)
                         # else:
                         #     self.distr_diff[city, day, t] = np.nan
 
@@ -815,15 +921,15 @@ class Farmer:
 
                         ## prune tree (not always successful due to high branching factor, or if participant made no choice in which case reset the tree)
                         if not missed:
-                            init_info_state = MCTS.tree.root.node_id
+                            init_info_state = self.mcts.tree.root.node_id
                             trial_obs = env_copy.trial_obs.copy()
-                            next_node_id = MCTS.init_node_id(trial_obs, init_info_state, t)
+                            next_node_id = self.mcts.init_node_id(trial_obs, init_info_state, t)
                             if not day_terminated:
-                                if next_node_id in MCTS.tree.root.action_leaves[action].children:
-                                    MCTS.tree.prune(action, next_node_id)
-                                    # assert np.array_equal(MCTS.tree.root.belief_state[2*MCTS.n_afc:], costs), 'error in root update\n root state: {} \n costs: {}'.format(MCTS.tree.root.belief_state[2*MCTS.n_afc:], costs)
-                                    # assert np.array_equal(MCTS.tree.root.belief_state[1:], costs), 'error in root update\n root state: {} \n costs: {}'.format(MCTS.tree.root.belief_state[2*MCTS.n_afc:], costs)
-                                    assert MCTS.tree.root.trial == t+1, 'trial mismatch after pruning\n env trial: {}, MCTS trial: {}'.format(t, MCTS.tree.root.trial)
+                                if next_node_id in self.mcts.tree.root.action_leaves[action].children:
+                                    self.mcts.tree.prune(action, next_node_id)
+                                    # assert np.array_equal(self.mcts.tree.root.belief_state[2*self.mcts.n_afc:], costs), 'error in root update\n root state: {} \n costs: {}'.format(self.mcts.tree.root.belief_state[2*self.mcts.n_afc:], costs)
+                                    # assert np.array_equal(self.mcts.tree.root.belief_state[1:], costs), 'error in root update\n root state: {} \n costs: {}'.format(self.mcts.tree.root.belief_state[2*self.mcts.n_afc:], costs)
+                                    assert self.mcts.tree.root.trial == t+1, 'trial mismatch after pruning\n env trial: {}, MCTS trial: {}'.format(t, self.mcts.tree.root.trial)
                                     tree_reset = False
                                 else:
                                     tree_reset = True
