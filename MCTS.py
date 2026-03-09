@@ -756,33 +756,33 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         depth = 0
         remaining_ro_costs = []
         ro_choices=[]
-        # for trial in range(first_trial+1, self.env.n_trials):
         for trial in range(first_trial+1, np.min([self.root_trial + self.horizon + 1, self.env.n_trials])): ## horizon-limited
             depth+=1
+
+            ## PA-BAMCP: sample paths
             if not self.real_future_paths:
-                _, _, sampled_path_states, _, _ = self.env.sample_paths_given_future_states(self.root_trial) ## PA-BAMCP
+                _, _, path_states, _, _ = self.env.sample_paths_given_future_states(self.root_trial) ## PA-BAMCP
+                aligned_states, orthogonal_states = self.env.get_alignment([path_states])
+                assert len(self.env.path_states[trial][0]) == len(aligned_states[0]) + len(orthogonal_states[0]), 'path states and aligned/orthogonal states do not match\n path states: {}, aligned: {}, orthogonal: {}'.format(len(self.env.path_states[trial][0]), len(aligned_states[0]), len(orthogonal_states[0]))
+
+            ## full BAMCP: use actual upcoming paths
+            else:
+                path_states = self.env.path_states[trial]
+                aligned_states, orthogonal_states = self.env.path_aligned_states[trial], self.env.path_orthogonal_states[trial]
+            assert len(path_states[0]) == len(aligned_states[0]) + len(orthogonal_states[0]), 'path states and aligned/orthogonal states do not match\n path states: {}, aligned: {}, orthogonal: {}'.format(len(path_states[0]), len(aligned_states[0]), len(orthogonal_states[0]))
+                
 
             ### greedy: get the total cost of the paths and return the better one
             path_costs = []
             for path_id in range(self.n_afc):
-
-                ## full BAMCP - greedy choice wrt/ predicted costs of actual paths
-                if self.real_future_paths:
-                    path_states = self.env.path_states[trial][path_id]
-
-                ## PA-BAMCP - greedy choice wrt/ predicted costs of sampled paths
-                else:
-                    path_states = sampled_path_states[path_id]
+                path_states_tmp = path_states[path_id]
 
                 ## unweighted
-                costs = [self.env.predicted_costs[state[0], state[1]] for state in path_states]
+                # costs = [self.env.predicted_costs[state[0], state[1]] for state in path_states]
 
                 ## arm-weighted
-                if self.real_future_paths:
-                    aligned_states, orthogonal_states = self.env.path_aligned_states[trial][path_id], self.env.path_orthogonal_states[trial][path_id] ## full BAMCP
-                else:
-                    aligned_states, orthogonal_states = self.env.get_alignment([[path_states]])
-                ro_cost = self.agent.arm_reweighting(self.env.predicted_costs, aligned_states, orthogonal_states)
+                aligned_states_tmp, orthogonal_states_tmp = aligned_states[path_id], orthogonal_states[path_id]
+                ro_cost = self.agent.arm_reweighting(self.env.predicted_costs, aligned_states_tmp, orthogonal_states_tmp)
                 
                 path_costs.append(ro_cost)
             best_ro_cost = np.max(path_costs) 
@@ -792,25 +792,27 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
             
             ### RANDOM: randomly choose between the paths
+            # path_id = np.random.choice(self.n_afc)
 
-            ## full BAMCP - random choice between actual upcoming paths
-            # if self.real_future_paths:
-            #     path_id = np.random.choice(self.n_afc)
-            #     path_states = self.env.path_states[trial][path_id] ## full BAMCP
+            # # full BAMCP - random choice between actual upcoming paths
+            # # if self.real_future_paths:
+            # #     path_id = np.random.choice(self.n_afc)
+            # #     path_states = self.env.path_states[trial][path_id] ## full BAMCP
 
-            # ## PA-BAMCP - choose between randomly sampled upcoming paths
-            # else:
-            #     path_id = np.random.choice(self.n_afc)
-            #     path_states = sampled_path_states[path_id] ## PA-BAMCP
+            # # ## PA-BAMCP - choose between randomly sampled upcoming paths
+            # # else:
+            # #     path_id = np.random.choice(self.n_afc)
+            # #     path_states = sampled_path_states[path_id] ## PA-BAMCP
+            # # path_id = np.random.choice(self.n_afc)
+            # # path_states_tmp = path_states[path_id]
 
             # ## unweighted
             # # costs = [self.env.predicted_costs[state[0], state[1]] for state in path_states]
 
             # ## arm-weighted
-            # aligned_states, orthogonal_states = self.env.get_alignment([[path_states]])
-            # costs = self.agent.arm_reweighting(self.env.predicted_costs, aligned_states, orthogonal_states)
+            # aligned_states_tmp, orthogonal_states_tmp = aligned_states[path_id], orthogonal_states[path_id]
+            # ro_cost = self.agent.arm_reweighting(self.env.predicted_costs, aligned_states_tmp, orthogonal_states_tmp)
 
-            # ro_cost = sum(costs)
             # remaining_ro_costs.append(ro_cost)
             # ro_choices.append(path_id)
             # total_cost += ro_cost * self.discount_factor**depth
