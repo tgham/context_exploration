@@ -89,16 +89,6 @@ class Node:
 
         ## define valid actions
         self.untried_actions = list(range(n_afc))
-        if n_afc == 4: # i.e. free choice, meaning we want to restrict wall movements
-            row, col,_ = self.belief_state
-            if row == self.N-1:
-                self.untried_actions.remove(0)
-            if row == 0:
-                self.untried_actions.remove(2)
-            if col == self.N-1:
-                self.untried_actions.remove(1)
-            if col == 0:
-                self.untried_actions.remove(3)
 
         ## action leaves
         self.action_leaves = {a: None for a in self.untried_actions}
@@ -116,9 +106,11 @@ class Node:
 
     ## select a random untried action
     def untried_action(self):
-        action = random.choice(self.untried_actions)
-        self.untried_actions.remove(action)
-        return action
+        idx = random.randint(0, len(self.untried_actions) - 1)
+        
+        # Swap with last element and pop for removal
+        self.untried_actions[idx], self.untried_actions[-1] = self.untried_actions[-1], self.untried_actions[idx]
+        return self.untried_actions.pop()
     
 class Action_Node:
 
@@ -157,7 +149,7 @@ class Tree:
 
     ## check if node is expandable
     def is_expandable(self, node):
-        return not node.terminated and len(node.untried_actions) > 0
+        return node.untried_actions and not node.terminated
 
     ## attach action leaf to child state
     def add_state_node(self, node_id, cost, terminated, trial, n_afc, parent=None, 
