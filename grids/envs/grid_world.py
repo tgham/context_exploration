@@ -38,7 +38,7 @@ class Actions(Enum):
 
 class GridEnv(gym.Env):
 
-    def __init__(self, N, n_trials=1, expt_info={'type':'AFC'}, beta_params=None, metric = 'cityblock', size=5, seed=None):
+    def __init__(self, N, n_trials=1, expt_info={'type':'AFC'}, beta_params=None, size=5, seed=None):
         
         ## seed
         if seed is not None:
@@ -75,43 +75,26 @@ class GridEnv(gym.Env):
             dtype=np.int32
         )
 
-        # define actions, depending on metric
-        self.metric = metric
+        # define actions
 
         """
         The following dictionary maps abstract actions from `self.action_space` to 
         the direction we will walk in if that action is taken.
         i.e. 0 corresponds to "right", 1 to "up" etc.
         """
-        if self.metric == 'cityblock':
-            self.action_space = spaces.Discrete(4)
-            # self.action_to_direction = {
-            #     Actions.right.value: np.array([1, 0]),
-            #     Actions.up.value: np.array([0, 1]),
-            #     Actions.left.value: np.array([-1, 0]),
-            #     Actions.down.value: np.array([0, -1]),
-            # }
-            self.action_to_direction = np.array([[1, 0], [0, 1], [-1, 0], [0, -1]])
-            self.direction_to_action = {tuple(v): k for k, v in enumerate(self.action_to_direction)}
-            self.n_actions = 4
+        self.action_space = spaces.Discrete(4)
+        # self.action_to_direction = {
+        #     Actions.right.value: np.array([1, 0]),
+        #     Actions.up.value: np.array([0, 1]),
+        #     Actions.left.value: np.array([-1, 0]),
+        #     Actions.down.value: np.array([0, -1]),
+        # }
+        self.action_to_direction = np.array([[1, 0], [0, 1], [-1, 0], [0, -1]])
+        self.direction_to_action = {tuple(v): k for k, v in enumerate(self.action_to_direction)}
+        self.n_actions = 4
 
-            ## action labels (NB these deviate from env action space, bc axes are flipped for plotting
-            self.action_labels = ['down', 'right', 'up', 'left']
-
-        elif self.metric == 'chebyshev':
-            self.action_space = spaces.Discrete(8)
-            self.action_to_direction = {
-                Actions.right.value: np.array([1, 0]),
-                Actions.up.value: np.array([0, 1]),
-                Actions.left.value: np.array([-1, 0]),
-                Actions.down.value: np.array([0, -1]),
-
-                Actions.north_east.value: np.array([1, 1]),
-                Actions.north_west.value: np.array([-1, 1]),
-                Actions.south_east.value: np.array([1, -1]),
-                Actions.south_west.value: np.array([-1, -1]),
-            }
-            self.n_actions = 8
+        ## action labels (NB these deviate from env action space, bc axes are flipped for plotting
+        self.action_labels = ['down', 'right', 'up', 'left']
 
         ## define abstract sequences
         if self.N%2==1:

@@ -36,7 +36,7 @@ from scipy.stats import wasserstein_distance # Tool for OT/Wasserstein
 
 
 ## create a grid environment
-def make_env(N, n_trials, expt_info, beta_params, metric, seed=None):
+def make_env(N, n_trials, expt_info, beta_params, seed=None):
 
     ## register env
     
@@ -52,7 +52,7 @@ def make_env(N, n_trials, expt_info, beta_params, metric, seed=None):
         max_episode_steps=100,
         kwargs={"size": N},
     )    
-    env = gym.make("grids/GridEnv-v0", N=N, n_trials=n_trials, expt_info=expt_info, beta_params=beta_params, metric=metric, seed=seed)
+    env = gym.make("grids/GridEnv-v0", N=N, n_trials=n_trials, expt_info=expt_info, beta_params=beta_params, seed=seed)
     
     return env
 
@@ -583,7 +583,7 @@ def KL_sim(obs_set, t, farmer, n_samples, plotting = False):
     all_posterior_mean_p_costs = []
 
     ## reset env
-    env = make_env(N, n_trials,expt_info, beta_params, 'cityblock')
+    env = make_env(N, n_trials,expt_info, beta_params)
     env.reset()
 
     ## loop through obs sets
@@ -688,7 +688,7 @@ def get_next_state(current, direction, N):
     return next_state
 
 ## func for generating a single participant
-def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params, metric, n_afc, N, save_path=None):
+def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params, n_afc, N, save_path=None):
 
 
     ## if real ppt sequences, ensure even split of contexts, otherwise if we're generating practice sequences, these are pre-determined
@@ -727,7 +727,7 @@ def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params,
         expt_info['objective'] = objectives[c]
 
         ## generate envs for this city
-        envs = [make_env(N, n_trials, expt_info, beta_params, metric) for _ in range(n_days)]
+        envs = [make_env(N, n_trials, expt_info, beta_params) for _ in range(n_days)]
 
         ## save expt info
         for i, env in enumerate(envs):
@@ -2048,58 +2048,6 @@ def loocv_split(df, iv='city'):
     return full_df_labeled
 
 
-
-
-## get the difference between the distributions over total costs for the two paths, given prior probs
-# def path_distr_diff(prior_probs_A, prior_probs_B, metric='intersection', one_sided=None):
-
-#     ## DP convolution to get probability mass function of sum
-#     outcome_probs_all = []
-#     for prior_probs in [prior_probs_A, prior_probs_B]:
-#         n = len(prior_probs)
-#         outcome_probs = [0.0]*(n+1)
-#         outcome_probs[0] = 1.0
-#         for p in prior_probs:
-            
-#             # update from high to low to avoid overwrite
-#             for k in range(n, 0, -1):
-#                 outcome_probs[k] = outcome_probs[k]*(1-p) + outcome_probs[k-1]*p
-#             outcome_probs[0] *= (1-p)
-#         outcome_probs_all.append(outcome_probs)
-
-#     ## or do this using MC samples
-
-#     ### get difference between the two distributions
-
-#     ## intersection/overlap
-#     if metric == 'intersection':
-#         dist = sum([min(outcome_probs_all[0][k], outcome_probs_all[1][k]) for k in range(len(outcome_probs_all[0]))])
-    
-#     ## optimal transport/wasserstein
-#     elif metric == 'OT': 
-#         cdf_A = np.cumsum(outcome_probs_all[0])
-#         cdf_B = np.cumsum(outcome_probs_all[1])
-#         dist = sum([abs(cdf_A[k] - cdf_B[k]) for k in range(len(cdf_A))])
-
-#     ## prob of superiority
-#     elif metric == 'p_sup':
-
-#         # create grid of probability products, P(A=i) * P(B=j)
-#         grid_probs = np.outer(outcome_probs_all[0], outcome_probs_all[1])
-#         i_A, i_B = np.indices(grid_probs.shape)
-        
-#         # Sum probabilities where A > B
-#         p_A_wins = np.sum(grid_probs[i_A > i_B])
-        
-#         # Sum probabilities where A == B
-#         p_tie = np.sum(grid_probs[i_A == i_B])
-#         dist = p_A_wins + 0.5 * p_tie
-
-#         ## if one-sided, convert to p(better path wins)
-#         if one_sided == 1: ## i.e. path B wins
-#             dist = 1-dist
-
-#     return dist, outcome_probs_all
 
 
 ## get the difference between the distributions over total costs for the two paths, given raw samples
