@@ -30,7 +30,7 @@ from scipy.special import beta, logsumexp, digamma, comb, betaln
 class Farmer:
 
     def __init__(self, N, context_prior=0.5, known_context=False,
-                 temp=None, lapse=None, arm_weight=None, horizon=None, real_future_paths=None,
+                 temp=1, lapse=0, arm_weight=0, horizon=3, real_future_paths=True,
                  exploration_constant=None, discount_factor=None, n_samples=None):
 
         self.N = N
@@ -352,7 +352,7 @@ class Farmer:
 
         
     ## run agent on participant's trial sequence
-    def run(self, params, hyperparams, agent = 'CE', df_trials=None, envs=None,fit=True, progress=False):
+    def run(self, hyperparams, agent = 'CE', df_trials=None, envs=None,fit=True, progress=False):
         
         ## init expt info
         try:
@@ -699,7 +699,6 @@ class Farmer:
 
                         ## debug plot
                         # # print(t,': BAMCP Q vals:', MCTS_Q, 'CE path costs:', CE_path_costs, 'actual path costs:', env_copy.path_actual_costs[t])
-                        # print(t,': BAMCP Q vals:', MCTS_Q, ', p_correct:', self.p_correct[city, day, t])
                         # # for a in range(self.n_afc):
                         # #     print(MCTS.tree.root.action_leaves[a])
                         # #     print(env_copy.starts[t][a])

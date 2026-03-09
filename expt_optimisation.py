@@ -23,7 +23,7 @@ import pickle
 import copy
 
 from utils import make_env, Node, Tree, argm, data_keys, grid_keys, parse_lists, KL_divergence, profile_func, KL_sim, value_iteration, generate_ppt_sequence
-from MCTS import MonteCarloTreeSearch, MonteCarloTreeSearch_Free, MonteCarloTreeSearch_AFC
+from MCTS import MonteCarloTreeSearch, MonteCarloTreeSearch_AFC
 
 import IPython
 
@@ -52,6 +52,7 @@ def agent_loop(p, agent_params_list, hyperparams, agent_param_combos):
     N = hyperparams['N']
     sim_outs = []
 
+
     ## load env objects
     # with open('useful_saves/expt_optimisation/simulated_envs/ppt_'+str(p)+'_envs.pkl', 'rb') as f:
     # with open('useful_saves/expt_optimisation/simulated_envs/env_objects/expt_2_env_objects_' + str(p) + '.pkl', 'rb') as f:
@@ -62,8 +63,21 @@ def agent_loop(p, agent_params_list, hyperparams, agent_param_combos):
     ## loop through agent/parameter combinations
     for agent, param_idx in agent_param_combos:
         agent_params = agent_params_list[param_idx]
-        farmer = Farmer(N, known_context = True) ## known context if expt 3
-        sim_out = farmer.run(agent_params, hyperparams, agent=agent, df_trials=None, envs=env_objects, fit=False, progress=False)
+
+        ## unpack params 
+        temp = agent_params[0]
+        lapse = agent_params[1]
+        arm_weight = agent_params[2]
+        horizon = agent_params[3]
+        real_future = agent_params[4]
+
+        ## unpack hyperparams
+        exploration_constant = hyperparams['exploration_constant']
+        discount_factor = hyperparams['discount_factor']
+        n_samples = hyperparams['n_samples']
+
+        farmer = Farmer(N, known_context = True, temp=temp, lapse=lapse, arm_weight=arm_weight, horizon=horizon, real_future_paths=real_future, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples) ## known context if expt 3
+        sim_out = farmer.run(hyperparams, agent=agent, df_trials=None, envs=env_objects, fit=False, progress=False)
         sim_outs.append(sim_out)
     
     ## join sim_outs together
@@ -89,7 +103,6 @@ def save_sim(sim_out):
 
 ## env inits
 N = 9
-metric = 'cityblock'
 beta_params = {
     'alpha_row':0.25,
     'beta_row': 0.25,
@@ -102,7 +115,7 @@ beta_params = {
     }
 
 ## trial info
-n_sim_participants = 100
+n_sim_participants = 2
 n_cities = 32
 n_days = 1
 n_trials = 4
@@ -173,9 +186,9 @@ all_sim_out = {
         'CE_p_correct':[],
         'distr_diff':[]
     }
-parallel = True
+parallel = False
 n_cores = 128
-create=True
+create=False
 
 ## init agent and expt
 ## Define parameter variations to sweep over
@@ -212,10 +225,9 @@ for i, params in enumerate(agent_params_list):
     print(f"  [{i}] temp={params[0]}, lapse={params[1]}, arm_weight={params[2]}, horizon={params[3]}, real_future={params[4]}")
 
 hyperparams = {
-    'n_sims': 100,
+    'n_samples': 10000,
     'exploration_constant': 1,
     'discount_factor': 1,
-    'n_iter': 10,
     'n_trials': n_trials,
     'n_afc': n_afc,
     'n_days': n_days,
@@ -244,7 +256,7 @@ if create:
             with mp.Pool(n_cores) as pool:
                 results = list(tqdm(pool.starmap(
                     generate_ppt_sequence,
-                    [(p, n_cities, n_days, n_trials, expt_info.copy(), beta_params, metric, n_afc, N)
+                    [(p, n_cities, n_days, n_trials, expt_info.copy(), beta_params, n_afc, N)
                     for p in range(1, n_sim_participants + 1)]
                 ), total=n_sim_participants))
 
@@ -256,13 +268,13 @@ if create:
                                                                                                 beta_params['alpha_row'], beta_params['beta_row'], beta_params['alpha_col'], beta_params['beta_col'],
                                                                                                 n_sim_participants, 
                                                                                                 n_cities, n_days, n_trials,
-                                                                                                    hyperparams['n_sims']))
+                                                                                                    hyperparams['n_samples']))
 
     elif not parallel:
         print('Generating {} experiment sequences serially'.format(n_sim_participants))
         for p in tqdm(range(1,n_sim_participants+1)):
 
-            out = generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info.copy(), beta_params, metric, n_afc, N)
+            out = generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info.copy(), beta_params, n_afc, N)
             df_expt = pd.concat([df_expt, out], ignore_index=True)
 
         ## save expt info
@@ -270,7 +282,7 @@ if create:
                                                                                             beta_params['alpha_row'], beta_params['beta_row'], beta_params['alpha_col'], beta_params['beta_col'],
                                                                                             n_sim_participants, 
                                                                                             n_cities, n_days, n_trials,
-                                                                                                hyperparams['n_sims']))
+                                                                                                hyperparams['n_samples']))
      
 
 ## loop through ppts
@@ -290,7 +302,7 @@ if __name__ == '__main__':
         ## start pool
         n_cores = np.min([n_cores, n_sim_participants])
         with mp.Pool(n_cores) as pool:
-            print('Parallel simulation:', n_cities, ' cities, ', n_days,', days, ',n_trials,' trials, ',hyperparams['n_sims'],' simulations per trial')
+            print('Parallel simulation:', n_cities, ' cities, ', n_days,', days, ',n_trials,' trials, ',hyperparams['n_samples'],' simulations per trial')
             print(f'Running {len(agents)} agents x {len(agent_params_list)} param settings = {len(agent_param_combos)} combinations per participant')
             sim_out = [pool.apply_async(agent_loop, args=(p, agent_params_list, hyperparams, agent_param_combos),
                                             callback = save_sim) for p in range(1, n_sim_participants+1)]
@@ -308,4 +320,4 @@ df_sim = pd.DataFrame(all_sim_out)
 ## save simulated grids + results
 df_sim.to_csv('useful_saves/expt_optimisation/sim_results/{}AFC_{}x{}_env_{}_sim_ppts_{}_cities_{}_days_{}_trials_{}_sims_results.csv'.format(n_afc,N,N,
                                                                                        n_sim_participants, 
-                                                                                       n_cities, n_days, n_trials,hyperparams['n_sims']))
+                                                                                       n_cities, n_days, n_trials,hyperparams['n_samples']))
