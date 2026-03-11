@@ -31,7 +31,7 @@ import multiprocess as mp
 import pingouin as pg
 from scipy.special import expit
 
-from agents import Farmer
+from agents import Farmer, BAMCP, CE
 from samplers import GridSampler
 
 
@@ -76,7 +76,11 @@ def agent_loop(p, agent_params_list, hyperparams, agent_param_combos):
         discount_factor = hyperparams['discount_factor']
         n_samples = hyperparams['n_samples']
 
-        farmer = Farmer(N, known_context = True, temp=temp, lapse=lapse, arm_weight=arm_weight, horizon=horizon, real_future_paths=real_future, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples) ## known context if expt 3
+        # farmer = Farmer(N, known_context = True, temp=temp, lapse=lapse, arm_weight=arm_weight, horizon=horizon, real_future_paths=real_future, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples) ## known context if expt 3
+        if agent == 'BAMCP':
+            farmer = BAMCP(N, known_context = True, temp=temp, lapse=lapse, arm_weight=arm_weight, horizon=horizon, real_future_paths=real_future, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples) ## known context if expt 3
+        elif agent =='CE':
+            farmer = CE(N, known_context = True, temp=temp, lapse=lapse, arm_weight=arm_weight, horizon=horizon, real_future_paths=real_future, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples) ## known context if expt 3
         sim_out = farmer.run(hyperparams, agent=agent, df_trials=None, envs=env_objects, fit=False, progress=False)
         sim_outs.append(sim_out)
     
@@ -225,7 +229,7 @@ for i, params in enumerate(agent_params_list):
     print(f"  [{i}] temp={params[0]}, lapse={params[1]}, arm_weight={params[2]}, horizon={params[3]}, real_future={params[4]}")
 
 hyperparams = {
-    'n_samples': 10000,
+    'n_samples': 1000,
     'exploration_constant': 1,
     'discount_factor': 1,
     'n_trials': n_trials,
@@ -236,9 +240,9 @@ hyperparams = {
     'participant': None, ## hacky
 }
 agents = [
-    'BAMCP', 
-    # 'CE', 
-    'CE_one_arm'
+    # 'BAMCP', 
+    'CE', 
+    # 'CE_one_arm'
     ]
 
 ## Generate all agent/parameter combinations (Each combo is (agent_name, param_idx))

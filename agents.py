@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from enum import Enum
 from itertools import product
 import copy
@@ -27,7 +28,7 @@ from scipy.special import beta, logsumexp, digamma, comb, betaln
 
 
 ### base farmer model?
-class Farmer:
+class Farmer(ABC):
 
     def __init__(self, N, context_prior=0.5, known_context=False,
                  temp=1, lapse=0, arm_weight=0, horizon=3, real_future_paths=True,
@@ -98,104 +99,10 @@ class Farmer:
         self.beta_row = env.beta_row
         self.beta_col = env.beta_col
 
-
-    ## generate full set of root samples
-    def root_samples(self, obs=None, n_samples=1000, CE=False):
-        
-        ## hacky: obs should not contain duplicates!
-        obs = np.unique(obs, axis=0).tolist() if obs is not None else []
-
-        sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, obs, N=self.N, CE=CE)
-        self.sampler = sampler
-        self.all_posterior_ps = np.zeros((n_samples, self.N))
-        self.all_posterior_qs = np.zeros((n_samples, self.N))
-        self.all_posterior_p_costs = np.zeros((n_samples, self.N, self.N))
-
-            
-        ### determine context indicators
-
-        ## inference case: infer posterior probability, given observations
-        if not self.known_context:
-            context_prior = self.context_prob
-            self.context_prob = sampler.context_posterior(context_prior=context_prior)
-
-        ## simple case: certain prior
-        elif self.known_context:
-            self.context_prob = 1.0 if self.known_context == 'column' else 0.0
-
-        ## use inferred context to sample
-        if not CE:
-            self.context_indicators = np.random.binomial(1, self.context_prob, size=n_samples) 
-            col_context = self.context_indicators.astype(bool)
-
-            ## looping method...
-            # for s in range(n_samples):
-            #     self.all_posterior_ps[s,:], self.all_posterior_qs[s,:] = sampler.sample(col_context=col_context[s])
-            #     self.all_posterior_p_costs[s] = np.outer(self.all_posterior_ps[s], self.all_posterior_qs[s])
-
-            #     ## temp fix: this posterior should also be filled in with 1s and 0s for states where a low and high cost have been observed respectively
-            #     for i,j,c in obs:
-            #         i = int(i)
-            #         j = int(j)
-            #         prob = 1 if c == self.low_cost else 0
-            #         self.all_posterior_p_costs[s][i,j] = prob
-
-            ## or, all at once?
-            n_col_samples = np.sum(self.context_indicators)
-            n_row_samples = n_samples - n_col_samples
-            posterior_ps_col, posterior_qs_col = sampler.sample(col_context=True, n_samples=n_col_samples)
-            posterior_ps_row, posterior_qs_row = sampler.sample(col_context=False, n_samples=n_row_samples)
-            self.all_posterior_ps[:n_col_samples,:] = posterior_ps_col
-            self.all_posterior_ps[n_col_samples:,:] = posterior_ps_row
-            self.all_posterior_qs[:n_col_samples,:] = posterior_qs_col
-            self.all_posterior_qs[n_col_samples:,:] = posterior_qs_row
-
-            ## shuffle them all in the same way
-            idx = np.random.permutation(n_samples)
-            self.all_posterior_ps = self.all_posterior_ps[idx]
-            self.all_posterior_qs = self.all_posterior_qs[idx]
-            self.context_indicators = np.zeros(n_samples)
-            self.context_indicators[:n_col_samples] = 1
-            self.context_indicators = self.context_indicators[idx].astype(bool)
-
-            ## posterior costs - i.e. the outer product of each sample's p and q
-            self.all_posterior_p_costs = np.einsum('si,sj->sij', self.all_posterior_ps, self.all_posterior_qs)
-
-            ## temp fix: this posterior should also be filled in with 1s and 0s for states where a low and high cost have been observed respectively
-            for i,j,c in obs:
-                i = int(i)
-                j = int(j)
-                prob = 1 if c == self.low_cost else 0
-                self.all_posterior_p_costs[:,i,j] = prob
-        
-            ## posterior means 
-            self.posterior_mean_p_cost = np.mean(self.all_posterior_p_costs, axis=0)
-            self.posterior_mean_p = np.mean(self.all_posterior_ps, axis=0)
-            self.posterior_mean_q = np.mean(self.all_posterior_qs, axis=0)
-
-        ## if CE, no need to loop through samples - just get posterior mean under each context, and then calculate weighted average
-        elif CE:
-            posterior_ps_col, posterior_qs_col = sampler.sample(col_context=True)
-            posterior_ps_row, posterior_qs_row = sampler.sample(col_context=False)
-            self.posterior_mean_p_cost = self.context_prob * np.outer(posterior_ps_col, posterior_qs_col) + (1-self.context_prob) * np.outer(posterior_ps_row, posterior_qs_row)
-            self.posterior_mean_p = self.context_prob * posterior_ps_col + (1-self.context_prob) * posterior_ps_row
-            self.posterior_mean_q = self.context_prob * posterior_qs_col + (1-self.context_prob) * posterior_qs_row
-
-            ## temp fix: this posterior should also be filled in with 1s and 0s for states where a low and high cost have been observed respectively
-            for i,j,c in obs:
-                i = int(i)
-                j = int(j)
-                prob = 1 if c == self.low_cost else 0
-                self.posterior_mean_p_cost[i,j] = prob
-
-        ## debugging plot - kde of samples
-        # fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-        # for p in range(self.N):
-        #     sns.kdeplot(self.all_posterior_ps[:,p], ax=axs[0])
-        #     sns.kdeplot(self.all_posterior_qs[:,p], ax=axs[1])
-        # axs[0].set_title('p')
-        # axs[1].set_title('q')
-        # plt.show()
+    ## agent-specific action based on posterior
+    @abstractmethod
+    def act(self, env_copy, tree_reset=True):
+        pass
 
 
     ## quick and cheap context posterior
@@ -209,146 +116,10 @@ class Farmer:
         return context_prob
     
 
-    ## dynamic programming
-    def dp(self, posterior_p_cost, expected_cost=True):
-
-        ## use expected cost of each state
-        if expected_cost:
-
-            ## p(high cost)
-            # dp_costs = self.posterior_p_cost*self.high_cost + (1-self.posterior_p_cost)*self.low_cost
-            # dp_costs[self.goal[0], self.goal[1]] = 0
-            
-            ## p(low cost)
-            dp_costs = posterior_p_cost*self.low_cost + (1-posterior_p_cost)*self.high_cost
-            dp_costs[self.goal[0], self.goal[1]] = 0
-
-        ## or, sample costs using p and q probabilities 
-        else:
-
-            ## p(high cost)
-            # dp_costs = np.array([self.low_cost if r > self.posterior_p_cost.flatten()[i] else self.high_cost for i, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
-            # dp_costs[self.goal[0], self.goal[1]] = 0
-
-            ## p(low cost)
-            dp_costs = np.array([self.low_cost if r < posterior_p_cost.flatten()[i] else self.high_cost for i, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
-            dp_costs[self.goal[0], self.goal[1]] = 0
-
-
-        self.V_inf, self.Q_inf, self.A_inf = value_iteration(dp_costs, self.goal)
-
-    ## optimal policy, as given by the dynamic programming Q vals
-    def optimal_policy(self, current, Q=None):
-
-        if Q is None:
-            Q = self.Q_inf
-
-        ## get adjacent states
-        next_states = np.clip(np.array([current + self.action_to_direction[i] for i in range(self.n_actions)]), 0, self.N-1)
-        next_states_idx = next_states[:, 0]*self.N + next_states[:, 1]
-    
-        ## choose action with highest Q-value
-        current_q = Q[current[0], current[1], :]
-        max_current_q = np.nanmax(current_q)
-        action = argm(current_q, max_current_q)
-
-        return action
-    
-    ## greedy wrt/ distance to goal
-    def greedy_policy(self, current, goal, eps=0):
-        if np.random.rand() < eps:
-            return self.random_policy()
-        else:
-            ## get adjacent states
-            next_states = np.clip(np.array([current + self.action_to_direction[i] for i in range(self.n_actions)]), 0, self.N-1)
-            
-            ## choose whichever one is closest to the goal
-            distances = cdist(next_states, [goal], metric='cityblock').flatten()
-            min_distance = np.min(distances)
-            action = argm(distances, min_distance)
-            # print(next_states, distances, min_distance, action)
-            return action
-        
     ## choice function
     def softmax(self, Q):
         CPs = (1-self.lapse) * softmax(Q/self.temp) + self.lapse/len(Q)
         return CPs
-
-
-    ## MCTS search method - performs tree search using this agent's internal MCTS object
-    def search(self):
-        """
-        Perform MCTS search using this agent's internal MCTS object.
-        
-        Args:
-            n_samples: Number of MCTS samples to use for the search.
-            
-        Returns:
-            action: The selected action.
-            MCTS_estimates: The Q-value estimates for each action.
-        """
-        if self.mcts is None:
-            raise ValueError("MCTS object has not been initialized. Call run() with agent='BAMCP' first.")
-
-        ## check root
-        assert self.mcts.root_trial == self.mcts.env.trial, 'trial mismatch between env and tree at start of search\n env trial: {} \n tree trial: {}'.format(self.mcts.env.trial, self.mcts.root_trial)
-        for a in range(self.mcts.n_afc):
-            assert np.array_equal(self.mcts.tree.root.starts[a], self.mcts.env.starts[self.mcts.root_trial][a]), 'start state mismatch for action {}\n env start: {} \n tree start: {}'.format(a, self.mcts.env.starts[self.mcts.root_trial][a], self.mcts.tree.root.starts[a])
-            assert np.array_equal(self.mcts.tree.root.goals[a], self.mcts.env.goals[self.mcts.root_trial][a]), 'goal state mismatch for action {}\n env goal: {} \n tree goal: {}'.format(a, self.mcts.env.goals[self.mcts.root_trial][a], self.mcts.tree.root.goals[a])
-            assert np.array_equal(self.mcts.tree.root.path_states[a], self.mcts.env.path_states[self.mcts.root_trial][a]), 'path state mismatch for action {}\n env path: {} \n tree path: {}'.format(a, self.mcts.env.path_states[self.mcts.root_trial][a], self.mcts.tree.root.path_states[a])
-
-        ## generate new set of root samples
-        self.root_samples(obs = self.mcts.env.obs, n_samples=self.n_samples, CE=False)
-
-        # debugging plot
-        # plt.figure()
-        # plot_r(self.posterior_mean_p_cost.reshape(self.N,self.N), ax = plt.subplot(), title='posterior sample')
-        # plt.show()
-
-        ## debugging Q-vals
-        self.mcts.Q_tracker = []
-        self.mcts.return_tracker = []
-        self.mcts.first_node_updates = []
-        self.mcts.first_node_updates_by_depth = []
-        self.mcts.tree_cost_tracker = []
-        self.mcts.conditional_tree_cost_tracker = [[] for _ in range(self.mcts.n_afc)]
-        for t in range(self.mcts.env.n_trials):
-            self.mcts.first_node_updates_by_depth.append([])
-            self.mcts.tree_cost_tracker.append([])
-            for a in range(self.mcts.n_afc):
-                self.mcts.conditional_tree_cost_tracker[a].append([])
-        
-        ## loop through simulations
-        for s in range(self.n_samples):
-            
-            ## root sampling of new posterior
-            posterior_p_cost = self.all_posterior_p_costs[s]
-            self.mcts.env.receive_predictions(posterior_p_cost)
-
-            ## selection, expansion, simulation
-            action_leaf = self.mcts.tree_policy()
-            self.mcts.rollout_policy(action_leaf)
-            
-            ##backup
-            self.mcts.backup()
-
-            ## update Q tracker
-            try:
-                Qs = [self.mcts.tree.root.action_leaves[a].performance for a in self.mcts.tree.root.action_leaves.keys()]
-                self.mcts.Q_tracker.append(Qs)
-            except:
-                pass
-
-        
-        ## action selection
-        MCTS_estimates = np.full(self.mcts.n_afc, np.nan)
-        for action, leaf in self.mcts.tree.root.action_leaves.items():
-            MCTS_estimates[action] = leaf.performance
-        assert not np.isnan(np.nansum(MCTS_estimates)), 'no MCTS estimates for {}'.format(self.mcts.tree.root)
-        max_MCTS = np.nanmax(MCTS_estimates)
-        action = argm(MCTS_estimates, max_MCTS)
-
-        return action, MCTS_estimates
 
         
     ## run agent on participant's trial sequence
@@ -372,9 +143,9 @@ class Farmer:
         if hyperparams is None:
             hyperparams = {}
         if 'greedy' in hyperparams:
-            greedy = hyperparams['greedy']
+            self.greedy = hyperparams['greedy']
         else:
-            greedy = True 
+            self.greedy = True
 
         ## initialise model's internal variables
         self.n_afc = n_afc ## can sort this out later
@@ -419,25 +190,6 @@ class Farmer:
         self.aligned_arm_len = np.zeros((n_cities, n_days, n_trials, self.n_afc))
         self.orthogonal_arm_len = np.zeros((n_cities, n_days, n_trials, self.n_afc))
 
-        # ## init params and hyperparams
-        # if agent == 'BAMCP':
-        #     ## parameters should already be set at agent initialisation
-        #     pass
-        # elif (agent == 'CE'):
-        #     self.temp = params[0]
-        #     self.lapse = params[1]
-        #     self.arm_weight = None
-        #     self._cache_arm_weights()
-        #     self.horizon = None
-        #     self.real_future_paths = None
-        # elif (agent == 'CE_one_arm'):
-        #     self.temp = params[0]
-        #     self.lapse = params[1]
-        #     self.arm_weight = params[2]
-        #     self._cache_arm_weights()
-        #     self.horizon = None
-        #     self.real_future_paths = None
-
         if progress:
             pbar = tqdm(total=n_cities*n_days*n_trials, desc='Running {} agent'.format(agent), leave=False)
 
@@ -476,9 +228,8 @@ class Farmer:
                     env_copy.n_trials = env_copy.n_episodes
 
                 ## initialise planner
-                if agent == 'BAMCP':
-                    self.mcts = None
-                    tree_reset = True
+                self.mcts = None
+                tree_reset = True
 
 
                 ## loop through trials within day
@@ -646,167 +397,35 @@ class Farmer:
                     self.get_env_info(env_copy)
 
                     ## agent-specific path selection
-                    if agent == 'BAMCP':
+                    action, Q_vals = self.act(env_copy, tree_reset)
 
-                        ## reset tree (or reuse it)
-                        self.init_mcts(env=env_copy, reset=tree_reset)
-                        assert t == self.mcts.root_trial, 'trial mismatch between sim and MCTS\n sim: {} \n MCTS: {}'.format(t, self.mcts.root_trial)
-                        assert self.mcts.env.trial == self.mcts.root_trial, 'trial mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(env_copy.trial, self.mcts.root_trial)
-                        assert self.mcts.env.sim == True, 'env not in sim mode'
-
-                        ## search
-                        self.mcts.root_state = current
-                        action, MCTS_Q = self.search()
-                        self.actions[city, day, t] = action
-                        self.Q_vals[city, day, t] = MCTS_Q
-                        self.p_choice[city, day, t] = self.softmax(MCTS_Q)
-                        correct_path = np.argmax(env_copy.path_actual_costs[t])
-                        self.p_correct[city, day, t] = self.p_choice[city, day, t][correct_path]
-                        for a in range(self.n_afc):
-                            self.leaf_visits[city, day, t, a] = self.mcts.tree.root.action_leaves[a].n_action_visits
-
-                        ## debug plot
-                        # fig, axs = plt.subplots(1,1, figsize=(5,5))
-                        # plot_r(self.posterior_mean_p_cost, axs, title = 'Posterior reward distribution\nmean root sample\npost obs')
-                        # plot_traj([env.path_states[t][c] for c in range(self.n_afc)], ax = axs)
-                        # plot_obs(env_copy.obs, ax = axs, text=True)
-                        # plt.show()
-
-                        ## or, do probability matching if not greedy
-                        if not greedy:
-                            action = np.random.choice(np.arange(len(MCTS_Q)), p=softmax(MCTS_Q))
+                    self.actions[city, day, t] = action
+                    self.Q_vals[city, day, t] = Q_vals
+                    self.p_choice[city, day, t] = self.softmax(Q_vals)
+                    correct_path = np.argmax(env_copy.path_actual_costs[t])
+                    self.p_correct[city, day, t] = self.p_choice[city, day, t][correct_path]
 
 
-                        ### let's also calculate CE choice under BAMCP's knowledge 
 
-                        ## get the cost of each path under the posterior mean
-                        CE_path_costs = []
-                        for path_id in range(env_copy.n_afc):
-                            path_states = env_copy.path_states[t][path_id]
-                            CE_path_cost = 0
-                            for state in path_states:
-                                # path_cost += env_copy.get_pred_cost(state) ## i.e. sample binary costs from the posterior pqs
-                                CE_path_cost += self.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost ## or, use expected costs
-                            CE_path_costs.append(CE_path_cost)
-
-                        ## CE chooses the path with the lowest total cost
-                        max_cost = np.max(CE_path_costs)
-                        CE_action = argm(CE_path_costs, max_cost)
-                        self.CE_actions[city, day, t] = CE_action
-                        self.CE_Q_vals[city, day, t] = np.array(CE_path_costs)
-                        self.CE_p_choice[city, day, t] = self.softmax(np.array(CE_path_costs))
-                        self.CE_p_correct[city, day, t] = self.CE_p_choice[city, day, t][correct_path]
-
-                        ## debug plot
-                        # # print(t,': BAMCP Q vals:', MCTS_Q, 'CE path costs:', CE_path_costs, 'actual path costs:', env_copy.path_actual_costs[t])
-                        # # for a in range(self.n_afc):
-                        # #     print(MCTS.tree.root.action_leaves[a])
-                        # #     print(env_copy.starts[t][a])
-                        # #     print(env_copy.goals[t][a])
-                        # fig, axs = plt.subplots(1,1, figsize=(5,5))
-                        # plot_r(self.posterior_mean_p_cost, axs, title = 'Posterior reward distribution\nmean root sample\npost obs')
-                        # plot_traj([env.path_states[t][c] for c in range(self.n_afc)], ax = axs)
-                        # plot_obs(env_copy.obs, ax = axs, text=True)
-                        # plt.show()
-
-
-                    elif agent == 'CE':
-                        env_copy.set_sim(False)
+                    # elif agent == 'human': CAN JUST DO CE AGENT HERE
                         
-                        ## get posterior mean grid
-                        self.root_samples(obs=env_copy.obs, CE=True)
-                        env_copy.receive_predictions(self.posterior_mean_p_cost)
+                    #     ## need to trivially set predicted costs to 0 to avoid errors when interacting with the environment
+                    #     # env_copy.receive_predictions(np.zeros((N, N)))
 
-                        ## get the cost of each path under the posterior mean
-                        path_costs = []
-                        for path_id in range(env_copy.n_afc):
-                            path_states = env_copy.path_states[t][path_id]
-                            path_cost = 0
-                            for state in path_states:
-                                # path_cost += env_copy.get_pred_cost(state) ## i.e. sample binary costs from the posterior pqs
-                                path_cost += self.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost ## or, use expected costs
-                            path_costs.append(path_cost)
-
-                        ## choose the path with the lowest total cost
-                        max_cost = np.max(path_costs)
-                        action = argm(path_costs, max_cost)
-                        self.actions[city, day, t] = action
-                        self.Q_vals[city, day, t] = np.array(path_costs)
-                        self.p_choice[city, day, t] = self.softmax(np.array(path_costs))
-                        correct_path = np.argmax(env_copy.path_actual_costs[t])
-                        self.p_correct[city, day, t] = self.p_choice[city, day, t][correct_path]
-
-                        ## or, do probability matching if not greedy
-                        if not greedy:
-                            action = np.random.choice(np.arange(len(path_costs)), p=softmax(path_costs))
-
-                        ## debug plot
-                        # fig, axs = plt.subplots(1,1, figsize=(5,5))
-                        # plot_r(self.posterior_mean_p_cost, axs, title = 'Posterior reward distribution\nmean root sample\npost obs')
-                        # plot_traj([env.path_states[t][c] for c in range(self.n_afc)], ax = axs)
-                        # plot_obs(env_copy.obs, ax = axs, text=True)
-                        # plt.show()
-                    
-                    elif agent == 'CE_one_arm':
-                        env_copy.set_sim(False)
-                        
-                        ## get posterior mean grid
-                        self.root_samples(obs=env_copy.obs, CE=True)
-                        env_copy.receive_predictions(self.posterior_mean_p_cost)
-
-                        ## get the cost of each path under the posterior mean (weighted by arm_weight)
-                        path_costs = []
-                        for path_id in range(env_copy.n_afc):
-                            path_states = env_copy.path_states[t][path_id]
-                            aligned_states, orthogonal_states = env_copy.path_aligned_states[t][path_id], env_copy.path_orthogonal_states[t][path_id]
-                            unweighted_pred_costs = self.posterior_mean_p_cost*env_copy.low_cost + (1-self.posterior_mean_p_cost)*env_copy.high_cost
-                            # weighted_path_costs = env_copy.arm_reweighting(unweighted_pred_costs, aligned_states, orthogonal_states, self._aligned_weight, self._orthogonal_weight)
-                            # path_costs.append(np.sum(weighted_path_costs))
-                            total_weighted_path_costs = env_copy.arm_reweighting(unweighted_pred_costs, aligned_states, orthogonal_states, self._aligned_weight, self._orthogonal_weight)
-                            path_costs.append(total_weighted_path_costs)
-
-                        ## choose the path with the lowest total cost
-                        max_cost = np.max(path_costs)
-                        action = argm(path_costs, max_cost)
-                        self.actions[city, day, t] = action
-                        self.Q_vals[city, day, t] = np.array(path_costs)
-                        self.p_choice[city, day, t] = self.softmax(np.array(path_costs))
-                        correct_path = np.argmax(env_copy.path_actual_costs[t])
-                        self.p_correct[city, day, t] = self.p_choice[city, day, t][correct_path]
-
-                        ## debugging
-                        # print(t,': CE_one_arm path costs:', path_costs, ', p_choice:', self.p_choice[city, day, t])
-                        # fig, axs = plt.subplots(1,1, figsize=(5,5))
-                        # plot_r(self.posterior_mean_p_cost, axs, title = 'Posterior reward distribution\nmean root sample\npost obs')
-                        # plot_traj([env.path_states[t][c] for c in range(self.n_afc)], ax = axs)
-                        # plot_obs(env_copy.obs, ax = axs, text=True)
-                        # plt.show()
-                        # if t==3:
-                        #     raise Exception('check this')
-
-                        ## or, do probability matching if not greedy
-                        if not greedy:
-                            action = np.random.choice(np.arange(len(path_costs)), p=softmax(path_costs))
-
-                    elif agent == 'human':
-                        
-                        ## need to trivially set predicted costs to 0 to avoid errors when interacting with the environment
-                        # env_copy.receive_predictions(np.zeros((N, N)))
-
-                        ## or, we might actually calculate the CE-correct answer under the human's observations
-                        self.root_samples(obs=env_copy.obs, CE=True)
-                        env_copy.receive_predictions(self.posterior_mean_p_cost)
-                        path_costs = []
-                        for path_id in range(env_copy.n_afc):
-                            path_states = env_copy.path_states[t][path_id]
-                            path_cost = 0
-                            for state in path_states:
-                                path_cost += self.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost ## or, use expected costs
-                            path_costs.append(path_cost)
-                        max_cost = np.max(path_costs)
-                        CE_action = argm(path_costs, max_cost)
-                        self.CE_actions[city, day, t] = CE_action
-                        self.CE_Q_vals[city, day, t] = np.array(path_costs)
+                    #     ## or, we might actually calculate the CE-correct answer under the human's observations
+                    #     self.root_samples(obs=env_copy.obs, CE=True)
+                    #     env_copy.receive_predictions(self.posterior_mean_p_cost)
+                    #     path_costs = []
+                    #     for path_id in range(env_copy.n_afc):
+                    #         path_states = env_copy.path_states[t][path_id]
+                    #         path_cost = 0
+                    #         for state in path_states:
+                    #             path_cost += self.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost ## or, use expected costs
+                    #         path_costs.append(path_cost)
+                    #     max_cost = np.max(path_costs)
+                    #     CE_action = argm(path_costs, max_cost)
+                    #     self.CE_actions[city, day, t] = CE_action
+                    #     self.CE_Q_vals[city, day, t] = np.array(path_costs)
 
                         
                         ### get the difference in distributions over total costs of the two paths
@@ -917,28 +536,10 @@ class Farmer:
                     self.get_env_info(env_copy)
 
                     ## update MCTS tree
-                    if agent == 'BAMCP':
-
-                        ## prune tree (not always successful due to high branching factor, or if participant made no choice in which case reset the tree)
-                        if not missed:
-                            init_info_state = self.mcts.tree.root.node_id
-                            trial_obs = env_copy.trial_obs.copy()
-                            next_node_id = self.mcts.init_node_id(trial_obs, init_info_state, t)
-                            if not day_terminated:
-                                if next_node_id in self.mcts.tree.root.action_leaves[action].children:
-                                    self.mcts.tree.prune(action, next_node_id)
-                                    # assert np.array_equal(self.mcts.tree.root.belief_state[2*self.mcts.n_afc:], costs), 'error in root update\n root state: {} \n costs: {}'.format(self.mcts.tree.root.belief_state[2*self.mcts.n_afc:], costs)
-                                    # assert np.array_equal(self.mcts.tree.root.belief_state[1:], costs), 'error in root update\n root state: {} \n costs: {}'.format(self.mcts.tree.root.belief_state[2*self.mcts.n_afc:], costs)
-                                    assert self.mcts.tree.root.trial == t+1, 'trial mismatch after pruning\n env trial: {}, MCTS trial: {}'.format(t, self.mcts.tree.root.trial)
-                                    tree_reset = False
-                                else:
-                                    tree_reset = True
-
-                                ## hacky: unless full BAMCP with real future paths and full horizon, reset the tree
-                                if (not self.real_future_paths) or (self.horizon < (n_trials-t)):
-                                    tree_reset = True
-                        else:
-                            tree_reset = True
+                    if (not missed) and (not day_terminated):
+                        tree_reset = self.update_tree(env_copy, action)
+                    else:
+                        tree_reset = True
 
                     ## get the context prior - i.e. the probability with which samples were drawn
                     context_prior = self.context_prob
@@ -1101,3 +702,312 @@ class Farmer:
             self._orthogonal_weight = 1 - max(0.0, self.arm_weight)
     
 
+## define subclasses
+class BAMCP(Farmer):
+    def __init__(self, N, context_prior=0.5, known_context=False,
+                 temp=1, lapse=0, arm_weight=0, horizon=3, real_future_paths=True,
+                 exploration_constant=None, discount_factor=None, n_samples=None):
+        super().__init__(N, context_prior, known_context,temp, lapse, arm_weight, horizon, real_future_paths, exploration_constant, discount_factor,n_samples)
+
+
+    ## generate full set of root samples
+    def root_samples(self, obs=None, n_samples=1000):
+        
+        ## hacky: obs should not contain duplicates!
+        obs = np.unique(obs, axis=0).tolist() if obs is not None else []
+
+        sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, obs, N=self.N)
+        self.sampler = sampler
+        self.all_posterior_ps = np.zeros((n_samples, self.N))
+        self.all_posterior_qs = np.zeros((n_samples, self.N))
+        self.all_posterior_p_costs = np.zeros((n_samples, self.N, self.N))
+
+            
+        ### determine context indicators
+
+        ## inference case: infer posterior probability, given observations
+        if not self.known_context:
+            context_prior = self.context_prob
+            self.context_prob = sampler.context_posterior(context_prior=context_prior)
+
+        ## simple case: certain prior
+        elif self.known_context:
+            self.context_prob = 1.0 if self.known_context == 'column' else 0.0
+
+        ## use inferred context to sample
+        self.context_indicators = np.random.binomial(1, self.context_prob, size=n_samples) 
+        col_context = self.context_indicators.astype(bool)
+
+        n_col_samples = np.sum(self.context_indicators)
+        n_row_samples = n_samples - n_col_samples
+        posterior_ps_col, posterior_qs_col = sampler.sample_probs(col_context=True, n_samples=n_col_samples)
+        posterior_ps_row, posterior_qs_row = sampler.sample_probs(col_context=False, n_samples=n_row_samples)
+        self.all_posterior_ps[:n_col_samples,:] = posterior_ps_col
+        self.all_posterior_ps[n_col_samples:,:] = posterior_ps_row
+        self.all_posterior_qs[:n_col_samples,:] = posterior_qs_col
+        self.all_posterior_qs[n_col_samples:,:] = posterior_qs_row
+
+        ## shuffle them all in the same way
+        idx = np.random.permutation(n_samples)
+        self.all_posterior_ps = self.all_posterior_ps[idx]
+        self.all_posterior_qs = self.all_posterior_qs[idx]
+        self.context_indicators = np.zeros(n_samples)
+        self.context_indicators[:n_col_samples] = 1
+        self.context_indicators = self.context_indicators[idx].astype(bool)
+
+        ## posterior costs - i.e. the outer product of each sample's p and q
+        self.all_posterior_p_costs = np.einsum('si,sj->sij', self.all_posterior_ps, self.all_posterior_qs)
+
+        ## temp fix: this posterior should also be filled in with 1s and 0s for states where a low and high cost have been observed respectively
+        for i,j,c in obs:
+            i = int(i)
+            j = int(j)
+            prob = 1 if c == self.low_cost else 0
+            self.all_posterior_p_costs[:,i,j] = prob
+    
+        ## posterior means 
+        self.posterior_mean_p_cost = np.mean(self.all_posterior_p_costs, axis=0)
+        self.posterior_mean_p = np.mean(self.all_posterior_ps, axis=0)
+        self.posterior_mean_q = np.mean(self.all_posterior_qs, axis=0)
+
+
+    ## MCTS search method - performs tree search using this agent's internal MCTS object
+    def search(self):
+        """
+        Perform MCTS search using this agent's internal MCTS object.
+        
+        Args:
+            n_samples: Number of MCTS samples to use for the search.
+            
+        Returns:
+            action: The selected action.
+            MCTS_estimates: The Q-value estimates for each action.
+        """
+        if self.mcts is None:
+            raise ValueError("MCTS object has not been initialized. Call run() with agent='BAMCP' first.")
+
+        ## check root
+        assert self.mcts.root_trial == self.mcts.env.trial, 'trial mismatch between env and tree at start of search\n env trial: {} \n tree trial: {}'.format(self.mcts.env.trial, self.mcts.root_trial)
+        for a in range(self.mcts.n_afc):
+            assert np.array_equal(self.mcts.tree.root.starts[a], self.mcts.env.starts[self.mcts.root_trial][a]), 'start state mismatch for action {}\n env start: {} \n tree start: {}'.format(a, self.mcts.env.starts[self.mcts.root_trial][a], self.mcts.tree.root.starts[a])
+            assert np.array_equal(self.mcts.tree.root.goals[a], self.mcts.env.goals[self.mcts.root_trial][a]), 'goal state mismatch for action {}\n env goal: {} \n tree goal: {}'.format(a, self.mcts.env.goals[self.mcts.root_trial][a], self.mcts.tree.root.goals[a])
+            assert np.array_equal(self.mcts.tree.root.path_states[a], self.mcts.env.path_states[self.mcts.root_trial][a]), 'path state mismatch for action {}\n env path: {} \n tree path: {}'.format(a, self.mcts.env.path_states[self.mcts.root_trial][a], self.mcts.tree.root.path_states[a])
+
+        ## generate new set of root samples
+        self.root_samples(obs = self.mcts.env.obs, n_samples=self.n_samples)
+
+        # debugging plot
+        # plt.figure()
+        # plot_r(self.posterior_mean_p_cost.reshape(self.N,self.N), ax = plt.subplot(), title='posterior sample')
+        # plt.show()
+
+        ## debugging Q-vals
+        self.mcts.Q_tracker = []
+        self.mcts.return_tracker = []
+        self.mcts.first_node_updates = []
+        self.mcts.first_node_updates_by_depth = []
+        self.mcts.tree_cost_tracker = []
+        self.mcts.conditional_tree_cost_tracker = [[] for _ in range(self.mcts.n_afc)]
+        for t in range(self.mcts.env.n_trials):
+            self.mcts.first_node_updates_by_depth.append([])
+            self.mcts.tree_cost_tracker.append([])
+            for a in range(self.mcts.n_afc):
+                self.mcts.conditional_tree_cost_tracker[a].append([])
+        
+        ## loop through simulations
+        for s in range(self.n_samples):
+            
+            ## root sampling of new posterior
+            posterior_p_cost = self.all_posterior_p_costs[s]
+            self.mcts.env.receive_predictions(posterior_p_cost)
+
+            ## selection, expansion, simulation
+            action_leaf = self.mcts.tree_policy()
+            self.mcts.rollout_policy(action_leaf)
+            
+            ##backup
+            self.mcts.backup()
+
+            ## update Q tracker
+            try:
+                Qs = [self.mcts.tree.root.action_leaves[a].performance for a in self.mcts.tree.root.action_leaves.keys()]
+                self.mcts.Q_tracker.append(Qs)
+            except:
+                pass
+
+        
+        ## action selection
+        MCTS_estimates = np.full(self.mcts.n_afc, np.nan)
+        for action, leaf in self.mcts.tree.root.action_leaves.items():
+            MCTS_estimates[action] = leaf.performance
+        assert not np.isnan(np.nansum(MCTS_estimates)), 'no MCTS estimates for {}'.format(self.mcts.tree.root)
+        max_MCTS = np.nanmax(MCTS_estimates)
+        action = argm(MCTS_estimates, max_MCTS)
+
+        return action, MCTS_estimates
+
+
+    def act(self, env_copy, tree_reset=True):
+
+        ## reset tree (or reuse it)
+        self.init_mcts(env=env_copy, reset=tree_reset)
+        assert self.mcts.env.trial == self.mcts.root_trial, 'trial mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(env_copy.trial, self.mcts.root_trial)
+        assert self.mcts.env.sim == True, 'env not in sim mode'
+
+        ## search
+        self.mcts.root_state = env_copy.current
+        action, MCTS_Q = self.search()
+
+        ## do probability matching if not greedy
+        if not self.greedy:
+            action = np.random.choice(np.arange(len(MCTS_Q)), p=softmax(MCTS_Q))
+
+        # for a in range(self.n_afc):
+        #     self.leaf_visits[city, day, t, a] = self.mcts.tree.root.action_leaves[a].n_action_visits
+
+        ## debug plot
+        # print(t,': BAMCP Q vals:', MCTS_Q, 'CE path costs:', CE_path_costs, 'actual path costs:', env_copy.path_actual_costs[t])
+        # for a in range(self.n_afc):
+        #     print(MCTS.tree.root.action_leaves[a])
+        #     print(env_copy.starts[t][a])
+        #     print(env_copy.goals[t][a])
+        # fig, axs = plt.subplots(1,1, figsize=(5,5))
+        # plot_r(self.posterior_mean_p_cost, axs, title = 'Posterior reward distribution\nmean root sample\npost obs')
+        # plot_traj([env_copy.path_states[self.mcts.root_trial][c] for c in range(self.n_afc)], ax = axs)
+        # plot_obs(env_copy.obs, ax = axs, text=True)
+        # plt.show()
+
+
+        # ### let's also calculate CE choice under BAMCP's knowledge 
+
+        # ## get the cost of each path under the posterior mean
+        # CE_path_costs = []
+        # for path_id in range(env_copy.n_afc):
+        #     path_states = env_copy.path_states[t][path_id]
+        #     CE_path_cost = 0
+        #     for state in path_states:
+        #         # path_cost += env_copy.get_pred_cost(state) ## i.e. sample binary costs from the posterior pqs
+        #         CE_path_cost += self.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost ## or, use expected costs
+        #     CE_path_costs.append(CE_path_cost)
+
+        # ## CE chooses the path with the lowest total cost
+        # max_cost = np.max(CE_path_costs)
+        # CE_action = argm(CE_path_costs, max_cost)
+        # self.CE_actions[city, day, t] = CE_action
+        # self.CE_Q_vals[city, day, t] = np.array(CE_path_costs)
+        # self.CE_p_choice[city, day, t] = self.softmax(np.array(CE_path_costs))
+        # self.CE_p_correct[city, day, t] = self.CE_p_choice[city, day, t][correct_path]
+
+        return action, MCTS_Q
+    
+
+    ## update the MCTS tree
+    def update_tree(self, env_copy, action):
+
+        ## prune tree (not always successful due to high branching factor, or if participant made no choice in which case reset the tree)
+        init_info_state = self.mcts.tree.root.node_id
+        trial_obs = env_copy.trial_obs.copy()
+        t = self.mcts.root_trial
+        next_node_id = self.mcts.init_node_id(trial_obs, init_info_state, t)
+
+        if next_node_id in self.mcts.tree.root.action_leaves[action].children:
+            self.mcts.tree.prune(action, next_node_id)
+            # assert np.array_equal(self.mcts.tree.root.belief_state[2*self.mcts.n_afc:], costs), 'error in root update\n root state: {} \n costs: {}'.format(self.mcts.tree.root.belief_state[2*self.mcts.n_afc:], costs)
+            # assert np.array_equal(self.mcts.tree.root.belief_state[1:], costs), 'error in root update\n root state: {} \n costs: {}'.format(self.mcts.tree.root.belief_state[2*self.mcts.n_afc:], costs)
+            assert self.mcts.tree.root.trial == t+1, 'trial mismatch after pruning\n env trial: {}, MCTS trial: {}'.format(t, self.mcts.tree.root.trial)
+            tree_reset = False
+        else:
+            tree_reset = True
+
+        ## hacky: unless full BAMCP with real future paths and full horizon, reset the tree
+        if (not self.real_future_paths) or (self.horizon < (env_copy.n_trials-t)):
+            tree_reset = True
+    
+        return tree_reset
+        
+
+
+
+class CE(Farmer):
+    def __init__(self, N, context_prior=0.5, known_context=False,
+                 temp=1, lapse=0, arm_weight=0, horizon=None, real_future_paths=None,
+                 exploration_constant=None, discount_factor=None, n_samples=None):
+        super().__init__(N, context_prior, known_context,temp, lapse, arm_weight, horizon, real_future_paths, exploration_constant, discount_factor,n_samples)
+
+    ## method for root samples(?)
+    def mean_grid(self, obs=None, n_samples=1000):
+        
+        ## hacky: obs should not contain duplicates!
+        obs = np.unique(obs, axis=0).tolist() if obs is not None else []
+
+        sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, obs, N=self.N)
+        self.sampler = sampler
+            
+        ### determine context indicators
+
+        ## inference case: infer posterior probability, given observations
+        if not self.known_context:
+            context_prior = self.context_prob
+            self.context_prob = sampler.context_posterior(context_prior=context_prior)
+
+        ## simple case: certain prior
+        elif self.known_context:
+            self.context_prob = 1.0 if self.known_context == 'column' else 0.0
+
+        ## get posterior mean under each context, and then calculate weighted average
+        posterior_ps_col, posterior_qs_col = sampler.mean_probs(col_context=True)
+        posterior_ps_row, posterior_qs_row = sampler.mean_probs(col_context=False)
+        self.posterior_mean_p_cost = self.context_prob * np.outer(posterior_ps_col, posterior_qs_col) + (1-self.context_prob) * np.outer(posterior_ps_row, posterior_qs_row)
+        self.posterior_mean_p = self.context_prob * posterior_ps_col + (1-self.context_prob) * posterior_ps_row
+        self.posterior_mean_q = self.context_prob * posterior_qs_col + (1-self.context_prob) * posterior_qs_row
+
+        ## temp fix: this posterior should also be filled in with 1s and 0s for states where a low and high cost have been observed respectively
+        for i,j,c in obs:
+            i = int(i)
+            j = int(j)
+            prob = 1 if c == self.low_cost else 0
+            self.posterior_mean_p_cost[i,j] = prob
+
+    
+    ## act based on posterior mean grid
+    def act(self, env_copy, tree_reset=True):
+        
+        ## get posterior mean grid
+        env_copy.set_sim(False)
+        self.mean_grid(obs=env_copy.obs)
+        env_copy.receive_predictions(self.posterior_mean_p_cost)
+
+        ## get the cost of each path under the posterior mean (weighted by arm_weight)
+        t = env_copy.trial
+        path_costs = []
+        for path_id in range(env_copy.n_afc):
+            path_states = env_copy.path_states[t][path_id]
+            aligned_states, orthogonal_states = env_copy.path_aligned_states[t][path_id], env_copy.path_orthogonal_states[t][path_id]
+            unweighted_pred_costs = self.posterior_mean_p_cost*env_copy.low_cost + (1-self.posterior_mean_p_cost)*env_copy.high_cost
+            total_weighted_path_costs = env_copy.arm_reweighting(unweighted_pred_costs, aligned_states, orthogonal_states, self._aligned_weight, self._orthogonal_weight)
+            path_costs.append(total_weighted_path_costs)
+
+        ## choose the path with the lowest total cost
+        max_cost = np.max(path_costs)
+        action = argm(path_costs, max_cost)
+        
+        ## debugging
+        # print(t,': CE_one_arm path costs:', path_costs)
+        # fig, axs = plt.subplots(1,1, figsize=(5,5))
+        # plot_r(self.posterior_mean_p_cost, axs, title = 'Posterior reward distribution\nmean root sample\npost obs')
+        # plot_traj([env_copy.path_states[t][c] for c in range(self.n_afc)], ax = axs)
+        # plot_obs(env_copy.obs, ax = axs, text=True)
+        # plt.show()
+        # if t==3:
+        #     raise Exception('check this')
+
+        ## or, do probability matching if not greedy
+        if not self.greedy:
+            action = np.random.choice(np.arange(len(path_costs)), p=softmax(path_costs))
+
+        return action, np.array(path_costs)
+
+    
+    ## trivially need to do this
+    def update_tree(self, env_copy, action):
+        return True  # default: always reset
