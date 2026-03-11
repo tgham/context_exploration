@@ -116,13 +116,12 @@ def acceptance_priors(ps, qs, m1,m2,n1,n2):
 #     return rel_obs
 
 class GridSampler:
-    def __init__(self, alpha_row, beta_row, alpha_col, beta_col, low_cost, high_cost, obs, N=10, CE=False):
+    def __init__(self, alpha_row, beta_row, alpha_col, beta_col, low_cost, high_cost, obs, N=10):
         self.alpha_row = alpha_row
         self.beta_row = beta_row
         self.alpha_col = alpha_col
         self.beta_col = beta_col
         self.obs = obs
-        self.CE = CE
         if self.obs is None:
             self.obs = np.array([])
         # else:
@@ -145,62 +144,51 @@ class GridSampler:
         self.high_counts_rows = np.array([np.sum([cost == self.high_cost for (_, _, cost) in self.row_to_obs[i]]) for i in range(self.N)])
         self.high_counts_cols = np.array([np.sum([cost == self.high_cost for (_, _, cost) in self.col_to_obs[j]]) for j in range(self.N)])
 
-
-    def init_pqs(self):
-        if self.CE:
-            self.row_probs = np.full(self.N, self.alpha_row / (self.alpha_row + self.beta_row))
-            self.col_probs = np.full(self.N, self.alpha_col / (self.alpha_col + self.beta_col))
-            for o in self.obs:
-                # if o[0] < self.N:
-                self.row_probs[int(o[0])] = np.random.beta(self.alpha_row, self.beta_row)
-                # if o[1] < self.N:
-                self.col_probs[int(o[1])] = np.random.beta(self.alpha_col, self.beta_col)
-        else:
-            self.row_probs = np.random.beta(self.alpha_row, self.beta_row, size=self.N)
-            self.col_probs = np.random.beta(self.alpha_col, self.beta_col, size=self.N)
-
-
     
-    ## sampling using counts for each row and column
-    def sample(self, col_context=True, n_samples=1):
+    ## sampling row and column probabilities from posterior
+    def sample_probs(self, col_context=True, n_samples=1):
         self.col_probs = np.ones((n_samples, self.N)) 
         self.row_probs = np.ones((n_samples, self.N))
         
-        ## if BAMCP, then parameters are *sampled* from beta distribution
-        if not self.CE:
-            if col_context:
-                # self.row_probs = np.ones(self.N)
-                for j in range(self.N):
-                    low_counts_col = self.low_counts_cols[j]
-                    high_counts_col = self.high_counts_cols[j]
-                    alpha = self.alpha_col + low_counts_col
-                    beta = self.beta_col + high_counts_col
-                    self.col_probs[:,j] = propose(alpha, beta, size=n_samples)
-            else:
-                # self.col_probs = np.ones(self.N)
-                for i in range(self.N):
-                    low_counts_row = self.low_counts_rows[i]
-                    high_counts_row = self.high_counts_rows[i]
-                    alpha = self.alpha_row + low_counts_row
-                    beta = self.beta_row + high_counts_row
-                    self.row_probs[:,i] = propose(alpha, beta, size=n_samples)
+        if col_context:
+            # self.row_probs = np.ones(self.N)
+            for j in range(self.N):
+                low_counts_col = self.low_counts_cols[j]
+                high_counts_col = self.high_counts_cols[j]
+                alpha = self.alpha_col + low_counts_col
+                beta = self.beta_col + high_counts_col
+                self.col_probs[:,j] = propose(alpha, beta, size=n_samples)
+        else:
+            # self.col_probs = np.ones(self.N)
+            for i in range(self.N):
+                low_counts_row = self.low_counts_rows[i]
+                high_counts_row = self.high_counts_rows[i]
+                alpha = self.alpha_row + low_counts_row
+                beta = self.beta_row + high_counts_row
+                self.row_probs[:,i] = propose(alpha, beta, size=n_samples)
 
-        ## if CE, then parameters are *fixed* at the mean of the beta distribution, whose parameters are determined by the counts
-        elif self.CE:
-            if col_context:
-                for j in range(self.N):
-                    low_counts_col = self.low_counts_cols[j]
-                    high_counts_col = self.high_counts_cols[j]
-                    alpha = self.alpha_col + low_counts_col
-                    beta = self.beta_col + high_counts_col
-                    self.col_probs[:,j] = alpha / (alpha + beta)
-            else:
-                for i in range(self.N):
-                    low_counts_row = self.low_counts_rows[i]
-                    high_counts_row = self.high_counts_rows[i]
-                    alpha = self.alpha_row + low_counts_row
-                    beta = self.beta_row + high_counts_row
-                    self.row_probs[:,i] = alpha / (alpha + beta)
+        return self.row_probs, self.col_probs
+    
+    ## get posterior mean row and column probabilities
+    def mean_probs(self, col_context=True, n_samples=1):
+        self.col_probs = np.ones((n_samples, self.N)) 
+        self.row_probs = np.ones((n_samples, self.N))
+    
+        ## parameters are *fixed* at the mean of the beta distribution, whose parameters are determined by the counts
+        if col_context:
+            for j in range(self.N):
+                low_counts_col = self.low_counts_cols[j]
+                high_counts_col = self.high_counts_cols[j]
+                alpha = self.alpha_col + low_counts_col
+                beta = self.beta_col + high_counts_col
+                self.col_probs[:,j] = alpha / (alpha + beta)
+        else:
+            for i in range(self.N):
+                low_counts_row = self.low_counts_rows[i]
+                high_counts_row = self.high_counts_rows[i]
+                alpha = self.alpha_row + low_counts_row
+                beta = self.beta_row + high_counts_row
+                self.row_probs[:,i] = alpha / (alpha + beta)
         return self.row_probs, self.col_probs
     
 
