@@ -35,8 +35,6 @@ class Farmer(ABC):
                  exploration_constant=None, discount_factor=None, n_samples=None):
 
         self.N = N
-        self.n_actions = 4
-        self.action_to_direction = {0: np.array([1,0]), 1: np.array([0, 1]), 2: np.array([-1, 0]), 3: np.array([0, -1])}
         
         ## initialise context prior prob
         self.context_prob = context_prior
@@ -99,9 +97,9 @@ class Farmer(ABC):
         self.beta_row = env.beta_row
         self.beta_col = env.beta_col
 
-    ## agent-specific action based on posterior
+    ## agent-specific calculation of Q values based on posterior
     @abstractmethod
-    def act(self, env_copy, tree_reset=True):
+    def compute_Q(self, env_copy, tree_reset=True):
         pass
 
 
@@ -397,11 +395,20 @@ class Farmer(ABC):
                     self.get_env_info(env_copy)
 
                     ## agent-specific path selection
-                    action, Q_vals = self.act(env_copy, tree_reset)
+                    Q_vals = self.compute_Q(env_copy, tree_reset)
+                    action_probs = self.softmax(Q_vals)
+
+                    ## action selection
+                    assert not np.isnan(np.nansum(Q_vals)), 'no Q estimates": {}'.format(Q_vals)
+                    if self.greedy:
+                        max_Q = np.nanmax(Q_vals)
+                        action = argm(Q_vals, max_Q)
+                    else:
+                        action = np.random.choice(len(Q_vals), p=action_probs)
 
                     self.actions[city, day, t] = action
                     self.Q_vals[city, day, t] = Q_vals
-                    self.p_choice[city, day, t] = self.softmax(Q_vals)
+                    self.p_choice[city, day, t] = action_probs
                     correct_path = np.argmax(env_copy.path_actual_costs[t])
                     self.p_correct[city, day, t] = self.p_choice[city, day, t][correct_path]
 
@@ -710,7 +717,7 @@ class BAMCP(Farmer):
         super().__init__(N, context_prior, known_context,temp, lapse, arm_weight, horizon, real_future_paths, exploration_constant, discount_factor,n_samples)
 
 
-    ## generate full set of root samples
+    ## generate full set of root samples from posterior
     def root_samples(self, obs=None, n_samples=1000):
         
         ## hacky: obs should not contain duplicates!
@@ -722,9 +729,6 @@ class BAMCP(Farmer):
         self.all_posterior_qs = np.zeros((n_samples, self.N))
         self.all_posterior_p_costs = np.zeros((n_samples, self.N, self.N))
 
-            
-        ### determine context indicators
-
         ## inference case: infer posterior probability, given observations
         if not self.known_context:
             context_prior = self.context_prob
@@ -734,10 +738,8 @@ class BAMCP(Farmer):
         elif self.known_context:
             self.context_prob = 1.0 if self.known_context == 'column' else 0.0
 
-        ## use inferred context to sample
+        ## sample grids
         self.context_indicators = np.random.binomial(1, self.context_prob, size=n_samples) 
-        col_context = self.context_indicators.astype(bool)
-
         n_col_samples = np.sum(self.context_indicators)
         n_row_samples = n_samples - n_col_samples
         posterior_ps_col, posterior_qs_col = sampler.sample_probs(col_context=True, n_samples=n_col_samples)
@@ -771,7 +773,7 @@ class BAMCP(Farmer):
         self.posterior_mean_q = np.mean(self.all_posterior_qs, axis=0)
 
 
-    ## MCTS search method - performs tree search using this agent's internal MCTS object
+    ## tree search using this agent's internal MCTS object
     def search(self):
         """
         Perform MCTS search using this agent's internal MCTS object.
@@ -795,11 +797,6 @@ class BAMCP(Farmer):
 
         ## generate new set of root samples
         self.root_samples(obs = self.mcts.env.obs, n_samples=self.n_samples)
-
-        # debugging plot
-        # plt.figure()
-        # plot_r(self.posterior_mean_p_cost.reshape(self.N,self.N), ax = plt.subplot(), title='posterior sample')
-        # plt.show()
 
         ## debugging Q-vals
         self.mcts.Q_tracker = []
@@ -835,32 +832,25 @@ class BAMCP(Farmer):
             except:
                 pass
 
-        
-        ## action selection
+        ## return final Q estimates
         MCTS_estimates = np.full(self.mcts.n_afc, np.nan)
         for action, leaf in self.mcts.tree.root.action_leaves.items():
             MCTS_estimates[action] = leaf.performance
-        assert not np.isnan(np.nansum(MCTS_estimates)), 'no MCTS estimates for {}'.format(self.mcts.tree.root)
-        max_MCTS = np.nanmax(MCTS_estimates)
-        action = argm(MCTS_estimates, max_MCTS)
 
-        return action, MCTS_estimates
+        return MCTS_estimates
 
 
-    def act(self, env_copy, tree_reset=True):
+    ## get MCTS Q estimates
+    def compute_Q(self, env_copy, tree_reset=True):
 
         ## reset tree (or reuse it)
         self.init_mcts(env=env_copy, reset=tree_reset)
         assert self.mcts.env.trial == self.mcts.root_trial, 'trial mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(env_copy.trial, self.mcts.root_trial)
         assert self.mcts.env.sim == True, 'env not in sim mode'
+        self.mcts.root_state = env_copy.current
 
         ## search
-        self.mcts.root_state = env_copy.current
-        action, MCTS_Q = self.search()
-
-        ## do probability matching if not greedy
-        if not self.greedy:
-            action = np.random.choice(np.arange(len(MCTS_Q)), p=softmax(MCTS_Q))
+        MCTS_Q = self.search()
 
         # for a in range(self.n_afc):
         #     self.leaf_visits[city, day, t, a] = self.mcts.tree.root.action_leaves[a].n_action_visits
@@ -898,7 +888,7 @@ class BAMCP(Farmer):
         # self.CE_p_choice[city, day, t] = self.softmax(np.array(CE_path_costs))
         # self.CE_p_correct[city, day, t] = self.CE_p_choice[city, day, t][correct_path]
 
-        return action, MCTS_Q
+        return MCTS_Q
     
 
     ## update the MCTS tree
@@ -970,7 +960,7 @@ class CE(Farmer):
 
     
     ## act based on posterior mean grid
-    def act(self, env_copy, tree_reset=True):
+    def compute_Q(self, env_copy, tree_reset=True):
         
         ## get posterior mean grid
         env_copy.set_sim(False)
@@ -986,10 +976,6 @@ class CE(Farmer):
             unweighted_pred_costs = self.posterior_mean_p_cost*env_copy.low_cost + (1-self.posterior_mean_p_cost)*env_copy.high_cost
             total_weighted_path_costs = env_copy.arm_reweighting(unweighted_pred_costs, aligned_states, orthogonal_states, self._aligned_weight, self._orthogonal_weight)
             path_costs.append(total_weighted_path_costs)
-
-        ## choose the path with the lowest total cost
-        max_cost = np.max(path_costs)
-        action = argm(path_costs, max_cost)
         
         ## debugging
         # print(t,': CE_one_arm path costs:', path_costs)
@@ -1001,11 +987,7 @@ class CE(Farmer):
         # if t==3:
         #     raise Exception('check this')
 
-        ## or, do probability matching if not greedy
-        if not self.greedy:
-            action = np.random.choice(np.arange(len(path_costs)), p=softmax(path_costs))
-
-        return action, np.array(path_costs)
+        return np.array(path_costs)
 
     
     ## trivially need to do this
