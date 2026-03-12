@@ -26,7 +26,6 @@ class MonteCarloTreeSearch():
         self.high_cost = self.env.high_cost
         self.tree = tree
         self.update_trial()
-        self.N = self.env.N
         self.discount_factor = discount_factor
         self.exploration_constant = exploration_constant
         self.real_future_paths = real_future_paths
