@@ -232,6 +232,82 @@ class GridSampler:
         return posterior_col
 
     
+    def sample_mdps(self, n_samples, context_indicators):
+        """
+        Sample n_samples MDP parameterisations from the posterior.
+        
+        Args:
+            n_samples: Number of posterior samples to draw.
+            context_indicators: Boolean array of shape (n_samples,). True = column context, False = row context.
+        
+        Returns:
+            sampled_mdps: Array of shape (n_samples, N, N) — sampled p(low cost) grids.
+            posterior_mean_mdp: Array of shape (N, N) — mean of the sampled grids.
+            extra: Dict of any additional sampler-specific outputs (e.g. latent ps, qs).
+        """
+        n_col_samples = int(np.sum(context_indicators))
+        n_row_samples = n_samples - n_col_samples
+
+        ## sample row and column probabilities under each context
+        posterior_ps_col, posterior_qs_col = self.sample_probs(col_context=True, n_samples=n_col_samples)
+        posterior_ps_row, posterior_qs_row = self.sample_probs(col_context=False, n_samples=n_row_samples)
+
+        ## assemble into (n_samples, N) arrays
+        all_ps = np.zeros((n_samples, self.N))
+        all_qs = np.zeros((n_samples, self.N))
+        all_ps[:n_col_samples, :] = posterior_ps_col
+        all_ps[n_col_samples:, :] = posterior_ps_row
+        all_qs[:n_col_samples, :] = posterior_qs_col
+        all_qs[n_col_samples:, :] = posterior_qs_row
+
+        ## shuffle consistently
+        idx = np.random.permutation(n_samples)
+        all_ps = all_ps[idx]
+        all_qs = all_qs[idx]
+        context_indicators = context_indicators[idx]
+
+        ## compute sampled MDP grids via outer product
+        sampled_mdps = np.einsum('si,sj->sij', all_ps, all_qs)
+
+        ## pin observed cells to their known values
+        for i, j, c in self.obs:
+            i = int(i)
+            j = int(j)
+            prob = 1 if c == self.low_cost else 0
+            sampled_mdps[:, i, j] = prob
+
+        return sampled_mdps
+
+
+    def mean_mdp(self, context_prob):
+        """
+        Compute the posterior mean MDP grid (no sampling).
+        
+        Args:
+            context_prob: Scalar probability that the context is column-world.
+        
+        Returns:
+            posterior_mean_mdp: Array of shape (N, N) — expected p(low cost) grid.
+            extra: Dict of any additional sampler-specific outputs.
+        """
+        posterior_ps_col, posterior_qs_col = self.mean_probs(col_context=True)
+        posterior_ps_row, posterior_qs_row = self.mean_probs(col_context=False)
+
+        posterior_mean_mdp = (
+            context_prob * np.outer(posterior_ps_col, posterior_qs_col)
+            + (1 - context_prob) * np.outer(posterior_ps_row, posterior_qs_row)
+        )
+
+        ## pin observed cells
+        for i, j, c in self.obs:
+            i = int(i)
+            j = int(j)
+            prob = 1 if c == self.low_cost else 0
+            posterior_mean_mdp[i, j] = prob
+
+        return posterior_mean_mdp
+
+
     def get_rel_obs(self, sampled_i, sampled_j):
         if (sampled_i, sampled_j) in self.cached_obs:
             return self.cached_obs[(sampled_i, sampled_j)]

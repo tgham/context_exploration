@@ -19,6 +19,7 @@ from scipy.stats import rankdata, truncnorm
 from scipy.linalg import cholesky
 from base_kernels import *
 from itertools import permutations, combinations
+from samplers import GridSampler
 from numba import njit
 
 
@@ -37,9 +38,6 @@ def _arm_reweighting_numba(costs, aligned_arr, orth_arr, aligned_weight, orthogo
     orth_sum *= orthogonal_weight
     
     return aligned_sum + orth_sum
-
-
-# from PIL import image
 
 
 class Actions(Enum):
@@ -1258,6 +1256,12 @@ class GridEnv(gym.Env):
             self.high_cost,
             self.low_cost
         )
+
+
+    ## construct a task-specific sampler for this environment
+    def make_sampler(self):
+        """Create a GridSampler from this environment's parameters and the given observations."""
+        return GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, self.obs, N=self.N)
 
 
     ## take a step in the environment

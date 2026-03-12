@@ -55,31 +55,12 @@ class Farmer(ABC):
 
         ## MCTS object (will be initialised when running BAMCP agent)
         self.mcts = None
-
-
-    ## initialise MCTS object for tree search
-    def init_mcts(self, env, reset=True):
-        """
-        Initialise or update the MCTS object for tree search.
         
-        Args:
-            env: The environment to use for MCTS.
-            reset: If True, create a new MCTS object. If False, update the existing one.
-        """
-        if reset:
-            tree = Tree(self.N)
-            self.mcts = MonteCarloTreeSearch_AFC(
-                env=env, 
-                tree=tree, 
-                exploration_constant=self.exploration_constant, 
-                discount_factor=self.discount_factor, 
-                horizon=self.horizon, 
-                real_future_paths=self.real_future_paths, 
-                aligned_weight=self._aligned_weight, 
-                orthogonal_weight=self._orthogonal_weight
-            )
-        else:
-            self.mcts.update_trial()
+
+    ## create a sampler object for the current observations
+    def make_sampler(self, obs):
+        """Construct a task-specific sampler. Override in subclasses for different MDP types."""
+        return GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, obs, N=self.N)
 
     ### interactions with the environment
 
@@ -717,61 +698,59 @@ class BAMCP(Farmer):
         super().__init__(N, context_prior, known_context,temp, lapse, arm_weight, horizon, real_future_paths, exploration_constant, discount_factor,n_samples)
 
 
+    ## initialise MCTS object for tree search
+    def init_mcts(self, env, reset=True):
+        """
+        Initialise or update the MCTS object for tree search.
+        
+        Args:
+            env: The environment to use for MCTS.
+            reset: If True, create a new MCTS object. If False, update the existing one.
+        """
+        if reset:
+            tree = Tree(self.N)
+            self.mcts = MonteCarloTreeSearch_AFC(
+                env=env, 
+                tree=tree, 
+                exploration_constant=self.exploration_constant, 
+                discount_factor=self.discount_factor, 
+                horizon=self.horizon, 
+                real_future_paths=self.real_future_paths, 
+                aligned_weight=self._aligned_weight, 
+                orthogonal_weight=self._orthogonal_weight
+            )
+        else:
+            self.mcts.update_trial()
+
+
     ## generate full set of root samples from posterior
     def root_samples(self, obs=None, n_samples=1000):
-        
+        """
+        Generic BAMCP root sampling: infer the context posterior, then
+        delegate to self.sampler.sample_mdps() to draw n_samples MDPs
+        from the task-specific posterior.
+        """
         ## hacky: obs should not contain duplicates!
         obs = np.unique(obs, axis=0).tolist() if obs is not None else []
 
-        sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, obs, N=self.N)
-        self.sampler = sampler
-        self.all_posterior_ps = np.zeros((n_samples, self.N))
-        self.all_posterior_qs = np.zeros((n_samples, self.N))
-        self.all_posterior_p_costs = np.zeros((n_samples, self.N, self.N))
+        ## create task-specific sampler
+        self.sampler = self.make_sampler(obs)
 
-        ## inference case: infer posterior probability, given observations
+        ## update context posterior
         if not self.known_context:
             context_prior = self.context_prob
-            self.context_prob = sampler.context_posterior(context_prior=context_prior)
-
-        ## simple case: certain prior
+            self.context_prob = self.sampler.context_posterior(context_prior=context_prior)
         elif self.known_context:
             self.context_prob = 1.0 if self.known_context == 'column' else 0.0
 
-        ## sample grids
-        self.context_indicators = np.random.binomial(1, self.context_prob, size=n_samples) 
-        n_col_samples = np.sum(self.context_indicators)
-        n_row_samples = n_samples - n_col_samples
-        posterior_ps_col, posterior_qs_col = sampler.sample_probs(col_context=True, n_samples=n_col_samples)
-        posterior_ps_row, posterior_qs_row = sampler.sample_probs(col_context=False, n_samples=n_row_samples)
-        self.all_posterior_ps[:n_col_samples,:] = posterior_ps_col
-        self.all_posterior_ps[n_col_samples:,:] = posterior_ps_row
-        self.all_posterior_qs[:n_col_samples,:] = posterior_qs_col
-        self.all_posterior_qs[n_col_samples:,:] = posterior_qs_row
+        ## draw context indicators (True = column context)
+        self.context_indicators = np.random.binomial(1, self.context_prob, size=n_samples).astype(bool)
 
-        ## shuffle them all in the same way
-        idx = np.random.permutation(n_samples)
-        self.all_posterior_ps = self.all_posterior_ps[idx]
-        self.all_posterior_qs = self.all_posterior_qs[idx]
-        self.context_indicators = np.zeros(n_samples)
-        self.context_indicators[:n_col_samples] = 1
-        self.context_indicators = self.context_indicators[idx].astype(bool)
-
-        ## posterior costs - i.e. the outer product of each sample's p and q
-        self.all_posterior_p_costs = np.einsum('si,sj->sij', self.all_posterior_ps, self.all_posterior_qs)
-
-        ## temp fix: this posterior should also be filled in with 1s and 0s for states where a low and high cost have been observed respectively
-        for i,j,c in obs:
-            i = int(i)
-            j = int(j)
-            prob = 1 if c == self.low_cost else 0
-            self.all_posterior_p_costs[:,i,j] = prob
-    
-        ## posterior means 
-        self.posterior_mean_p_cost = np.mean(self.all_posterior_p_costs, axis=0)
-        self.posterior_mean_p = np.mean(self.all_posterior_ps, axis=0)
-        self.posterior_mean_q = np.mean(self.all_posterior_qs, axis=0)
-
+        ## delegate MDP sampling to the sampler
+        self.all_posterior_p_costs = self.sampler.sample_mdps(n_samples, self.context_indicators)
+        
+        ## optional: compute CE mean too
+        self.posterior_mean_p_cost = self.sampler.mean_mdp(context_prob = self.context_prob)
 
     ## tree search using this agent's internal MCTS object
     def search(self):
@@ -924,39 +903,25 @@ class CE(Farmer):
                  exploration_constant=None, discount_factor=None, n_samples=None):
         super().__init__(N, context_prior, known_context,temp, lapse, arm_weight, horizon, real_future_paths, exploration_constant, discount_factor,n_samples)
 
-    ## method for root samples(?)
+
+    ## method for computing posterior mean MDP
     def mean_grid(self, obs=None, n_samples=1000):
         
         ## hacky: obs should not contain duplicates!
         obs = np.unique(obs, axis=0).tolist() if obs is not None else []
 
-        sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, obs, N=self.N)
-        self.sampler = sampler
+        ## create task-specific sampler
+        self.sampler = self.make_sampler(obs)
             
-        ### determine context indicators
-
-        ## inference case: infer posterior probability, given observations
+        ## update context posterior
         if not self.known_context:
             context_prior = self.context_prob
-            self.context_prob = sampler.context_posterior(context_prior=context_prior)
-
-        ## simple case: certain prior
+            self.context_prob = self.sampler.context_posterior(context_prior=context_prior)
         elif self.known_context:
             self.context_prob = 1.0 if self.known_context == 'column' else 0.0
 
-        ## get posterior mean under each context, and then calculate weighted average
-        posterior_ps_col, posterior_qs_col = sampler.mean_probs(col_context=True)
-        posterior_ps_row, posterior_qs_row = sampler.mean_probs(col_context=False)
-        self.posterior_mean_p_cost = self.context_prob * np.outer(posterior_ps_col, posterior_qs_col) + (1-self.context_prob) * np.outer(posterior_ps_row, posterior_qs_row)
-        self.posterior_mean_p = self.context_prob * posterior_ps_col + (1-self.context_prob) * posterior_ps_row
-        self.posterior_mean_q = self.context_prob * posterior_qs_col + (1-self.context_prob) * posterior_qs_row
-
-        ## temp fix: this posterior should also be filled in with 1s and 0s for states where a low and high cost have been observed respectively
-        for i,j,c in obs:
-            i = int(i)
-            j = int(j)
-            prob = 1 if c == self.low_cost else 0
-            self.posterior_mean_p_cost[i,j] = prob
+        ## delegate mean MDP computation to the sampler
+        self.posterior_mean_p_cost = self.sampler.mean_mdp(context_prob=self.context_prob)
 
     
     ## act based on posterior mean grid
