@@ -53,7 +53,7 @@ class Farmer(ABC):
         ## MCTS object (will be initialised when running BAMCP agent)
         self.mcts = None
 
-        ## environment reference (set via get_env_info)
+        ## environment reference (set in compute_Q)
         self.env = None
         
 
@@ -61,14 +61,8 @@ class Farmer(ABC):
     def make_sampler(self):
         """Delegate to the environment's task-specific sampler factory."""
         if self.env is None:
-            raise ValueError("Environment not set. Call get_env_info() first.")
+            raise ValueError("Environment not set. Has compute_Q been called yet?")
         return self.env.make_sampler()
-
-    ### interactions with the environment
-
-    ## function for receiving info from env
-    def get_env_info(self, env):
-        self.env = env
 
     ## agent-specific calculation of Q values based on posterior
     @abstractmethod
@@ -77,7 +71,7 @@ class Farmer(ABC):
 
 
     ## quick and cheap context posterior
-    def quick_context_posterior(self, obs=None):
+    def quick_context_posterior(self):
         sampler = self.make_sampler()
         context_prob = sampler.context_posterior(context_prior=self.context_prob)
         return context_prob
@@ -359,10 +353,7 @@ class Farmer(ABC):
                         self.day_costs[city, day, t] = np.nansum(self.total_costs[city, day, :t+1]) ## i.e. costs observed so far today
                         self.path_len[city, day, t] = len(env_copy.path_states[t][0])
                         
-
-                    ## agent receives info from env
-                    self.get_env_info(env_copy)
-
+                    
                     ## agent-specific path selection
                     Q_vals = self.compute_Q(env_copy, tree_reset)
                     action_probs = self.softmax(Q_vals)
@@ -508,9 +499,7 @@ class Farmer(ABC):
                     else:
                         env_copy.set_trial(t+1)
 
-                    ## update observations
-                    self.get_env_info(env_copy)
-
+                    
                     ## update MCTS tree
                     if (not missed) and (not day_terminated):
                         tree_reset = self.update_tree(env_copy, action)
@@ -521,7 +510,7 @@ class Farmer(ABC):
                     context_prior = self.context_prob
 
                     # get the new context posterior for this agent
-                    context_posterior = self.quick_context_posterior(env_copy.obs)
+                    context_posterior = self.quick_context_posterior()
 
                     ## (and save these)
                     self.context_priors[city, day, t] = context_prior
@@ -808,6 +797,9 @@ class BAMCP(Farmer):
     ## get MCTS Q estimates
     def compute_Q(self, env_copy, tree_reset=True):
 
+        ## store env reference (used by make_sampler, quick_context_posterior, etc.)
+        self.env = env_copy
+
         ## reset tree (or reuse it)
         self.init_mcts(env=env_copy, reset=tree_reset)
         assert self.mcts.env.trial == self.mcts.root_trial, 'trial mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(env_copy.trial, self.mcts.root_trial)
@@ -909,6 +901,9 @@ class CE(Farmer):
     ## act based on posterior mean grid
     def compute_Q(self, env_copy, tree_reset=True):
         
+        ## store env reference (used by make_sampler, quick_context_posterior, etc.)
+        self.env = env_copy
+
         ## get posterior mean grid
         env_copy.set_sim(False)
         self.mean_grid()

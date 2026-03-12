@@ -226,8 +226,6 @@ class GridSampler:
         
         # Compute the posterior probability for context being the column world
         posterior_col = np.exp(log_joint_col - log_denominator)
-
-        # print('Posterior probability of context being the column world:', posterior_col)
         
         return posterior_col
 
