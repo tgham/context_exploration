@@ -64,7 +64,7 @@ class Node:
 
     # __slots__ = ['state', 'n_state_visits', 'cost', 'terminated', 'node_id', 'parent_node_ids', 'N', 'untried_actions', 'action_leaves']
 
-    def __init__(self, node_id, cost, terminated, trial, n_afc, N,
+    def __init__(self, node_id, cost, terminated, trial, n_afc,
                     path_actions=None, path_states=None, starts=None, goals=None
                  ):
         
@@ -75,7 +75,6 @@ class Node:
         self.terminated = terminated
         self.node_id = node_id
         self.parent_node_ids = []
-        self.N = N
 
         ## path info for PA-BAMCP - for the pair of (sampled) paths, what are the actions, states, starts and goals?
         self.path_actions = path_actions
@@ -142,10 +141,8 @@ class Action_Node:
 ## Tree class
 class Tree:
 
-    def __init__(self,N):
-        # self.nodes = {}
+    def __init__(self):
         self.root = None
-        self.N = N
 
     ## check if node is expandable
     def is_expandable(self, node):
@@ -157,7 +154,7 @@ class Tree:
                        ):
         
         ## create a new node
-        node = Node(node_id=node_id, cost=cost, terminated=terminated, trial = trial, n_afc=n_afc, N=self.N,
+        node = Node(node_id=node_id, cost=cost, terminated=terminated, trial = trial, n_afc=n_afc, 
                     path_actions=path_actions, path_states=path_states, starts=starts, goals=goals
                     )
         
@@ -196,18 +193,6 @@ class Tree:
             return None #i.e. root reached, bc it has no parent
         else:
             return self.nodes[parent_node_id]
-
-    ## calculate value of each S-A node
-    def action_tree(self):
-
-        self.tree_q = np.zeros((self.N,self.N,4)) + np.nan
-        for bs in self.nodes.keys():
-            belief_state = self.nodes[bs].belief_state
-            for a in self.nodes[bs].action_leaves.keys():
-                try:
-                    self.tree_q[belief_state[0], belief_state[1], a] = self.nodes[bs].action_leaves[a].performance
-                except:
-                    pass
 
 
     def print_tree(self, node, indent="", is_last=True, dummy=False, depth=0, max_depth=None):
@@ -381,44 +366,6 @@ class Tree:
 
         ## update the root
         self.root = self.root.action_leaves[action].children[next_node_id]
-        
-
-
-    
-    ## calculate the best trajectory for any two points, given the tree
-    def best_traj(self, start, goal):
-
-        ## get the best action at each state
-        best_actions = nanargmax(self.tree_q, axis=2)
-
-        ## get the best trajectory from start to goal
-        current = start
-        traj_states = [current]
-        traj_actions = []
-        stuck = False
-        while not np.array_equal(current, goal) and not stuck:
-            i, j = current
-            action = best_actions[i,j]
-            action = int(action)
-            traj_actions.append(action)
-            if action==0:
-                current = np.clip((i + 1, j), 0, self.N-1)
-            elif action == 1:
-                current = np.clip((i, j + 1), 0, self.N-1)
-            elif action == 2:
-                current = np.clip((i - 1, j), 0, self.N-1)
-            elif action == 3:
-                current = np.clip((i, j - 1), 0, self.N-1)
-            traj_states.append(current)
-
-            ## check if the current state is already in the path
-            for s in traj_states[:-1]:
-                if np.array_equal(s, current):
-                    stuck = True
-                    
-        
-        return traj_states, traj_actions
-                    
 
     
     
@@ -2101,7 +2048,6 @@ data_keys = [
     'actual_trajectory',
     'optimal_trajectory',
     'observations',
-    'action_tree',
     'discounted_costs',
     'total_discounted_cost',
     'discounted_optimal_costs',

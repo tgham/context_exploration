@@ -20,7 +20,6 @@ from utils import *
 from scipy.stats import rankdata, truncnorm
 from scipy.linalg import cholesky
 from base_kernels import *
-from samplers import GridSampler
 from MCTS import MonteCarloTreeSearch_AFC
 from tqdm.auto import tqdm
 import pandas as pd
@@ -30,11 +29,9 @@ from scipy.special import beta, logsumexp, digamma, comb, betaln
 ### base farmer model?
 class Farmer(ABC):
 
-    def __init__(self, N, context_prior=0.5, known_context=False,
+    def __init__(self, context_prior=0.5, known_context=False,
                  temp=1, lapse=0, arm_weight=0, horizon=3, real_future_paths=True,
                  exploration_constant=None, discount_factor=None, n_samples=None):
-
-        self.N = N
         
         ## initialise context prior prob
         self.context_prob = context_prior
@@ -55,28 +52,23 @@ class Farmer(ABC):
 
         ## MCTS object (will be initialised when running BAMCP agent)
         self.mcts = None
+
+        ## environment reference (set via get_env_info)
+        self.env = None
         
 
-    ## create a sampler object for the current observations
-    def make_sampler(self, obs):
-        """Construct a task-specific sampler. Override in subclasses for different MDP types."""
-        return GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, obs, N=self.N)
+    ## create a sampler object from the environment's current state
+    def make_sampler(self):
+        """Delegate to the environment's task-specific sampler factory."""
+        if self.env is None:
+            raise ValueError("Environment not set. Call get_env_info() first.")
+        return self.env.make_sampler()
 
     ### interactions with the environment
 
     ## function for receiving info from env
     def get_env_info(self, env):
-        self.N = env.N 
-        self.obs = env.obs
-        self.current = env.current
-        self.expt = env.expt
-        self.goal = env.goal
-        self.high_cost = env.high_cost
-        self.low_cost = env.low_cost
-        self.alpha_row = env.alpha_row
-        self.alpha_col = env.alpha_col
-        self.beta_row = env.beta_row
-        self.beta_col = env.beta_col
+        self.env = env
 
     ## agent-specific calculation of Q values based on posterior
     @abstractmethod
@@ -85,12 +77,8 @@ class Farmer(ABC):
 
 
     ## quick and cheap context posterior
-    def quick_context_posterior(self, obs):
-        
-        ## hacky fix: obs should not contain duplicates!
-        obs = np.unique(obs, axis=0).tolist() if obs is not None else []
-        
-        sampler = GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, obs, N=self.N)
+    def quick_context_posterior(self, obs=None):
+        sampler = self.make_sampler()
         context_prob = sampler.context_posterior(context_prior=self.context_prob)
         return context_prob
     
@@ -240,8 +228,8 @@ class Farmer(ABC):
                                 path_past_overlap = len(overlap)
 
                                 ## get the number of costs and no-costs that comprise these overlapping states
-                                path_past_observed_high_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.high_cost for obs in overlap)
-                                path_past_observed_low_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.low_cost for obs in overlap)
+                                path_past_observed_high_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
+                                path_past_observed_low_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
                                 self.path_future_overlaps[city, day, t, i] = env_copy.path_future_overlaps[t][i]
                                 self.path_past_overlaps[city, day, t, i] = path_past_overlap
                                 self.path_past_observed_high_costs[city, day, t, i] = path_past_observed_high_costs
@@ -255,8 +243,8 @@ class Farmer(ABC):
                                 path = set(map(tuple, path))
                                 overlap = set(path).intersection(set(obs_list))
                                 path_past_overlap = len(overlap)
-                                path_past_observed_high_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.high_cost for obs in overlap)
-                                path_past_observed_low_costs = sum(env_copy.costss[t][obs[0], obs[1]] == self.low_cost for obs in overlap)
+                                path_past_observed_high_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
+                                path_past_observed_low_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
                                 self.path_future_overlaps[city, day, t, i] = env_copy.path_future_overlaps[t][i]
                                 self.path_past_overlaps[city, day, t, i] = path_past_overlap
                                 self.path_past_observed_high_costs[city, day, t, i] = path_past_observed_high_costs
@@ -272,12 +260,12 @@ class Farmer(ABC):
                             self.orthogonal_arm_len[city, day, t, i] = len(orthogonal_states)
 
                             ## get info on costs on rows and columns
-                            observed_high_cost_cols = {obs[1] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == self.high_cost}
-                            observed_low_cost_cols = {obs[1] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == self.low_cost}
-                            observed_high_cost_rows = {obs[0] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == self.high_cost}
-                            observed_low_cost_rows = {obs[0] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == self.low_cost}
-                            observed_high_cost_states = {tuple(obs) for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == self.high_cost}
-                            observed_low_cost_states = {tuple(obs) for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == self.low_cost}
+                            observed_high_cost_cols = {obs[1] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost}
+                            observed_low_cost_cols = {obs[1] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost}
+                            observed_high_cost_rows = {obs[0] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost}
+                            observed_low_cost_rows = {obs[0] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost}
+                            observed_high_cost_states = {tuple(obs) for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost}
+                            observed_low_cost_states = {tuple(obs) for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost}
 
                             if env_copy.context == 'column':
                                 
@@ -425,7 +413,7 @@ class Farmer(ABC):
                         # for s in range(n_samples):
                             
                         #     ## sample binary grid
-                        #     sample_costs = np.array([self.high_cost if r>self.all_posterior_p_costs[s].flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
+                        #     sample_costs = np.array([env_copy.high_cost if r>self.all_posterior_p_costs[s].flatten()[ri] else env_copy.low_cost for ri, r in enumerate(np.random.random(env_copy.N**2))]).reshape(env_copy.N, env_copy.N)
 
                         #     ## sum costs along each path
                         #     for path_id in range(env_copy.n_afc):
@@ -440,20 +428,20 @@ class Farmer(ABC):
 
                         # --- 1. PRE-CALCULATION (Do this once outside the sampling loop) ---
                         # Create the Path Weight Matrix W (N_path x N^2)
-                        # W = np.zeros((env_copy.n_afc, self.N**2))
+                        # W = np.zeros((env_copy.n_afc, env_copy.N**2))
                         # for path_id in range(env_copy.n_afc):
                         #     path_states = env_copy.path_states[t][path_id]
-                        #     flat_indices = [state[0] * self.N + state[1] for state in path_states]
+                        #     flat_indices = [state[0] * env_copy.N + state[1] for state in path_states]
                         #     W[path_id, flat_indices] = 1
 
 
                         # # --- 2. VECTORIZED SAMPLING (Replaces your N_samples loop) ---
                         # n_samples = 10000
                         # self.root_samples(obs = env_copy.obs, n_samples=n_samples, CE=False)
-                        # p_costs_flat = self.all_posterior_p_costs.reshape(n_samples, self.N**2)
-                        # random_draws = np.random.random((n_samples, self.N**2))
+                        # p_costs_flat = self.all_posterior_p_costs.reshape(n_samples, env_copy.N**2)
+                        # random_draws = np.random.random((n_samples, env_copy.N**2))
                         # sample_costs_binary = (random_draws < p_costs_flat).astype(int) 
-                        # sample_costs_vectorized = sample_costs_binary * self.high_cost + (1 - sample_costs_binary) * self.low_cost
+                        # sample_costs_vectorized = sample_costs_binary * env_copy.high_cost + (1 - sample_costs_binary) * env_copy.low_cost
 
                         # # Step 3: Vectorized Path Summation
                         # sample_total_costs = sample_costs_vectorized @ W.T 
@@ -692,10 +680,10 @@ class Farmer(ABC):
 
 ## define subclasses
 class BAMCP(Farmer):
-    def __init__(self, N, context_prior=0.5, known_context=False,
+    def __init__(self, context_prior=0.5, known_context=False,
                  temp=1, lapse=0, arm_weight=0, horizon=3, real_future_paths=True,
                  exploration_constant=None, discount_factor=None, n_samples=None):
-        super().__init__(N, context_prior, known_context,temp, lapse, arm_weight, horizon, real_future_paths, exploration_constant, discount_factor,n_samples)
+        super().__init__(context_prior, known_context,temp, lapse, arm_weight, horizon, real_future_paths, exploration_constant, discount_factor,n_samples)
 
 
     ## initialise MCTS object for tree search
@@ -708,7 +696,7 @@ class BAMCP(Farmer):
             reset: If True, create a new MCTS object. If False, update the existing one.
         """
         if reset:
-            tree = Tree(self.N)
+            tree = Tree()
             self.mcts = MonteCarloTreeSearch_AFC(
                 env=env, 
                 tree=tree, 
@@ -724,17 +712,15 @@ class BAMCP(Farmer):
 
 
     ## generate full set of root samples from posterior
-    def root_samples(self, obs=None, n_samples=1000):
+    def root_samples(self, n_samples=1000):
         """
         Generic BAMCP root sampling: infer the context posterior, then
         delegate to self.sampler.sample_mdps() to draw n_samples MDPs
         from the task-specific posterior.
         """
-        ## hacky: obs should not contain duplicates!
-        obs = np.unique(obs, axis=0).tolist() if obs is not None else []
 
         ## create task-specific sampler
-        self.sampler = self.make_sampler(obs)
+        self.sampler = self.make_sampler()
 
         ## update context posterior
         if not self.known_context:
@@ -775,7 +761,7 @@ class BAMCP(Farmer):
             assert np.array_equal(self.mcts.tree.root.path_states[a], self.mcts.env.path_states[self.mcts.root_trial][a]), 'path state mismatch for action {}\n env path: {} \n tree path: {}'.format(a, self.mcts.env.path_states[self.mcts.root_trial][a], self.mcts.tree.root.path_states[a])
 
         ## generate new set of root samples
-        self.root_samples(obs = self.mcts.env.obs, n_samples=self.n_samples)
+        self.root_samples(n_samples=self.n_samples)
 
         ## debugging Q-vals
         self.mcts.Q_tracker = []
@@ -898,20 +884,16 @@ class BAMCP(Farmer):
 
 
 class CE(Farmer):
-    def __init__(self, N, context_prior=0.5, known_context=False,
+    def __init__(self, context_prior=0.5, known_context=False,
                  temp=1, lapse=0, arm_weight=0, horizon=None, real_future_paths=None,
                  exploration_constant=None, discount_factor=None, n_samples=None):
-        super().__init__(N, context_prior, known_context,temp, lapse, arm_weight, horizon, real_future_paths, exploration_constant, discount_factor,n_samples)
-
+        super().__init__(context_prior, known_context,temp, lapse, arm_weight, horizon, real_future_paths, exploration_constant, discount_factor,n_samples)
 
     ## method for computing posterior mean MDP
-    def mean_grid(self, obs=None, n_samples=1000):
-        
-        ## hacky: obs should not contain duplicates!
-        obs = np.unique(obs, axis=0).tolist() if obs is not None else []
+    def mean_grid(self, n_samples=1000):
 
         ## create task-specific sampler
-        self.sampler = self.make_sampler(obs)
+        self.sampler = self.make_sampler()
             
         ## update context posterior
         if not self.known_context:
@@ -929,7 +911,7 @@ class CE(Farmer):
         
         ## get posterior mean grid
         env_copy.set_sim(False)
-        self.mean_grid(obs=env_copy.obs)
+        self.mean_grid()
         env_copy.receive_predictions(self.posterior_mean_p_cost)
 
         ## get the cost of each path under the posterior mean (weighted by arm_weight)

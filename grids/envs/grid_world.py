@@ -1261,7 +1261,10 @@ class GridEnv(gym.Env):
     ## construct a task-specific sampler for this environment
     def make_sampler(self):
         """Create a GridSampler from this environment's parameters and the given observations."""
-        return GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, self.obs, N=self.N)
+
+        ## hacky: obs should be unique obs
+        sampler_obs = np.unique(self.obs, axis=0).tolist() if self.obs is not None else []
+        return GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, sampler_obs, N=self.N)
 
 
     ## take a step in the environment
