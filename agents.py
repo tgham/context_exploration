@@ -372,6 +372,14 @@ class Farmer(ABC):
                     correct_path = np.argmax(env_copy.path_actual_costs[t])
                     self.p_correct[city, day, t] = self.p_choice[city, day, t][correct_path]
 
+                    ## let's also calculate the CE choice under the current agent's knowledge
+                    CE_Q_vals = self.compute_CE_Q(env_copy)
+                    CE_action = argm(CE_Q_vals, np.max(CE_Q_vals))
+                    CE_action_probs = self.softmax(CE_Q_vals)
+                    self.CE_Q_vals[city, day, t] = CE_Q_vals
+                    self.CE_actions[city, day, t] = CE_action
+                    self.CE_p_choice[city, day, t] = CE_action_probs
+                    self.CE_p_correct[city, day, t] = self.CE_p_choice[city, day, t][correct_path]
 
 
                     # elif agent == 'human': CAN JUST DO CE AGENT HERE
@@ -665,6 +673,58 @@ class Farmer(ABC):
             # arm_weight < 0: favour orthogonal arm (reduce aligned weight)
             self._aligned_weight = 1 - max(0.0, -self.arm_weight)
             self._orthogonal_weight = 1 - max(0.0, self.arm_weight)
+
+    
+    
+    ### shared CE methods
+
+    ## compute posterior mean MDP
+    def mean_grid(self):
+
+        ## create task-specific sampler
+        self.sampler = self.make_sampler()
+            
+        ## update context posterior
+        if not self.known_context:
+            context_prior = self.context_prob
+            self.context_prob = self.sampler.context_posterior(context_prior=context_prior)
+        elif self.known_context:
+            self.context_prob = 1.0 if self.known_context == 'column' else 0.0
+
+        ## delegate mean MDP computation to the sampler
+        self.posterior_mean_p_cost = self.sampler.mean_mdp(context_prob=self.context_prob)
+
+    ## act based on posterior mean grid
+    def compute_CE_Q(self, env_copy):
+
+        ## store env reference (used by make_sampler, quick_context_posterior, etc.)
+        self.env = env_copy
+
+        ## get posterior mean grid
+        self.mean_grid()
+
+        ## get the cost of each path under the posterior mean (weighted by arm_weight)
+        t = env_copy.trial
+        path_costs = []
+        for path_id in range(env_copy.n_afc):
+            path_states = env_copy.path_states[t][path_id]
+            aligned_states, orthogonal_states = env_copy.path_aligned_states[t][path_id], env_copy.path_orthogonal_states[t][path_id]
+            unweighted_pred_costs = self.posterior_mean_p_cost*env_copy.low_cost + (1-self.posterior_mean_p_cost)*env_copy.high_cost
+            total_weighted_path_costs = env_copy.arm_reweighting(unweighted_pred_costs, aligned_states, orthogonal_states, self._aligned_weight, self._orthogonal_weight)
+            path_costs.append(total_weighted_path_costs)
+        
+        ## debugging
+        # print(t,': CE_one_arm path costs:', path_costs)
+        # fig, axs = plt.subplots(1,1, figsize=(5,5))
+        # plot_r(self.posterior_mean_p_cost, axs, title = 'Posterior reward distribution\nmean root sample\npost obs')
+        # plot_traj([env_copy.path_states[t][c] for c in range(self.n_afc)], ax = axs)
+        # plot_obs(env_copy.obs, ax = axs, text=True)
+        # plt.show()
+        # if t==3:
+        #     raise Exception('check this')
+        
+        CE_Q = np.array(path_costs)
+        return CE_Q
     
 
 ## define subclasses
@@ -725,7 +785,7 @@ class BAMCP(Farmer):
         self.all_posterior_p_costs = self.sampler.sample_mdps(n_samples, self.context_indicators)
         
         ## optional: compute CE mean too
-        self.posterior_mean_p_cost = self.sampler.mean_mdp(context_prob = self.context_prob)
+        # self.posterior_mean_p_cost = self.sampler.mean_mdp(context_prob = self.context_prob)
 
     ## tree search using this agent's internal MCTS object
     def search(self):
@@ -809,9 +869,6 @@ class BAMCP(Farmer):
         ## search
         MCTS_Q = self.search()
 
-        # for a in range(self.n_afc):
-        #     self.leaf_visits[city, day, t, a] = self.mcts.tree.root.action_leaves[a].n_action_visits
-
         ## debug plot
         # print(t,': BAMCP Q vals:', MCTS_Q, 'CE path costs:', CE_path_costs, 'actual path costs:', env_copy.path_actual_costs[t])
         # for a in range(self.n_afc):
@@ -823,27 +880,6 @@ class BAMCP(Farmer):
         # plot_traj([env_copy.path_states[self.mcts.root_trial][c] for c in range(self.n_afc)], ax = axs)
         # plot_obs(env_copy.obs, ax = axs, text=True)
         # plt.show()
-
-
-        # ### let's also calculate CE choice under BAMCP's knowledge 
-
-        # ## get the cost of each path under the posterior mean
-        # CE_path_costs = []
-        # for path_id in range(env_copy.n_afc):
-        #     path_states = env_copy.path_states[t][path_id]
-        #     CE_path_cost = 0
-        #     for state in path_states:
-        #         # path_cost += env_copy.get_pred_cost(state) ## i.e. sample binary costs from the posterior pqs
-        #         CE_path_cost += self.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost ## or, use expected costs
-        #     CE_path_costs.append(CE_path_cost)
-
-        # ## CE chooses the path with the lowest total cost
-        # max_cost = np.max(CE_path_costs)
-        # CE_action = argm(CE_path_costs, max_cost)
-        # self.CE_actions[city, day, t] = CE_action
-        # self.CE_Q_vals[city, day, t] = np.array(CE_path_costs)
-        # self.CE_p_choice[city, day, t] = self.softmax(np.array(CE_path_costs))
-        # self.CE_p_correct[city, day, t] = self.CE_p_choice[city, day, t][correct_path]
 
         return MCTS_Q
     
@@ -881,55 +917,11 @@ class CE(Farmer):
                  exploration_constant=None, discount_factor=None, n_samples=None):
         super().__init__(context_prior, known_context,temp, lapse, arm_weight, horizon, real_future_paths, exploration_constant, discount_factor,n_samples)
 
-    ## method for computing posterior mean MDP
-    def mean_grid(self, n_samples=1000):
-
-        ## create task-specific sampler
-        self.sampler = self.make_sampler()
-            
-        ## update context posterior
-        if not self.known_context:
-            context_prior = self.context_prob
-            self.context_prob = self.sampler.context_posterior(context_prior=context_prior)
-        elif self.known_context:
-            self.context_prob = 1.0 if self.known_context == 'column' else 0.0
-
-        ## delegate mean MDP computation to the sampler
-        self.posterior_mean_p_cost = self.sampler.mean_mdp(context_prob=self.context_prob)
-
     
     ## act based on posterior mean grid
-    def compute_Q(self, env_copy, tree_reset=True):
-        
-        ## store env reference (used by make_sampler, quick_context_posterior, etc.)
-        self.env = env_copy
-
-        ## get posterior mean grid
-        env_copy.set_sim(False)
-        self.mean_grid()
-        env_copy.receive_predictions(self.posterior_mean_p_cost)
-
-        ## get the cost of each path under the posterior mean (weighted by arm_weight)
-        t = env_copy.trial
-        path_costs = []
-        for path_id in range(env_copy.n_afc):
-            path_states = env_copy.path_states[t][path_id]
-            aligned_states, orthogonal_states = env_copy.path_aligned_states[t][path_id], env_copy.path_orthogonal_states[t][path_id]
-            unweighted_pred_costs = self.posterior_mean_p_cost*env_copy.low_cost + (1-self.posterior_mean_p_cost)*env_copy.high_cost
-            total_weighted_path_costs = env_copy.arm_reweighting(unweighted_pred_costs, aligned_states, orthogonal_states, self._aligned_weight, self._orthogonal_weight)
-            path_costs.append(total_weighted_path_costs)
-        
-        ## debugging
-        # print(t,': CE_one_arm path costs:', path_costs)
-        # fig, axs = plt.subplots(1,1, figsize=(5,5))
-        # plot_r(self.posterior_mean_p_cost, axs, title = 'Posterior reward distribution\nmean root sample\npost obs')
-        # plot_traj([env_copy.path_states[t][c] for c in range(self.n_afc)], ax = axs)
-        # plot_obs(env_copy.obs, ax = axs, text=True)
-        # plt.show()
-        # if t==3:
-        #     raise Exception('check this')
-
-        return np.array(path_costs)
+    def compute_Q(self, env_copy, tree_reset=None):
+        CE_Q = self.compute_CE_Q(env_copy)
+        return CE_Q
 
     
     ## trivially need to do this
