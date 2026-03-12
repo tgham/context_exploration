@@ -84,7 +84,7 @@ class Farmer(ABC):
 
         
     ## run agent on participant's trial sequence
-    def run(self, hyperparams, agent = 'CE', df_trials=None, envs=None,fit=True, progress=False):
+    def run(self, hyperparams, agent = 'CE', df_trials=None, envs=None,fit=True, yoked=False, progress=False):
         
         ## init expt info
         try:
@@ -207,10 +207,10 @@ class Farmer(ABC):
                     actions = []
                     choice_probs = []
 
-                    ### if extracting useful behavioural measures
+                    ### if extracting useful behavioural measures, i.e. yoking to human choices
 
                     ## overlaps with previous observations
-                    if agent == 'human':
+                    if yoked:
                         paths = env_copy.path_states[t].copy()
                         obs_list = [tuple(obs[:2]) for obs in env_copy.obs.tolist()]
                         obs_list = list(set(obs_list)) # no repeated obs!
@@ -266,12 +266,12 @@ class Farmer(ABC):
                                 ### actual costs
                                 
                                 ## count how many of these aligned states have actual high and low costs
-                                self.aligned_arm_actual_high_costs[city, day, t, i] = sum(1 for state in aligned_states if state in observed_high_cost_states)
-                                self.aligned_arm_actual_low_costs[city, day, t, i] = sum(1 for state in aligned_states if state in observed_low_cost_states)
+                                # self.aligned_arm_actual_high_costs[city, day, t, i] = sum(1 for state in aligned_states if state in observed_high_cost_states)
+                                # self.aligned_arm_actual_low_costs[city, day, t, i] = sum(1 for state in aligned_states if state in observed_low_cost_states)
 
-                                ## count how many of the orthogonal states have actual high and low costs
-                                self.orthogonal_arm_actual_high_costs[city, day, t, i] = sum(1 for state in orthogonal_states if state in observed_high_cost_states)
-                                self.orthogonal_arm_actual_low_costs[city, day, t, i] = sum(1 for state in orthogonal_states if state in observed_low_cost_states)
+                                # ## count how many of the orthogonal states have actual high and low costs
+                                # self.orthogonal_arm_actual_high_costs[city, day, t, i] = sum(1 for state in orthogonal_states if state in observed_high_cost_states)
+                                # self.orthogonal_arm_actual_low_costs[city, day, t, i] = sum(1 for state in orthogonal_states if state in observed_low_cost_states)
 
                                 
                                 ### gen costs
@@ -306,17 +306,17 @@ class Farmer(ABC):
                                 ### actual costs
 
                                 ## count how many of these aligned states have actual high and low costs
-                                self.aligned_arm_actual_high_costs[city, day, t, i] = sum(
-                                    1 for state in aligned_states 
-                                    if state in observed_high_cost_states)
-                                self.aligned_arm_actual_low_costs[city, day, t, i] = sum(
-                                    1 for state in aligned_states if state in observed_low_cost_states)
+                                # self.aligned_arm_actual_high_costs[city, day, t, i] = sum(
+                                #     1 for state in aligned_states 
+                                #     if state in observed_high_cost_states)
+                                # self.aligned_arm_actual_low_costs[city, day, t, i] = sum(
+                                #     1 for state in aligned_states if state in observed_low_cost_states)
 
-                                ## count how many of the orthogonal states have actual high and low costs
-                                self.orthogonal_arm_actual_high_costs[city, day, t, i] = sum(
-                                    1 for state in orthogonal_states if state in observed_high_cost_states)
-                                self.orthogonal_arm_actual_low_costs[city, day, t, i] = sum(
-                                    1 for state in orthogonal_states if state in observed_low_cost_states)
+                                # ## count how many of the orthogonal states have actual high and low costs
+                                # self.orthogonal_arm_actual_high_costs[city, day, t, i] = sum(
+                                #     1 for state in orthogonal_states if state in observed_high_cost_states)
+                                # self.orthogonal_arm_actual_low_costs[city, day, t, i] = sum(
+                                #     1 for state in orthogonal_states if state in observed_low_cost_states)
 
                                 
                                 ### gen costs
@@ -382,84 +382,9 @@ class Farmer(ABC):
                     self.CE_p_correct[city, day, t] = self.CE_p_choice[city, day, t][correct_path]
 
 
-                    # elif agent == 'human': CAN JUST DO CE AGENT HERE
-                        
-                    #     ## need to trivially set predicted costs to 0 to avoid errors when interacting with the environment
-                    #     # env_copy.receive_predictions(np.zeros((N, N)))
-
-                    #     ## or, we might actually calculate the CE-correct answer under the human's observations
-                    #     self.root_samples(obs=env_copy.obs, CE=True)
-                    #     env_copy.receive_predictions(self.posterior_mean_p_cost)
-                    #     path_costs = []
-                    #     for path_id in range(env_copy.n_afc):
-                    #         path_states = env_copy.path_states[t][path_id]
-                    #         path_cost = 0
-                    #         for state in path_states:
-                    #             path_cost += self.posterior_mean_p_cost[state[0], state[1]]*env_copy.low_cost + (1-self.posterior_mean_p_cost[state[0], state[1]])*env_copy.high_cost ## or, use expected costs
-                    #         path_costs.append(path_cost)
-                    #     max_cost = np.max(path_costs)
-                    #     CE_action = argm(path_costs, max_cost)
-                    #     self.CE_actions[city, day, t] = CE_action
-                    #     self.CE_Q_vals[city, day, t] = np.array(path_costs)
-
-                        
-                        ### get the difference in distributions over total costs of the two paths
-
-                        # ## sample PMFs over total costs for each path
-                        # n_samples = 50000
-                        # self.root_samples(obs = env_copy.obs, n_samples=n_samples, CE=False)
-                        # sample_total_costs = np.zeros((n_samples, env_copy.n_afc))
-                        # for s in range(n_samples):
-                            
-                        #     ## sample binary grid
-                        #     sample_costs = np.array([env_copy.high_cost if r>self.all_posterior_p_costs[s].flatten()[ri] else env_copy.low_cost for ri, r in enumerate(np.random.random(env_copy.N**2))]).reshape(env_copy.N, env_copy.N)
-
-                        #     ## sum costs along each path
-                        #     for path_id in range(env_copy.n_afc):
-                        #         path_states = env_copy.path_states[t][path_id]
-                        #         path_cost = 0
-                        #         for state in path_states:
-                        #             path_cost += sample_costs[state[0], state[1]]
-                        #         sample_total_costs[s, path_id] = path_cost
-
-
-                        ### OR, vectorized sampling approach:
-
-                        # --- 1. PRE-CALCULATION (Do this once outside the sampling loop) ---
-                        # Create the Path Weight Matrix W (N_path x N^2)
-                        # W = np.zeros((env_copy.n_afc, env_copy.N**2))
-                        # for path_id in range(env_copy.n_afc):
-                        #     path_states = env_copy.path_states[t][path_id]
-                        #     flat_indices = [state[0] * env_copy.N + state[1] for state in path_states]
-                        #     W[path_id, flat_indices] = 1
-
-
-                        # # --- 2. VECTORIZED SAMPLING (Replaces your N_samples loop) ---
-                        # n_samples = 10000
-                        # self.root_samples(obs = env_copy.obs, n_samples=n_samples, CE=False)
-                        # p_costs_flat = self.all_posterior_p_costs.reshape(n_samples, env_copy.N**2)
-                        # random_draws = np.random.random((n_samples, env_copy.N**2))
-                        # sample_costs_binary = (random_draws < p_costs_flat).astype(int) 
-                        # sample_costs_vectorized = sample_costs_binary * env_copy.high_cost + (1 - sample_costs_binary) * env_copy.low_cost
-
-                        # # Step 3: Vectorized Path Summation
-                        # sample_total_costs = sample_costs_vectorized @ W.T 
-
-
-                        ## or, only calculate the difference if the CE's belief does indeed favour the better path - i.e. if CE_aciton == correct_path
-                        # if CE_action == correct_path:
-                        #     self.distr_diff[city, day, t] = path_distr_diff(sample_total_costs[:,0], sample_total_costs[:,1], correct_path)
-                        # else:
-                        #     self.distr_diff[city, day, t] = np.nan
-
-                        # print('t{}, distr diff: {}'.format(t, self.distr_diff[city, day, t]))
-                        
-                        
-
-
-                    ### take ppt's action if a) we are fitting, or b) we are extracting behavioural measures
+                    ### take ppt's action if a) we are fitting, or b) we are extracting behavioural measures by yoking to ppt's choices
                     missed=False
-                    if (fit) or (agent == 'human'):
+                    if (fit) or (yoked):
 
                         ## first check if the participant has made a choice
                         try:

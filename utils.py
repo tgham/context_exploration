@@ -951,7 +951,7 @@ def save_rotated_data(rotated_data, output_file):
             pickle.dump(rotated_data, f)
 
 def load_data(path):
-    from agents import Farmer ## for later simulation
+    from agents import Farmer, CE ## for later simulation
     fieldnames = [
         "pid", 
         "trial", "city", "path_chosen", "button_pressed", "reaction_time_ms", 
@@ -1565,7 +1565,7 @@ def load_data(path):
         except FileNotFoundError:
             raise FileNotFoundError(f'No env objects found for participant {pid} with id {id}')
         
-        ## simulate
+        ## simulate using CE
         if expt == 'expt_1':
             N=8
             context_prior=0.5
@@ -1578,8 +1578,8 @@ def load_data(path):
             N=9
             context_prior=None
             known_context = True
-        agent = Farmer(N=N, context_prior=context_prior, known_context=known_context)
-        agent.run(params = None, hyperparams=None, agent = 'human', df_trials= df_all.loc[df_all['pid'] == pid],envs=envs, fit=False)
+        agent = CE(context_prior=context_prior, known_context=known_context)
+        agent.run(hyperparams=None, agent = 'human', df_trials= df_all.loc[df_all['pid'] == pid],envs=envs, fit=False, yoked = True)
 
         ## extract cost info
         df_all.loc[df_all['pid'] == pid, 'observed_cost'] = agent.total_costs.flatten()
