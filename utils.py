@@ -113,10 +113,9 @@ class Node:
     
 class Action_Node:
 
-    def __init__(self, start, action, goal, terminated, trial, parent_id):
+    def __init__(self, start, action, terminated, trial, parent_id):
         self.start = start
         self.action = action ## in AFC, this specifies the path ID (i.e. 0 or 1)
-        self.goal = goal
         self.total_simulation_cost = 0
         self.performance = None
         self.n_action_visits = 0
@@ -129,10 +128,9 @@ class Action_Node:
 
     def __str__(self):
         # return "prev_state{}: (action={}, next_state={}, children={}, visits={}, performance={:0.4f})".format(
-        return "start{}: (action={}, goal={}, n_children={}, visits={}, performance={:0.3f})".format(
+        return "start{}: (action={}, n_children={}, visits={}, performance={:0.3f})".format(
                                                   self.start,
                                                   self.action,
-                                                self.goal,
                                                   len(self.children_ids),
                                                   self.n_action_visits,
                                                   self.performance,
@@ -254,7 +252,7 @@ class Tree:
 
             # Print the action label (only once per action)
             leaf = children[0][0]  # Assume all children of the same action share the same leaf
-            action_label = f"Action {action}, (n_v: {leaf.n_action_visits}, start: {leaf.start}, goal: {leaf.goal}, branch factor: {len(children)}, perf: {leaf.performance:.2f})"
+            action_label = f"Action {action}, (n_v: {leaf.n_action_visits}, start: {leaf.start}, branch factor: {len(children)}, perf: {leaf.performance:.2f})"
 
             # Highlight the best action in bold (use ANSI escape codes for bold text)
             if action == best_action:

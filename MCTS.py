@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 import random
 from math import sqrt, log
 from utils import Action_Node, Tree, make_env, argm, data_keys, KL_divergence, get_next_state
@@ -76,11 +77,10 @@ class MonteCarloTreeSearch():
         path_actions = self.env.path_actions[self.root_trial].copy()
         path_states = self.env.path_states[self.root_trial].copy()
         starts = self.env.starts[self.root_trial].copy()
-        goals = self.env.goals[self.root_trial].copy()
 
         ## add state node to the tree
         self.tree.add_state_node(node_id=node_id, cost=None, terminated=False, trial = self.root_trial, n_afc = self.n_afc, parent=None, 
-                                path_actions=path_actions, path_states=path_states, starts=starts, goals=goals
+                                path_actions=path_actions, path_states=path_states, starts=starts, 
                                  )
 
     ## create node id, which represents the agent's current state of knowledge, a flattened N*N*2 array representing which cells have a high or low cost
@@ -106,11 +106,53 @@ class MonteCarloTreeSearch():
     ## debugging method for checking if node's belief state matches the env state
     def check_node(self, node):
         raise NotImplementedError('check_node not implemented in subclass')
+    
+    ## revert env to root state and trial
+    @abstractmethod
+    def revert_env(self):
+        pass
+
 
     
     ## expand the action space of a node
     def expand(self, node):
-        raise NotImplementedError('expand not implemented in subclass')
+        assert self.env.sim, 'env is not in sim mode'
+
+        ### take action (or path) and get new state
+        action = node.untried_action()
+        # terminated = node.trial == self.env.n_trials-1 ## i.e. this action leaf corresponds to the action made in the final trial, so it leads to termination of the day
+
+        ## or, we terminate depending on horizon
+        terminated = node.trial == np.min([self.root_trial + self.horizon, self.env.n_trials-1]) ## i.e. this action leaf corresponds to a trial that is at or beyond the horizon, so it leads to termination of the day
+            
+        ### update info for s-a leaf - i.e. the state-action pair
+
+        ## full BAMCP:
+        if self.real_future_paths:
+            start = self.env.starts[node.trial][action].copy()
+            assert (start[0], start[1]) == (node.starts[action][0], node.starts[action][1]), 'mismatch between node and env start states\n node: {} \n env: {}'.format(node.starts[action], start)
+
+        ## PA-BAMCP:
+        else:
+            start = node.starts[action].copy()
+
+        node.action_leaves[action] = Action_Node(start = start, action=action, terminated=terminated, trial=node.trial, parent_id=node.node_id)
+        node.action_leaves[action].performance = 0
+        node.action_leaves[action].norm_performance = 0
+
+        ### expansion of node attaches a (potentially sampled) pair of paths to the leaf
+        node.action_leaves[action].start = start
+        node.action_leaves[action].path_actions = node.path_actions[action]
+        node.action_leaves[action].path_states = node.path_states[action]
+        
+        ## one-armed weighting: store the aligned and orthogonal states
+        if self.real_future_paths:
+            node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states = self.env.path_aligned_states[node.trial][action], self.env.path_orthogonal_states[node.trial][action] ## full BAMCP
+            # print('got alignment info: ', node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states)
+        else:
+            node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states = self.env.get_alignment([[node.path_states[action]]]) ## PA-BAMCP
+        
+        return node.action_leaves[action]
     
 
     ## take an action according to the tree policy, i.e. take the best UCT child and see where it takes you
@@ -139,17 +181,6 @@ class MonteCarloTreeSearch():
             t+=1
             self.check_node(node)
 
-            ## myopia - i.e. initiate rollout of all subsequent trials
-            # if t == 2:
-
-            #     ## revert env
-            #     self.env.set_state(self.root_state)
-            #     self.env.set_goal(self.root_goal)
-            #     self.env.set_trial(self.root_trial)
-            #     assert np.array_equal(self.env.current, self.root_state), 'env state not reverted properly'
-            #     assert self.env.trial == self.root_trial, 'env trial not reverted properly'
-            #     return False
-
             ## expansion step
             if self.tree.is_expandable(node):
                 action_leaf = self.expand(node)
@@ -161,9 +192,7 @@ class MonteCarloTreeSearch():
                 # node.n_state_visits += 1
 
                 ## revert env
-                self.env.set_state(self.root_state)
-                self.env.set_goal(self.root_goal)
-                self.env.set_trial(self.root_trial)
+                self.revert_env()
                 # assert (self.env.current[0], self.env.current[1]) == (self.root_state[0], self.root_state[1]), 'env state not reverted properly:\n env current: {} \n root state: {}'.format(self.env.current, self.root_state)
                 assert self.env.trial == self.root_trial, 'env trial not reverted properly. should be in {}, but actually in {}'.format(self.root_trial, self.env.trial)
 
@@ -193,26 +222,23 @@ class MonteCarloTreeSearch():
                             next_path_actions = self.env.path_actions[node_trial].copy()
                             next_path_states = self.env.path_states[node_trial].copy()
                             next_starts = self.env.starts[node_trial].copy()
-                            next_goals = self.env.goals[node_trial].copy()
                         else:
                             next_path_actions= None
                             next_path_states= None
                             next_starts = None
-                            next_goals = None
 
                     ## PA-BAMCP: trial info for the next node (i.e. the node to which the action leaf leads) is sampled
                     else:
                         if not terminated:
-                            _, next_path_actions, next_path_states, next_starts, next_goals = self.env.sample_paths_given_future_states(self.root_trial)
+                            _, next_path_actions, next_path_states, next_starts, _ = self.env.sample_paths_given_future_states(self.root_trial)
                         else:
                             next_path_actions= None
                             next_path_states= None
                             next_starts = None
-                            next_goals = None
 
                     ## create new node
                     node = self.tree.add_state_node(node_id=next_node_id, cost = costs, terminated=terminated, trial = node_trial, n_afc = self.n_afc, parent=action_leaf,
-                                        path_actions=next_path_actions, path_states=next_path_states, starts=next_starts, goals=next_goals
+                                        path_actions=next_path_actions, path_states=next_path_states, starts=next_starts
                                                     )
 
 
@@ -221,9 +247,7 @@ class MonteCarloTreeSearch():
             action_leaf = None
 
         ## revert env
-        self.env.set_state(self.root_state)
-        self.env.set_goal(self.root_goal)
-        self.env.set_trial(self.root_trial)
+        self.revert_env()
         # assert (self.env.current[0], self.env.current[1]) == (self.root_state[0], self.root_state[1]), 'env state not reverted properly'
         assert self.env.trial == self.root_trial, 'env trial not reverted properly'
 
@@ -396,73 +420,10 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         assert node.trial == self.env.trial, 'mismatch between node and env trial\n node: {} \n env: {}'.format(node.trial, self.env.trial)
 
     
-    ## in AFC, we define prev and next states in terms of the start and goal states for the chosen path
-    def expand(self, node):
-        assert self.env.sim, 'env is not in sim mode'
-
-        ### take action (or path) and get new state
-        action = node.untried_action()
-        # terminated = node.trial == self.env.n_trials-1 ## i.e. this action leaf corresponds to the action made in the final trial, so it leads to termination of the day
-
-        ## or, we terminate depending on horizon
-        terminated = node.trial == np.min([self.root_trial + self.horizon, self.env.n_trials-1]) ## i.e. this action leaf corresponds to a trial that is at or beyond the horizon, so it leads to termination of the day
-            
-        ### update info for s-a leaf - i.e. the state-action pair
-
-        ## full BAMCP:
-        if self.real_future_paths:
-            start = self.env.starts[node.trial][action].copy()
-            goal = self.env.goals[node.trial][action].copy()
-            assert (start[0], start[1]) == (node.starts[action][0], node.starts[action][1]), 'mismatch between node and env start states\n node: {} \n env: {}'.format(node.starts[action], start)
-
-        ## PA-BAMCP:
-        else:
-            start = node.starts[action].copy()
-            goal = node.goals[action].copy()
-
-        node.action_leaves[action] = Action_Node(start = start, action=action, goal = goal, terminated=terminated, trial=node.trial, parent_id=node.node_id)
-        node.action_leaves[action].performance = 0
-        node.action_leaves[action].norm_performance = 0
-
-        ### expansion of node attaches a (potentially sampled) pair of paths to the leaf
-        node.action_leaves[action].start = start
-        node.action_leaves[action].goal = goal
-        node.action_leaves[action].path_actions = node.path_actions[action]
-        node.action_leaves[action].path_states = node.path_states[action]
-        
-        ## one-armed weighting: store the aligned and orthogonal states
-        if self.real_future_paths:
-            node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states = self.env.path_aligned_states[node.trial][action], self.env.path_orthogonal_states[node.trial][action] ## full BAMCP
-            # print('got alignment info: ', node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states)
-        else:
-            node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states = self.env.get_alignment([[node.path_states[action]]]) ## PA-BAMCP
-        
-        return node.action_leaves[action]
-    
     def update_trial(self):
         self.root_trial = self.env.trial ## i.e. the trial that the agent is current faced with in the real env
         self.root_state = self.env.starts[self.root_trial].copy() ## i.e. the two possible start states for this trial
         self.root_goal = self.env.goals[self.root_trial].copy() ## i.e. the two possible goal states for this trial
-
-        ## PA-BAMCP: root's trial info now needs to accurately reflect the env
-        # if self.tree.root is not None:
-        #     print(self.root_trial,self.tree.root.starts, self.env.starts[self.root_trial])
-        #     for a in range(self.n_afc):
-
-        #         ## update node
-        #         self.tree.root.starts[a] = self.env.starts[self.root_trial][a].copy()
-        #         self.tree.root.goals[a] = self.env.goals[self.root_trial][a].copy()
-        #         self.tree.root.path_states[a] = self.env.path_states[self.root_trial][a]
-        #         self.tree.root.path_actions[a] = self.env.path_actions[self.root_trial][a]
-
-        #         ## update action leaf (if it exists)
-        #         if self.tree.root.action_leaves[a] is not None:
-        #             self.tree.root.action_leaves[a].start = self.env.starts[self.root_trial][a].copy()
-        #             self.tree.root.action_leaves[a].goal = self.env.goals[self.root_trial][a].copy()
-        #             self.tree.root.action_leaves[a].path_states = self.env.path_states[self.root_trial][a]
-        #             self.tree.root.action_leaves[a].path_actions = self.env.path_actions[self.root_trial][a]
-        #             self.tree.root.action_leaves[a].aligned_states = self.env.path_aligned_states[self.root_trial][a]
-        #             self.tree.root.action_leaves[a].orthogonal_states = self.env.path_orthogonal_states[self.root_trial][a]
 
     ## tree step
     def tree_step(self, action_leaf):
@@ -482,11 +443,9 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         ## PA-BAMCP: sample two paths 
         else:
             start_tmp = action_leaf.start.copy()
-            goal_tmp = action_leaf.goal.copy()
             action_sequence = action_leaf.path_actions.copy()
 
         self.env.set_state(start_tmp)
-        self.env.set_goal(goal_tmp)
         # self.env.set_trial(step_trial)
 
         ## initialise costs and observations for this path
@@ -496,7 +455,6 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         ## take path
         # states, costs = self.env.take_path(action_sequence)
         states, costs = self.env.path_step(path_id)
-        assert (states[-1][0], states[-1][1]) == (goal_tmp[0], goal_tmp[1]), 'final state of path does not match goal\n final state: {}, goal: {}'.format(states[-1], goal_tmp)
 
         ## add back in the start state if it wasn't actually observed in non-sim space
         # states = [start_tmp] + states
@@ -657,31 +615,13 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         # assert len(remaining_ro_costs)+first_trial+1 == self.env.n_trials, 'remaining RO costs do not match number of trials\n n remaining RO costs: {}, n trials: {}'.format(len(remaining_ro_costs), self.env.n_trials)
         assert len(remaining_ro_costs)+first_trial+1 == np.min([self.root_trial + self.horizon + 1, self.env.n_trials]), 'remaining RO costs do not match number of trials\n n remaining RO costs: {}, n trials: {}'.format(len(remaining_ro_costs), np.min([self.root_trial + self.horizon + 1, self.env.n_trials]))
         return total_cost 
+
     
-    ## myopic rollout - i.e. tree has been cut off at a certain depth, after which point you just do greedy rollouts
-    def myopic_rollout(self, myopic_trial):
-
-        ## init
-        total_cost = 0
-        depth = 0
-        for trial in range(myopic_trial, self.env.n_trials):
-            depth+=1
-
-            ## GREEDY: get the total cost of the paths and return the better one
-            path_costs = []
-            for path_id in range(self.n_afc):
-                path_states = self.env.path_states[trial][path_id]
-                ro_cost = 0
-                for state in path_states:
-                    # cost = self.env.get_pred_cost(state)
-                    cost = self.env.predicted_costs[state[0], state[1]]
-                    ro_cost += cost
-                path_costs.append(ro_cost)
-            total_cost += np.max(path_costs) * self.discount_factor**depth
-
-        # self.tree_costs.append(total_cost)
-        self.tree_costs[-1] += total_cost
-        return total_cost
+    ## after simulation, need to revert env to its original state before the next simulation
+    def revert_env(self):
+        self.env.set_state(self.root_state)
+        self.env.set_goal(self.root_goal)
+        self.env.set_trial(self.root_trial)
     
 
     ## expected KL divergence
