@@ -73,7 +73,7 @@ class Farmer(ABC):
     ## quick and cheap context posterior
     def quick_context_posterior(self):
         sampler = self.make_sampler()
-        context_prob = sampler.context_posterior(context_prior=self.context_prob)
+        context_prob = sampler.infer_context_posterior(context_prior=self.context_prob)
         return context_prob
     
 
@@ -612,7 +612,7 @@ class Farmer(ABC):
         ## update context posterior
         if not self.known_context:
             context_prior = self.context_prob
-            self.context_prob = self.sampler.context_posterior(context_prior=context_prior)
+            self.context_prob = self.sampler.infer_context_posterior(context_prior=context_prior)
         elif self.known_context:
             self.context_prob = 1.0 if self.known_context == 'column' else 0.0
 
@@ -699,7 +699,7 @@ class BAMCP(Farmer):
         ## update context posterior
         if not self.known_context:
             context_prior = self.context_prob
-            self.context_prob = self.sampler.context_posterior(context_prior=context_prior)
+            self.context_prob = self.sampler.infer_context_posterior(context_prior=context_prior)
         elif self.known_context:
             self.context_prob = 1.0 if self.known_context == 'column' else 0.0
 

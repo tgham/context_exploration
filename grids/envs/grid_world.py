@@ -54,7 +54,7 @@ class Actions(Enum):
 
 class GridEnv(gym.Env):
 
-    def __init__(self, N, n_trials=1, expt_info={'type':'AFC'}, beta_params=None, size=5, seed=None):
+    def __init__(self, N, n_trials, expt_info, beta_params=None, size=5, seed=None):
         
         ## seed
         if seed is not None:
@@ -70,6 +70,7 @@ class GridEnv(gym.Env):
         self.locations = np.column_stack([X.ravel(), Y.ravel()])
         self.expt = expt_info['type']
         self.context = expt_info['context']
+        self.known_context = expt_info['known_context']
         self.n_afc = expt_info['n_afc'] if 'n_afc' in expt_info else 2
         if expt_info['objective'] is not None:
             self.objective = expt_info['objective']
