@@ -117,17 +117,15 @@ class Action_Node:
         self.n_action_visits = 0
         self.terminated = terminated
         self.trial = trial
-        self.node_id = self.action
         self.parent_id = parent_id
         self.children={}
-        self.children_ids = []
 
     def __str__(self):
         # return "prev_state{}: (action={}, next_state={}, children={}, visits={}, performance={:0.4f})".format(
         return "start{}: (action={}, n_children={}, visits={}, performance={:0.3f})".format(
                                                   self.start,
                                                   self.action,
-                                                  len(self.children_ids),
+                                                  len(self.children.keys()),
                                                   self.n_action_visits,
                                                   self.performance,
                                                   )
@@ -160,7 +158,6 @@ class Tree:
         else:
             
             ## add this state node to the children of the previous action leaf
-            parent.children_ids.append(node.node_id)
             parent.children[node.node_id] = node
 
         return node
