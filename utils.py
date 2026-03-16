@@ -64,7 +64,7 @@ class Node:
 
     # __slots__ = ['state', 'n_state_visits', 'cost', 'terminated', 'node_id', 'parent_node_ids', 'N', 'untried_actions', 'action_leaves']
 
-    def __init__(self, node_id, cost, terminated, trial, n_afc,
+    def __init__(self, node_id, cost, terminated, trial,
                     path_actions=None, path_states=None, starts=None, goals=None
                  ):
         
@@ -87,6 +87,7 @@ class Node:
         self.min_Q = np.inf
 
         ## define valid actions
+        n_afc = len(path_actions) if path_actions is not None else 0
         self.untried_actions = list(range(n_afc))
 
         ## action leaves
@@ -147,12 +148,12 @@ class Tree:
         return node.untried_actions and not node.terminated
 
     ## attach action leaf to child state
-    def add_state_node(self, node_id, cost, terminated, trial, n_afc, parent=None, 
+    def add_state_node(self, node_id, cost, terminated, trial, parent=None, 
                                 path_actions=None, path_states=None, starts=None, goals=None
                        ):
         
         ## create a new node
-        node = Node(node_id=node_id, cost=cost, terminated=terminated, trial = trial, n_afc=n_afc, 
+        node = Node(node_id=node_id, cost=cost, terminated=terminated, trial = trial, 
                     path_actions=path_actions, path_states=path_states, starts=starts, goals=goals
                     )
         

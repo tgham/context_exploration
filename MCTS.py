@@ -23,8 +23,6 @@ class MonteCarloTreeSearch():
         self.n_afc = self.env.n_afc
         self.aligned_weight = aligned_weight
         self.orthogonal_weight = orthogonal_weight
-        self.low_cost = self.env.low_cost
-        self.high_cost = self.env.high_cost
         self.tree = tree
         self.update_trial()
         self.discount_factor = discount_factor
@@ -50,40 +48,46 @@ class MonteCarloTreeSearch():
         starts = self.env.starts[self.root_trial].copy()
 
         ## add state node to the tree
-        self.tree.add_state_node(node_id=node_id, cost=None, terminated=False, trial = self.root_trial, n_afc = self.n_afc, parent=None, 
+        self.tree.add_state_node(node_id=node_id, cost=None, terminated=False, trial = self.root_trial, parent=None, 
                                 path_actions=path_actions, path_states=path_states, starts=starts, 
                                  )
 
+    
+    ### abstract methods
+
     ## create node id, which represents the agent's current state of knowledge, a flattened N*N*2 array representing which cells have a high or low cost
+    @abstractmethod
     def init_node_id(self, obs=None, init_info_state=None, trial = None):
-        raise NotImplementedError('init_node_id not implemented in subclass')
+        pass
 
     ## update MCTS with trial info
+    @abstractmethod
     def update_trial(self):
-        raise NotImplementedError('trial update not implemented in subclass')
+        pass
 
     ## tree step
+    @abstractmethod
     def tree_step(self, action_leaf):
-        raise NotImplementedError('tree step not implemented in subclass')
+        pass    
     
     ## rollout policy
+    @abstractmethod
     def rollout_policy(self, action_leaf):
-        raise NotImplementedError('rollout policy not implemented in subclass')
+        pass
     
-    ## myopic rollout
-    def myopic_rollout(self, myopic_trial):
-        raise NotImplementedError('myopic rollout not implemented in subclass')
     
     ## debugging method for checking if node's belief state matches the env state
+    @abstractmethod
     def check_node(self, node):
-        raise NotImplementedError('check_node not implemented in subclass')
+        pass
     
     ## revert env to root state and trial
     @abstractmethod
     def revert_env(self):
         pass
 
-
+    
+    ### general MCTS methods
     
     ## expand the action space of a node
     def expand(self, node):
@@ -131,25 +135,16 @@ class MonteCarloTreeSearch():
 
         ## initialise the tree
         node = self.tree.root
-        t = 0
         node_trial = node.trial
-        # assert node_trial == self.env.trial, 'trial mismatch between env and tree\n env: {} \n tree: {}\n MCTS: {}'.format(self.env.trial, node_trial, self.root_trial)
-        assert node_trial == self.root_trial, 'trial mismatch between env and tree\n env: {} \n tree: {}\n MCTS: {}'.format(self.env.trial, node_trial, self.root_trial)
-        self.check_node(node)
 
         ## create a record of the nodes/leaves visited in the tree
         self.tree_costs = [] ## i.e. the cost associated with each traversal of the tree *under the tree policy*. Hence, this does not include the cost of the current state, which is the starting point of the tree policy, nor does it include the cost of expansion.
         self.tree_actions = [] ## i.e. the states and actions visited in the tree. This *does* include the root, because it is from the root that we move to the next leaf (and then next node). 
         self.node_id_path = []
-
-        ## create a copy of the env
-        # env_copy = copy.deepcopy(self.env)
-        # assert env_copy.sim, 'env copy is not in sim mode'
         
         ## loop until you reach a leaf node or terminal state
         assert self.env.sim, 'env is not in sim mode'
         while not node.terminated:
-            t+=1
             self.check_node(node)
 
             ## expansion step
@@ -158,13 +153,8 @@ class MonteCarloTreeSearch():
                 self.tree_actions.append(action_leaf.action)
                 self.node_id_path.append(node.node_id)
 
-                ## update counts already?
-                # action_leaf.n_action_visits += 1
-                # node.n_state_visits += 1
-
                 ## revert env
                 self.revert_env()
-                # assert (self.env.current[0], self.env.current[1]) == (self.root_state[0], self.root_state[1]), 'env state not reverted properly:\n env current: {} \n root state: {}'.format(self.env.current, self.root_state)
                 assert self.env.trial == self.root_trial, 'env trial not reverted properly. should be in {}, but actually in {}'.format(self.root_trial, self.env.trial)
 
                 return action_leaf
@@ -187,7 +177,7 @@ class MonteCarloTreeSearch():
                     node = action_leaf.children[next_node_id]
                 else:
 
-                    ## full BAMCP: trial info for next node is just inherited from the env (need to sort this out...)
+                    ## full BAMCP: trial info for next node is just inherited from the env
                     if self.real_future_paths:
                         if not terminated:
                             next_path_actions = self.env.path_actions[node_trial].copy()
@@ -208,7 +198,7 @@ class MonteCarloTreeSearch():
                             next_starts = None
 
                     ## create new node
-                    node = self.tree.add_state_node(node_id=next_node_id, cost = costs, terminated=terminated, trial = node_trial, n_afc = self.n_afc, parent=action_leaf,
+                    node = self.tree.add_state_node(node_id=next_node_id, cost = costs, terminated=terminated, trial = node_trial, parent=action_leaf,
                                         path_actions=next_path_actions, path_states=next_path_states, starts=next_starts
                                                     )
 
@@ -219,7 +209,6 @@ class MonteCarloTreeSearch():
 
         ## revert env
         self.revert_env()
-        # assert (self.env.current[0], self.env.current[1]) == (self.root_state[0], self.root_state[1]), 'env state not reverted properly'
         assert self.env.trial == self.root_trial, 'env trial not reverted properly'
 
         return action_leaf
@@ -240,9 +229,6 @@ class MonteCarloTreeSearch():
             ## Get the corresponding action leaf
             action_leaf = node.action_leaves[action]
 
-            ## quick sanity check: the depth should match node.trial
-            # assert depth == node.trial, 'Tree path mismatch:\n node trial: {} \n depth: {}'.format(node.trial, depth)
-
             ## Discounted cost from the current node to the terminal node
             discounted_cost = np.dot(
                 self.tree_costs[depth:],  # Costs from current depth onward
@@ -257,36 +243,41 @@ class MonteCarloTreeSearch():
             action_leaf.performance += (
                 (discounted_cost - action_leaf.performance) / action_leaf.n_action_visits
             )
-            # print('depth:',depth,', n_action_visits:', action_leaf.n_action_visits, 'performance:', action_leaf.performance, 'discounted_cost:', discounted_cost, 'tree costs:', self.tree_costs)
 
-            ## debugging: save updates applied to the first node
-            if depth == 0:
-                to_append = [np.nan] * self.n_afc
-                to_append[action] = discounted_cost
-                self.first_node_updates.append(to_append)
-                self.first_node_updates_by_depth[tree_len-1].append(to_append)
-            
-            ## save costs of each step in the tree - i.e. the cost of making each move in the tree
-            to_append = [np.nan] * self.n_afc
-            to_append[action] = self.tree_costs[depth]
-            self.tree_cost_tracker[depth].append(to_append)
-
-            ## updates, conditional on first action
-            first_action = self.tree_actions[0]
-            to_append = [np.nan] * self.n_afc
-            to_append[first_action] = self.tree_costs[depth]
-            self.conditional_tree_cost_tracker[action][depth].append(to_append)
-
-            ## debugging: save per-node max and min Q values to normalise Qs in UCT calculation
+            ## save per-node max and min Q values to normalise Qs in UCT calculation
             if action_leaf.performance > node.max_Q:
                 node.max_Q = action_leaf.performance
             if action_leaf.performance < node.min_Q:
                 node.min_Q = action_leaf.performance
 
+            
             ## Move to the next node in the path if not at the end
             if depth < tree_len - 1:
                 next_node_id = self.node_id_path[depth+1]
                 node = action_leaf.children[next_node_id]
+
+            
+            # ### some lists for debugging 
+
+            # ## debugging: save updates applied to the first node
+            # if depth == 0:
+            #     to_append = [np.nan] * self.n_afc
+            #     to_append[action] = discounted_cost
+            #     self.first_node_updates.append(to_append)
+            #     self.first_node_updates_by_depth[tree_len-1].append(to_append)
+            
+            # ## save costs of each step in the tree - i.e. the cost of making each move in the tree
+            # to_append = [np.nan] * self.n_afc
+            # to_append[action] = self.tree_costs[depth]
+            # self.tree_cost_tracker[depth].append(to_append)
+
+            # ## updates, conditional on first action
+            # first_action = self.tree_actions[0]
+            # to_append = [np.nan] * self.n_afc
+            # to_append[first_action] = self.tree_costs[depth]
+            # self.conditional_tree_cost_tracker[action][depth].append(to_append)
+
+
 
 
     ## calculate E-E value
@@ -341,7 +332,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
             counts = {}
         
         # Add new observations - optimized loop
-        high_cost = self.high_cost
+        high_cost = self.env.high_cost
         for obs_item in obs:
             i, j, c = int(obs_item[0]), int(obs_item[1]), obs_item[2]
             key = (i, j)
@@ -360,6 +351,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         # assert np.array_equal(node.belief_state[:2*self.n_afc].reshape(self.n_afc,2), self.env.current), 'mismatch between node and env state\n node: {} \n env: {}'.format(node.belief_state[:2*self.n_afc].reshape(self.n_afc,2), self.env.current)
         # assert node.belief_state[0] == self.env.trial, 'mismatch between node and env trial\n node: {} \n env: {}'.format(node.belief_state[0], self.env.trial)
         assert node.trial == self.env.trial, 'mismatch between node and env trial\n node: {} \n env: {}'.format(node.trial, self.env.trial)
+
 
     
     def update_trial(self):
