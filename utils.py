@@ -62,8 +62,6 @@ def make_env(N, n_trials, expt_info, beta_params, seed=None):
 ## Node class
 class Node:
 
-    # __slots__ = ['state', 'n_state_visits', 'cost', 'terminated', 'node_id', 'parent_node_ids', 'N', 'untried_actions', 'action_leaves']
-
     def __init__(self, node_id, cost, terminated, trial,
                     path_actions=None, path_states=None, starts=None
                  ):
@@ -74,7 +72,6 @@ class Node:
         self.trial = trial
         self.terminated = terminated
         self.node_id = node_id
-        self.parent_node_ids = []
 
         ## path info for PA-BAMCP - for the pair of (sampled) paths, what are the actions, states, starts?
         self.path_actions = path_actions
@@ -113,15 +110,14 @@ class Node:
     
 class Action_Node:
 
-    def __init__(self, start, action, terminated, trial, parent_id):
-        self.start = start
+    def __init__(self, action, terminated, trial, parent_id):
         self.action = action ## in AFC, this specifies the path ID (i.e. 0 or 1)
         self.total_simulation_cost = 0
         self.performance = None
         self.n_action_visits = 0
         self.terminated = terminated
         self.trial = trial
-        self.node_id = (self.start, self.action) #+ str(self.next_state)
+        self.node_id = self.action
         self.parent_id = parent_id
         self.children={}
         self.children_ids = []
@@ -156,18 +152,16 @@ class Tree:
                     path_actions=path_actions, path_states=path_states, starts=starts
                     )
         
-        ## store parent-child relationships
+        ### store parent-child relationships
+
+        ## if no action led to this node, then this is the root
         if parent is None:
             self.root = node
-            # self.nodes[str(state)].parent = None
         else:
-            node.parent_node_ids.append(parent.node_id)
             
             ## add this state node to the children of the previous action leaf
             parent.children_ids.append(node.node_id)
-            # child_key = tuple(np.append(state, cost))
             parent.children[node.node_id] = node
-            # parent.children[str(np.append(state, cost))] = node
 
         return node
 
@@ -184,13 +178,6 @@ class Tree:
                     if len(leaf.children) == 0:
                         children.append(tuple((a, leaf, None, None)))
         return children
-
-    def parent(self, node):
-        parent_node_id = self.nodes[node.node_id].parent_node_id
-        if parent_node_id is None:
-            return None #i.e. root reached, bc it has no parent
-        else:
-            return self.nodes[parent_node_id]
 
 
     def print_tree(self, node, indent="", is_last=True, dummy=False, depth=0, max_depth=None):
@@ -210,7 +197,6 @@ class Tree:
             return
 
         # Get the current node
-        # node = self.nodes[node_id]
         if dummy:
             if node is None:
                 return
@@ -252,7 +238,7 @@ class Tree:
 
             # Print the action label (only once per action)
             leaf = children[0][0]  # Assume all children of the same action share the same leaf
-            action_label = f"Action {action}, (n_v: {leaf.n_action_visits}, start: {leaf.start}, branch factor: {len(children)}, perf: {leaf.performance:.2f})"
+            action_label = f"Action {action}, (n_v: {leaf.n_action_visits},  branch factor: {len(children)}, perf: {leaf.performance:.2f})"
 
             # Highlight the best action in bold (use ANSI escape codes for bold text)
             if action == best_action:
@@ -339,18 +325,6 @@ class Tree:
 
 
     ## prune, i.e. after taking a step, keep only that subtree
-    # def prune(self):
-
-    #     ## identify the root's children, i.e. the four adjacent states
-    #     # keep_nodes = [str(self.root.belief_state)]
-    #     keep_nodes = self.root.node_id
-    #     for leaf in self.root.action_leaves.values():
-    #         if leaf is not None:
-    #             keep_nodes.append(str(leaf.next_state))
-
-    #     for bs in list(self.nodes.keys()):
-    #         if str(self.nodes[bs].belief_state) not in keep_nodes:
-    #             del self.nodes[bs]
 
     def prune(self, action, next_node_id):
         
