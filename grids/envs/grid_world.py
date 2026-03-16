@@ -158,23 +158,11 @@ class GridEnv(gym.Env):
 
             ####  define costs
 
-            ### define actual binary costs for each trial, assuming they regenerate each time
-            # self.costss = []
-            # for t in range(self.n_trials):
-
-                ## prob = p(high cost)
-                # self.costss.append(np.array([self.high_cost if r<self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N))
-                
-                ## prob = p(low cost)
-                # self.costss.append(np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N))
-
-            ### or, define actual binary costs for each trial, assuming they are the same across trials
-            self.costss = []
-            costs = np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
-            self.costss = [costs for t in range(n_trials)]
+            ## actual binary costs for each trial, assuming they are the same across trials
+            self.costs = np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
 
             ## check if decent spread of high and low costs - i.e. mean cost should be around the mean of the two costs, +/- some tolerance
-            mean_cost = np.mean(costs)
+            mean_cost = np.mean(self.costs)
             ideal_mean_cost = (self.high_cost + self.low_cost)/2
             tol = 0.05
             if (mean_cost<ideal_mean_cost-tol) or (mean_cost>ideal_mean_cost+tol):
@@ -255,7 +243,7 @@ class GridEnv(gym.Env):
 
                         ## pq = p(low cost)
                         path_expected_cost = np.sum([self.p_costs[x, y]*self.low_cost + (1-self.p_costs[x, y])*self.high_cost for x, y in path])
-                        path_actual_cost = np.sum([self.costss[t][x, y] for x, y in path])
+                        path_actual_cost = np.sum([self.costs[x, y] for x, y in path])
                         path_expected_costs.append(path_expected_cost)
                         path_actual_costs.append(path_actual_cost)
                     self.path_expected_costs.append(path_expected_costs)
@@ -502,10 +490,6 @@ class GridEnv(gym.Env):
         # We need the following line to seed self.np_random
         super().reset(seed=seed)
 
-        ## set costs, given p_costs
-        # self.costs = np.array([self.high_cost if r>self.p_costs.flatten()[ri] else self.low_cost for ri, r in enumerate(np.random.random(self.N**2))]).reshape(self.N, self.N)
-        self.costs = self.costss[self._trial]
-
         ## set start and end
         if start_goal is not None: 
             self._agent_location = np.array(start_goal[0], dtype=int)
@@ -556,7 +540,6 @@ class GridEnv(gym.Env):
                 print('error: ', self.costs[self._agent_location[0]][self._agent_location[1]])
                 current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
         self.trial_obs = np.array([[self._agent_location[0], self._agent_location[1], current_cost]])
-        self.a_traj = [tuple(self._agent_location)]
 
     ## soft reset (allows simulation of future trials without full copying of env) - i.e. update only the start and goal locations
     def soft_reset(self, start=None, goal=None):
@@ -890,7 +873,7 @@ class GridEnv(gym.Env):
 
             ## absolute difference in value
             t = len(self.starts)
-            path_costs = [np.sum([self.costss[t][x, y] for x, y in path]) for path in path_states]
+            path_costs = [np.sum([self.costs[x, y] for x, y in path]) for path in path_states]
             cost_tol = self.N/3
             vals_diff = np.abs(max(path_costs) - min(path_costs)) >= cost_tol
 
@@ -1289,8 +1272,7 @@ class GridEnv(gym.Env):
         if not self.sim:
             cost = current_cost
             
-            ## update observation and trajectory arrays - i.e. agent observes along the way
-            self.a_traj.append((i, j))
+            ## update observation array - i.e. agent observes along the way
             self.trial_obs = np.vstack([self.trial_obs, [i, j, current_cost]])
 
         ## return the predicted cost if simulating
@@ -1312,14 +1294,6 @@ class GridEnv(gym.Env):
                     self.obs = self.trial_obs.copy()
                 else: ## otherwise, append the trial_obs to the obs from the previous trials
                     self.obs = np.vstack([self.obs, self.trial_obs])
-
-                ## sum of costs of route INC START AND END
-                self.a_traj_costs = [self.costs[x, y] for x, y in self.a_traj]
-                self.a_traj_total_cost = np.sum(self.a_traj_costs)
-
-                ## sum of costs of route EXC START AND END
-                # self.a_traj_costs = [self.costs[x, y] for x, y in self.a_traj[1:-1]]
-                # self.a_traj_total_cost = np.sum(self.a_traj_costs)
 
                 ## update trial counter
                 self._trial += 1
@@ -1377,8 +1351,6 @@ class GridEnv(gym.Env):
         # If not simulating, update observations and trajectory
         if not self.sim:
 
-            # Extend trajectory with all states
-            self.a_traj.extend(path)
             
             # Build trial_obs array for all new states at once
             new_obs = np.column_stack([xs, ys, costs])
@@ -1393,11 +1365,6 @@ class GridEnv(gym.Env):
                 self.obs = self.trial_obs.copy()
             else:  # otherwise, append the trial_obs to the obs from previous trials
                 self.obs = np.vstack([self.obs, self.trial_obs])
-            
-            # Sum of costs of route INC START AND END (vectorized)
-            traj_arr = np.array(self.a_traj)
-            self.a_traj_costs = self.costs[traj_arr[:, 0], traj_arr[:, 1]].tolist()
-            self.a_traj_total_cost = np.sum(self.a_traj_costs)
             
             # Update trial counter
             self._trial += 1
