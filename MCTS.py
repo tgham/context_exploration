@@ -39,17 +39,16 @@ class MonteCarloTreeSearch():
             self.horizon = horizon
 
         ## create id for root node
-        node_id = self.init_node_id(self.env.obs, None, self.root_trial)
+        node_id = self.init_node_id(self.env.obs, None)
 
         
-        ### node needs to contain paths, actions, starts and goals for that trial so that these can be inherited by the action node
+        ### node needs to contain paths, actions for that trial so that these can be inherited by the action node
         path_actions = self.env.path_actions[self.root_trial].copy()
         path_states = self.env.path_states[self.root_trial].copy()
-        starts = self.env.starts[self.root_trial].copy()
 
         ## add state node to the tree
         self.tree.add_state_node(node_id=node_id, cost=None, terminated=False, trial = self.root_trial, parent=None, 
-                                path_actions=path_actions, path_states=path_states, starts=starts, 
+                                path_actions=path_actions, path_states=path_states,
                                  )
 
     
@@ -57,7 +56,7 @@ class MonteCarloTreeSearch():
 
     ## create node id, which represents the agent's current state of knowledge, a flattened N*N*2 array representing which cells have a high or low cost
     @abstractmethod
-    def init_node_id(self, obs=None, init_info_state=None, trial = None):
+    def init_node_id(self, obs=None, init_info_state=None):
         pass
 
     ## update MCTS with trial info
@@ -102,21 +101,12 @@ class MonteCarloTreeSearch():
             
         ### update info for s-a leaf - i.e. the state-action pair
 
-        ## full BAMCP:
-        if self.real_future_paths:
-            start = self.env.starts[node.trial][action].copy()
-            assert (start[0], start[1]) == (node.starts[action][0], node.starts[action][1]), 'mismatch between node and env start states\n node: {} \n env: {}'.format(node.starts[action], start)
 
-        ## PA-BAMCP:
-        else:
-            start = node.starts[action].copy()
-
-        node.action_leaves[action] = Action_Node(start = start, action=action, terminated=terminated, trial=node.trial, parent_id=node.node_id)
+        node.action_leaves[action] = Action_Node(action=action, terminated=terminated, trial=node.trial, parent_id=node.node_id)
         node.action_leaves[action].performance = 0
         node.action_leaves[action].norm_performance = 0
 
         ### expansion of node attaches a (potentially sampled) pair of paths to the leaf
-        node.action_leaves[action].start = start
         node.action_leaves[action].path_actions = node.path_actions[action]
         node.action_leaves[action].path_states = node.path_states[action]
         
@@ -182,24 +172,21 @@ class MonteCarloTreeSearch():
                         if not terminated:
                             next_path_actions = self.env.path_actions[node_trial].copy()
                             next_path_states = self.env.path_states[node_trial].copy()
-                            next_starts = self.env.starts[node_trial].copy()
                         else:
                             next_path_actions= None
                             next_path_states= None
-                            next_starts = None
 
                     ## PA-BAMCP: trial info for the next node (i.e. the node to which the action leaf leads) is sampled
                     else:
                         if not terminated:
-                            _, next_path_actions, next_path_states, next_starts, _ = self.env.sample_paths_given_future_states(self.root_trial)
+                            _, next_path_actions, next_path_states, _, _ = self.env.sample_paths_given_future_states(self.root_trial)
                         else:
                             next_path_actions= None
                             next_path_states= None
-                            next_starts = None
 
                     ## create new node
                     node = self.tree.add_state_node(node_id=next_node_id, cost = costs, terminated=terminated, trial = node_trial, parent=action_leaf,
-                                        path_actions=next_path_actions, path_states=next_path_states, starts=next_starts
+                                        path_actions=next_path_actions, path_states=next_path_states,
                                                     )
 
 
@@ -321,7 +308,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         super().__init__(env, tree, exploration_constant, discount_factor, horizon, real_future_paths, aligned_weight, orthogonal_weight)
 
     ## node_ids are defined by the informational state, i.e. the counts of low and high cost states in each cell
-    def init_node_id(self, obs=None, parent_node_id=None, trial=None):
+    def init_node_id(self, obs=None, parent_node_id=None):
         
         ## uses sparse representation: frozenset of ((i, j), (low_count, high_count)) for observed cells only
 
@@ -369,18 +356,13 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
         ## full BAMCP: use actual upcoming paths
         if self.real_future_paths:
-            start_tmp = self.env.starts[step_trial][path_id].copy()
-            goal_tmp = self.env.goals[step_trial][path_id].copy()
             action_sequence = self.env.path_actions[step_trial][path_id]
-            assert (start_tmp[0], start_tmp[1]) == (action_leaf.start[0], action_leaf.start[1]), 'mismatch between node and env start states\n node: {} \n env: {}'.format(action_leaf.start, start_tmp)
+            # assert (start_tmp[0], start_tmp[1]) == (action_leaf.path_states[path_id][0][0], action_leaf.path_states[path_id][1]), 'mismatch between node and env start states\n node: {} \n env: {}'.format(action_leaf.path_states[path_id], start_tmp)
 
         ## PA-BAMCP: sample two paths 
         else:
-            start_tmp = action_leaf.start.copy()
             action_sequence = action_leaf.path_actions.copy()
 
-        self.env.set_state(start_tmp)
-        # self.env.set_trial(step_trial)
 
         ## initialise costs and observations for this path
         simulated_obs = []
@@ -415,7 +397,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         terminated = action_leaf.terminated
 
         ## get the next node id, i.e. the informational state after taking this path
-        next_node_id = self.init_node_id(simulated_obs, action_leaf.parent_id, step_trial)
+        next_node_id = self.init_node_id(simulated_obs, action_leaf.parent_id)
         # n_total_obs = np.sum([len(self.env.path_states[trial][0]) for trial in range(action_leaf.trial+1)])
         # assert n_total_obs == np.sum(next_node_id), 'total obs and next node id do not match\n total obs: {}, next node id: {}'.format(n_total_obs, np.sum(next_node_id))
 
