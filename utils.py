@@ -65,7 +65,7 @@ class Node:
     # __slots__ = ['state', 'n_state_visits', 'cost', 'terminated', 'node_id', 'parent_node_ids', 'N', 'untried_actions', 'action_leaves']
 
     def __init__(self, node_id, cost, terminated, trial,
-                    path_actions=None, path_states=None, starts=None, goals=None
+                    path_actions=None, path_states=None, starts=None
                  ):
         
         ## state info
@@ -76,11 +76,10 @@ class Node:
         self.node_id = node_id
         self.parent_node_ids = []
 
-        ## path info for PA-BAMCP - for the pair of (sampled) paths, what are the actions, states, starts and goals?
+        ## path info for PA-BAMCP - for the pair of (sampled) paths, what are the actions, states, starts?
         self.path_actions = path_actions
         self.path_states = path_states
         self.starts = starts 
-        self.goals = goals
 
         ## save the max and min Q values observed among the children of this action node, for normalization purposes in the UCB formula
         self.max_Q = -np.inf
@@ -149,12 +148,12 @@ class Tree:
 
     ## attach action leaf to child state
     def add_state_node(self, node_id, cost, terminated, trial, parent=None, 
-                                path_actions=None, path_states=None, starts=None, goals=None
+                                path_actions=None, path_states=None, starts=None
                        ):
         
         ## create a new node
         node = Node(node_id=node_id, cost=cost, terminated=terminated, trial = trial, 
-                    path_actions=path_actions, path_states=path_states, starts=starts, goals=goals
+                    path_actions=path_actions, path_states=path_states, starts=starts
                     )
         
         ## store parent-child relationships
@@ -226,7 +225,7 @@ class Tree:
 
         # Add branch marker
         branch = "└── " if is_last else "├── "
-        print(f"{indent}{branch}Node: {node_label}, Episode: {trial_label}, Visits: {node.n_state_visits}")
+        print(f"{indent}{branch}Node: {node_label}, Trial: {trial_label}, Visits: {node.n_state_visits}")
 
         # Update indentation for children
         child_indent = indent + ("    " if is_last else "│   ")
