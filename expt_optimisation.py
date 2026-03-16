@@ -77,9 +77,9 @@ def agent_loop(p, agent_params_list, hyperparams, agent_param_combos):
         n_samples = hyperparams['n_samples']
 
         if agent == 'BAMCP':
-            farmer = BAMCP(N, known_context = True, temp=temp, lapse=lapse, arm_weight=arm_weight, horizon=horizon, real_future_paths=real_future, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples) ## known context if expt 3
+            farmer = BAMCP(temp=temp, lapse=lapse, arm_weight=arm_weight, horizon=horizon, real_future_paths=real_future, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples) ## known context if expt 3
         elif agent =='CE':
-            farmer = CE(N, known_context = True, temp=temp, lapse=lapse, arm_weight=arm_weight, horizon=horizon, real_future_paths=real_future, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples) ## known context if expt 3
+            farmer = CE(temp=temp, lapse=lapse, arm_weight=arm_weight, horizon=horizon, real_future_paths=real_future, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples) ## known context if expt 3
         sim_out = farmer.run(hyperparams, agent=agent, df_trials=None, envs=env_objects, fit=False, yoked=False, progress=False)
         sim_outs.append(sim_out)
     

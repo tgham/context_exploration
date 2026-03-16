@@ -110,39 +110,41 @@ def random_idx(arr_len):
 def acceptance_priors(ps, qs, m1,m2,n1,n2):
     return np.sum(m1 * np.log(ps) + n1 * np.log(1 - ps) + m2 * np.log(qs) + n2 * np.log(1 - qs))
 
-# @lru_cache(maxsize=None)
-# def get_rel_obs(obs, sampled_i, sampled_j):
-#     rel_obs = np.array([(i_, j_, cost_) for (i_, j_, cost_) in obs if (i_ == sampled_i) or (j_ == sampled_j)], dtype=np.float64)
-#     return rel_obs
-
 class GridSampler:
     def __init__(self, alpha_row, beta_row, alpha_col, beta_col, low_cost, high_cost, obs, N=10):
         self.alpha_row = alpha_row
         self.beta_row = beta_row
         self.alpha_col = alpha_col
         self.beta_col = beta_col
-        self.obs = obs
-        if self.obs is None:
-            self.obs = np.array([])
-        # else:
-            # self.obs = np.array([(int(i), int(j), float(cost)) for (i, j, cost) in self.obs])
         self.N = N
         self.low_cost = low_cost
         self.high_cost = high_cost
+        self.set_obs(obs)
 
-        ## hacky fix: should be no duplicates in obs!
-        self.obs = np.unique(self.obs, axis=0)
+    def set_obs(self, obs):
+        self.obs = obs
 
-        ## cache obs groups 
-        self.row_to_obs = {i: [(i, j, cost) for (i_, j, cost) in self.obs if i_ == i] for i in range(self.N)}
-        self.col_to_obs = {j: [(i, j, cost) for (i, j_, cost) in self.obs if j_ == j] for j in range(self.N)}
-        self.cached_obs = {}
+        ## nothing observed yet - set up empty structures
+        if len(self.obs) == 0:
+            self.low_counts_rows = np.zeros(self.N, dtype=int)
+            self.low_counts_cols = np.zeros(self.N, dtype=int)
+            self.high_counts_rows = np.zeros(self.N, dtype=int)
+            self.high_counts_cols = np.zeros(self.N, dtype=int)
+        
+        else:
+            ## hacky fix: should be no duplicates in obs!
+            self.obs = np.array([(int(i), int(j), float(cost)) for (i, j, cost) in self.obs])
+            self.obs = np.unique(self.obs, axis=0)
 
-        ## precompute the number of high and low costs for each row and column
-        self.low_counts_rows = np.array([np.sum([cost == self.low_cost for (_, _, cost) in self.row_to_obs[i]]) for i in range(self.N)])
-        self.low_counts_cols = np.array([np.sum([cost == self.low_cost for (_, _, cost) in self.col_to_obs[j]]) for j in range(self.N)])
-        self.high_counts_rows = np.array([np.sum([cost == self.high_cost for (_, _, cost) in self.row_to_obs[i]]) for i in range(self.N)])
-        self.high_counts_cols = np.array([np.sum([cost == self.high_cost for (_, _, cost) in self.col_to_obs[j]]) for j in range(self.N)])
+            ## precompute row and column counts directly from obs
+            obs_rows = self.obs[:, 0].astype(int)
+            obs_cols = self.obs[:, 1].astype(int)
+            obs_costs = self.obs[:, 2]
+
+            self.low_counts_rows = np.bincount(obs_rows[obs_costs == self.low_cost], minlength=self.N).astype(int)
+            self.high_counts_rows = np.bincount(obs_rows[obs_costs == self.high_cost], minlength=self.N).astype(int)
+            self.low_counts_cols = np.bincount(obs_cols[obs_costs == self.low_cost], minlength=self.N).astype(int)
+            self.high_counts_cols = np.bincount(obs_cols[obs_costs == self.high_cost], minlength=self.N).astype(int)
 
     
     ## sampling row and column probabilities from posterior
@@ -170,9 +172,9 @@ class GridSampler:
         return self.row_probs, self.col_probs
     
     ## get posterior mean row and column probabilities
-    def mean_probs(self, col_context=True, n_samples=1):
-        self.col_probs = np.ones((n_samples, self.N)) 
-        self.row_probs = np.ones((n_samples, self.N))
+    def mean_probs(self, col_context=True):
+        self.col_probs = np.ones(self.N) 
+        self.row_probs = np.ones(self.N)
     
         ## parameters are *fixed* at the mean of the beta distribution, whose parameters are determined by the counts
         if col_context:
@@ -181,18 +183,23 @@ class GridSampler:
                 high_counts_col = self.high_counts_cols[j]
                 alpha = self.alpha_col + low_counts_col
                 beta = self.beta_col + high_counts_col
-                self.col_probs[:,j] = alpha / (alpha + beta)
+                self.col_probs[j] = alpha / (alpha + beta)
         else:
             for i in range(self.N):
                 low_counts_row = self.low_counts_rows[i]
                 high_counts_row = self.high_counts_rows[i]
                 alpha = self.alpha_row + low_counts_row
                 beta = self.beta_row + high_counts_row
-                self.row_probs[:,i] = alpha / (alpha + beta)
+                self.row_probs[i] = alpha / (alpha + beta)
         return self.row_probs, self.col_probs
     
 
-    def infer_context_posterior(self, context_prior=0.5):
+    ## update the context posterior based on the observed data and the current context prior
+    def update_context_posterior(self, context_prior=0.5):
+
+        ## known context - no need for inference
+        if context_prior == 0.0 or context_prior == 1.0:
+            return context_prior
         
         # Compute log-likelihood for columns
         log_col_likelihoods = []
@@ -230,19 +237,22 @@ class GridSampler:
         return posterior_col
 
     
-    def sample_mdps(self, n_samples, context_indicators):
+    def sample_mdps(self, n_samples, context_prior):
         """
         Sample n_samples MDP parameterisations from the posterior.
         
         Args:
             n_samples: Number of posterior samples to draw.
-            context_indicators: Boolean array of shape (n_samples,). True = column context, False = row context.
+            context_prob: Scalar probability that the context is column-world.
         
         Returns:
             sampled_mdps: Array of shape (n_samples, N, N) — sampled p(low cost) grids.
             posterior_mean_mdp: Array of shape (N, N) — mean of the sampled grids.
             extra: Dict of any additional sampler-specific outputs (e.g. latent ps, qs).
         """
+        
+        ## update context posterior and determine how many samples to draw under each context
+        context_indicators = np.random.binomial(1, context_prior, size=n_samples).astype(bool)
         n_col_samples = int(np.sum(context_indicators))
         n_row_samples = n_samples - n_col_samples
 
@@ -262,7 +272,6 @@ class GridSampler:
         idx = np.random.permutation(n_samples)
         all_ps = all_ps[idx]
         all_qs = all_qs[idx]
-        context_indicators = context_indicators[idx]
 
         ## compute sampled MDP grids via outer product
         sampled_mdps = np.einsum('si,sj->sij', all_ps, all_qs)
@@ -277,12 +286,12 @@ class GridSampler:
         return sampled_mdps
 
 
-    def mean_mdp(self, context_prob):
+    def mean_mdp(self, context_prior):
         """
         Compute the posterior mean MDP grid (no sampling).
         
         Args:
-            context_prob: Scalar probability that the context is column-world.
+            context_prior: Scalar probability that the context is column-world.
         
         Returns:
             posterior_mean_mdp: Array of shape (N, N) — expected p(low cost) grid.
@@ -292,8 +301,8 @@ class GridSampler:
         posterior_ps_row, posterior_qs_row = self.mean_probs(col_context=False)
 
         posterior_mean_mdp = (
-            context_prob * np.outer(posterior_ps_col, posterior_qs_col)
-            + (1 - context_prob) * np.outer(posterior_ps_row, posterior_qs_row)
+            context_prior * np.outer(posterior_ps_col, posterior_qs_col)
+            + (1 - context_prior) * np.outer(posterior_ps_row, posterior_qs_row)
         )
 
         ## pin observed cells
@@ -304,12 +313,3 @@ class GridSampler:
             posterior_mean_mdp[i, j] = prob
 
         return posterior_mean_mdp
-
-
-    def get_rel_obs(self, sampled_i, sampled_j):
-        if (sampled_i, sampled_j) in self.cached_obs:
-            return self.cached_obs[(sampled_i, sampled_j)]
-        rel_obs = np.array([(i_, j_, cost_) for (i_, j_, cost_) in self.obs if (i_ == sampled_i) or (j_ == sampled_j)], dtype=np.float64)
-        self.cached_obs[(sampled_i, sampled_j)] = rel_obs
-        return rel_obs
-

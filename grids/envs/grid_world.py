@@ -1245,10 +1245,6 @@ class GridEnv(gym.Env):
     
     ## functions for receiving predictions from the agent
     def receive_predictions(self, predicted_p_costs):
-        # self.posterior_mean = posterior_mean
-        # self.posterior_cov = posterior_cov
-        # self.posterior_var = posterior_var
-        # self.predicted_costs = predicted_costs.reshape(self.N, self.N)
         self.predicted_p_costs = predicted_p_costs.reshape(self.N, self.N)
 
         ## fill in the grid with highs and lows based on predicted_p_costs (vectorized)
@@ -1262,10 +1258,7 @@ class GridEnv(gym.Env):
     ## construct a task-specific sampler for this environment
     def make_sampler(self):
         """Create a GridSampler from this environment's parameters and the given observations."""
-
-        ## hacky: obs should be unique obs
-        sampler_obs = np.unique(self.obs, axis=0).tolist() if self.obs is not None else []
-        return GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, sampler_obs, N=self.N)
+        return GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, self.obs, N=self.N)
 
 
     ## take a step in the environment

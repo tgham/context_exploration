@@ -29,13 +29,9 @@ from scipy.special import beta, logsumexp, digamma, comb, betaln
 ### base farmer model?
 class Farmer(ABC):
 
-    def __init__(self, context_prior=0.5, known_context=False,
+    def __init__(self,
                  temp=1, lapse=0, arm_weight=0, horizon=3, real_future_paths=True,
                  exploration_constant=None, discount_factor=None, n_samples=None):
-        
-        ## initialise context prior prob
-        self.context_prob = context_prior
-        self.known_context = known_context
 
         ## behavioural parameters
         self.temp = temp
@@ -55,33 +51,76 @@ class Farmer(ABC):
 
         ## environment reference (set in compute_Q)
         self.env = None
-        
+    
+
+    
+    
+    ### general methods for sampling, choice, fitting etc.
 
     ## create a sampler object from the environment's current state
-    def make_sampler(self):
+    def init_sampler(self, env):
         """Delegate to the environment's task-specific sampler factory."""
-        if self.env is None:
-            raise ValueError("Environment not set. Has compute_Q been called yet?")
-        return self.env.make_sampler()
-
+        
+        ## make sampler if there is not one, otherwise we just need to update the sampler's observations
+        if not hasattr(self, 'sampler') or self.sampler is None:
+            self.sampler = env.make_sampler()
+        else:
+            self.sampler.set_obs(env.obs)
+            
     ## agent-specific calculation of Q values based on posterior
     @abstractmethod
     def compute_Q(self, env_copy, tree_reset=True):
         pass
-
-
-    ## quick and cheap context posterior
-    def quick_context_posterior(self):
-        sampler = self.make_sampler()
-        context_prob = sampler.infer_context_posterior(context_prior=self.context_prob)
-        return context_prob
-    
 
     ## choice function
     def softmax(self, Q):
         CPs = (1-self.lapse) * softmax(Q/self.temp) + self.lapse/len(Q)
         return CPs
 
+
+    ## loss function
+    def loss_func(self, df_trials):
+
+        ## flatten + other init
+        self.p_choice_flat = self.p_choice[:,:,:,1].flatten() ## i.e. p(choose path B)
+        if len(self.p_choice_flat) != len(df_trials):
+            # warnings.warn('p_choice_flat length does not match df_trials length. Check your data!')
+            print('p_choice_flat length does not match df_trials length for participant {}. Truncating p_choice_flat to match df_trials length.'.format(df_trials['pid'].values[0]))
+            self.p_choice_flat = self.p_choice_flat[:len(df_trials)] ## i.e. truncate to match df_trials length
+        # self.p_choice_flat = self.p_choice_flat[~np.isnan(self.p_choice_flat)]
+        self.ppt_choices = (df_trials['path_chosen']=='b').values
+
+
+        ## numerical stability
+        self.p_choice_flat[(self.p_choice_flat==0) & (self.ppt_choices)] = 0 + np.finfo(float).tiny
+        self.p_choice_flat[(self.p_choice_flat==1) & (~self.ppt_choices)] = 1 - np.finfo(float).eps
+
+        ## negative log likelihood
+        self.trial_loss[self.ppt_choices] = np.log(self.p_choice_flat[self.ppt_choices])
+        self.trial_loss[~self.ppt_choices] = np.log((1-self.p_choice_flat[~self.ppt_choices]))
+        self.loss = -np.nansum(self.trial_loss)
+
+
+    ## pseudo r^2
+    def pseudo_r2(self, df_trials):
+        
+        ## calculate loss under null (random choice)
+        n_trials = len(df_trials)
+        p_choice_null = np.ones(n_trials) * 0.5
+        loss_null = -np.sum(np.log(p_choice_null))
+
+        ## pseudo r^2
+        pseudo_r2 = 1 - (self.loss / loss_null)
+
+        ## LLR test?
+        llr = 2 * (loss_null - self.loss)
+        df = 2
+        p_value = scipy.stats.chi2.sf(llr, df)
+
+        return pseudo_r2, p_value
+    
+
+    ### bespoke methods 
         
     ## run agent on participant's trial sequence
     def run(self, hyperparams, agent = 'CE', df_trials=None, envs=None,fit=True, yoked=False, progress=False):
@@ -156,8 +195,9 @@ class Farmer(ABC):
 
         ## loop through cities
         for city in range(n_cities):
-            if not self.known_context:
-                context_prior = 0.5
+            
+            ## expts 1-2 - unknown context
+            start_of_day_context_prior = 0.5 
 
             ## loop through days
             for day in range(n_days):
@@ -177,11 +217,14 @@ class Farmer(ABC):
                 env_copy.set_trial(0)
                 assert not hasattr(env_copy, 'obs'), 'env_copy.obs should not exist before the first trial: {}'.format(len(env_copy.obs),', city:', city+1, 'day:', day+1)
                 
-                ## context prior resets (only if context is unknown)
-                if not self.known_context:
-                    self.context_prob = context_prior
-                elif self.known_context:
-                    self.known_context = env_copy.context
+                ## expt 3 - context is known
+                if env_copy.context == 'column':
+                    start_of_day_context_prior = 1.0
+                elif env_copy.context == 'row':
+                    start_of_day_context_prior = 0.0
+                
+                ## context prior resets
+                self.context_prior = start_of_day_context_prior
 
 
                 ## FIX FOR OLD ENVS: rename some attributes (episode --> trial, etc.)
@@ -197,8 +240,6 @@ class Farmer(ABC):
                 for t in range(n_trials):
 
                     ## reset env/trial
-                    if self.known_context is None: ## only reset if context is unknown
-                        self.context_prob = context_prior ## tmp fix: fix the prior to the prior that was used at the beginning of the grid (to prevent observations contributing to the posterior on multiple trials)
                     env_copy.reset()
                     env_copy.set_sim(True)
                     start = env_copy.current
@@ -438,20 +479,23 @@ class Farmer(ABC):
                         tree_reset = self.update_tree(env_copy, action)
                     else:
                         tree_reset = True
-
+                    
+                    ## update the sampler with the new observations
+                    self.sampler.set_obs(env_copy.obs)
+                    
                     ## get the context prior - i.e. the probability with which samples were drawn
-                    context_prior = self.context_prob
+                    context_prior = self.context_prior ## this is the prior that was used to generate the samples for this trial, which we will need to calculate the context posterior
 
-                    # get the new context posterior for this agent
-                    context_posterior = self.quick_context_posterior()
-
-                    ## (and save these)
+                    ## update the context prior for the next trial
+                    context_posterior = self.sampler.update_context_posterior(start_of_day_context_prior)
+                    self.context_prior = context_posterior
+                    # print(t, 'prior: ', context_prior, 'posterior: ', context_posterior)
                     self.context_priors[city, day, t] = context_prior
                     self.context_posteriors[city, day, t] = context_posterior
 
                     ## carry over the context prob to the next run, if on the final trial of the day
                     if t == (n_trials-1):
-                        context_prior = context_posterior
+                        start_of_day_context_prior = context_posterior
 
                     ## update progress bar
                     if progress:
@@ -544,47 +588,6 @@ class Farmer(ABC):
                             sim_out['CE_Q_c'].append(np.nan)
             return sim_out
 
-            
-    ## loss function
-    def loss_func(self, df_trials):
-
-        ## flatten + other init
-        self.p_choice_flat = self.p_choice[:,:,:,1].flatten() ## i.e. p(choose path B)
-        if len(self.p_choice_flat) != len(df_trials):
-            # warnings.warn('p_choice_flat length does not match df_trials length. Check your data!')
-            print('p_choice_flat length does not match df_trials length for participant {}. Truncating p_choice_flat to match df_trials length.'.format(df_trials['pid'].values[0]))
-            self.p_choice_flat = self.p_choice_flat[:len(df_trials)] ## i.e. truncate to match df_trials length
-        # self.p_choice_flat = self.p_choice_flat[~np.isnan(self.p_choice_flat)]
-        self.ppt_choices = (df_trials['path_chosen']=='b').values
-
-
-        ## numerical stability
-        self.p_choice_flat[(self.p_choice_flat==0) & (self.ppt_choices)] = 0 + np.finfo(float).tiny
-        self.p_choice_flat[(self.p_choice_flat==1) & (~self.ppt_choices)] = 1 - np.finfo(float).eps
-
-        ## negative log likelihood
-        self.trial_loss[self.ppt_choices] = np.log(self.p_choice_flat[self.ppt_choices])
-        self.trial_loss[~self.ppt_choices] = np.log((1-self.p_choice_flat[~self.ppt_choices]))
-        self.loss = -np.nansum(self.trial_loss)
-
-
-    ## pseudo r^2
-    def pseudo_r2(self, df_trials):
-        
-        ## calculate loss under null (random choice)
-        n_trials = len(df_trials)
-        p_choice_null = np.ones(n_trials) * 0.5
-        loss_null = -np.sum(np.log(p_choice_null))
-
-        ## pseudo r^2
-        pseudo_r2 = 1 - (self.loss / loss_null)
-
-        ## LLR test?
-        llr = 2 * (loss_null - self.loss)
-        df = 2
-        p_value = scipy.stats.chi2.sf(llr, df)
-
-        return pseudo_r2, p_value
 
 
     ## calculate weighted cost based on aligned vs orthogonal states
@@ -599,34 +602,15 @@ class Farmer(ABC):
             self._aligned_weight = 1 - max(0.0, -self.arm_weight)
             self._orthogonal_weight = 1 - max(0.0, self.arm_weight)
 
-    
-    
-    ### shared CE methods
-
-    ## compute posterior mean MDP
-    def mean_grid(self):
-
-        ## create task-specific sampler
-        self.sampler = self.make_sampler()
-            
-        ## update context posterior
-        if not self.known_context:
-            context_prior = self.context_prob
-            self.context_prob = self.sampler.infer_context_posterior(context_prior=context_prior)
-        elif self.known_context:
-            self.context_prob = 1.0 if self.known_context == 'column' else 0.0
-
-        ## delegate mean MDP computation to the sampler
-        self.posterior_mean_p_cost = self.sampler.mean_mdp(context_prob=self.context_prob)
 
     ## act based on posterior mean grid
     def compute_CE_Q(self, env_copy):
 
-        ## store env reference (used by make_sampler, quick_context_posterior, etc.)
-        self.env = env_copy
+        ## get task-specific sampler
+        self.init_sampler(env_copy)
 
         ## get posterior mean grid
-        self.mean_grid()
+        self.posterior_mean_MDP = self.sampler.mean_mdp(context_prior=self.context_prior)
 
         ## get the cost of each path under the posterior mean (weighted by arm_weight)
         t = env_copy.trial
@@ -634,7 +618,7 @@ class Farmer(ABC):
         for path_id in range(env_copy.n_afc):
             path_states = env_copy.path_states[t][path_id]
             aligned_states, orthogonal_states = env_copy.path_aligned_states[t][path_id], env_copy.path_orthogonal_states[t][path_id]
-            unweighted_pred_costs = self.posterior_mean_p_cost*env_copy.low_cost + (1-self.posterior_mean_p_cost)*env_copy.high_cost
+            unweighted_pred_costs = self.posterior_mean_MDP*env_copy.low_cost + (1-self.posterior_mean_MDP)*env_copy.high_cost
             total_weighted_path_costs = env_copy.arm_reweighting(unweighted_pred_costs, aligned_states, orthogonal_states, self._aligned_weight, self._orthogonal_weight)
             path_costs.append(total_weighted_path_costs)
         
@@ -654,10 +638,10 @@ class Farmer(ABC):
 
 ## define subclasses
 class BAMCP(Farmer):
-    def __init__(self, context_prior=0.5, known_context=False,
+    def __init__(self,
                  temp=1, lapse=0, arm_weight=0, horizon=3, real_future_paths=True,
                  exploration_constant=None, discount_factor=None, n_samples=None):
-        super().__init__(context_prior, known_context,temp, lapse, arm_weight, horizon, real_future_paths, exploration_constant, discount_factor,n_samples)
+        super().__init__(temp, lapse, arm_weight, horizon, real_future_paths, exploration_constant, discount_factor,n_samples)
 
 
     ## initialise MCTS object for tree search
@@ -685,33 +669,6 @@ class BAMCP(Farmer):
             self.mcts.update_trial()
 
 
-    ## generate full set of root samples from posterior
-    def root_samples(self, n_samples=1000):
-        """
-        Generic BAMCP root sampling: infer the context posterior, then
-        delegate to self.sampler.sample_mdps() to draw n_samples MDPs
-        from the task-specific posterior.
-        """
-
-        ## create task-specific sampler
-        self.sampler = self.make_sampler()
-
-        ## update context posterior
-        if not self.known_context:
-            context_prior = self.context_prob
-            self.context_prob = self.sampler.infer_context_posterior(context_prior=context_prior)
-        elif self.known_context:
-            self.context_prob = 1.0 if self.known_context == 'column' else 0.0
-
-        ## draw context indicators (True = column context)
-        self.context_indicators = np.random.binomial(1, self.context_prob, size=n_samples).astype(bool)
-
-        ## delegate MDP sampling to the sampler
-        self.all_posterior_p_costs = self.sampler.sample_mdps(n_samples, self.context_indicators)
-        
-        ## optional: compute CE mean too
-        # self.posterior_mean_p_cost = self.sampler.mean_mdp(context_prob = self.context_prob)
-
     ## tree search using this agent's internal MCTS object
     def search(self):
         """
@@ -732,10 +689,9 @@ class BAMCP(Farmer):
         for a in range(self.mcts.n_afc):
             assert np.array_equal(self.mcts.tree.root.starts[a], self.mcts.env.starts[self.mcts.root_trial][a]), 'start state mismatch for action {}\n env start: {} \n tree start: {}'.format(a, self.mcts.env.starts[self.mcts.root_trial][a], self.mcts.tree.root.starts[a])
             assert np.array_equal(self.mcts.tree.root.goals[a], self.mcts.env.goals[self.mcts.root_trial][a]), 'goal state mismatch for action {}\n env goal: {} \n tree goal: {}'.format(a, self.mcts.env.goals[self.mcts.root_trial][a], self.mcts.tree.root.goals[a])
-            assert np.array_equal(self.mcts.tree.root.path_states[a], self.mcts.env.path_states[self.mcts.root_trial][a]), 'path state mismatch for action {}\n env path: {} \n tree path: {}'.format(a, self.mcts.env.path_states[self.mcts.root_trial][a], self.mcts.tree.root.path_states[a])
 
         ## generate new set of root samples
-        self.root_samples(n_samples=self.n_samples)
+        self.all_posterior_MDPs = self.sampler.sample_mdps(self.n_samples, context_prior=self.context_prior)
 
         ## debugging Q-vals
         self.mcts.Q_tracker = []
@@ -754,8 +710,8 @@ class BAMCP(Farmer):
         for s in range(self.n_samples):
             
             ## root sampling of new posterior
-            posterior_p_cost = self.all_posterior_p_costs[s]
-            self.mcts.env.receive_predictions(posterior_p_cost)
+            posterior_MDP = self.all_posterior_MDPs[s]
+            self.mcts.env.receive_predictions(posterior_MDP)
 
             ## selection, expansion, simulation
             action_leaf = self.mcts.tree_policy()
@@ -782,29 +738,24 @@ class BAMCP(Farmer):
     ## get MCTS Q estimates
     def compute_Q(self, env_copy, tree_reset=True):
 
-        ## store env reference (used by make_sampler, quick_context_posterior, etc.)
-        self.env = env_copy
-
         ## reset tree (or reuse it)
         self.init_mcts(env=env_copy, reset=tree_reset)
         assert self.mcts.env.trial == self.mcts.root_trial, 'trial mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(env_copy.trial, self.mcts.root_trial)
         assert self.mcts.env.sim == True, 'env not in sim mode'
         self.mcts.root_state = env_copy.current
 
+        ## get task-specific sampler
+        self.init_sampler(env_copy)
+
         ## search
         MCTS_Q = self.search()
 
-        ## debug plot
-        # print(t,': BAMCP Q vals:', MCTS_Q, 'CE path costs:', CE_path_costs, 'actual path costs:', env_copy.path_actual_costs[t])
-        # for a in range(self.n_afc):
-        #     print(MCTS.tree.root.action_leaves[a])
-        #     print(env_copy.starts[t][a])
-        #     print(env_copy.goals[t][a])
-        # fig, axs = plt.subplots(1,1, figsize=(5,5))
-        # plot_r(self.posterior_mean_p_cost, axs, title = 'Posterior reward distribution\nmean root sample\npost obs')
-        # plot_traj([env_copy.path_states[self.mcts.root_trial][c] for c in range(self.n_afc)], ax = axs)
-        # plot_obs(env_copy.obs, ax = axs, text=True)
-        # plt.show()
+        ## debugging plot
+        fig, axs = plt.subplots(1,1, figsize=(5,5))
+        plot_r(np.mean(self.all_posterior_MDPs, axis=0), axs, title = 'Posterior reward distribution\nmean of all root samples\npost obs')
+        plot_traj([env_copy.path_states[self.mcts.root_trial][c] for c in range(self.n_afc)], ax = axs)
+        plot_obs(env_copy.obs, ax = axs, text=True)
+        plt.show()
 
         return MCTS_Q
     
@@ -837,10 +788,10 @@ class BAMCP(Farmer):
 
 
 class CE(Farmer):
-    def __init__(self, context_prior=0.5, known_context=False,
+    def __init__(self, 
                  temp=1, lapse=0, arm_weight=0, horizon=None, real_future_paths=None,
                  exploration_constant=None, discount_factor=None, n_samples=None):
-        super().__init__(context_prior, known_context,temp, lapse, arm_weight, horizon, real_future_paths, exploration_constant, discount_factor,n_samples)
+        super().__init__(temp, lapse, arm_weight, horizon, real_future_paths, exploration_constant, discount_factor,n_samples)
 
     
     ## act based on posterior mean grid
