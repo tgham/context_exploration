@@ -40,37 +40,8 @@ class MonteCarloTreeSearch():
         else:
             self.horizon = horizon
 
-        ## or, scale exploration constant by the expected cost of the entire day
-        # n_total_steps = sum([len(self.env.path_states[trial][0]) for trial in range(self.env.n_trials)])
-        # expected_cost_per_t = abs(np.mean([self.low_cost, self.high_cost]))
-        # self.exploration_constants = [exploration_constant * (expected_cost_per_t * n_total_steps) for t in range(self.env.n_trials)]
-        # print(self.exploration_constants)
-
-        ## or, multiple exploration constants, each scaled by the expected cost of the day from that trial onwards
-        expected_cost = np.abs(np.mean([self.low_cost, self.high_cost]))
-        self.exploration_constants = []
-        for t in range(self.env.n_trials):
-            n_steps = 0
-            total_exp_cost = 0
-            # for subseq_t in range(t, self.env.n_trials):
-            for subseq_t in range(t, min(t+self.horizon+1, self.env.n_trials)):
-                n_steps += len(self.env.path_states[subseq_t][0])
-                total_exp_cost += (expected_cost * n_steps)
-            self.exploration_constants.append(total_exp_cost * exploration_constant)
-        # print('exploration constants:', self.exploration_constants)
-
         ## create id for root node
         node_id = self.init_node_id(self.env.obs, None, self.root_trial)
-
-        ## some debugging metrics
-        self.exploratory_steps = 0
-        self.exploitative_steps = 0
-        if self.high_cost < 0:
-            self.max_Q = np.zeros(self.env.n_trials) - np.inf
-            self.min_Q = np.zeros(self.env.n_trials) 
-        else:
-            self.max_Q = np.zeros(self.env.n_trials) 
-            self.min_Q = np.zeros(self.env.n_trials) + np.inf
 
         
         ### node needs to contain paths, actions, starts and goals for that trial so that these can be inherited by the action node
@@ -306,13 +277,7 @@ class MonteCarloTreeSearch():
             to_append[first_action] = self.tree_costs[depth]
             self.conditional_tree_cost_tracker[action][depth].append(to_append)
 
-            ## debugging: save max and min Q values to normalise Qs
-            # if action_leaf.performance > self.max_Q[depth]:
-            #     self.max_Q[depth] = action_leaf.performance
-            # if action_leaf.performance < self.min_Q[depth]:
-            #     self.min_Q[depth] = action_leaf.performance
-            
-            ## as above but save per-node min and max Qs
+            ## debugging: save per-node max and min Q values to normalise Qs in UCT calculation
             if action_leaf.performance > node.max_Q:
                 node.max_Q = action_leaf.performance
             if action_leaf.performance < node.min_Q:
@@ -323,13 +288,6 @@ class MonteCarloTreeSearch():
                 next_node_id = self.node_id_path[depth+1]
                 node = action_leaf.children[next_node_id]
 
-        ## track the cumulative return, i.e. the discounted cost that is applied to the root node
-        # discounted_return = np.dot(self.tree_costs, discount_factors)
-        # if self.tree_actions[0] == 0:
-        #     self.return_tracker.append([discounted_return, np.nan])
-        # else:
-        #     self.return_tracker.append([np.nan, discounted_return])
-
 
     ## calculate E-E value
     def compute_UCT(self, node, action_leaf, min_Q=None, max_Q=None): 
@@ -338,24 +296,8 @@ class MonteCarloTreeSearch():
         ## standard case
         # exploitation_term = action_leaf.performance
         # exploration_term = self.exploration_constant * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
-
-        ## or, depth-dependent exploration constant
-        # exploitation_term = action_leaf.performance
-        # exploration_term = self.exploration_constants[action_leaf.trial] * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
         
-        ### or, min-max normalisation of Qs, 
-
-        # ## based on overall min and max Q values (i.e. min and max of all estimates ever recorded at that depth)
-        # min_Q = self.min_Q[action_leaf.trial]
-        # max_Q = self.max_Q[action_leaf.trial]
-
-        ## or, based on min and max for that node
-        # min_Q = action_leaf.min_Q
-        # max_Q = action_leaf.max_Q
-
-        # ## or, based on min and max of current estimates of Qs at that depth
-        # # min_Q, max_Q = self.tree.min_max_Q(node=self.tree.root, depth=action_leaf.trial, current_depth=0)
-
+        ### or, min-max normalisation based on min and max for that node
         norm_term = max_Q - min_Q + 1e-8 ## add small constant to avoid divide by zero
         exploitation_term = (action_leaf.performance - min_Q) / norm_term
         exploration_term = self.exploration_constant * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
@@ -623,64 +565,3 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         self.env.set_goal(self.root_goal)
         self.env.set_trial(self.root_trial)
     
-
-    ## expected KL divergence
-    def expected_KL(self, env_copy):
-
-        ### log determinant of covariance matrix
-
-        ## get prior p and q samples
-        prior_p_samples = self.all_posterior_ps
-        prior_q_samples = self.all_posterior_qs
-        prior_samples = np.vstack([prior_p_samples.T, prior_q_samples.T])
-
-        ## log det of prior covariance matrix 
-        # prior_cov = np.cov(prior_samples)
-        # prior_LD = np.linalg.slogdet(prior_cov)[1]
-        # assert prior_cov.shape[0] == N*2, 'covariance matrix is wrong shape'
-        
-        ## order the outcomes (counterfactual, then actual. This is to allow reuse of the posterior samples associated with the actual outcome on the next timestep)
-        actual_outcome = env_copy.obs.copy()[-1, -1]
-        if actual_outcome == env_copy.low_cost:
-            ordered_outcomes = [env_copy.high_cost, env_copy.low_cost]
-        else:
-            ordered_outcomes = [env_copy.low_cost, env_copy.high_cost]
-        posterior_LDs = []
-        KLs = []
-
-        ## posterior samples under each of the possible outcomes of the action that was just taken
-        for o, outcome in enumerate(ordered_outcomes):
-            sim_obs = env_copy.obs.copy()
-            sim_obs[-1, -1] = outcome
-            self.root_samples(sim_obs, n_samples=self.n_samples, CE=self.CE)
-            posterior_samples = np.vstack([np.array(self.all_posterior_ps).T, np.array(self.all_posterior_qs).T])
-            
-            ## posterior log det
-            # posterior_cov = np.cov(posterior_samples)
-            # assert posterior_cov.shape == prior_cov.shape, 'prior and posterior covariance matrices do not match: {} vs {}'.format(posterior_cov.shape, prior_cov.shape)
-            # LD = np.linalg.slogdet(posterior_cov)[1]
-            # posterior_LDs.append(LD)
-
-            ## or, calculate the KL divergence between two multivariate gaussians
-            KL = KL_divergence(prior_samples, posterior_samples)
-            KLs.append(KL)
-
-
-        ## expected log det, i.e. the difference between the prior and the expected posterior log dets, weighted by the probability of each outcome
-        # p_low = np.mean(prior_p_samples * prior_q_samples)
-        # p_high = 1 - p_low
-        # if actual_outcome == env_copy.low_cost:
-        #     expected_LD = p_low * (posterior_LDs[1] - prior_LD) + p_high * (posterior_LDs[0] - prior_LD)
-        # else:
-        #     expected_LD = p_low * (posterior_LDs[0] - prior_LD) + p_high * (posterior_LDs[1] - prior_LD)
-        # ELDs.append(expected_LD)
-
-        ## expected KL divergence
-        p_low = np.mean(prior_p_samples * prior_q_samples)
-        p_high = 1 - p_low
-        if actual_outcome == env_copy.low_cost:
-            expected_KL = p_low * (KLs[1]) + p_high * (KLs[0])
-        else:
-            expected_KL = p_low * (KLs[0]) + p_high * (KLs[1])
-        
-        return expected_KL
