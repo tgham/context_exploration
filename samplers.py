@@ -192,7 +192,7 @@ class GridSampler:
         return self.row_probs, self.col_probs
     
 
-    def context_posterior(self, context_prior=0.5):
+    def infer_context_posterior(self, context_prior=0.5):
         
         # Compute log-likelihood for columns
         log_col_likelihoods = []
