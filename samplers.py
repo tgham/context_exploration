@@ -111,15 +111,16 @@ def acceptance_priors(ps, qs, m1,m2,n1,n2):
     return np.sum(m1 * np.log(ps) + n1 * np.log(1 - ps) + m2 * np.log(qs) + n2 * np.log(1 - qs))
 
 class GridSampler:
-    def __init__(self, alpha_row, beta_row, alpha_col, beta_col, low_cost, high_cost, obs, N=10):
-        self.alpha_row = alpha_row
-        self.beta_row = beta_row
-        self.alpha_col = alpha_col
-        self.beta_col = beta_col
-        self.N = N
-        self.low_cost = low_cost
-        self.high_cost = high_cost
-        self.set_obs(obs)
+    def __init__(self, env):
+        self.alpha_row = env.alpha_row
+        self.beta_row = env.beta_row
+        self.alpha_col = env.alpha_col
+        self.beta_col = env.beta_col
+        self.N = env.N
+        self.low_cost = env.low_cost
+        self.high_cost = env.high_cost
+        self.set_obs(env.obs)
+        self.env = env
 
     def set_obs(self, obs):
         self.obs = obs
@@ -243,12 +244,10 @@ class GridSampler:
         
         Args:
             n_samples: Number of posterior samples to draw.
-            context_prob: Scalar probability that the context is column-world.
+            context_prior: Scalar probability that the context is column-world.
         
         Returns:
-            sampled_mdps: Array of shape (n_samples, N, N) — sampled p(low cost) grids.
-            posterior_mean_mdp: Array of shape (N, N) — mean of the sampled grids.
-            extra: Dict of any additional sampler-specific outputs (e.g. latent ps, qs).
+            List of shallow-copied GridEnv objects.
         """
         
         ## update context posterior and determine how many samples to draw under each context
@@ -274,21 +273,23 @@ class GridSampler:
         all_qs = all_qs[idx]
 
         ## compute sampled MDP grids via outer product
-        sampled_mdps = np.einsum('si,sj->sij', all_ps, all_qs)
-
-        ## fill in with binary values, i.e. p = p(low cost)
-        sampled_mdps = np.where(
-            np.random.rand(*sampled_mdps.shape) < sampled_mdps, self.low_cost, self.high_cost
-        )
+        sample_probs = np.einsum('si,sj->sij', all_ps, all_qs)
 
         ## pin observed cells to their known values
         for i, j, c in self.obs:
             i = int(i)
             j = int(j)
             prob = 1 if c == self.low_cost else 0
-            sampled_mdps[:, i, j] = prob
+            sample_probs[:, i, j] = prob
+        
+        ## fill in with binary values, i.e. p = p(low cost)
+        sample_grids = np.where(
+            np.random.rand(*sample_probs.shape) < sample_probs, self.low_cost, self.high_cost
+        )
 
-        return sampled_mdps
+
+        return [self.env.sim_clone(sample_grids[s]) for s in range(n_samples)]
+    
 
 
     def mean_mdp(self, context_prior):
