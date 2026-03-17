@@ -46,15 +46,9 @@ class Actions(Enum):
     left = 2
     down = 3
 
-    north_east = 4
-    north_west = 5
-    south_east = 6
-    south_west = 7
-
-
 class GridEnv(gym.Env):
 
-    def __init__(self, N, n_trials, expt_info, beta_params=None, size=5, seed=None):
+    def __init__(self, N, n_trials, expt_info, beta_params=None, seed=None):
         
         ## seed
         if seed is not None:
@@ -77,14 +71,8 @@ class GridEnv(gym.Env):
         else:
             self.objective = 'costs'
 
-
         ### misc gym inits
-
-        ## sizes
-        self.window_size = 512
-
-        # Observations are dictionaries with the agent's and the goal's location.
-        size = 5
+        
         # Observation space is a 2D location on the grid
         self.observation_space = gym.spaces.Box(
             low=np.array([0, 0]),  # Minimum x and y
@@ -92,7 +80,7 @@ class GridEnv(gym.Env):
             dtype=np.int32
         )
 
-        # define actions
+        ## define actions
 
         """
         The following dictionary maps abstract actions from `self.action_space` to 
@@ -100,12 +88,6 @@ class GridEnv(gym.Env):
         i.e. 0 corresponds to "right", 1 to "up" etc.
         """
         self.action_space = spaces.Discrete(4)
-        # self.action_to_direction = {
-        #     Actions.right.value: np.array([1, 0]),
-        #     Actions.up.value: np.array([0, 1]),
-        #     Actions.left.value: np.array([-1, 0]),
-        #     Actions.down.value: np.array([0, -1]),
-        # }
         self.action_to_direction = np.array([[1, 0], [0, 1], [-1, 0], [0, -1]])
         self.direction_to_action = {tuple(v): k for k, v in enumerate(self.action_to_direction)}
         self.n_actions = 4
@@ -121,7 +103,7 @@ class GridEnv(gym.Env):
         max_turns =1
         self.abstract_sequences = self.generate_abstract_sequences(self.path_len, max_turns)
 
-        ### initialise grid
+        ## initialise grid
         init_done = False
         t=0
         while not init_done:
@@ -132,18 +114,10 @@ class GridEnv(gym.Env):
                 self.high_cost, self.low_cost = -1, -0
             elif self.objective == 'both':
                 self.high_cost, self.low_cost = -1, 1
-            else:
-                raise ValueError('objective must be either rewards or costs')
             self.alpha_row = beta_params['alpha_row']
             self.beta_row = beta_params['beta_row']
             self.alpha_col = beta_params['alpha_col']
             self.beta_col = beta_params['beta_col']
-
-            ## combinatorial
-            # self.row_p = np.random.beta(self.alpha_row,self.beta_row, self.N)
-            # self.col_q = np.random.beta(self.alpha_col, self.beta_col, self.N)
-            # self.p_costs = np.outer(self.row_p, self.col_q)
-
             
             ### determine context
             if self.context == 'row':
@@ -180,10 +154,6 @@ class GridEnv(gym.Env):
             self.context_alignment = []
             self.path_actual_costs = []
             self.path_expected_costs = []
-            self.o_trajs = []
-            self.o_traj_costs = []
-            self.o_traj_total_costs = []
-            self.o_traj_actions = []
             self.n_trials = n_trials
             self.path_aligned_states = []  ## states on each path that are aligned with context
             self.path_orthogonal_states = []  ## states on each path that are orthogonal to context
@@ -226,13 +196,6 @@ class GridEnv(gym.Env):
                         self.context_alignment.append(alignment_tmp)
 
 
-                    ## get info about optimal path (WILL CHANGE THIS LATER SINCE THE NOTION OF OPTIMAL IS DIFFERENT FOR AFC)
-                    # o_traj, o_traj_costs, o_traj_total_cost, o_traj_actions = self.optimal_trajectory(start, goal)
-                    self.o_trajs.append([])
-                    self.o_traj_costs.append([])
-                    self.o_traj_total_costs.append(np.nan)
-                    self.o_traj_actions.append([])
-
                     ## save expected costs of the paths
                     path_actual_costs = []
                     path_expected_costs = []
@@ -253,27 +216,6 @@ class GridEnv(gym.Env):
 
                 except:
                     break
-
-            ## hacky: randomise the order of the SGs and paths, so that A and B are not always in the same order
-            # if self.expt=='AFC' and paths_found:
-            #     for t in range(self.n_trials):
-            #         order = np.random.permutation(self.n_afc)
-            #         self.starts[t] = [self.starts[t][i] for i in order]
-            #         self.goals[t] = [self.goals[t][i] for i in order]
-            #         self.path_states[t] = [self.path_states[t][i] for i in order]
-            #         self.path_actions[t] = [self.path_actions[t][i] for i in order]
-            #         if order[0]==0:
-            #             ## many things stay as is
-            #             pass
-            #         elif order[0]==1:
-            #             # swap dominant_axis_A and dominant_axis_B
-            #             tmp = self.dominant_axis_A[t]
-            #             self.dominant_axis_A[t] = self.dominant_axis_B[t]
-            #             self.dominant_axis_B[t] = tmp
-
-            #         self.sampled_abstract_sequences[t] = [self.sampled_abstract_sequences[t][i] for i in order]
-
-                    
 
 
             ## if all the SGs and paths have been found, then we then need to check overlap across trials
@@ -467,10 +409,6 @@ class GridEnv(gym.Env):
                 self._agent_location - self._goal_location, ord=1
             )
         }
-    # def get_current(self):
-    #     return self._agent_location.copy()
-    # def get_goal(self):
-    #     return self._goal_location.copy()
 
     @property
     def current(self):
@@ -495,7 +433,6 @@ class GridEnv(gym.Env):
             self._agent_location = np.array(start_goal[0], dtype=int)
             self._goal_location = np.array(start_goal[1], dtype=int)
         else:
-            # self._agent_location, self._goal_location = self.sample_SG()
             self._agent_location = np.array(self.starts[self._trial])
             self._goal_location = np.array(self.goals[self._trial])
 
@@ -534,6 +471,9 @@ class GridEnv(gym.Env):
         if self.sim:
             current_cost = self.predicted_costs[self._agent_location[0], self._agent_location[1]]
         else:
+            ## hack: 
+            if not hasattr(self, 'costs'):
+                self.costs = self.costss[0]
             try:
                 current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
             except:
@@ -552,79 +492,6 @@ class GridEnv(gym.Env):
         else:
             self._goal_location = np.array(self.goals[self._trial])
         self.terminated=False
-    
-    ## get some S-G pairs
-    def sample_SG(self):
-
-        ## sample start and goal locations
-        dist = 0
-        min_dist = self.N*0.75
-        angle = 0
-        angle_tolerance = 0.75
-        angle_bounds = [45*(1+angle_tolerance), 45*(1-angle_tolerance)]
-        row_or_col = 1
-        t = 0
-        new = False
-        new_rc = False
-        route_optimality_tolerance = 1
-        while (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (not new) or (not new_rc):
-            agent_location = self.np_random.integers(0, self.N, size=2, dtype=int)
-            goal_location = self.np_random.integers(
-                0, self.N, size=2, dtype=int
-            )
-
-            ## distance criterion
-            dist = np.max(cdist([agent_location, goal_location], [agent_location, goal_location], metric='cityblock'))
-
-            ## same row/col criterion
-            row_or_col = np.sum(agent_location == goal_location)
-
-            ## angle criterion
-            angle = node_angle(agent_location, goal_location)
-
-            ## check if start or goal have appeared already
-            if len(self.starts)==0:
-                new = True
-            else:
-                for s, g in zip(self.starts, self.goals):
-                    if (agent_location[0], agent_location[1]) == (s[0], s[1]) or (goal_location[0], goal_location[1]) == (g[0], g[1]):
-                        new = False
-                    else:
-                        new = True
-
-            ## check if start or goal is in the same row or column as another start or goal
-            if len(self.starts)==0:
-                new_rc = True
-            else:
-                for s, g in zip(self.starts, self.goals):
-                    if np.sum(agent_location == s)>0 or np.sum(agent_location == g)>0 or np.sum(goal_location == s)>0 or np.sum(goal_location == g)>0:
-                        new_rc = False
-                    else:
-                        new_rc = True
-            
-
-            ## checkpoint before doing DP
-            if (dist<min_dist) or (row_or_col>0) or (angle>angle_bounds[0]) or (angle<angle_bounds[1]) or (not new) or (not new_rc):
-                continue
-
-            t+=1
-            if t>200:
-                raise ValueError('cant find start and end')
-
-        ## for sanity check, just place agent and goal in opposite corners
-        # self._agent_location = np.array(self.starts[self.n_trials%4])
-        # self._goal_location = np.array(self.goals[self.n_trials%4])
-        # self.n_trials += 1
-
-        ## what kind of quadrilateral is this? e.g. is the long edge vertical or horizontal?
-        dx = goal_location[0] - agent_location[0]
-        dy = goal_location[1] - agent_location[1]
-        if abs(dx) > abs(dy):
-            self.quad_type = 'horizontal'
-        else:
-            self.quad_type = 'vertical'
-
-        return agent_location, goal_location
     
 
     ## sample paths and SGs for AFC expt
@@ -1218,13 +1085,6 @@ class GridEnv(gym.Env):
         ## pq = p(low cost)
         return self.high_cost if np.random.random() > self.predicted_p_costs[state[0], state[1]] else self.low_cost
     
-    ## define way in which costs become compounded over trials
-    def compound_cost(self, cost, trial):
-        cc = cost ## do nothing
-        # cc = cost * (trial + 1)  ## i.e. cost increases linearly with trial number
-        # cc = cost * 2**trial ## i.e. cost increases exponentially with trial number
-        return cc
-    
     
     ## functions for receiving predictions from the agent
     def receive_predictions(self, predicted_p_costs):
@@ -1371,117 +1231,6 @@ class GridEnv(gym.Env):
         
         return path, costs
         
-
-
-    ## calculate the optimal trajectory between the two points, as given by the true DP solution
-    def optimal_trajectory(self, start, goal):
-        current = start.copy()
-
-        ## start with the current state
-        o_traj = [tuple(current)]
-        expected_cost = self.p_costs[current[0], current[1]]*self.low_cost + (1-self.p_costs[current[0], current[1]])*self.high_cost
-        o_traj_costs = [expected_cost]
-
-        ## or start from nothing
-        # o_traj = []
-        # o_traj_costs = []
-
-        ## save the optimal actions
-        o_traj_actions = []
-
-        ## Loop until the goal is reached
-        visited = set()
-        while True:
-            i, j = current
-            action = int(self.A_true[i, j])  # Ensure action index is int
-            o_traj_actions.append(action)
-            visited.add(tuple(current))
-            
-            # Take action and update current state
-            if action == 0:  # Down
-                current = np.clip((i + 1, j), 0, self.N - 1)
-            elif action == 1:  # Right
-                current = np.clip((i, j + 1), 0, self.N - 1)
-            elif action == 2:  # Up
-                current = np.clip((i - 1, j), 0, self.N - 1)
-            elif action == 3:  # Left
-                current = np.clip((i, j - 1), 0, self.N - 1)
-            
-            if tuple(current) in visited:
-                print(f"Cycle detected from {start} to {goal} at state {current}. Exiting to prevent infinite loop.")
-                print(self.A_true)
-                break
-            
-            ## check if goal has been reached (THIS SHOULD COME BEFORE THE APPEND IF WE DON'T WANT TO INCLUDE THE GOAL STATE
-            # if np.array_equal(current, goal):
-            #     break
-
-            # Update trajectory and expected cost
-            o_traj.append(tuple(current))
-            expected_cost = self.p_costs[current[0], current[1]]*self.low_cost + (1-self.p_costs[current[0], current[1]])*self.high_cost
-            o_traj_costs.append(expected_cost)
-
-            ## check if goal has been reached (THIS SHOULD COME BEFORE THE APPEND IF WE DON'T WANT TO INCLUDE THE GOAL STATE
-            # if current[0] == goal[0] and current[1] == goal[1]:
-            if (current[0], current[1]) == (goal[0], goal[1]):
-                break
-
-        ## calculate the total cost of the trajectory INC START AND END
-        o_traj_total_cost = np.sum(o_traj_costs)
-
-        ## calculate the total cost of the trajectory EXC START AND END
-        # o_traj_costs = o_traj_costs[1:-1]
-        # o_traj_total_cost = np.sum(o_traj_costs)
-
-        return o_traj, o_traj_costs, o_traj_total_cost, o_traj_actions
-
-
-    ## calculate the cost of the simplest manhattan paths
-    def manhattan_trajectory(self, start, goal):
-        x1, y1 = start
-        x2, y2 = goal
-        
-        ## horizontal-first trajectory (i.e. move in x direction first)
-        horizontal_trajectory = [start]
-        while x1 != x2:
-            if x2 > x1:
-                x1 += 1  # Move right
-            else:
-                x1 -= 1  # Move left
-            horizontal_trajectory.append((x1, y1))
-        while y1 != y2:
-            if y2 > y1:
-                y1 += 1  # Move up
-            else:
-                y1 -= 1  # Move down
-            horizontal_trajectory.append((x1, y1))
-        
-        ## vertical-first trajectory (i.e. move in y direction first)
-        x1, y1 = start
-        vertical_trajectory = [start]
-        while y1 != y2:
-            if y2 > y1:
-                y1 += 1
-            else:
-                y1 -= 1
-            vertical_trajectory.append((x1, y1))
-        while x1 != x2:
-            if x2 > x1:
-                x1 += 1
-            else:
-                x1 -= 1
-            vertical_trajectory.append((x1, y1))
-
-        ## calculate the costs of these trajectories
-        # horizontal_trajectory_costs = [self.costs[x, y] for x, y in horizontal_trajectory]
-        # vertical_trajectory_costs = [self.costs[x, y] for x, y in vertical_trajectory]
-        # horizontal_trajectory_costs = [self.p_costs[x, y] for x, y in horizontal_trajectory]
-        # vertical_trajectory_costs = [self.p_costs[x, y] for x, y in vertical_trajectory]
-        horizontal_trajectory_costs = [self.p_costs[x, y]*self.low_cost + (1-self.p_costs[x, y])*self.high_cost for x, y in horizontal_trajectory]
-        vertical_trajectory_costs = [self.p_costs[x, y]*self.low_cost + (1-self.p_costs[x, y])*self.high_cost for x, y in vertical_trajectory]
-        manhattan_costs = [np.sum(horizontal_trajectory_costs), np.sum(vertical_trajectory_costs)]
-
-        return manhattan_costs
     
 
     ## get information on which states are orthogonal vs aligned to the context
