@@ -17,8 +17,6 @@ import heapq
 from collections import defaultdict
 from IPython.display import display, clear_output
 from utils import *
-from scipy.stats import rankdata, truncnorm
-from scipy.linalg import cholesky
 from base_kernels import *
 from MCTS import MonteCarloTreeSearch_AFC
 from tqdm.auto import tqdm
@@ -497,6 +495,9 @@ class Farmer(ABC):
                     if t == (n_trials-1):
                         start_of_day_context_prior = context_posterior
 
+                        ## also need to clear sampler
+                        self.sampler = None
+
                     ## update progress bar
                     if progress:
                         pbar.update(1)
@@ -666,6 +667,7 @@ class BAMCP(Farmer):
                 orthogonal_weight=self._orthogonal_weight
             )
         else:
+            self.mcts.env = env
             self.mcts.update_trial()
 
 
@@ -687,7 +689,7 @@ class BAMCP(Farmer):
         ## check root
         assert self.mcts.root_trial == self.mcts.env.trial, 'trial mismatch between env and tree at start of search\n env trial: {} \n tree trial: {}'.format(self.mcts.env.trial, self.mcts.root_trial)
         for a in range(self.mcts.n_afc):
-            assert np.array_equal(self.mcts.tree.root.path_states[a][0], self.mcts.env.starts[self.mcts.root_trial][a]), 'start state mismatch for action {}\n env start: {} \n tree start: {}'.format(a, self.mcts.env.starts[self.mcts.root_trial][a], self.mcts.tree.root.path_states[a][0])
+            assert np.array_equal(self.mcts.tree.root.path_states[a][0], self.mcts.env.starts[self.mcts.root_trial][a]), 'trial {}, start state mismatch for action {}\n env start: {} \n tree start: {}'.format(self.mcts.root_trial, a, self.mcts.env.starts[self.mcts.root_trial][a], self.mcts.tree.root.path_states[a][0])
 
         ## generate new set of root samples
         self.all_posterior_MDPs = self.sampler.sample_mdps(self.n_samples, context_prior=self.context_prior)
@@ -709,8 +711,9 @@ class BAMCP(Farmer):
         for s in range(self.n_samples):
             
             ## root sampling of new posterior
-            posterior_MDP = self.all_posterior_MDPs[s]
-            self.mcts.env.receive_predictions(posterior_MDP)
+            # posterior_MDP = self.all_posterior_MDPs[s]
+            # self.mcts.env.receive_predictions(posterior_MDP)
+            self.mcts.env = self.all_posterior_MDPs[s]
 
             ## selection, expansion, simulation
             action_leaf = self.mcts.tree_policy()
@@ -749,9 +752,11 @@ class BAMCP(Farmer):
         ## search
         MCTS_Q = self.search()
 
-        ## debugging plot
+        # ## debugging plot
+        # # toplot_mean = np.mean([MDP.costs == self.sampler.low_cost for MDP in self.all_posterior_MDPs], axis=0) ## mean of binary grids
+        # toplot_mean = self.sampler.mean_mdp(context_prior=self.context_prior) ## or actual posterior mean
         # fig, axs = plt.subplots(1,1, figsize=(5,5))
-        # plot_r(np.mean(self.all_posterior_MDPs, axis=0), axs, title = 'Posterior reward distribution\nmean of all root samples\npost obs')
+        # plot_r(toplot_mean, axs, title = 'Posterior reward distribution\nmean of all root samples\nMCTS Q: {}'.format(np.round(MCTS_Q,2)))
         # plot_traj([env_copy.path_states[self.mcts.root_trial][c] for c in range(self.n_afc)], ax = axs)
         # plot_obs(env_copy.obs, ax = axs, text=True)
         # plt.show()
@@ -778,7 +783,7 @@ class BAMCP(Farmer):
             tree_reset = True
 
         ## hacky: unless full BAMCP with real future paths and full horizon, reset the tree
-        if (not self.real_future_paths) or (self.horizon < (env_copy.n_trials-t)):
+        if (not self.real_future_paths) or (self.horizon < (env_copy.n_trials-t-1)):
             tree_reset = True
     
         return tree_reset
