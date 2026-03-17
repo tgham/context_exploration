@@ -24,7 +24,6 @@ class MonteCarloTreeSearch():
         self.aligned_weight = aligned_weight
         self.orthogonal_weight = orthogonal_weight
         self.tree = tree
-        self.update_trial()
         self.discount_factor = discount_factor
         self.exploration_constant = exploration_constant
         self.real_future_paths = real_future_paths
@@ -37,6 +36,9 @@ class MonteCarloTreeSearch():
             self.horizon = self.env.n_trials-1 
         else:
             self.horizon = horizon
+
+        ## init root info
+        self.update_trial()
 
         ## create id for root node
         node_id = self.init_node_id(self.env.obs, None)
@@ -97,7 +99,7 @@ class MonteCarloTreeSearch():
         # terminated = node.trial == self.env.n_trials-1 ## i.e. this action leaf corresponds to the action made in the final trial, so it leads to termination of the day
 
         ## or, we terminate depending on horizon
-        terminated = node.trial == np.min([self.root_trial + self.horizon, self.env.n_trials-1]) ## i.e. this action leaf corresponds to a trial that is at or beyond the horizon, so it leads to termination of the day
+        terminated = node.trial == self.horizon_trial ## i.e. this action leaf corresponds to a trial that is at or beyond the horizon, so it leads to termination of the day
             
         ### update info for s-a leaf - i.e. the state-action pair
 
@@ -142,10 +144,6 @@ class MonteCarloTreeSearch():
                 action_leaf = self.expand(node)
                 self.tree_actions.append(action_leaf.action)
                 self.node_id_path.append(node.node_id)
-
-                ## revert env
-                self.revert_env()
-                assert self.env.trial == self.root_trial, 'env trial not reverted properly. should be in {}, but actually in {}'.format(self.root_trial, self.env.trial)
 
                 return action_leaf
                 
@@ -194,10 +192,6 @@ class MonteCarloTreeSearch():
         if node.terminated:
             action_leaf = None
 
-        ## revert env
-        self.revert_env()
-        assert self.env.trial == self.root_trial, 'env trial not reverted properly'
-
         return action_leaf
 
 
@@ -217,9 +211,9 @@ class MonteCarloTreeSearch():
             action_leaf = node.action_leaves[action]
 
             ## Discounted cost from the current node to the terminal node
-            discounted_cost = np.dot(
-                self.tree_costs[depth:],  # Costs from current depth onward
-                discount_factors[:tree_len - depth]  # Corresponding discount factors from current depth
+            discounted_cost = sum(
+                c * d 
+                for c, d in zip(self.tree_costs[depth:], discount_factors[:tree_len - depth])
             )
 
             ## update visit counts and performance estimates
@@ -310,9 +304,9 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
     ## node_ids are defined by the informational state, i.e. the counts of low and high cost states in each cell
     def init_node_id(self, obs=None, parent_node_id=None):
         
-        ## uses sparse representation: frozenset of ((i, j), (low_count, high_count)) for observed cells only
+        ## uses sparse representation: tuple of ((i, j), (low_count, high_count)) for observed cells only
 
-        # Initialize counts from parent node_id (sparse frozenset) if provided
+        # Initialize counts from parent node_id (sparse tuple) if provided
         if parent_node_id is not None:
             counts = dict(parent_node_id)
         else:
@@ -320,9 +314,8 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         
         # Add new observations - optimized loop
         high_cost = self.env.high_cost
-        for obs_item in obs:
-            i, j, c = int(obs_item[0]), int(obs_item[1]), obs_item[2]
-            key = (i, j)
+        for i, j, c in obs:
+            key = (int(i), int(j))
             prev = counts.get(key)
             if prev is None:
                 counts[key] = (0, 1) if c == high_cost else (1, 0)
@@ -331,7 +324,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
             else:
                 counts[key] = (prev[0] + 1, prev[1])
         
-        return frozenset(counts.items())
+        return tuple(sorted(counts.items()))
     
     ## in AFC, there is no meaningful state of the MDP, so belief state just contains the trial number
     def check_node(self, node):
@@ -344,7 +337,9 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
     def update_trial(self):
         self.root_trial = self.env.trial ## i.e. the trial that the agent is current faced with in the real env
         self.root_state = self.env.starts[self.root_trial].copy() ## i.e. the two possible start states for this trial
-        self.root_goal = self.env.goals[self.root_trial].copy() ## i.e. the two possible goal states for this trial
+
+        ## set the horizon_trial - i.e. the trial at which search terminates
+        self.horizon_trial = min(self.root_trial + self.horizon, self.env.n_trials-1)
 
     ## tree step
     def tree_step(self, action_leaf):
@@ -413,8 +408,8 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
             self.env.set_trial(node_trial)
             self.env.soft_reset()
         else:
-            next_state = np.array([None, None])
-            next_goal = np.array([None, None])
+            next_state = (None, None)
+            next_goal = (None, None)
             self.env.soft_reset(next_state, next_goal)
 
         ## some checks
@@ -457,8 +452,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         ## loop through remaining trials
         depth = 0
         remaining_ro_costs = []
-        ro_choices=[]
-        for trial in range(first_trial+1, np.min([self.root_trial + self.horizon + 1, self.env.n_trials])): ## horizon-limited
+        for trial in range(first_trial+1, self.horizon_trial + 1): ## horizon-limited
             depth+=1
 
             ## PA-BAMCP: sample paths
@@ -487,9 +481,8 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
                 ro_cost = self.env.arm_reweighting(self.env.costs, aligned_states_tmp, orthogonal_states_tmp, self.aligned_weight, self.orthogonal_weight)
                 
                 path_costs.append(ro_cost)
-            best_ro_cost = np.max(path_costs) 
+            best_ro_cost = max(path_costs) 
             remaining_ro_costs.append(best_ro_cost)
-            ro_choices.append(np.argmax(path_costs))
             total_cost += best_ro_cost * self.discount_factor**depth
 
             
@@ -516,20 +509,13 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
             # ro_cost = self.agent.arm_reweighting(self.env.costs, aligned_states_tmp, orthogonal_states_tmp)
 
             # remaining_ro_costs.append(ro_cost)
-            # ro_choices.append(path_id)
             # total_cost += ro_cost * self.discount_factor**depth
         # print(total_cost)
         # raise Exception
 
         self.tree_costs.append(total_cost)
         # assert len(remaining_ro_costs)+first_trial+1 == self.env.n_trials, 'remaining RO costs do not match number of trials\n n remaining RO costs: {}, n trials: {}'.format(len(remaining_ro_costs), self.env.n_trials)
-        assert len(remaining_ro_costs)+first_trial+1 == np.min([self.root_trial + self.horizon + 1, self.env.n_trials]), 'remaining RO costs do not match number of trials\n n remaining RO costs: {}, n trials: {}'.format(len(remaining_ro_costs), np.min([self.root_trial + self.horizon + 1, self.env.n_trials]))
+        assert len(remaining_ro_costs)+first_trial+1 == self.horizon_trial + 1, 'remaining RO costs do not match number of trials\n n remaining RO costs: {}, n trials: {}'.format(len(remaining_ro_costs), self.horizon_trial + 1)
         return total_cost 
 
-    
-    ## after simulation, need to revert env to its original state before the next simulation
-    def revert_env(self):
-        self.env.set_state(self.root_state)
-        self.env.set_goal(self.root_goal)
-        self.env.set_trial(self.root_trial)
     
