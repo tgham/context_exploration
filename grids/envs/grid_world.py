@@ -438,26 +438,10 @@ class GridEnv(gym.Env):
 
         ## initialise trial info
         self.terminated = False
-        # observation = self.get_obs()
-        # info = self._get_info()
-        # current_cost = self.get_cost(self._agent_location)
-        # current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
 
-        ## reset obs on each trial
-        # self.obs = np.array([self._agent_location[0], self._agent_location[1], current_cost], ndmin=2)
-
-        ## or, observations accumulate over trials, and agent observes starting position
-        # if not self.sim:
-        #     if not hasattr(self, 'obs') or self.obs is None:
-        #         self.obs = np.array([[self._agent_location[0], self._agent_location[1], current_cost]]) 
-        #     else:
-        #         # print(len(self.obs))
-        #         self.obs = np.vstack([self.obs, [self._agent_location[0], self._agent_location[1], current_cost]])
-        #     self.obs_tmp = self.obs.copy()
-
-        ## or, observations accumulate over trials, but agent doesn't observe starting position
+        ## initialise obs if first trial and in non-sim mode
         if not self.sim:
-            if not hasattr(self, 'obs') or self.obs is None:
+            if self._trial == 0:
                 self.obs = np.array([])
 
 
@@ -468,17 +452,14 @@ class GridEnv(gym.Env):
         #     print('self._agent_location is a tuple":', self._agent_location, self._trial)
         self._goal_location = np.array(self.goals[self._trial][action])
         self.terminated = False
-        if self.sim:
-            current_cost = self.predicted_costs[self._agent_location[0], self._agent_location[1]]
-        else:
-            ## hack: 
-            if not hasattr(self, 'costs'):
-                self.costs = self.costss[0]
-            try:
-                current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
-            except:
-                print('error: ', self.costs[self._agent_location[0]][self._agent_location[1]])
-                current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
+        ## hack: 
+        if not hasattr(self, 'costs'):
+            self.costs = self.costss[0]
+        try:
+            current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
+        except:
+            print('error: ', self.costs[self._agent_location[0]][self._agent_location[1]])
+            current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
         self.trial_obs = np.array([[self._agent_location[0], self._agent_location[1], current_cost]])
 
     ## soft reset (allows simulation of future trials without full copying of env) - i.e. update only the start and goal locations
@@ -1065,37 +1046,10 @@ class GridEnv(gym.Env):
         if len(self.obs_tmp)==0:
             self.obs_tmp = self.obs_start_tmp.copy()
 
-    ## get cost, given p(cost)
-    def get_cost(self, state):
-
-        ## pq = p(high cost)
-        # return self.high_cost if np.random.random() < self.p_costs[state[0], state[1]] else self.low_cost
-        
-        ## pq = p(low cost)
-        return self.high_cost if np.random.random() > self.p_costs[state[0], state[1]] else self.low_cost
     
-    def get_pred_cost(self, state):
-
-        ## ensure coordinates of state are integers
-        state = np.array(state, dtype=int)
-
-        ## pq = p(high cost)
-        # return self.high_cost if np.random.random() < self.predicted_p_costs[state[0], state[1]] else self.low_cost
-
-        ## pq = p(low cost)
-        return self.high_cost if np.random.random() > self.predicted_p_costs[state[0], state[1]] else self.low_cost
-    
-    
-    ## functions for receiving predictions from the agent
-    def receive_predictions(self, predicted_p_costs):
-        self.predicted_p_costs = predicted_p_costs.reshape(self.N, self.N)
-
-        ## fill in the grid with highs and lows based on predicted_p_costs (vectorized)
-        self.predicted_costs = np.where(
-            np.random.random((self.N, self.N)) > self.predicted_p_costs,
-            self.high_cost,
-            self.low_cost
-        )
+    ## receiving predictions from the agent
+    def receive_predictions(self, costs):
+        self.costs = costs
 
 
     ## construct a task-specific sampler for this environment
@@ -1103,87 +1057,15 @@ class GridEnv(gym.Env):
         """Create a GridSampler from this environment's parameters and the given observations."""
         return GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, self.obs, N=self.N)
 
-
-    ## take a step in the environment
-    def step(self, action):
-
-        self.terminated = False
-        
-        ## take the actual action 
-        direction = self.action_to_direction[action] 
-
-        ## move to the new state - optimized clip
-        new_loc = self._agent_location + direction
-        # Clip to grid bounds [0, N-1]
-        i, j = new_loc[0], new_loc[1]
-        N_max = self.N - 1
-        if i < 0: i = 0
-        elif i > N_max: i = N_max
-        if j < 0: j = 0
-        elif j > N_max: j = N_max
-        new_loc[0], new_loc[1] = i, j
-        self._agent_location = new_loc
-
-        ## get the predicted and actual costs of the new state using pre-sampled costs
-        current_cost = self.costs[i, j]
-        predicted_cost = self.predicted_costs[i, j]
-
-        ## return the real cost if not simulating
-        if not self.sim:
-            cost = current_cost
-            
-            ## update observation array - i.e. agent observes along the way
-            self.trial_obs = np.vstack([self.trial_obs, [i, j, current_cost]])
-
-        ## return the predicted cost if simulating
-        elif self.sim:
-            cost = predicted_cost
-
-
-        # An trial is done iff the agent has reached the goal
-        # if self._agent_location[0] == self._goal_location[0] and self._agent_location[1] == self._goal_location[1]:
-        if (self._agent_location[0], self._agent_location[1]) == (self._goal_location[0], self._goal_location[1]):
-            self.terminated = True
-        
-            ## update observation array only once the trial is complete
-            if not self.sim:
-                if self._trial==0:
-                    assert len(self.obs)==0, 'obs should be empty at the start of the trial'
-
-                if len(self.obs)==0: ## i.e. first trial, so just copy the trial_obs
-                    self.obs = self.trial_obs.copy()
-                else: ## otherwise, append the trial_obs to the obs from the previous trials
-                    self.obs = np.vstack([self.obs, self.trial_obs])
-
-                ## update trial counter
-                self._trial += 1
-
-
-        # observation = self.get_obs()
-        # info = self._get_info()
-        truncated=False
-        agent_loc = self._agent_location
-        info = {} ## make this empty since gym requires it
-        return agent_loc, cost, self.terminated, truncated, info 
-    
-    ## take path
-    def take_path(self, action_sequence):
-        states = []
-        costs = []
-        for action in action_sequence:
-            current, cost, terminated, _, _ = self.step(action)
-            states.append(current)
-            costs.append(cost)
-        return states, costs
     
     ## take path using pre-computed path_states (avoids looping through individual step calls)
-    def path_step(self, action):
+    def step(self, action):
         """
         
         Args:
             action: index of the path to take from path_states[self._trial]
         
-        Returns:
+        Returns standard env.step outputs:
             states: list of states visited
             costs: list of costs at each state
         """
@@ -1194,10 +1076,7 @@ class GridEnv(gym.Env):
         xs, ys = path_arr[:, 0], path_arr[:, 1]
         
         # Get all costs at once using advanced indexing
-        if self.sim:
-            costs = self.predicted_costs[xs, ys]
-        else:
-            costs = self.costs[xs, ys]
+        costs = self.costs[xs, ys]
         
         # Update agent location to final state
         self._agent_location = path_arr[-1]
@@ -1210,7 +1089,6 @@ class GridEnv(gym.Env):
         
         # If not simulating, update observations and trajectory
         if not self.sim:
-
             
             # Build trial_obs array for all new states at once
             new_obs = np.column_stack([xs, ys, costs])
@@ -1228,8 +1106,13 @@ class GridEnv(gym.Env):
             
             # Update trial counter
             self._trial += 1
+
+        ## create dummy outputs for compatibility with step() outputs
+        info, truncated = {}, False
+
+        return path, costs, self.terminated, truncated, info
         
-        return path, costs
+        # return path, costs
         
     
 
