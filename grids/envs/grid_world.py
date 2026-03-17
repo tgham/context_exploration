@@ -12,6 +12,7 @@ from scipy.spatial.distance import cdist
 from scipy.special import softmax
 import warnings
 import heapq
+import copy
 from collections import defaultdict
 from IPython.display import display, clear_output
 from utils import *
@@ -422,6 +423,31 @@ class GridEnv(gym.Env):
     def trial(self):
         return self._trial
 
+    def sim_clone(self, costs):
+        """
+        Returns a lightweight shallow copy of the environment, injecting 
+        the newly sampled MDP components (e.g. costs).
+        """
+        sim_env = copy.copy(self)
+        
+        # Inject the new underlying sampled MDP dynamics
+        sim_env.costs = costs
+        sim_env.sim = True 
+        
+        # Explicitly shallow-copy attributes that might be mutated in-place
+        if hasattr(self, 'trial_obs') and self.trial_obs is not None:
+            if isinstance(self.trial_obs, np.ndarray):
+                sim_env.trial_obs = self.trial_obs.copy()
+            else:
+                sim_env.trial_obs = copy.copy(self.trial_obs)
+                
+        if hasattr(self, 'obs') and self.obs is not None:
+            if isinstance(self.obs, np.ndarray):
+                sim_env.obs = self.obs.copy()
+            else:
+                sim_env.obs = copy.copy(self.obs)
+
+        return sim_env
 
     ## reset the environment
     def reset(self, seed=None, start_goal=None):
@@ -447,10 +473,10 @@ class GridEnv(gym.Env):
 
     ## init trial - i.e. in the AFC task, once a start has been chosen, initialise the start, goal and obs for that trial
     def init_trial(self, action):
-        self._agent_location = np.array(self.starts[self._trial][action])
+        self._agent_location = self.starts[self._trial][action]
         # if isinstance(self._agent_location[0], tuple):
         #     print('self._agent_location is a tuple":', self._agent_location, self._trial)
-        self._goal_location = np.array(self.goals[self._trial][action])
+        self._goal_location = self.goals[self._trial][action]
         self.terminated = False
         ## hack: 
         if not hasattr(self, 'costs'):
@@ -467,11 +493,11 @@ class GridEnv(gym.Env):
         if start is not None:
             self._agent_location = start
         else:
-            self._agent_location = np.array(self.starts[self._trial])
+            self._agent_location = self.starts[self._trial]
         if goal is not None:
             self._goal_location = goal
         else:
-            self._goal_location = np.array(self.goals[self._trial])
+            self._goal_location = self.goals[self._trial]
         self.terminated=False
     
 
@@ -1055,7 +1081,7 @@ class GridEnv(gym.Env):
     ## construct a task-specific sampler for this environment
     def make_sampler(self):
         """Create a GridSampler from this environment's parameters and the given observations."""
-        return GridSampler(self.alpha_row, self.beta_row, self.alpha_col, self.beta_col, self.low_cost, self.high_cost, self.obs, N=self.N)
+        return GridSampler(self)
 
     
     ## take path using pre-computed path_states (avoids looping through individual step calls)
@@ -1071,24 +1097,22 @@ class GridEnv(gym.Env):
         """
         path = self.path_states[self._trial][action]
         
-        # Convert path to numpy array for vectorized indexing
-        path_arr = np.array(path)
-        xs, ys = path_arr[:, 0], path_arr[:, 1]
-        
-        # Get all costs at once using advanced indexing
-        costs = self.costs[xs, ys]
+        # Get all costs at once using list comprehension
+        costs = [self.costs[x, y] for x, y in path]
         
         # Update agent location to final state
-        self._agent_location = path_arr[-1]
+        self._agent_location = path[-1]
         
         # Set goal location to the final state of the path
-        self._goal_location = path_arr[-1]
+        self._goal_location = path[-1]
         
         # Mark as terminated (path is complete)
         self.terminated = True
         
         # If not simulating, update observations and trajectory
         if not self.sim:
+            xs = [p[0] for p in path]
+            ys = [p[1] for p in path]
             
             # Build trial_obs array for all new states at once
             new_obs = np.column_stack([xs, ys, costs])
@@ -1111,8 +1135,6 @@ class GridEnv(gym.Env):
         info, truncated = {}, False
 
         return path, costs, self.terminated, truncated, info
-        
-        # return path, costs
         
     
 
