@@ -488,17 +488,6 @@ class GridEnv(gym.Env):
             current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
         self.trial_obs = np.array([[self._agent_location[0], self._agent_location[1], current_cost]])
 
-    ## soft reset (allows simulation of future trials without full copying of env) - i.e. update only the start and goal locations
-    def soft_reset(self, start=None, goal=None):
-        if start is not None:
-            self._agent_location = start
-        else:
-            self._agent_location = self.starts[self._trial]
-        if goal is not None:
-            self._goal_location = goal
-        else:
-            self._goal_location = self.goals[self._trial]
-        self.terminated=False
     
 
     ## sample paths and SGs for AFC expt
@@ -1057,21 +1046,8 @@ class GridEnv(gym.Env):
 
     
     ## custom functions for manually editing the env
-    def set_state(self, state):
-        self._agent_location = state
-    def set_goal(self, goal):
-        self._goal_location = goal
-    def set_trial(self, trial):
-        self._trial = trial
     def set_sim(self, sim):
         self.sim = sim
-    def set_obs(self, obs):
-        self.obs = obs
-    def flush_obs(self): ## necessary for MCTS
-        self.obs_tmp = self.obs.copy()
-        if len(self.obs_tmp)==0:
-            self.obs_tmp = self.obs_start_tmp.copy()
-
     
     ## receiving predictions from the agent
     def receive_predictions(self, costs):
@@ -1128,8 +1104,8 @@ class GridEnv(gym.Env):
             else:  # otherwise, append the trial_obs to the obs from previous trials
                 self.obs = np.vstack([self.obs, self.trial_obs])
             
-            # Update trial counter
-            self._trial += 1
+        # Update trial counter
+        self._trial += 1
 
         ## create dummy outputs for compatibility with step() outputs
         info, truncated = {}, False

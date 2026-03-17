@@ -158,7 +158,7 @@ class MonteCarloTreeSearch():
                 self.node_id_path.append(node.node_id)
 
                 ## move in env
-                _, costs, terminated, node_trial, next_node_id = self.tree_step(action_leaf)
+                next_node_id, costs, terminated, node_trial  = self.tree_step(action_leaf)
 
                 # see if the next state node already exists as a child of this action leaf
                 if next_node_id in action_leaf.children:
@@ -401,20 +401,10 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
         ## since the agent has chosen a path to the goal, we need to move the environment to the next trial
         node_trial = step_trial+1
-        if not terminated:
-
-            next_state = None ## sort this out later, but it seems we don't really need this for this task
-
-            self.env.set_trial(node_trial)
-            self.env.soft_reset()
-        else:
-            next_state = (None, None)
-            next_goal = (None, None)
-            self.env.soft_reset(next_state, next_goal)
 
         ## some checks
         assert len(self.tree_costs)<=self.env.n_trials, 'tree costs exceed number of trials, tree len: {}, n_trials: {}'.format(len(self.tree_costs), self.env.n_trials)
-        return next_state, costs, terminated, node_trial, next_node_id
+        return next_node_id, costs, terminated, node_trial
     
     ## rollout policy
     def rollout_policy(self, action_leaf):
