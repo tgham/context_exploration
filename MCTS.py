@@ -366,15 +366,9 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
         ## initialise costs and observations for this path
         simulated_obs = []
-        # simulated_obs = [np.append(start_tmp, self.env.predicted_costs[start_tmp[0], start_tmp[1]])] ## if the agent hasn't already observed the start state
 
         ## take path
-        # states, costs = self.env.take_path(action_sequence)
-        states, costs = self.env.path_step(path_id)
-
-        ## add back in the start state if it wasn't actually observed in non-sim space
-        # states = [start_tmp] + states
-        # costs = [self.env.predicted_costs[start_tmp[0], start_tmp[1]]] + costs
+        states, costs, _, _, _ = self.env.step(path_id)
 
         ## add costs to states to create simulated obs for the tree
         simulated_obs = [(s[0], s[1], costs[i]) for i, s in enumerate(states)]
@@ -384,7 +378,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
             aligned_states, orthogonal_states = self.env.path_aligned_states[step_trial][path_id], self.env.path_orthogonal_states[step_trial][path_id] ## full BAMCP
         else:
             aligned_states, orthogonal_states = action_leaf.aligned_states, action_leaf.orthogonal_states ## PA-BAMCP
-        total_weighted_cost = self.env.arm_reweighting(self.env.predicted_costs, aligned_states, orthogonal_states, self.aligned_weight, self.orthogonal_weight)
+        total_weighted_cost = self.env.arm_reweighting(self.env.costs, aligned_states, orthogonal_states, self.aligned_weight, self.orthogonal_weight)
 
         ## save costs
         self.tree_costs.append(total_weighted_cost)
@@ -448,12 +442,12 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
             first_path_states = action_leaf.path_states
 
         ## unweighted
-        # starting_costs = [self.env.predicted_costs[state[0], state[1]] for state in first_path_states]
+        # starting_costs = [self.env.costs[state[0], state[1]] for state in first_path_states]
         # total_cost = sum(starting_costs)
 
         ## weighted
         aligned_states, orthogonal_states = action_leaf.aligned_states, action_leaf.orthogonal_states
-        total_cost = self.env.arm_reweighting(self.env.predicted_costs, aligned_states, orthogonal_states, self.aligned_weight, self.orthogonal_weight)
+        total_cost = self.env.arm_reweighting(self.env.costs, aligned_states, orthogonal_states, self.aligned_weight, self.orthogonal_weight)
 
         ## if final trial, just stop here
         if action_leaf.terminated:
@@ -486,11 +480,11 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
                 path_states_tmp = path_states[path_id]
 
                 ## unweighted
-                # costs = [self.env.predicted_costs[state[0], state[1]] for state in path_states]
+                # costs = [self.env.costs[state[0], state[1]] for state in path_states]
 
                 ## arm-weighted
                 aligned_states_tmp, orthogonal_states_tmp = aligned_states[path_id], orthogonal_states[path_id]
-                ro_cost = self.env.arm_reweighting(self.env.predicted_costs, aligned_states_tmp, orthogonal_states_tmp, self.aligned_weight, self.orthogonal_weight)
+                ro_cost = self.env.arm_reweighting(self.env.costs, aligned_states_tmp, orthogonal_states_tmp, self.aligned_weight, self.orthogonal_weight)
                 
                 path_costs.append(ro_cost)
             best_ro_cost = np.max(path_costs) 
@@ -515,11 +509,11 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
             # # path_states_tmp = path_states[path_id]
 
             # ## unweighted
-            # # costs = [self.env.predicted_costs[state[0], state[1]] for state in path_states]
+            # # costs = [self.env.costs[state[0], state[1]] for state in path_states]
 
             # ## arm-weighted
             # aligned_states_tmp, orthogonal_states_tmp = aligned_states[path_id], orthogonal_states[path_id]
-            # ro_cost = self.agent.arm_reweighting(self.env.predicted_costs, aligned_states_tmp, orthogonal_states_tmp)
+            # ro_cost = self.agent.arm_reweighting(self.env.costs, aligned_states_tmp, orthogonal_states_tmp)
 
             # remaining_ro_costs.append(ro_cost)
             # ro_choices.append(path_id)

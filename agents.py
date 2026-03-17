@@ -459,7 +459,7 @@ class Farmer(ABC):
                         assert np.array_equal(start, env_copy.starts[t][action]), 'current state does not match start state in city {} day {} trial {}\n current: {}, start: {}.\n all starts: {}\n all goals:{}'.format(city, day, t, env_copy.current, env_copy.starts[t][action], env_copy.starts, env_copy.goals)
                         action_sequence = env_copy.path_actions[t][action]
                         # _, _ = env_copy.take_path(action_sequence)
-                        states, costs = env_copy.path_step(action)
+                        states, costs, _, _, _ = env_copy.step(action)
                         current = env_copy.current
                         assert np.array_equal(costs, env_copy.trial_obs[:,-1]), 'costs do not match trial observations\n costs: {}, trial_obs: {}'.format(costs, env_copy.trial_obs[:,-1])
                         assert len(costs) == len(action_sequence)+1, 'costs and action sequence do not match\n costs: {}, action sequence: {}'.format(len(costs), len(action_sequence))
@@ -687,7 +687,7 @@ class BAMCP(Farmer):
         ## check root
         assert self.mcts.root_trial == self.mcts.env.trial, 'trial mismatch between env and tree at start of search\n env trial: {} \n tree trial: {}'.format(self.mcts.env.trial, self.mcts.root_trial)
         for a in range(self.mcts.n_afc):
-            assert np.array_equal(self.mcts.tree.root.starts[a], self.mcts.env.starts[self.mcts.root_trial][a]), 'start state mismatch for action {}\n env start: {} \n tree start: {}'.format(a, self.mcts.env.starts[self.mcts.root_trial][a], self.mcts.tree.root.starts[a])
+            assert np.array_equal(self.mcts.tree.root.path_states[a][0], self.mcts.env.starts[self.mcts.root_trial][a]), 'start state mismatch for action {}\n env start: {} \n tree start: {}'.format(a, self.mcts.env.starts[self.mcts.root_trial][a], self.mcts.tree.root.path_states[a][0])
 
         ## generate new set of root samples
         self.all_posterior_MDPs = self.sampler.sample_mdps(self.n_samples, context_prior=self.context_prior)
@@ -750,11 +750,11 @@ class BAMCP(Farmer):
         MCTS_Q = self.search()
 
         ## debugging plot
-        fig, axs = plt.subplots(1,1, figsize=(5,5))
-        plot_r(np.mean(self.all_posterior_MDPs, axis=0), axs, title = 'Posterior reward distribution\nmean of all root samples\npost obs')
-        plot_traj([env_copy.path_states[self.mcts.root_trial][c] for c in range(self.n_afc)], ax = axs)
-        plot_obs(env_copy.obs, ax = axs, text=True)
-        plt.show()
+        # fig, axs = plt.subplots(1,1, figsize=(5,5))
+        # plot_r(np.mean(self.all_posterior_MDPs, axis=0), axs, title = 'Posterior reward distribution\nmean of all root samples\npost obs')
+        # plot_traj([env_copy.path_states[self.mcts.root_trial][c] for c in range(self.n_afc)], ax = axs)
+        # plot_obs(env_copy.obs, ax = axs, text=True)
+        # plt.show()
 
         return MCTS_Q
     
@@ -766,7 +766,7 @@ class BAMCP(Farmer):
         init_info_state = self.mcts.tree.root.node_id
         trial_obs = env_copy.trial_obs.copy()
         t = self.mcts.root_trial
-        next_node_id = self.mcts.init_node_id(trial_obs, init_info_state, t)
+        next_node_id = self.mcts.init_node_id(trial_obs, init_info_state)
 
         if next_node_id in self.mcts.tree.root.action_leaves[action].children:
             self.mcts.tree.prune(action, next_node_id)
