@@ -276,6 +276,11 @@ class GridSampler:
         ## compute sampled MDP grids via outer product
         sampled_mdps = np.einsum('si,sj->sij', all_ps, all_qs)
 
+        ## fill in with binary values, i.e. p = p(low cost)
+        sampled_mdps = np.where(
+            np.random.rand(*sampled_mdps.shape) < sampled_mdps, self.low_cost, self.high_cost
+        )
+
         ## pin observed cells to their known values
         for i, j, c in self.obs:
             i = int(i)
