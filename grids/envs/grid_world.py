@@ -1082,8 +1082,6 @@ class GridEnv(gym.Env):
         # Set goal location to the final state of the path
         self._goal_location = path[-1]
         
-        # Mark as terminated (path is complete)
-        self.terminated = True
         
         # If not simulating, update observations and trajectory
         if not self.sim:
@@ -1106,6 +1104,9 @@ class GridEnv(gym.Env):
             
         # Update trial counter
         self._trial += 1
+
+        # Mark as terminated if at the end of the day
+        self.terminated = self._trial >= self.n_trials
 
         ## create dummy outputs for compatibility with step() outputs
         info, truncated = {}, False
