@@ -41,6 +41,7 @@ def _arm_reweighting_numba(costs, aligned_arr, orth_arr, aligned_weight, orthogo
     return aligned_sum + orth_sum
 
 
+
 class Actions(Enum):
     right = 0
     up = 1
@@ -425,27 +426,27 @@ class GridEnv(gym.Env):
 
     def sim_clone(self, costs):
         """
-        Returns a lightweight shallow copy of the environment, injecting 
+        Returns a lightweight shallow copy of the environment, injecting
         the newly sampled MDP components (e.g. costs).
         """
         sim_env = copy.copy(self)
-        
+
         # Inject the new underlying sampled MDP dynamics
         sim_env.costs = costs
-        sim_env.sim = True 
-        
-        # Explicitly shallow-copy attributes that might be mutated in-place
-        if hasattr(self, 'trial_obs') and self.trial_obs is not None:
-            if isinstance(self.trial_obs, np.ndarray):
-                sim_env.trial_obs = self.trial_obs.copy()
-            else:
-                sim_env.trial_obs = copy.copy(self.trial_obs)
-                
-        if hasattr(self, 'obs') and self.obs is not None:
-            if isinstance(self.obs, np.ndarray):
-                sim_env.obs = self.obs.copy()
-            else:
-                sim_env.obs = copy.copy(self.obs)
+        sim_env.sim = True
+
+        # # Explicitly shallow-copy attributes that might be mutated in-place
+        # if hasattr(self, 'trial_obs') and self.trial_obs is not None:
+        #     if isinstance(self.trial_obs, np.ndarray):
+        #         sim_env.trial_obs = self.trial_obs.copy()
+        #     else:
+        #         sim_env.trial_obs = copy.copy(self.trial_obs)
+
+        # if hasattr(self, 'obs') and self.obs is not None:
+        #     if isinstance(self.obs, np.ndarray):
+        #         sim_env.obs = self.obs.copy()
+        #     else:
+        #         sim_env.obs = copy.copy(self.obs)
 
         return sim_env
 
@@ -465,10 +466,10 @@ class GridEnv(gym.Env):
         ## initialise trial info
         self.terminated = False
 
-        ## initialise obs if first trial and in non-sim mode
-        if not self.sim:
-            if self._trial == 0:
-                self.obs = np.array([])
+        ## initialise obs if first trial
+        if self._trial == 0:
+            self.obs = np.empty((0, 3), dtype=int)
+
 
 
     ## init trial - i.e. in the AFC task, once a start has been chosen, initialise the start, goal and obs for that trial
@@ -487,7 +488,6 @@ class GridEnv(gym.Env):
             print('error: ', self.costs[self._agent_location[0]][self._agent_location[1]])
             current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
         self.trial_obs = np.array([[self._agent_location[0], self._agent_location[1], current_cost]])
-
     
 
     ## sample paths and SGs for AFC expt
@@ -1048,6 +1048,9 @@ class GridEnv(gym.Env):
     ## custom functions for manually editing the env
     def set_sim(self, sim):
         self.sim = sim
+    def set_sim_weights(self, aligned_weight, orthogonal_weight):
+        self.sim_aligned_weight = aligned_weight
+        self.sim_orthogonal_weight = orthogonal_weight
     
     ## receiving predictions from the agent
     def receive_predictions(self, costs):
@@ -1075,32 +1078,33 @@ class GridEnv(gym.Env):
         
         # Get all costs at once using list comprehension
         costs = [self.costs[x, y] for x, y in path]
-        
+
         # Update agent location to final state
         self._agent_location = path[-1]
         
         # Set goal location to the final state of the path
         self._goal_location = path[-1]
         
+        # Build trial_obs array for all new states at once by combining path and costs - quickly!!
+        new_obs = np.array([[x, y, cost] for (x, y), cost in zip(path, costs)])
+        self.trial_obs = new_obs
         
-        # If not simulating, update observations and trajectory
+        # Update observation array
         if not self.sim:
-            xs = [p[0] for p in path]
-            ys = [p[1] for p in path]
+            self.obs = np.vstack([self.obs, self.trial_obs])
+
+        ## if simulating, no need to update obs, but we do need to do arm_reweighting of the costs
+        else:
+            aligned_arr = self.path_aligned_states[self._trial][action]
+            orth_arr = self.path_orthogonal_states[self._trial][action]
+            aligned_set = {(int(s[0]), int(s[1])) for s in aligned_arr} if len(aligned_arr) > 0 else set()
+            orth_set = {(int(s[0]), int(s[1])) for s in orth_arr} if len(orth_arr) > 0 else set()
+            for i, (x, y) in enumerate(path):
+                if (x, y) in aligned_set:
+                    costs[i] *= self.sim_aligned_weight
+                elif (x, y) in orth_set:
+                    costs[i] *= self.sim_orthogonal_weight
             
-            # Build trial_obs array for all new states at once
-            new_obs = np.column_stack([xs, ys, costs])
-            # self.trial_obs = np.vstack([self.trial_obs, new_obs]) ## only do this if the agent's starting location is observed in init_trial
-            self.trial_obs = new_obs
-            
-            # Update observation array (same logic as step)
-            if self._trial == 0:
-                assert len(self.obs) == 0, 'obs should be empty at the start of the trial'
-            
-            if len(self.obs) == 0:  # first trial, so just copy the trial_obs
-                self.obs = self.trial_obs.copy()
-            else:  # otherwise, append the trial_obs to the obs from previous trials
-                self.obs = np.vstack([self.obs, self.trial_obs])
             
         # Update trial counter
         self._trial += 1
@@ -1111,7 +1115,7 @@ class GridEnv(gym.Env):
         ## create dummy outputs for compatibility with step() outputs
         info, truncated = {}, False
 
-        return path, costs, self.terminated, truncated, info
+        return self.trial_obs, costs, self.terminated, truncated, info
         
     
 
