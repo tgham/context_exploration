@@ -66,10 +66,6 @@ class MonteCarloTreeSearch():
     def update_trial(self):
         pass
 
-    ## tree step
-    @abstractmethod
-    def tree_step(self, action_leaf):
-        pass    
     
     ## rollout policy
     @abstractmethod
@@ -123,7 +119,7 @@ class MonteCarloTreeSearch():
     
 
     ## take an action according to the tree policy, i.e. take the best UCT child and see where it takes you
-    def tree_policy(self):
+    def tree_steps(self):
 
         ## initialise the tree
         node = self.tree.root
@@ -152,15 +148,38 @@ class MonteCarloTreeSearch():
 
                 ## get the best child
                 action_leaf = self.best_child(node)
+                assert self.env.trial == action_leaf.trial, 'trial mismatch between env and tree\n env: {} \n tree: {}\n MCTS: {}'.format(self.env.trial, action_leaf.trial, self.root_trial)
 
                 ## update the tree path
                 self.tree_actions.append(action_leaf.action)
                 self.node_id_path.append(node.node_id)
 
-                ## move in env
-                next_node_id, costs, terminated, node_trial  = self.tree_step(action_leaf)
+                ## PA-BAMCP TO DO:
+                if not self.real_future_paths:
+                    # (HERE, OR BEFORE EXECUTING A STEP, WE WOULD NEED TO MODIFY THE ENV SO THAT SELF.ENV.STEP REFERS TO THE SAMPLED PATHS THAT ARE TIED TO THAT ACTION LEAF 
+                    pass
 
-                # see if the next state node already exists as a child of this action leaf
+                ## move in env
+                states, costs, terminated, _, _ = self.env.step(action_leaf.action)
+                assert terminated == action_leaf.terminated, 'termination mismatch between env and tree\n env: {} \n tree: {}'.format(terminated, action_leaf.terminated)
+
+                ## one-arm bias
+                if self.real_future_paths:
+                    aligned_states, orthogonal_states = self.env.path_aligned_states[action_leaf.trial][action_leaf.action], self.env.path_orthogonal_states[action_leaf.trial][action_leaf.action] ## full BAMCP
+                else:
+                    aligned_states, orthogonal_states = action_leaf.aligned_states, action_leaf.orthogonal_states ## PA-BAMCP
+                total_weighted_cost = self.env.arm_reweighting(self.env.costs, aligned_states, orthogonal_states, self.aligned_weight, self.orthogonal_weight)
+
+                ## save costs
+                self.tree_costs.append(total_weighted_cost)
+
+                ## get the next node id, i.e. the informational state after taking this path
+                step_obs = [(s[0], s[1], costs[i]) for i, s in enumerate(states)]
+                next_node_id = self.init_node_id(step_obs, action_leaf.parent_id)
+                node_trial += 1
+                assert node_trial == action_leaf.trial+1, 'trial mismatch between env and tree after step\n env: {} \n tree: {}'.format(node_trial, action_leaf.trial+1)
+
+                ## see if the next state node already exists as a child of this action leaf
                 if next_node_id in action_leaf.children:
                     node = action_leaf.children[next_node_id]
                 else:
@@ -193,6 +212,52 @@ class MonteCarloTreeSearch():
             action_leaf = None
 
         return action_leaf
+    
+    ## rollout policy
+    def rollout(self, action_leaf):
+
+        ## if no action leaf because tree policy has reached a terminal node, return None
+        if action_leaf is None:
+            return None
+
+        ## first need to get the starting cost r, which is essentially the cost of path choice that corresponds to the action leaf
+        first_trial = action_leaf.trial
+
+        #### PA-BAMCP TO-DO: NEED TO MODIFY ENV SO THAT STEP REFERS TO THE SAMPLED PATHS THAT ARE TIED TO THAT ACTION LEAF
+
+        ## full BAMCP: use actual upcoming paths
+        if not self.real_future_paths:
+            # first_path_states = action_leaf.path_states
+            pass 
+
+        ##### TO-DO ENV.SIM_STEP HERE, i.e. sim_step returns costs that are arm-weighted
+        states, costs, terminated, _, _ = self.env.step(action_leaf.action)
+
+        ## weighted
+        # aligned_states, orthogonal_states = action_leaf.aligned_states, action_leaf.orthogonal_states
+        # total_cost = self.env.arm_reweighting(self.env.costs, aligned_states, orthogonal_states, self.aligned_weight, self.orthogonal_weight)
+        total_cost = sum(costs) ## unweighted
+
+        ## if final trial, just stop here
+        if action_leaf.terminated:
+            self.tree_costs.append(total_cost)
+            return total_cost
+        
+        ## loop through remaining trials
+        depth = 0
+        remaining_ro_costs = []
+        for trial in range(first_trial+1, self.horizon_trial + 1): ## horizon-limited
+            depth+=1
+            ro_action = self.rollout_policy()
+            _, costs, terminated, _, _ = self.env.step(ro_action)
+            total_cost += sum(costs) * self.discount_factor**depth
+            remaining_ro_costs.append(total_cost)
+
+        self.tree_costs.append(total_cost)
+        assert len(remaining_ro_costs)+first_trial+1 == self.horizon_trial + 1, 'remaining RO costs do not match number of trials\n n remaining RO costs: {}, n trials: {}'.format(len(remaining_ro_costs), self.horizon_trial + 1)
+        return total_cost 
+
+    
 
 
     ## backup costs until you reach the root
@@ -341,171 +406,43 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         ## set the horizon_trial - i.e. the trial at which search terminates
         self.horizon_trial = min(self.root_trial + self.horizon, self.env.n_trials-1)
 
-    ## tree step
-    def tree_step(self, action_leaf):
-        
-        ## get some initial info about the step
-        step_trial = action_leaf.trial
-        path_id = action_leaf.action
-        assert self.env.trial == action_leaf.trial, 'trial mismatch between env and tree\n env: {} \n tree: {}\n MCTS: {}'.format(self.env.trial, action_leaf.trial, self.root_trial)
 
-        ## full BAMCP: use actual upcoming paths
-        if self.real_future_paths:
-            action_sequence = self.env.path_actions[step_trial][path_id]
-            # assert (start_tmp[0], start_tmp[1]) == (action_leaf.path_states[path_id][0][0], action_leaf.path_states[path_id][1]), 'mismatch between node and env start states\n node: {} \n env: {}'.format(action_leaf.path_states[path_id], start_tmp)
-
-        ## PA-BAMCP: sample two paths 
-        else:
-            action_sequence = action_leaf.path_actions.copy()
-
-
-        ## initialise costs and observations for this path
-        simulated_obs = []
-
-        ## take path
-        states, costs, _, _, _ = self.env.step(path_id)
-
-        ## add costs to states to create simulated obs for the tree
-        simulated_obs = [(s[0], s[1], costs[i]) for i, s in enumerate(states)]
-
-        ## one-arm bias
-        if self.real_future_paths:
-            aligned_states, orthogonal_states = self.env.path_aligned_states[step_trial][path_id], self.env.path_orthogonal_states[step_trial][path_id] ## full BAMCP
-        else:
-            aligned_states, orthogonal_states = action_leaf.aligned_states, action_leaf.orthogonal_states ## PA-BAMCP
-        total_weighted_cost = self.env.arm_reweighting(self.env.costs, aligned_states, orthogonal_states, self.aligned_weight, self.orthogonal_weight)
-
-        ## save costs
-        self.tree_costs.append(total_weighted_cost)
-        
-        ## assertions (length checks commented out for performance)
-        # n_weighted = len(aligned_states) + len(orthogonal_states)
-        # assert len(simulated_obs) == n_weighted, 'sim obs and costs do not match\n sim obs: {}, weighted: {}'.format(len(simulated_obs), n_weighted)
-        # assert len(costs) == n_weighted, 'costs and weighted costs do not match\n costs: {}, weighted: {}'.format(len(costs), n_weighted)
-        assert len(simulated_obs) == len(action_sequence)+1, 'sim obs and action sequence do not match\n sim obs: {}, action seq: {}'.format(len(simulated_obs), len(action_sequence)+1)
-        terminated = action_leaf.terminated
-
-        ## get the next node id, i.e. the informational state after taking this path
-        next_node_id = self.init_node_id(simulated_obs, action_leaf.parent_id)
-        # n_total_obs = np.sum([len(self.env.path_states[trial][0]) for trial in range(action_leaf.trial+1)])
-        # assert n_total_obs == np.sum(next_node_id), 'total obs and next node id do not match\n total obs: {}, next node id: {}'.format(n_total_obs, np.sum(next_node_id))
-
-        ## debugging
-        # if step_trial==0:
-        #     print(self.env.context)
-        #     print('costs:', costs)
-        #     print('weighted costs:', weighted_costs)
-        #     print('tree costs:', self.tree_costs)
-        #     print('simulated obs:', simulated_obs)
-        #     raise Exception
-
-        ## since the agent has chosen a path to the goal, we need to move the environment to the next trial
-        node_trial = step_trial+1
-
-        ## some checks
-        assert len(self.tree_costs)<=self.env.n_trials, 'tree costs exceed number of trials, tree len: {}, n_trials: {}'.format(len(self.tree_costs), self.env.n_trials)
-        return next_node_id, costs, terminated, node_trial
-    
-    ## rollout policy
-    def rollout_policy(self, action_leaf):
-
-        ## if no action leaf because tree policy has reached a terminal node, return None
-        if action_leaf is None:
-            return None
-
-        ### first need to get the starting cost r, which is essentially the cost of path choice that corresponds to the action leaf
-
-        first_trial = action_leaf.trial
-        path_id = action_leaf.action
-
-        ## full BAMCP: use actual upcoming paths
-        if self.real_future_paths:
-            first_path_states = self.env.path_states[first_trial][path_id]
-
-        ## PA-BAMCP: sample paths
-        else:
-            first_path_states = action_leaf.path_states
-
-        ## unweighted
-        # starting_costs = [self.env.costs[state[0], state[1]] for state in first_path_states]
-        # total_cost = sum(starting_costs)
-
-        ## weighted
-        aligned_states, orthogonal_states = action_leaf.aligned_states, action_leaf.orthogonal_states
-        total_cost = self.env.arm_reweighting(self.env.costs, aligned_states, orthogonal_states, self.aligned_weight, self.orthogonal_weight)
-
-        ## if final trial, just stop here
-        if action_leaf.terminated:
-            self.tree_costs.append(total_cost)
-            return total_cost
-        
-        ## loop through remaining trials
-        depth = 0
-        remaining_ro_costs = []
-        for trial in range(first_trial+1, self.horizon_trial + 1): ## horizon-limited
-            depth+=1
-
-            ## PA-BAMCP: sample paths
-            if not self.real_future_paths:
-                _, _, path_states, _, _ = self.env.sample_paths_given_future_states(self.root_trial) ## PA-BAMCP
-                aligned_states, orthogonal_states = self.env.get_alignment([path_states])
-                assert len(self.env.path_states[trial][0]) == len(aligned_states[0]) + len(orthogonal_states[0]), 'path states and aligned/orthogonal states do not match\n path states: {}, aligned: {}, orthogonal: {}'.format(len(self.env.path_states[trial][0]), len(aligned_states[0]), len(orthogonal_states[0]))
-
-            ## full BAMCP: use actual upcoming paths
-            else:
-                path_states = self.env.path_states[trial]
-                aligned_states, orthogonal_states = self.env.path_aligned_states[trial], self.env.path_orthogonal_states[trial]
-            assert len(path_states[0]) == len(aligned_states[0]) + len(orthogonal_states[0]), 'path states and aligned/orthogonal states do not match\n path states: {}, aligned: {}, orthogonal: {}'.format(len(path_states[0]), len(aligned_states[0]), len(orthogonal_states[0]))
-                
-
-            ### greedy: get the total cost of the paths and return the better one
-            path_costs = []
-            for path_id in range(self.n_afc):
-                path_states_tmp = path_states[path_id]
-
-                ## unweighted
-                # costs = [self.env.costs[state[0], state[1]] for state in path_states]
-
-                ## arm-weighted
-                aligned_states_tmp, orthogonal_states_tmp = aligned_states[path_id], orthogonal_states[path_id]
-                ro_cost = self.env.arm_reweighting(self.env.costs, aligned_states_tmp, orthogonal_states_tmp, self.aligned_weight, self.orthogonal_weight)
-                
-                path_costs.append(ro_cost)
-            best_ro_cost = max(path_costs) 
-            remaining_ro_costs.append(best_ro_cost)
-            total_cost += best_ro_cost * self.discount_factor**depth
+    ## rollout policy (greedy or random)
+    def rollout_policy(self):
 
             
-            ### RANDOM: randomly choose between the paths
-            # path_id = np.random.choice(self.n_afc)
 
-            # # full BAMCP - random choice between actual upcoming paths
-            # # if self.real_future_paths:
-            # #     path_id = np.random.choice(self.n_afc)
-            # #     path_states = self.env.path_states[trial][path_id] ## full BAMCP
+        ### greedy:
+        
+        
+        ### TO-DO PA-BAMCP: need to modify env so that we can act according to newly sampled paths?
 
-            # # ## PA-BAMCP - choose between randomly sampled upcoming paths
-            # # else:
-            # #     path_id = np.random.choice(self.n_afc)
-            # #     path_states = sampled_path_states[path_id] ## PA-BAMCP
-            # # path_id = np.random.choice(self.n_afc)
-            # # path_states_tmp = path_states[path_id]
+        ## PA-BAMCP: sample paths
+        # if not self.real_future_paths:
+        #     _, _, path_states, _, _ = self.env.sample_paths_given_future_states(self.root_trial) ## PA-BAMCP
+        #     aligned_states, orthogonal_states = self.env.get_alignment([path_states])
 
-            # ## unweighted
-            # # costs = [self.env.costs[state[0], state[1]] for state in path_states]
+        # ## full BAMCP: use actual upcoming paths
+        # else:
+        #     path_states = self.env.path_states[self.env._trial]
+        #     aligned_states, orthogonal_states = self.env.path_aligned_states[self.env._trial], self.env.path_orthogonal_states[self.env._trial]
+        # assert len(path_states[0]) == len(aligned_states[0]) + len(orthogonal_states[0]), 'path states and aligned/orthogonal states do not match\n path states: {}, aligned: {}, orthogonal: {}'.format(len(path_states[0]), len(aligned_states[0]), len(orthogonal_states[0]))
 
-            # ## arm-weighted
-            # aligned_states_tmp, orthogonal_states_tmp = aligned_states[path_id], orthogonal_states[path_id]
-            # ro_cost = self.agent.arm_reweighting(self.env.costs, aligned_states_tmp, orthogonal_states_tmp)
+        # ## get the total cost of the paths
+        # path_costs = []
+        # for action in range(self.n_afc):
 
-            # remaining_ro_costs.append(ro_cost)
-            # total_cost += ro_cost * self.discount_factor**depth
-        # print(total_cost)
-        # raise Exception
+        #     ## arm-weighted
+        #     aligned_states_tmp, orthogonal_states_tmp = aligned_states[action], orthogonal_states[action]
+        #     ro_cost = self.env.arm_reweighting(self.env.costs, aligned_states_tmp, orthogonal_states_tmp, self.aligned_weight, self.orthogonal_weight)
+        #     path_costs.append(ro_cost)
+        
+        # ## take greedy action
+        # best_ro_cost = max(path_costs)
+        # ro_action = path_costs.index(best_ro_cost)
+        
+        
+        ### RANDOM: randomly choose between the paths
+        ro_action = random.choice(range(self.n_afc))
 
-        self.tree_costs.append(total_cost)
-        # assert len(remaining_ro_costs)+first_trial+1 == self.env.n_trials, 'remaining RO costs do not match number of trials\n n remaining RO costs: {}, n trials: {}'.format(len(remaining_ro_costs), self.env.n_trials)
-        assert len(remaining_ro_costs)+first_trial+1 == self.horizon_trial + 1, 'remaining RO costs do not match number of trials\n n remaining RO costs: {}, n trials: {}'.format(len(remaining_ro_costs), self.horizon_trial + 1)
-        return total_cost 
-
-    
+        return ro_action
