@@ -13,7 +13,7 @@ import scipy
 from scipy.spatial.distance import cdist
 from scipy.special import softmax
 import warnings
-import heapq
+import heapq 
 from collections import defaultdict
 from IPython.display import display, clear_output
 from utils import *
@@ -58,12 +58,16 @@ class Farmer(ABC):
     ## create a sampler object from the environment's current state
     def init_sampler(self, env):
         """Delegate to the environment's task-specific sampler factory."""
-        
+
+        ## set arm weights on env so sim_clones inherit them
+        env.set_sim_weights(self._aligned_weight, self._orthogonal_weight)
+
         ## make sampler if there is not one, otherwise we just need to update the sampler's observations
         if not hasattr(self, 'sampler') or self.sampler is None:
             self.sampler = env.make_sampler()
         else:
             self.sampler.set_obs(env.obs)
+
             
     ## agent-specific calculation of Q values based on posterior
     @abstractmethod
@@ -212,7 +216,6 @@ class Farmer(ABC):
                     env.path_aligned_states, env.path_orthogonal_states = env.get_alignment(env.path_states)
 
                 env_copy = copy.deepcopy(env)
-                env_copy.set_trial(0)
                 assert not hasattr(env_copy, 'obs'), 'env_copy.obs should not exist before the first trial: {}'.format(len(env_copy.obs),', city:', city+1, 'day:', day+1)
                 
                 ## expt 3 - context is known
@@ -457,7 +460,7 @@ class Farmer(ABC):
                         assert np.array_equal(start, env_copy.starts[t][action]), 'current state does not match start state in city {} day {} trial {}\n current: {}, start: {}.\n all starts: {}\n all goals:{}'.format(city, day, t, env_copy.current, env_copy.starts[t][action], env_copy.starts, env_copy.goals)
                         action_sequence = env_copy.path_actions[t][action]
                         # _, _ = env_copy.take_path(action_sequence)
-                        states, costs, _, _, _ = env_copy.step(action)
+                        _, costs, _, _, _ = env_copy.step(action)
                         current = env_copy.current
                         assert np.array_equal(costs, env_copy.trial_obs[:,-1]), 'costs do not match trial observations\n costs: {}, trial_obs: {}'.format(costs, env_copy.trial_obs[:,-1])
                         assert len(costs) == len(action_sequence)+1, 'costs and action sequence do not match\n costs: {}, action sequence: {}'.format(len(costs), len(action_sequence))
@@ -469,7 +472,9 @@ class Farmer(ABC):
 
                     ## else, skip to next trial??
                     else:
-                        env_copy.set_trial(t+1)
+                        # env_copy.set_trial(t+1)
+                        env_copy._trial += 1 
+                        print('skipping city {}, day {}, trial {} because participant missed their choice'.format(city+1, day+1, t+1))
 
                     
                     ## update MCTS tree
@@ -663,8 +668,6 @@ class BAMCP(Farmer):
                 discount_factor=self.discount_factor, 
                 horizon=self.horizon, 
                 real_future_paths=self.real_future_paths, 
-                aligned_weight=self._aligned_weight, 
-                orthogonal_weight=self._orthogonal_weight
             )
         else:
             self.mcts.env = env
@@ -716,8 +719,8 @@ class BAMCP(Farmer):
             self.mcts.env = self.all_posterior_MDPs[s]
 
             ## selection, expansion, simulation
-            action_leaf = self.mcts.tree_policy()
-            self.mcts.rollout_policy(action_leaf)
+            action_leaf = self.mcts.tree_steps()
+            self.mcts.rollout(action_leaf)
             
             ##backup
             self.mcts.backup()
@@ -740,14 +743,15 @@ class BAMCP(Farmer):
     ## get MCTS Q estimates
     def compute_Q(self, env_copy, tree_reset=True):
 
+        ## get task-specific sampler
+        self.init_sampler(env_copy)
+
         ## reset tree (or reuse it)
         self.init_mcts(env=env_copy, reset=tree_reset)
         assert self.mcts.env.trial == self.mcts.root_trial, 'trial mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(env_copy.trial, self.mcts.root_trial)
         assert self.mcts.env.sim == True, 'env not in sim mode'
         self.mcts.root_state = env_copy.current
 
-        ## get task-specific sampler
-        self.init_sampler(env_copy)
 
         ## search
         MCTS_Q = self.search()
@@ -757,7 +761,7 @@ class BAMCP(Farmer):
         # toplot_mean = self.sampler.mean_mdp(context_prior=self.context_prior) ## or actual posterior mean
         # fig, axs = plt.subplots(1,1, figsize=(5,5))
         # plot_r(toplot_mean, axs, title = 'Posterior reward distribution\nmean of all root samples\nMCTS Q: {}'.format(np.round(MCTS_Q,2)))
-        # plot_traj([env_copy.path_states[self.mcts.root_trial][c] for c in range(self.n_afc)], ax = axs)
+        # plot_traj([env_copy.path_states[self.mcts.root_trial][c] for c in range(self.mcts.n_afc)], ax = axs)
         # plot_obs(env_copy.obs, ax = axs, text=True)
         # plt.show()
 

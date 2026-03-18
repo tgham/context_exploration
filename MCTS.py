@@ -17,12 +17,10 @@ from plotter import *
 ## base class 
 class MonteCarloTreeSearch():
 
-    def __init__(self, env, tree, exploration_constant=2, discount_factor=0.99, horizon=None, real_future_paths=True, aligned_weight=1.0, orthogonal_weight=1.0):
+    def __init__(self, env, tree, exploration_constant=2, discount_factor=0.99, horizon=None, real_future_paths=True):
         self.env = env.unwrapped
         self.expt = env.expt
         self.n_afc = self.env.n_afc
-        self.aligned_weight = aligned_weight
-        self.orthogonal_weight = orthogonal_weight
         self.tree = tree
         self.discount_factor = discount_factor
         self.exploration_constant = exploration_constant
@@ -107,13 +105,14 @@ class MonteCarloTreeSearch():
         ### expansion of node attaches a (potentially sampled) pair of paths to the leaf
         node.action_leaves[action].path_actions = node.path_actions[action]
         node.action_leaves[action].path_states = node.path_states[action]
-        
-        ## one-armed weighting: store the aligned and orthogonal states
+
+        ## one-armed weighting: store the aligned and orthogonal states (PA-BAMCP TO-DO)
         if self.real_future_paths:
             node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states = self.env.path_aligned_states[node.trial][action], self.env.path_orthogonal_states[node.trial][action] ## full BAMCP
             # print('got alignment info: ', node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states)
         else:
             node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states = self.env.get_alignment([[node.path_states[action]]]) ## PA-BAMCP
+        
         
         return node.action_leaves[action]
     
@@ -160,21 +159,11 @@ class MonteCarloTreeSearch():
                     pass
 
                 ## move in env
-                states, costs, terminated, _, _ = self.env.step(action_leaf.action)
+                step_obs, costs, terminated, _, _ = self.env.step(action_leaf.action)
                 assert terminated == action_leaf.terminated, 'termination mismatch between env and tree\n env: {} \n tree: {}'.format(terminated, action_leaf.terminated)
-
-                ## one-arm bias
-                if self.real_future_paths:
-                    aligned_states, orthogonal_states = self.env.path_aligned_states[action_leaf.trial][action_leaf.action], self.env.path_orthogonal_states[action_leaf.trial][action_leaf.action] ## full BAMCP
-                else:
-                    aligned_states, orthogonal_states = action_leaf.aligned_states, action_leaf.orthogonal_states ## PA-BAMCP
-                total_weighted_cost = self.env.arm_reweighting(self.env.costs, aligned_states, orthogonal_states, self.aligned_weight, self.orthogonal_weight)
-
-                ## save costs
-                self.tree_costs.append(total_weighted_cost)
+                self.tree_costs.append(sum(costs))
 
                 ## get the next node id, i.e. the informational state after taking this path
-                step_obs = [(s[0], s[1], costs[i]) for i, s in enumerate(states)]
                 next_node_id = self.init_node_id(step_obs, action_leaf.parent_id)
                 node_trial += 1
                 assert node_trial == action_leaf.trial+1, 'trial mismatch between env and tree after step\n env: {} \n tree: {}'.format(node_trial, action_leaf.trial+1)
@@ -231,12 +220,8 @@ class MonteCarloTreeSearch():
             pass 
 
         ##### TO-DO ENV.SIM_STEP HERE, i.e. sim_step returns costs that are arm-weighted
-        states, costs, terminated, _, _ = self.env.step(action_leaf.action)
-
-        ## weighted
-        # aligned_states, orthogonal_states = action_leaf.aligned_states, action_leaf.orthogonal_states
-        # total_cost = self.env.arm_reweighting(self.env.costs, aligned_states, orthogonal_states, self.aligned_weight, self.orthogonal_weight)
-        total_cost = sum(costs) ## unweighted
+        _, costs, terminated, _, _ = self.env.step(action_leaf.action)
+        total_cost = sum(costs)
 
         ## if final trial, just stop here
         if action_leaf.terminated:
@@ -363,8 +348,8 @@ class MonteCarloTreeSearch():
 
 class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
-    def __init__(self, env, tree, exploration_constant=2, discount_factor=0.99, horizon=None, real_future_paths=True, aligned_weight=1.0, orthogonal_weight=1.0):
-        super().__init__(env, tree, exploration_constant, discount_factor, horizon, real_future_paths, aligned_weight, orthogonal_weight)
+    def __init__(self, env, tree, exploration_constant=2, discount_factor=0.99, horizon=None, real_future_paths=True):
+        super().__init__(env, tree, exploration_constant, discount_factor, horizon, real_future_paths)
 
     ## node_ids are defined by the informational state, i.e. the counts of low and high cost states in each cell
     def init_node_id(self, obs=None, parent_node_id=None):
@@ -434,7 +419,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
         #     ## arm-weighted
         #     aligned_states_tmp, orthogonal_states_tmp = aligned_states[action], orthogonal_states[action]
-        #     ro_cost = self.env.arm_reweighting(self.env.costs, aligned_states_tmp, orthogonal_states_tmp, self.aligned_weight, self.orthogonal_weight)
+        #     ro_cost = self.env.arm_reweighting(self.env.costs, aligned_states_tmp, orthogonal_states_tmp)
         #     path_costs.append(ro_cost)
         
         # ## take greedy action

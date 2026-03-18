@@ -13,7 +13,7 @@ def compute_log_likelihood(sampled_i, sampled_j, rel_obs, proposed_row_p, propos
     for i, j, cost in rel_obs:
 
         ## determine whether to use current or proposed p and q
-        # if (i == sampled_i) and (j != sampled_j):
+        # if (i == sampled_i) and (j != sampled_j): 
         #     rel_p = proposed_row_p
         #     rel_q = current_col_q
         # elif (j == sampled_j) and (i != sampled_i):
@@ -121,6 +121,7 @@ class GridSampler:
         self.high_cost = env.high_cost
         self.set_obs(env.obs)
         self.env = env
+
 
     def set_obs(self, obs):
         self.obs = obs
@@ -287,8 +288,10 @@ class GridSampler:
             np.random.rand(*sample_probs.shape) < sample_probs, self.low_cost, self.high_cost
         )
 
+        ## clone the environment for each sample grid
+        sample_mdps = [self.env.sim_clone(sample_grids[s]) for s in range(n_samples)]
 
-        return [self.env.sim_clone(sample_grids[s]) for s in range(n_samples)]
+        return sample_mdps
     
 
 
