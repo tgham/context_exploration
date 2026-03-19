@@ -18,30 +18,27 @@ from plotter import *
 class MonteCarloTreeSearch():
 
     def __init__(self, env, tree, exploration_constant=2, discount_factor=0.99, horizon=None, real_future_paths=True):
-        self.env = env.unwrapped
-        self.expt = env.expt
-        self.n_afc = self.env.n_afc
+        
+        ## initialize tree and and MCTS params
         self.tree = tree
         self.discount_factor = discount_factor
         self.exploration_constant = exploration_constant
         self.real_future_paths = real_future_paths
-
-        ## hacky fix of alignment issue
-        self.env.path_aligned_states, self.env.path_orthogonal_states, self.env.path_weights = self.env.get_alignment(self.env.path_states)
-        
-        ## if horizon isn't specified, default to n_trials-1 (i.e. look to the end of the day, which is up to n_trials-1 from the root)
         if horizon is None:
-            self.horizon = self.env.n_trials-1 
+            self.horizon = env.n_trials-1 #default to n_trials-1 (i.e. look to the end of the day, which is up to n_trials-1 from the root)
         else:
             self.horizon = horizon
-
+        
         ## init root info
-        self.update_trial()
+        self.refresh_env(env)
+        self.n_afc = self.env.n_afc
+        
+        ## hacky fix of alignment issue (maybe remove when we fix PA-BAMCP)
+        self.env.path_aligned_states, self.env.path_orthogonal_states, self.env.path_weights = self.env.get_alignment(self.env.path_states)
 
         ## create id for root node
         node_id = self.init_node_id(self.env.obs, None)
 
-        
         ### node needs to contain paths, actions for that trial so that these can be inherited by the action node
         path_actions = self.env.path_actions[self.root_trial].copy()
         path_states = self.env.path_states[self.root_trial].copy()
@@ -59,9 +56,9 @@ class MonteCarloTreeSearch():
     def init_node_id(self, obs=None, init_info_state=None):
         pass
 
-    ## update MCTS with trial info
+    ## update MCTS object with misc info from the env
     @abstractmethod
-    def update_trial(self):
+    def refresh_env(self, env=None):
         pass
 
     
@@ -384,9 +381,14 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         assert node.trial == self.env.trial, 'mismatch between node and env trial\n node: {} \n env: {}'.format(node.trial, self.env.trial)
 
 
-    
-    def update_trial(self):
-        self.root_trial = self.env.trial ## i.e. the trial that the agent is current faced with in the real env
+    ## when the external environment has changed, we need to update the MCTS object's version to reflect this
+    def refresh_env(self, env=None):
+
+        if env is not None:
+            self.env = env.unwrapped
+
+        ## i.e. the trial that the agent is current faced with in the real env
+        self.root_trial = self.env.trial 
 
         ## set the horizon_trial - i.e. the trial at which search terminates
         self.horizon_trial = min(self.root_trial + self.horizon, self.env.n_trials-1)

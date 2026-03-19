@@ -659,8 +659,7 @@ class BAMCP(Farmer):
                 real_future_paths=self.real_future_paths, 
             )
         else:
-            self.mcts.env = env
-            self.mcts.update_trial()
+            self.mcts.refresh_env(env)
 
 
     ## tree search using this agent's internal MCTS object
