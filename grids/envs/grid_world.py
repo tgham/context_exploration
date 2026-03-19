@@ -386,23 +386,6 @@ class GridEnv(gym.Env):
         self.sim = False
 
     ## get info from current state
-    def get_obs(self):
-        return {"agent": self._agent_location, "goal": self._goal_location}
-    def _get_info(self):
-        return {
-            "distance": np.linalg.norm(
-                self._agent_location - self._goal_location, ord=1
-            )
-        }
-
-    @property
-    def current(self):
-        return self._agent_location
-    
-    @property
-    def goal(self):
-        return self._goal_location
-    
     @property
     def trial(self):
         return self._trial
@@ -434,17 +417,9 @@ class GridEnv(gym.Env):
         return sim_env
 
     ## reset the environment
-    def reset(self, seed=None, start_goal=None):
+    def reset(self, seed=None):
         # We need the following line to seed self.np_random
         super().reset(seed=seed)
-
-        ## set start and end
-        if start_goal is not None: 
-            self._agent_location = np.array(start_goal[0], dtype=int)
-            self._goal_location = np.array(start_goal[1], dtype=int)
-        else:
-            self._agent_location = np.array(self.starts[self._trial])
-            self._goal_location = np.array(self.goals[self._trial])
 
         ## initialise trial info
         self.terminated = False
@@ -452,26 +427,12 @@ class GridEnv(gym.Env):
         ## initialise obs if first trial
         if self._trial == 0:
             self.obs = np.empty((0, 3), dtype=int)
+        
 
-
-
-    ## init trial - i.e. in the AFC task, once a start has been chosen, initialise the start, goal and obs for that trial
-    def init_trial(self, action):
-        self._agent_location = self.starts[self._trial][action]
-        # if isinstance(self._agent_location[0], tuple):
-        #     print('self._agent_location is a tuple":', self._agent_location, self._trial)
-        self._goal_location = self.goals[self._trial][action]
-        self.terminated = False
-        ## hack: 
+        ## hack... remove this once we've created new envs
         if not hasattr(self, 'costs'):
-            self.costs = self.costss[0]
-        try:
-            current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
-        except:
-            print('error: ', self.costs[self._agent_location[0]][self._agent_location[1]])
-            current_cost = self.costs[self._agent_location[0], self._agent_location[1]]
-        self.trial_obs = np.array([[self._agent_location[0], self._agent_location[1], current_cost]])
-    
+            self.costs = self.costss[self._trial]
+
 
     ## sample paths and SGs for AFC expt
     def sample_paths(self):
@@ -1032,7 +993,7 @@ class GridEnv(gym.Env):
     def set_sim(self, sim):
         self.sim = sim
     def set_sim_weights(self, aligned_weight, orthogonal_weight):
-        self._sim_weight_map = np.array([aligned_weight, orthogonal_weight])
+        self.sim_weight_map = np.array([aligned_weight, orthogonal_weight])
     
     ## receiving predictions from the agent
     def receive_predictions(self, costs):
@@ -1058,14 +1019,10 @@ class GridEnv(gym.Env):
         """
         path = self.path_states[self._trial][action]
 
-        # Update agent/goal location
-        self._agent_location = path[-1]
-        self._goal_location = path[-1]
-
         ## apply reward-func weighting in sim mode
         if self.sim:
             path_weight_idx = self.path_weights[self._trial][action]
-            costs = [float(self.costs[x, y]) * self._sim_weight_map[path_weight_idx[k]] for k, (x, y) in enumerate(path)]
+            costs = [float(self.costs[x, y]) * self.sim_weight_map[path_weight_idx[k]] for k, (x, y) in enumerate(path)]
             self.trial_obs = [(x, y, costs[k]) for k, (x, y) in enumerate(path)]
         else:
             path_arr = np.array(path, dtype=np.int64)

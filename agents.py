@@ -243,11 +243,6 @@ class Farmer(ABC):
                     ## reset env/trial
                     env_copy.reset()
                     env_copy.set_sim(True)
-                    start = env_copy.current
-                    current = start
-                    goal = env_copy.goal
-                    actions = []
-                    choice_probs = []
 
                     ### if extracting useful behavioural measures, i.e. yoking to human choices
 
@@ -454,14 +449,8 @@ class Farmer(ABC):
                     ## only interact with the environment if participant made a choice
                     if not missed:
                         env_copy.set_sim(False)
-                        env_copy.init_trial(action)
-                        start = env_copy.current
-                        goal = env_copy.goal
-                        assert np.array_equal(start, env_copy.starts[t][action]), 'current state does not match start state in city {} day {} trial {}\n current: {}, start: {}.\n all starts: {}\n all goals:{}'.format(city, day, t, env_copy.current, env_copy.starts[t][action], env_copy.starts, env_copy.goals)
                         action_sequence = env_copy.path_actions[t][action]
-                        # _, _ = env_copy.take_path(action_sequence)
                         _, costs, _, _, _ = env_copy.step(action)
-                        current = env_copy.current
                         assert np.array_equal(costs, env_copy.trial_obs[:,-1]), 'costs do not match trial observations\n costs: {}, trial_obs: {}'.format(costs, env_copy.trial_obs[:,-1])
                         assert len(costs) == len(action_sequence)+1, 'costs and action sequence do not match\n costs: {}, action sequence: {}'.format(len(costs), len(action_sequence))
                         path_cost = np.sum(costs)
@@ -472,7 +461,6 @@ class Farmer(ABC):
 
                     ## else, skip to next trial??
                     else:
-                        # env_copy.set_trial(t+1)
                         env_copy._trial += 1 
                         print('skipping city {}, day {}, trial {} because participant missed their choice'.format(city+1, day+1, t+1))
 
@@ -492,7 +480,6 @@ class Farmer(ABC):
                     ## update the context prior for the next trial
                     context_posterior = self.sampler.update_context_posterior(start_of_day_context_prior)
                     self.context_prior = context_posterior
-                    # print(t, 'prior: ', context_prior, 'posterior: ', context_posterior)
                     self.context_priors[city, day, t] = context_prior
                     self.context_posteriors[city, day, t] = context_posterior
 
@@ -624,7 +611,10 @@ class Farmer(ABC):
         for path_id in range(env_copy.n_afc):
             path = env_copy.path_states[t][path_id]
             path_weight_idx = env_copy.path_weights[t][path_id]
-            weighted_costs = [float(env_copy.costs[x, y]) * env_copy._sim_weight_map[path_weight_idx[k]] for k, (x, y) in enumerate(path)]
+            try:
+                weighted_costs = [float(env_copy.costs[x, y]) * env_copy.sim_weight_map[path_weight_idx[k]] for k, (x, y) in enumerate(path)]
+            except:
+                weighted_costs = [float(env_copy.costss[t][x, y]) * env_copy.sim_weight_map[path_weight_idx[k]] for k, (x, y) in enumerate(path)]
             path_costs.append(sum(weighted_costs))
         
         ## debugging
@@ -749,7 +739,6 @@ class BAMCP(Farmer):
         self.init_mcts(env=env_copy, reset=tree_reset)
         assert self.mcts.env.trial == self.mcts.root_trial, 'trial mismatch between env and MCTS\n env: {} \n MCTS: {}'.format(env_copy.trial, self.mcts.root_trial)
         assert self.mcts.env.sim == True, 'env not in sim mode'
-        self.mcts.root_state = env_copy.current
 
 
         ## search

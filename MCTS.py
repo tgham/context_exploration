@@ -387,7 +387,6 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
     
     def update_trial(self):
         self.root_trial = self.env.trial ## i.e. the trial that the agent is current faced with in the real env
-        self.root_state = self.env.starts[self.root_trial].copy() ## i.e. the two possible start states for this trial
 
         ## set the horizon_trial - i.e. the trial at which search terminates
         self.horizon_trial = min(self.root_trial + self.horizon, self.env.n_trials-1)
