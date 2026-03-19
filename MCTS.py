@@ -96,7 +96,8 @@ class MonteCarloTreeSearch():
         ## loop until you reach a leaf node or terminal state
         assert self.env.sim, 'env is not in sim mode'
         terminated=False
-        while not terminated:
+        truncated = False
+        while not terminated and not truncated:
             self.check_node(node)
 
             ## expansion step
@@ -119,11 +120,11 @@ class MonteCarloTreeSearch():
                 self.node_id_path.append(node.node_id)
 
                 ## move in env
-                step_obs, costs, terminated, _, _ = self.env.step(action_leaf.action)
+                step_obs, costs, terminated, truncated, _ = self.env.step(action_leaf.action)
                 self.tree_costs.append(sum(costs))
 
                 ## continue down the tree if not terminated (NB: WE MAY ACTUALLY WANT TO STILL CREATE THE NODE FOR THE TERMINAL STATE)
-                if not terminated:
+                if not terminated and not truncated:
 
                     ## get the next node id, i.e. the informational state after taking this path
                     next_node_id = self.init_node_id(step_obs, action_leaf.parent_id)
@@ -140,8 +141,8 @@ class MonteCarloTreeSearch():
                                                         )
 
 
-        ## if terminal node, there are no mode action leaves to choose from
-        if terminated:
+        ## if terminal node, there are no more action leaves to choose from
+        if terminated or truncated:
             action_leaf = None
 
         return action_leaf
@@ -155,21 +156,21 @@ class MonteCarloTreeSearch():
 
         ## first need to get the starting cost r, which is essentially the cost of path choice that corresponds to the action leaf
         first_trial = action_leaf.trial
-        _, costs, terminated, _, _ = self.env.step(action_leaf.action)
+        _, costs, terminated, truncated, _ = self.env.step(action_leaf.action)
         total_cost = sum(costs)
 
         ## if final trial, just stop here
-        if terminated:
+        if terminated or truncated:
             self.tree_costs.append(total_cost)
             return total_cost
         
         ## else, loop through remaining trials
         depth = 0
         remaining_ro_costs = []
-        while not terminated:
+        while not terminated and not truncated:
             depth+=1
             ro_action = self.rollout_policy()
-            _, costs, terminated, _, _ = self.env.step(ro_action)
+            _, costs, terminated, truncated, _ = self.env.step(ro_action)
             total_cost += sum(costs) * self.discount_factor**depth
             remaining_ro_costs.append(total_cost)
 
@@ -329,7 +330,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
         ## set the horizon_trial - i.e. the trial at which search terminates
         self.horizon_trial = min(self.root_trial + self.horizon, self.env.n_trials-1)
-        self.env.set_terminal_trial(self.horizon_trial)
+        self.env.set_trunc_trial(self.horizon_trial)
 
 
     ## rollout policy (greedy or random)

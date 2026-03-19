@@ -394,8 +394,8 @@ class GridEnv(gym.Env):
         return self.starts[self._trial]
     
     ## method for setting the horizon trial in the env
-    def set_terminal_trial(self, terminal_trial):
-        self.terminal_trial = terminal_trial
+    def set_trunc_trial(self, trunc_trial):
+        self.trunc_trial = trunc_trial
 
     def sim_clone(self, costs):
         """
@@ -430,7 +430,7 @@ class GridEnv(gym.Env):
 
         ## initialise trial info
         self.terminated = False
-        self.set_terminal_trial(self.n_trials-1)
+        self.set_trunc_trial(self.n_trials-1)
 
         ## initialise obs if first trial
         if self._trial == 0:
@@ -1042,13 +1042,16 @@ class GridEnv(gym.Env):
             
             
         # Mark as terminated if done final trial
-        self.terminated = self._trial >= self.terminal_trial
+        self.terminated = self._trial >= self.n_trials - 1
+
+        ## mark as truncated if we have reached horizon
+        truncated = self._trial >= self.trunc_trial
 
         # Update trial counter
         self._trial += 1
 
         ## create dummy outputs for compatibility with step() outputs
-        info, truncated = {}, False
+        info = {}
 
         return self.trial_obs, costs, self.terminated, truncated, info
         
