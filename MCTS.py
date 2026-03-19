@@ -415,21 +415,21 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         #     aligned_states, orthogonal_states = self.env.path_aligned_states[self.env._trial], self.env.path_orthogonal_states[self.env._trial]
         # assert len(path_states[0]) == len(aligned_states[0]) + len(orthogonal_states[0]), 'path states and aligned/orthogonal states do not match\n path states: {}, aligned: {}, orthogonal: {}'.format(len(path_states[0]), len(aligned_states[0]), len(orthogonal_states[0]))
 
-        # ## get the total cost of the paths
-        # path_costs = []
-        # for action in range(self.n_afc):
-
-        #     ## arm-weighted
-        #     aligned_states_tmp, orthogonal_states_tmp = aligned_states[action], orthogonal_states[action]
-        #     ro_cost = self.env.arm_reweighting(self.env.costs, aligned_states_tmp, orthogonal_states_tmp)
-        #     path_costs.append(ro_cost)
+        ## get the total cost of the paths
+        t = self.env.trial
+        path_costs = []
+        for action in range(self.n_afc):
+            path = self.env.path_states[t][action]
+            path_weight_idx = self.env.path_weights[t][action]
+            weighted_costs = [float(self.env.costs[x, y]) * self.env.sim_weight_map[path_weight_idx[k]] for k, (x, y) in enumerate(path)]
+            path_costs.append(sum(weighted_costs))
         
-        # ## take greedy action
-        # best_ro_cost = max(path_costs)
-        # ro_action = path_costs.index(best_ro_cost)
+        ## take greedy action
+        best_ro_cost = max(path_costs)
+        ro_action = path_costs.index(best_ro_cost)
         
         
         ### RANDOM: randomly choose between the paths
-        ro_action = random.choice(range(self.n_afc))
+        # ro_action = random.choice(range(self.n_afc))
 
         return ro_action
