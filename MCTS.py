@@ -36,13 +36,8 @@ class MonteCarloTreeSearch():
         ## create id for root node
         node_id = self.init_node_id(self.env.obs, None)
 
-        ### node needs to contain paths, actions for that trial so that these can be inherited by the action node
-        path_actions = self.env.path_actions[self.root_trial].copy()
-        path_states = self.env.path_states[self.root_trial].copy()
-
         ## add state node to the tree
-        self.tree.add_state_node(node_id=node_id, cost=None, terminated=False, trial = self.root_trial, parent=None, 
-                                path_actions=path_actions, path_states=path_states,
+        self.tree.add_state_node(state = env.current, node_id=node_id, cost=None, terminated=False, trial = self.root_trial, n_afc=self.n_afc, parent=None, 
                                  )
 
     
@@ -57,23 +52,17 @@ class MonteCarloTreeSearch():
     @abstractmethod
     def refresh_env(self, env=None):
         pass
-
     
     ## rollout policy
     @abstractmethod
     def rollout_policy(self, action_leaf):
         pass
     
-    
     ## debugging method for checking if node's belief state matches the env state
     @abstractmethod
     def check_node(self, node):
         pass
     
-    ## revert env to root state and trial
-    @abstractmethod
-    def revert_env(self):
-        pass
 
     
     ### general MCTS methods
@@ -89,25 +78,9 @@ class MonteCarloTreeSearch():
         ## or, we terminate depending on horizon
         terminated = node.trial == self.horizon_trial ## i.e. this action leaf corresponds to a trial that is at or beyond the horizon, so it leads to termination of the day
             
-        ### update info for s-a leaf - i.e. the state-action pair
-
-
+        ## create new action leaf and attach to node
         node.action_leaves[action] = Action_Node(action=action, terminated=terminated, trial=node.trial, parent_id=node.node_id)
         node.action_leaves[action].performance = 0
-        node.action_leaves[action].norm_performance = 0
-
-        ### expansion of node attaches a (potentially sampled) pair of paths to the leaf
-        node.action_leaves[action].path_actions = node.path_actions[action]
-        node.action_leaves[action].path_states = node.path_states[action]
-
-        ## one-armed weighting: store the aligned and orthogonal states (PA-BAMCP TO-DO)
-        if self.real_future_paths:
-            node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states = self.env.path_aligned_states[node.trial][action], self.env.path_orthogonal_states[node.trial][action]  ## full BAMCP
-            node.action_leaves[action].weights = self.env.path_weights[node.trial][action]
-            # print('got alignment info: ', node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states)
-        else:
-            node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states, node.action_leaves[action].weights = self.env.get_alignment([[node.path_states[action]]]) ## PA-BAMCP
-        
         
         return node.action_leaves[action]
     
@@ -126,7 +99,8 @@ class MonteCarloTreeSearch():
         
         ## loop until you reach a leaf node or terminal state
         assert self.env.sim, 'env is not in sim mode'
-        while not node.terminated:
+        terminated = False
+        while not terminated:
             self.check_node(node)
 
             ## expansion step
@@ -148,52 +122,32 @@ class MonteCarloTreeSearch():
                 self.tree_actions.append(action_leaf.action)
                 self.node_id_path.append(node.node_id)
 
-                ## PA-BAMCP TO DO:
-                if not self.real_future_paths:
-                    # (HERE, OR BEFORE EXECUTING A STEP, WE WOULD NEED TO MODIFY THE ENV SO THAT SELF.ENV.STEP REFERS TO THE SAMPLED PATHS THAT ARE TIED TO THAT ACTION LEAF 
-                    pass
-
                 ## move in env
-                step_obs, costs, terminated, _, _ = self.env.step(action_leaf.action)
+                step_obs, costs, _, _, _ = self.env.step(action_leaf.action)
                 # assert terminated == action_leaf.terminated, 'termination mismatch between env and tree\n env: {} \n tree: {}'.format(terminated, action_leaf.terminated)
                 terminated = action_leaf.terminated ## override env termination with tree termination, which is based on horizon (i.e. if we have reached the horizon, we terminate even if the env has not)
                 self.tree_costs.append(sum(costs))
 
-                ## get the next node id, i.e. the informational state after taking this path
-                next_node_id = self.init_node_id(step_obs, action_leaf.parent_id)
-                node_trial += 1
-                assert node_trial == action_leaf.trial+1, 'trial mismatch between env and tree after step\n env: {} \n tree: {}'.format(node_trial, action_leaf.trial+1)
+                ## continue down the tree if not terminated
+                if not terminated:
 
-                ## see if the next state node already exists as a child of this action leaf
-                if next_node_id in action_leaf.children:
-                    node = action_leaf.children[next_node_id]
-                else:
+                    ## get the next node id, i.e. the informational state after taking this path
+                    next_node_id = self.init_node_id(step_obs, action_leaf.parent_id)
+                    node_trial += 1
+                    assert node_trial == action_leaf.trial+1, 'trial mismatch between env and tree after step\n env: {} \n tree: {}'.format(node_trial, action_leaf.trial+1)
 
-                    ## full BAMCP: trial info for next node is just inherited from the env
-                    if self.real_future_paths:
-                        if not terminated:
-                            next_path_actions = self.env.path_actions[node_trial].copy()
-                            next_path_states = self.env.path_states[node_trial].copy()
-                        else:
-                            next_path_actions= None
-                            next_path_states= None
-
-                    ## PA-BAMCP: trial info for the next node (i.e. the node to which the action leaf leads) is sampled
+                    ## see if the next state node already exists as a child of this action leaf
+                    if next_node_id in action_leaf.children:
+                        node = action_leaf.children[next_node_id]
                     else:
-                        if not terminated:
-                            _, next_path_actions, next_path_states, _, _ = self.env.sample_paths_given_future_states(self.root_trial)
-                        else:
-                            next_path_actions= None
-                            next_path_states= None
 
-                    ## create new node
-                    node = self.tree.add_state_node(node_id=next_node_id, cost = costs, terminated=terminated, trial = node_trial, parent=action_leaf,
-                                        path_actions=next_path_actions, path_states=next_path_states,
-                                                    )
+                        ## create new node
+                        node = self.tree.add_state_node(state = self.env.current, node_id=next_node_id, cost = costs, terminated=terminated, trial = node_trial, n_afc=self.n_afc, parent=action_leaf,
+                                                        )
 
 
         ## if terminal node, there are no mode action leaves to choose from
-        if node.terminated:
+        if terminated:
             action_leaf = None
 
         return action_leaf
@@ -207,15 +161,6 @@ class MonteCarloTreeSearch():
 
         ## first need to get the starting cost r, which is essentially the cost of path choice that corresponds to the action leaf
         first_trial = action_leaf.trial
-
-        #### PA-BAMCP TO-DO: NEED TO MODIFY ENV SO THAT STEP REFERS TO THE SAMPLED PATHS THAT ARE TIED TO THAT ACTION LEAF
-
-        ## full BAMCP: use actual upcoming paths
-        if not self.real_future_paths:
-            # first_path_states = action_leaf.path_states
-            pass 
-
-        ##### TO-DO ENV.SIM_STEP HERE, i.e. sim_step returns costs that are arm-weighted
         _, costs, terminated, _, _ = self.env.step(action_leaf.action)
         total_cost = sum(costs)
 
@@ -398,20 +343,6 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
             
 
         ### greedy:
-        
-        
-        ### TO-DO PA-BAMCP: need to modify env so that we can act according to newly sampled paths?
-
-        ## PA-BAMCP: sample paths
-        # if not self.real_future_paths:
-        #     _, _, path_states, _, _ = self.env.sample_paths_given_future_states(self.root_trial) ## PA-BAMCP
-        #     aligned_states, orthogonal_states = self.env.get_alignment([path_states])
-
-        # ## full BAMCP: use actual upcoming paths
-        # else:
-        #     path_states = self.env.path_states[self.env._trial]
-        #     aligned_states, orthogonal_states = self.env.path_aligned_states[self.env._trial], self.env.path_orthogonal_states[self.env._trial]
-        # assert len(path_states[0]) == len(aligned_states[0]) + len(orthogonal_states[0]), 'path states and aligned/orthogonal states do not match\n path states: {}, aligned: {}, orthogonal: {}'.format(len(path_states[0]), len(aligned_states[0]), len(orthogonal_states[0]))
 
         ## get the total cost of the paths
         t = self.env.trial

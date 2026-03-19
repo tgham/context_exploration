@@ -60,28 +60,23 @@ def make_env(N, n_trials, expt_info, beta_params, seed=None):
 ## Node class
 class Node:
 
-    def __init__(self, node_id, cost, terminated, trial,
-                    path_actions=None, path_states=None, starts=None
+    def __init__(self, state, node_id, cost, terminated, trial,
+                    n_afc=2,
                  ):
         
         ## state info
+        self.state = state
         self.n_state_visits = 0
         self.cost = cost ## this is given by the obs of the choice just made, e.g. the costs observed on taking the last path
         self.trial = trial
         self.terminated = terminated
         self.node_id = node_id
 
-        ## path info for PA-BAMCP - for the pair of (sampled) paths, what are the actions, states, starts?
-        self.path_actions = path_actions
-        self.path_states = path_states
-        self.starts = starts 
-
         ## save the max and min Q values observed among the children of this action node, for normalization purposes in the UCB formula
         self.max_Q = -np.inf
         self.min_Q = np.inf
 
         ## define valid actions
-        n_afc = len(path_actions) if path_actions is not None else 0
         self.untried_actions = list(range(n_afc))
 
         ## action leaves
@@ -90,8 +85,8 @@ class Node:
 
     def __str__(self):
         action_leaves_msg = {action: np.round(leaf.performance,3) if leaf is not None else None for action, leaf in self.action_leaves.items()}
-        return "starts {}: (trial={}, visits={}, terminated={})\n{})".format(
-                                                  self.starts,
+        return "state {}: (trial={}, visits={}, terminated={})\n{})".format(
+                                                    self.state,
                                                     self.trial,
                                                   self.n_state_visits,
                                                   self.terminated,
@@ -119,9 +114,7 @@ class Action_Node:
         self.children={}
 
     def __str__(self):
-        # return "prev_state{}: (action={}, next_state={}, children={}, visits={}, performance={:0.4f})".format(
-        return "start{}: (action={}, n_children={}, visits={}, performance={:0.3f})".format(
-                                                  self.start,
+        return "(action={}, n_children={}, visits={}, performance={:0.3f})".format(
                                                   self.action,
                                                   len(self.children.keys()),
                                                   self.n_action_visits,
@@ -139,14 +132,14 @@ class Tree:
         return node.untried_actions and not node.terminated
 
     ## attach action leaf to child state
-    def add_state_node(self, node_id, cost, terminated, trial, parent=None, 
-                                path_actions=None, path_states=None, starts=None
+    def add_state_node(self, state, node_id, cost, terminated, trial, n_afc=2, parent=None, 
                        ):
         
         ## create a new node
-        node = Node(node_id=node_id, cost=cost, terminated=terminated, trial = trial, 
-                    path_actions=path_actions, path_states=path_states, starts=starts
+        node = Node(state=state, node_id=node_id, cost=cost, terminated=terminated, trial = trial, 
+                    n_afc=n_afc
                     )
+        
         
         ### store parent-child relationships
 
@@ -202,6 +195,7 @@ class Tree:
             # node_label = f"{node.belief_state}"
             # node_label = f"{node.node_id}"
             node_label = f"{node.cost}"
+            # node_label = f"{node.state}"
         trial_label = f"{node.trial}"
 
         # Add branch marker

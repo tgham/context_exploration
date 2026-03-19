@@ -679,8 +679,6 @@ class BAMCP(Farmer):
 
         ## check root
         assert self.mcts.root_trial == self.mcts.env.trial, 'trial mismatch between env and tree at start of search\n env trial: {} \n tree trial: {}'.format(self.mcts.env.trial, self.mcts.root_trial)
-        for a in range(self.mcts.n_afc):
-            assert np.array_equal(self.mcts.tree.root.path_states[a][0], self.mcts.env.starts[self.mcts.root_trial][a]), 'trial {}, start state mismatch for action {}\n env start: {} \n tree start: {}'.format(self.mcts.root_trial, a, self.mcts.env.starts[self.mcts.root_trial][a], self.mcts.tree.root.path_states[a][0])
 
         ## generate new set of root samples
         self.all_posterior_MDPs = self.sampler.sample_mdps(self.n_samples, context_prior=self.context_prior)
