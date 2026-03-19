@@ -27,7 +27,7 @@ class MonteCarloTreeSearch():
         self.real_future_paths = real_future_paths
 
         ## hacky fix of alignment issue
-        self.env.path_aligned_states, self.env.path_orthogonal_states = self.env.get_alignment(self.env.path_states)
+        self.env.path_aligned_states, self.env.path_orthogonal_states, self.env.path_weights = self.env.get_alignment(self.env.path_states)
         
         ## if horizon isn't specified, default to n_trials-1 (i.e. look to the end of the day, which is up to n_trials-1 from the root)
         if horizon is None:
@@ -108,10 +108,11 @@ class MonteCarloTreeSearch():
 
         ## one-armed weighting: store the aligned and orthogonal states (PA-BAMCP TO-DO)
         if self.real_future_paths:
-            node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states = self.env.path_aligned_states[node.trial][action], self.env.path_orthogonal_states[node.trial][action] ## full BAMCP
+            node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states = self.env.path_aligned_states[node.trial][action], self.env.path_orthogonal_states[node.trial][action]  ## full BAMCP
+            node.action_leaves[action].weights = self.env.path_weights[node.trial][action]
             # print('got alignment info: ', node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states)
         else:
-            node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states = self.env.get_alignment([[node.path_states[action]]]) ## PA-BAMCP
+            node.action_leaves[action].aligned_states, node.action_leaves[action].orthogonal_states, node.action_leaves[action].weights = self.env.get_alignment([[node.path_states[action]]]) ## PA-BAMCP
         
         
         return node.action_leaves[action]

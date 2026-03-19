@@ -24,23 +24,6 @@ from samplers import GridSampler
 from numba import njit
 
 
-# Numba-optimized arm reweighting function (outside class for JIT compilation)
-@njit(cache=True)
-def _arm_reweighting_numba(costs, aligned_arr, orth_arr, aligned_weight, orthogonal_weight):
-    """Numba-optimized arm reweighting calculation."""
-    aligned_sum = 0.0
-    for i in range(aligned_arr.shape[0]):
-        aligned_sum += costs[aligned_arr[i, 0], aligned_arr[i, 1]]
-    aligned_sum *= aligned_weight
-    
-    orth_sum = 0.0
-    for i in range(orth_arr.shape[0]):
-        orth_sum += costs[orth_arr[i, 0], orth_arr[i, 1]]
-    orth_sum *= orthogonal_weight
-    
-    return aligned_sum + orth_sum
-
-
 
 class Actions(Enum):
     right = 0
@@ -376,7 +359,7 @@ class GridEnv(gym.Env):
                     self.same_overlaps = False
                     self._trial = 0
                     init_done = True
-                    self.path_aligned_states, self.path_orthogonal_states = self.get_alignment(self.path_states)
+                    self.path_aligned_states, self.path_orthogonal_states, self.path_weights = self.get_alignment(self.path_states)
                     self.get_future_states()
                     self.enumerate_valid_paths()
 
@@ -392,7 +375,7 @@ class GridEnv(gym.Env):
                 # self.same_overlaps = True
                 # init_done = True
                 # self._trial = 0
-                # self.path_aligned_states, self.path_orthogonal_states = self.get_alignment(self.path_states)
+                # self.path_aligned_states, self.path_orthogonal_states, self.path_weights  = self.get_alignment(self.path_states)
                 # self.get_future_states()
                 # self.enumerate_valid_paths()
 
@@ -1049,8 +1032,7 @@ class GridEnv(gym.Env):
     def set_sim(self, sim):
         self.sim = sim
     def set_sim_weights(self, aligned_weight, orthogonal_weight):
-        self.sim_aligned_weight = aligned_weight
-        self.sim_orthogonal_weight = orthogonal_weight
+        self._sim_weight_map = np.array([aligned_weight, orthogonal_weight])
     
     ## receiving predictions from the agent
     def receive_predictions(self, costs):
@@ -1075,35 +1057,21 @@ class GridEnv(gym.Env):
             costs: list of costs at each state
         """
         path = self.path_states[self._trial][action]
-        
-        # Get all costs at once using list comprehension
-        costs = [self.costs[x, y] for x, y in path]
 
-        # Update agent location to final state
+        # Update agent/goal location
         self._agent_location = path[-1]
-        
-        # Set goal location to the final state of the path
         self._goal_location = path[-1]
-        
-        # Build trial_obs array for all new states at once by combining path and costs - quickly!!
-        new_obs = np.array([[x, y, cost] for (x, y), cost in zip(path, costs)])
-        self.trial_obs = new_obs
-        
-        # Update observation array
-        if not self.sim:
-            self.obs = np.vstack([self.obs, self.trial_obs])
 
-        ## if simulating, no need to update obs, but we do need to do arm_reweighting of the costs
+        ## apply reward-func weighting in sim mode
+        if self.sim:
+            path_weight_idx = self.path_weights[self._trial][action]
+            costs = [float(self.costs[x, y]) * self._sim_weight_map[path_weight_idx[k]] for k, (x, y) in enumerate(path)]
+            self.trial_obs = [(x, y, costs[k]) for k, (x, y) in enumerate(path)]
         else:
-            aligned_arr = self.path_aligned_states[self._trial][action]
-            orth_arr = self.path_orthogonal_states[self._trial][action]
-            aligned_set = {(int(s[0]), int(s[1])) for s in aligned_arr} if len(aligned_arr) > 0 else set()
-            orth_set = {(int(s[0]), int(s[1])) for s in orth_arr} if len(orth_arr) > 0 else set()
-            for i, (x, y) in enumerate(path):
-                if (x, y) in aligned_set:
-                    costs[i] *= self.sim_aligned_weight
-                elif (x, y) in orth_set:
-                    costs[i] *= self.sim_orthogonal_weight
+            path_arr = np.array(path, dtype=np.int64)
+            costs = self.costs[path_arr[:, 0], path_arr[:, 1]].astype(np.float64)
+            self.trial_obs = np.column_stack([path_arr, costs])
+            self.obs = np.vstack([self.obs, self.trial_obs])
             
             
         # Update trial counter
@@ -1139,28 +1107,25 @@ class GridEnv(gym.Env):
         #     self.path_orthogonal_states = []
         path_aligned_states = []
         path_orthogonal_states = []
-            
+        path_weights = []
+
         # Process all trials
         n_trials_tmp = len(path_states)
         for trial_idx in range(n_trials_tmp):
             trial_aligned_states = []
             trial_orthogonal_states = []
+            trial_weights = []
             n_afc_tmp = len(path_states[trial_idx])
             for choice_idx in range(n_afc_tmp):
                 ps = path_states[trial_idx][choice_idx]
                 aligned_states = set()
                 orthogonal_states = set()
-                
-                # if len(ps) < 2:
-                #     trial_aligned_states.append(aligned_states)
-                #     trial_orthogonal_states.append(orthogonal_states)
-                #     continue
-                
+
                 # Iterate through consecutive state pairs to determine movement direction
                 for idx in range(len(ps) - 1):
                     current_state = ps[idx]
                     next_state = ps[idx + 1]
-                    
+
                     if self.context == 'column':
                         # Aligned: vertical movement (column stays constant)
                         if current_state[1] == next_state[1] and current_state[0] != next_state[0]:
@@ -1170,7 +1135,7 @@ class GridEnv(gym.Env):
                         elif current_state[0] == next_state[0] and current_state[1] != next_state[1]:
                             orthogonal_states.add(tuple(current_state))
                             orthogonal_states.add(tuple(next_state))
-                            
+
                     elif self.context == 'row':
                         # Aligned: horizontal movement (row stays constant)
                         if current_state[0] == next_state[0] and current_state[1] != next_state[1]:
@@ -1180,27 +1145,41 @@ class GridEnv(gym.Env):
                         elif current_state[1] == next_state[1] and current_state[0] != next_state[0]:
                             orthogonal_states.add(tuple(current_state))
                             orthogonal_states.add(tuple(next_state))
-                
+
                 # corner states should only be counted as aligned
                 corner_states = aligned_states.intersection(orthogonal_states)
                 orthogonal_states -= corner_states
-                
+
                 # Pre-convert sets to numpy arrays for faster arm_reweighting
                 aligned_arr = np.array(list(aligned_states)) if aligned_states else np.empty((0, 2), dtype=int)
                 orthogonal_arr = np.array(list(orthogonal_states)) if orthogonal_states else np.empty((0, 2), dtype=int)
-                
+
+                # Build weight category mask: 0=aligned, 1=orthogonal
+                n_states = len(ps)
+                categories = np.zeros(n_states, dtype=np.int8)
+                for idx in range(n_states):
+                    state = tuple(ps[idx])
+                    if state in aligned_states:
+                        categories[idx] = 0
+                    elif state in orthogonal_states:
+                        categories[idx] = 1
+                    else:
+                        raise ValueError(f"State {state} in path not classified as aligned or orthogonal. This should not happen.")
+
                 trial_aligned_states.append(aligned_arr)
                 trial_orthogonal_states.append(orthogonal_arr)
-            
+                trial_weights.append(categories)
+
             # Store results as attributes
             path_aligned_states.append(trial_aligned_states)
             path_orthogonal_states.append(trial_orthogonal_states)
+            path_weights.append(trial_weights)
 
         ## sometimes, we're only returning aligned and orthogonal states for a single trial, and a single choice, so we can just return the arrays for that trial and choice rather than the whole list of lists
         if n_trials_tmp == 1 and n_afc_tmp == 1:
-            return path_aligned_states[0][0], path_orthogonal_states[0][0]
+            return path_aligned_states[0][0], path_orthogonal_states[0][0], path_weights[0][0]
 
-        return path_aligned_states, path_orthogonal_states
+        return path_aligned_states, path_orthogonal_states, path_weights
 
 
     ## get grid of upcoming states
@@ -1280,23 +1259,4 @@ class GridEnv(gym.Env):
             raise ValueError(f"Unknown context: {self.context}")
         
         return n_relevant_future_overlaps, n_irrelevant_future_overlaps
-
-
-    ## calculate weighted cost based on aligned vs orthogonal states
-    def arm_reweighting(self, costs, aligned_arr, orth_arr, aligned_weight=1.0, orthogonal_weight=1.0):
-        """
-        Calculate sum of weighted costs for a path based on aligned and orthogonal state costs.
-        Uses Numba-optimized implementation for ~5x speedup.
-        
-        Args:
-            costs: NxN array of costs for each state in the grid
-            aligned_arr: numpy array of shape (n, 2) for states on the context-aligned arm
-            orth_arr: numpy array of shape (n, 2) for states on the orthogonal arm
-            aligned_weight: weight to apply to aligned arm costs (default 1.0)
-            orthogonal_weight: weight to apply to orthogonal arm costs (default 1.0)
-            
-        Returns:
-            float: sum of weighted costs for the path
-        """
-        return _arm_reweighting_numba(costs, aligned_arr, orth_arr, aligned_weight, orthogonal_weight)
         

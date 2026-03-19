@@ -24,7 +24,7 @@ import pstats
 import subprocess
 import time
 from numba import jit, njit
-import pickle
+import pickle 
 import pandas as pd
 import json
 import os
@@ -49,8 +49,6 @@ def make_env(N, n_trials, expt_info, beta_params, seed=None):
     register(
         id=env_id,
         entry_point='grids.envs:GridEnv',
-        max_episode_steps=100,
-        kwargs={"size": N},
     )    
     env = gym.make("grids/GridEnv-v0", N=N, n_trials=n_trials, expt_info=expt_info, beta_params=beta_params, seed=seed)
     

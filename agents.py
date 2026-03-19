@@ -213,7 +213,7 @@ class Farmer(ABC):
                         env.expt = 'AFC'
                     
                     ## get context alignment of states
-                    env.path_aligned_states, env.path_orthogonal_states = env.get_alignment(env.path_states)
+                    env.path_aligned_states, env.path_orthogonal_states, env.path_weights = env.get_alignment(env.path_states)
 
                 env_copy = copy.deepcopy(env)
                 assert not hasattr(env_copy, 'obs'), 'env_copy.obs should not exist before the first trial: {}'.format(len(env_copy.obs),', city:', city+1, 'day:', day+1)
@@ -622,11 +622,10 @@ class Farmer(ABC):
         t = env_copy.trial
         path_costs = []
         for path_id in range(env_copy.n_afc):
-            path_states = env_copy.path_states[t][path_id]
-            aligned_states, orthogonal_states = env_copy.path_aligned_states[t][path_id], env_copy.path_orthogonal_states[t][path_id]
-            unweighted_pred_costs = self.posterior_mean_MDP*env_copy.low_cost + (1-self.posterior_mean_MDP)*env_copy.high_cost
-            total_weighted_path_costs = env_copy.arm_reweighting(unweighted_pred_costs, aligned_states, orthogonal_states, self._aligned_weight, self._orthogonal_weight)
-            path_costs.append(total_weighted_path_costs)
+            path = env_copy.path_states[t][path_id]
+            path_weight_idx = env_copy.path_weights[t][path_id]
+            weighted_costs = [float(env_copy.costs[x, y]) * env_copy._sim_weight_map[path_weight_idx[k]] for k, (x, y) in enumerate(path)]
+            path_costs.append(sum(weighted_costs))
         
         ## debugging
         # print(t,': CE_one_arm path costs:', path_costs)
