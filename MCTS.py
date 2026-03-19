@@ -73,13 +73,9 @@ class MonteCarloTreeSearch():
 
         ### take action (or path) and get new state
         action = node.untried_action()
-        # terminated = node.trial == self.env.n_trials-1 ## i.e. this action leaf corresponds to the action made in the final trial, so it leads to termination of the day
-
-        ## or, we terminate depending on horizon
-        terminated = node.trial == self.horizon_trial ## i.e. this action leaf corresponds to a trial that is at or beyond the horizon, so it leads to termination of the day
             
         ## create new action leaf and attach to node
-        node.action_leaves[action] = Action_Node(action=action, terminated=terminated, trial=node.trial, parent_id=node.node_id)
+        node.action_leaves[action] = Action_Node(action=action, trial=node.trial, parent_id=node.node_id)
         node.action_leaves[action].performance = 0
         
         return node.action_leaves[action]
@@ -99,7 +95,7 @@ class MonteCarloTreeSearch():
         
         ## loop until you reach a leaf node or terminal state
         assert self.env.sim, 'env is not in sim mode'
-        terminated = False
+        terminated=False
         while not terminated:
             self.check_node(node)
 
@@ -123,12 +119,10 @@ class MonteCarloTreeSearch():
                 self.node_id_path.append(node.node_id)
 
                 ## move in env
-                step_obs, costs, _, _, _ = self.env.step(action_leaf.action)
-                # assert terminated == action_leaf.terminated, 'termination mismatch between env and tree\n env: {} \n tree: {}'.format(terminated, action_leaf.terminated)
-                terminated = action_leaf.terminated ## override env termination with tree termination, which is based on horizon (i.e. if we have reached the horizon, we terminate even if the env has not)
+                step_obs, costs, terminated, _, _ = self.env.step(action_leaf.action)
                 self.tree_costs.append(sum(costs))
 
-                ## continue down the tree if not terminated
+                ## continue down the tree if not terminated (NB: WE MAY ACTUALLY WANT TO STILL CREATE THE NODE FOR THE TERMINAL STATE)
                 if not terminated:
 
                     ## get the next node id, i.e. the informational state after taking this path
@@ -165,14 +159,14 @@ class MonteCarloTreeSearch():
         total_cost = sum(costs)
 
         ## if final trial, just stop here
-        if action_leaf.terminated:
+        if terminated:
             self.tree_costs.append(total_cost)
             return total_cost
         
-        ## loop through remaining trials
+        ## else, loop through remaining trials
         depth = 0
         remaining_ro_costs = []
-        for trial in range(first_trial+1, self.horizon_trial + 1): ## horizon-limited
+        while not terminated:
             depth+=1
             ro_action = self.rollout_policy()
             _, costs, terminated, _, _ = self.env.step(ro_action)
@@ -335,6 +329,7 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
         ## set the horizon_trial - i.e. the trial at which search terminates
         self.horizon_trial = min(self.root_trial + self.horizon, self.env.n_trials-1)
+        self.env.set_terminal_trial(self.horizon_trial)
 
 
     ## rollout policy (greedy or random)

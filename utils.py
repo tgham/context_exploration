@@ -103,12 +103,11 @@ class Node:
     
 class Action_Node:
 
-    def __init__(self, action, terminated, trial, parent_id):
+    def __init__(self, action, trial, parent_id):
         self.action = action ## in AFC, this specifies the path ID (i.e. 0 or 1)
         self.total_simulation_cost = 0
         self.performance = None
         self.n_action_visits = 0
-        self.terminated = terminated
         self.trial = trial
         self.parent_id = parent_id
         self.children={}

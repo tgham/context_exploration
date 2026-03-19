@@ -389,6 +389,13 @@ class GridEnv(gym.Env):
     @property
     def trial(self):
         return self._trial
+    @property
+    def current(self):
+        return self.starts[self._trial]
+    
+    ## method for setting the horizon trial in the env
+    def set_terminal_trial(self, terminal_trial):
+        self.terminal_trial = terminal_trial
 
     def sim_clone(self, costs):
         """
@@ -423,6 +430,7 @@ class GridEnv(gym.Env):
 
         ## initialise trial info
         self.terminated = False
+        self.set_terminal_trial(self.n_trials-1)
 
         ## initialise obs if first trial
         if self._trial == 0:
@@ -432,6 +440,8 @@ class GridEnv(gym.Env):
         ## hack... remove this once we've created new envs
         if not hasattr(self, 'costs'):
             self.costs = self.costss[self._trial]
+        if not hasattr(self, 'path_weights'):
+            self.path_aligned_states, self.path_orthogonal_states, self.path_weights = self.get_alignment(self.path_states)
 
 
     ## sample paths and SGs for AFC expt
@@ -1031,11 +1041,11 @@ class GridEnv(gym.Env):
             self.obs = np.vstack([self.obs, self.trial_obs])
             
             
+        # Mark as terminated if done final trial
+        self.terminated = self._trial >= self.terminal_trial
+
         # Update trial counter
         self._trial += 1
-
-        # Mark as terminated if at the end of the day
-        self.terminated = self._trial >= self.n_trials
 
         ## create dummy outputs for compatibility with step() outputs
         info, truncated = {}, False
