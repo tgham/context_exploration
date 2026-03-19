@@ -32,9 +32,6 @@ class MonteCarloTreeSearch():
         ## init root info
         self.refresh_env(env)
         self.n_afc = self.env.n_afc
-        
-        ## hacky fix of alignment issue (maybe remove when we fix PA-BAMCP)
-        self.env.path_aligned_states, self.env.path_orthogonal_states, self.env.path_weights = self.env.get_alignment(self.env.path_states)
 
         ## create id for root node
         node_id = self.init_node_id(self.env.obs, None)
@@ -116,7 +113,7 @@ class MonteCarloTreeSearch():
     
 
     ## take an action according to the tree policy, i.e. take the best UCT child and see where it takes you
-    def tree_steps(self):
+    def traverse_tree(self):
 
         ## initialise the tree
         node = self.tree.root
@@ -158,7 +155,8 @@ class MonteCarloTreeSearch():
 
                 ## move in env
                 step_obs, costs, terminated, _, _ = self.env.step(action_leaf.action)
-                assert terminated == action_leaf.terminated, 'termination mismatch between env and tree\n env: {} \n tree: {}'.format(terminated, action_leaf.terminated)
+                # assert terminated == action_leaf.terminated, 'termination mismatch between env and tree\n env: {} \n tree: {}'.format(terminated, action_leaf.terminated)
+                terminated = action_leaf.terminated ## override env termination with tree termination, which is based on horizon (i.e. if we have reached the horizon, we terminate even if the env has not)
                 self.tree_costs.append(sum(costs))
 
                 ## get the next node id, i.e. the informational state after taking this path

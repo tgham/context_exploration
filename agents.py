@@ -707,7 +707,7 @@ class BAMCP(Farmer):
             self.mcts.env = self.all_posterior_MDPs[s]
 
             ## selection, expansion, simulation
-            action_leaf = self.mcts.tree_steps()
+            action_leaf = self.mcts.traverse_tree()
             self.mcts.rollout(action_leaf)
             
             ##backup
