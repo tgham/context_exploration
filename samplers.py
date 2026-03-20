@@ -322,3 +322,60 @@ class GridSampler:
             posterior_mean_mdp[i, j] = prob
 
         return posterior_mean_mdp
+
+
+
+### MAB sampler
+class BanditSampler:
+    def __init__(self, env):
+        self.alpha = env.alpha
+        self.beta = env.beta
+        self.n_afc = env.n_afc
+        self.success = 1
+        self.failure = 0
+        self.env = env
+        self.set_obs(env.obs)
+
+
+    ## update counts from obs history
+    def set_obs(self, obs):
+        self.obs = obs
+
+        ## nothing observed yet - set up empty structures
+        if len(self.obs) == 0:
+            self.n_successes = np.zeros(self.n_afc, dtype=int)
+            self.n_failures = np.zeros(self.n_afc, dtype=int)
+        
+        else:
+
+            ## precompute number of successes and failures for each arm directly from obs
+            obs_actions = self.obs[:, 0].astype(int)
+            obs_rewards = self.obs[:, 1].astype(int)
+
+            self.n_successes = np.bincount(obs_actions[obs_rewards == self.success], minlength=self.n_afc).astype(int)
+            self.n_failures = np.bincount(obs_actions[obs_rewards == self.failure], minlength=self.n_afc).astype(int)
+
+    ## sample mdps
+    def sample_mdps(self, n_samples):
+
+        ## sample posterior probabilities
+        sampled_ps = np.zeros((n_samples, self.n_afc))
+        for a in range(self.n_afc):
+            alpha = self.alpha + self.n_successes[a]
+            beta = self.beta + self.n_failures[a]
+            sampled_ps[:,a] = propose(alpha, beta, size=n_samples)
+
+        ## clone environment for each sample
+        sample_mdps = [self.env.sim_clone(sampled_ps[s]) for s in range(n_samples)]
+
+        return sample_mdps
+    
+    ## mean mdp
+    def mean_probs(self):
+        mean_ps = np.zeros(self.n_afc)
+        for a in range(self.n_afc):
+            alpha = self.alpha + self.n_successes[a]
+            beta = self.beta + self.n_failures[a]
+            mean_ps[a] = alpha / (alpha + beta)
+
+        return mean_ps
