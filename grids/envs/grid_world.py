@@ -64,6 +64,7 @@ class GridEnv(gym.Env):
             high=np.array([self.N - 1, self.N - 1]),  # Maximum x and y
             dtype=np.int32
         )
+        self.info = {} ## dummy info for compatibility with gym API
 
         ## define actions
 
@@ -393,7 +394,7 @@ class GridEnv(gym.Env):
     def current(self):
         return self.starts[self._trial]
     
-    ## method for setting the horizon trial in the env
+    ## set the horizon trial in the env
     def set_trunc_trial(self, trunc_trial):
         self.trunc_trial = trunc_trial
 
@@ -1057,10 +1058,7 @@ class GridEnv(gym.Env):
         # Update trial counter
         self._trial += 1
 
-        ## create dummy outputs for compatibility with step() outputs
-        info = {}
-
-        return self.trial_obs, costs, self.terminated, truncated, info
+        return self.trial_obs, costs, self.terminated, truncated, self.info
         
     
 
