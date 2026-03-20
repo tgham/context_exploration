@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import random
 from math import sqrt, log
+from bisect import bisect_left
 from utils import Action_Node, Tree, make_env, argm, data_keys, KL_divergence, get_next_state
 import copy
 import numpy as np
@@ -178,29 +179,27 @@ class MonteCarloTreeSearch():
         assert len(remaining_ro_costs)+first_trial+1 == self.horizon_trial + 1, 'remaining RO costs do not match number of trials\n n remaining RO costs: {}, n trials: {}'.format(len(remaining_ro_costs), self.horizon_trial + 1)
         return total_cost 
 
-    
-
 
     ## backup costs until you reach the root
     def backup(self):
         tree_len = len(self.tree_costs)
         assert tree_len == len(self.tree_actions), 'tree costs and path lengths do not match\n n tree costs: {} \n n tree path: {}\ntree costs: {}\n tree path: {}'.format(len(self.tree_costs), len(self.tree_actions), self.tree_costs, self.tree_actions)
 
-        ## Precompute discount factors
-        discount_factors = [self.discount_factor ** d for d in range(tree_len)]
+        ## efficiently precompute discounted returns via backward pass
+        discounted_returns = [0.0] * tree_len
+        discounted_returns[-1] = self.tree_costs[-1]
+        for i in range(tree_len - 2, -1, -1):
+            discounted_returns[i] = self.tree_costs[i] + self.discount_factor * discounted_returns[i + 1]
 
         ## Loop through the tree path
         node = self.tree.root
         for depth, action in enumerate(self.tree_actions):
-            
+
             ## Get the corresponding action leaf
             action_leaf = node.action_leaves[action]
 
             ## Discounted cost from the current node to the terminal node
-            discounted_cost = sum(
-                c * d 
-                for c, d in zip(self.tree_costs[depth:], discount_factors[:tree_len - depth])
-            )
+            discounted_cost = discounted_returns[depth]
 
             ## update visit counts and performance estimates
             action_leaf.n_action_visits += 1
@@ -259,9 +258,6 @@ class MonteCarloTreeSearch():
         norm_term = max_Q - min_Q + 1e-8 ## add small constant to avoid divide by zero
         exploitation_term = (action_leaf.performance - min_Q) / norm_term
         exploration_term = self.exploration_constant * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
-        
-        # print('depth:', action_leaf.trial, 'min Q:', min_Q, 'max Q:', max_Q, 'performance:', action_leaf.performance, 'Q = ', exploitation_term + exploration_term)
-        # print('node depth:', action_leaf.trial, 'exploration term:', exploration_term, 'exploitation term:', exploitation_term)
         
         return exploitation_term + exploration_term
 
@@ -335,8 +331,6 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
     ## rollout policy (greedy or random)
     def rollout_policy(self):
-
-            
 
         ### greedy:
 
