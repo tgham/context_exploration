@@ -60,14 +60,14 @@ def make_env(N, n_trials, expt_info, beta_params, seed=None):
 ## Node class
 class Node:
 
-    def __init__(self, state, node_id, cost, terminated, trial,
+    def __init__(self, state, node_id, reward, terminated, trial,
                     n_afc=2,
                  ):
         
         ## state info
         self.state = state
         self.n_state_visits = 0
-        self.cost = cost ## this is given by the obs of the choice just made, e.g. the costs observed on taking the last path
+        self.reward = reward ## this is given by the obs of the choice just made, e.g. the rewards observed on taking the last path
         self.trial = trial
         self.terminated = terminated
         self.node_id = node_id
@@ -105,7 +105,6 @@ class Action_Node:
 
     def __init__(self, action, trial, parent_id):
         self.action = action ## in AFC, this specifies the path ID (i.e. 0 or 1)
-        self.total_simulation_cost = 0
         self.performance = None
         self.n_action_visits = 0
         self.trial = trial
@@ -131,11 +130,11 @@ class Tree:
         return node.untried_actions and not node.terminated
 
     ## attach action leaf to child state
-    def add_state_node(self, state, node_id, cost, terminated, trial, n_afc=2, parent=None, 
+    def add_state_node(self, state, node_id, reward, terminated, trial, n_afc=2, parent=None, 
                        ):
         
         ## create a new node
-        node = Node(state=state, node_id=node_id, cost=cost, terminated=terminated, trial = trial, 
+        node = Node(state=state, node_id=node_id, reward=reward, terminated=terminated, trial = trial, 
                     n_afc=n_afc
                     )
         
@@ -189,11 +188,11 @@ class Tree:
                 return
             else:
                 # node_label = f"{node.belief_state}"
-                node_label = f"{node.cost}"
+                node_label = f"{node.reward}"
         else:
             # node_label = f"{node.belief_state}"
             # node_label = f"{node.node_id}"
-            node_label = f"{node.cost}"
+            node_label = f"{node.reward}"
             # node_label = f"{node.state}"
         trial_label = f"{node.trial}"
 

@@ -38,13 +38,13 @@ class MonteCarloTreeSearch():
         node_id = self.init_node_id(self.env.obs, None)
 
         ## add state node to the tree
-        self.tree.add_state_node(state = env.current, node_id=node_id, cost=None, terminated=False, trial = self.root_trial, n_afc=self.n_afc, parent=None, 
+        self.tree.add_state_node(state = env.current, node_id=node_id, reward=None, terminated=False, trial = self.root_trial, n_afc=self.n_afc, parent=None, 
                                  )
 
     
     ### abstract methods
 
-    ## create node id, which represents the agent's current state of knowledge, a flattened N*N*2 array representing which cells have a high or low cost
+    ## create node id, which represents the agent's current state of knowledge
     @abstractmethod
     def init_node_id(self, obs=None, init_info_state=None):
         pass
@@ -90,7 +90,7 @@ class MonteCarloTreeSearch():
         node_trial = node.trial
 
         ## create a record of the nodes/leaves visited in the tree
-        self.tree_costs = [] ## i.e. the cost associated with each traversal of the tree *under the tree policy*. Hence, this does not include the cost of the current state, which is the starting point of the tree policy, nor does it include the cost of expansion.
+        self.tree_rewards = [] ## i.e. the reward associated with each traversal of the tree *under the tree policy*. Hence, this does not include the reward of the current state, which is the starting point of the tree policy, nor does it include the reward of expansion.
         self.tree_actions = [] ## i.e. the states and actions visited in the tree. This *does* include the root, because it is from the root that we move to the next leaf (and then next node). 
         self.node_id_path = []
         
@@ -121,8 +121,8 @@ class MonteCarloTreeSearch():
                 self.node_id_path.append(node.node_id)
 
                 ## move in env
-                step_obs, costs, terminated, truncated, _ = self.env.step(action_leaf.action)
-                self.tree_costs.append(sum(costs))
+                step_obs, rewards, terminated, truncated, _ = self.env.step(action_leaf.action)
+                self.tree_rewards.append(sum(rewards))
 
                 ## continue down the tree if not terminated (NB: WE MAY ACTUALLY WANT TO STILL CREATE THE NODE FOR THE TERMINAL STATE)
                 if not terminated and not truncated:
@@ -138,7 +138,7 @@ class MonteCarloTreeSearch():
                     else:
 
                         ## create new node
-                        node = self.tree.add_state_node(state = self.env.current, node_id=next_node_id, cost = costs, terminated=terminated, trial = node_trial, n_afc=self.n_afc, parent=action_leaf,
+                        node = self.tree.add_state_node(state = self.env.current, node_id=next_node_id, reward = rewards, terminated=terminated, trial = node_trial, n_afc=self.n_afc, parent=action_leaf,
                                                         )
 
 
@@ -155,41 +155,41 @@ class MonteCarloTreeSearch():
         if action_leaf is None:
             return None
 
-        ## first need to get the starting cost r, which is essentially the cost of path choice that corresponds to the action leaf
+        ## first need to get the starting reward r, which is essentially the reward of choice that corresponds to the action leaf
         first_trial = action_leaf.trial
-        _, costs, terminated, truncated, _ = self.env.step(action_leaf.action)
-        total_cost = sum(costs)
+        _, rewards, terminated, truncated, _ = self.env.step(action_leaf.action)
+        total_reward = sum(rewards)
 
         ## if final trial, just stop here
         if terminated or truncated:
-            self.tree_costs.append(total_cost)
-            return total_cost
+            self.tree_rewards.append(total_reward)
+            return total_reward
         
         ## else, loop through remaining trials
         depth = 0
-        remaining_ro_costs = []
+        remaining_ro_rewards = []
         while not terminated and not truncated:
             depth+=1
             ro_action = self.rollout_policy()
-            _, costs, terminated, truncated, _ = self.env.step(ro_action)
-            total_cost += sum(costs) * self.discount_factor**depth
-            remaining_ro_costs.append(total_cost)
+            _, rewards, terminated, truncated, _ = self.env.step(ro_action)
+            total_reward += sum(rewards) * self.discount_factor**depth
+            remaining_ro_rewards.append(total_reward)
 
-        self.tree_costs.append(total_cost)
-        assert len(remaining_ro_costs)+first_trial+1 == self.horizon_trial + 1, 'remaining RO costs do not match number of trials\n n remaining RO costs: {}, n trials: {}'.format(len(remaining_ro_costs), self.horizon_trial + 1)
-        return total_cost 
+        self.tree_rewards.append(total_reward)
+        assert len(remaining_ro_rewards)+first_trial+1 == self.horizon_trial + 1, 'remaining RO rewards do not match number of trials\n n remaining RO rewards: {}, n trials: {}'.format(len(remaining_ro_rewards), self.horizon_trial + 1)
+        return total_reward 
 
 
-    ## backup costs until you reach the root
+    ## backup rewards until you reach the root
     def backup(self):
-        tree_len = len(self.tree_costs)
-        assert tree_len == len(self.tree_actions), 'tree costs and path lengths do not match\n n tree costs: {} \n n tree path: {}\ntree costs: {}\n tree path: {}'.format(len(self.tree_costs), len(self.tree_actions), self.tree_costs, self.tree_actions)
+        tree_len = len(self.tree_rewards)
+        assert tree_len == len(self.tree_actions), 'tree rewards and path lengths do not match\n n tree rewards: {} \n n tree path: {}\ntree rewards: {}\n tree path: {}'.format(len(self.tree_rewards), len(self.tree_actions), self.tree_rewards, self.tree_actions)
 
         ## efficiently precompute discounted returns via backward pass
         discounted_returns = [0.0] * tree_len
-        discounted_returns[-1] = self.tree_costs[-1]
+        discounted_returns[-1] = self.tree_rewards[-1]
         for i in range(tree_len - 2, -1, -1):
-            discounted_returns[i] = self.tree_costs[i] + self.discount_factor * discounted_returns[i + 1]
+            discounted_returns[i] = self.tree_rewards[i] + self.discount_factor * discounted_returns[i + 1]
 
         ## Loop through the tree path
         node = self.tree.root
@@ -198,8 +198,8 @@ class MonteCarloTreeSearch():
             ## Get the corresponding action leaf
             action_leaf = node.action_leaves[action]
 
-            ## Discounted cost from the current node to the terminal node
-            discounted_cost = discounted_returns[depth]
+            ## Discounted reward from the current node to the terminal node
+            discounted_reward = discounted_returns[depth]
 
             ## update visit counts and performance estimates
             action_leaf.n_action_visits += 1
@@ -207,7 +207,7 @@ class MonteCarloTreeSearch():
 
             ## Incremental average update for performance
             action_leaf.performance += (
-                (discounted_cost - action_leaf.performance) / action_leaf.n_action_visits
+                (discounted_reward - action_leaf.performance) / action_leaf.n_action_visits
             )
 
             ## save per-node max and min Q values to normalise Qs in UCT calculation
@@ -228,20 +228,20 @@ class MonteCarloTreeSearch():
             # ## debugging: save updates applied to the first node
             # if depth == 0:
             #     to_append = [np.nan] * self.n_afc
-            #     to_append[action] = discounted_cost
+            #     to_append[action] = discounted_reward
             #     self.first_node_updates.append(to_append)
             #     self.first_node_updates_by_depth[tree_len-1].append(to_append)
             
-            # ## save costs of each step in the tree - i.e. the cost of making each move in the tree
+            # ## save rewards of each step in the tree - i.e. the reward of making each move in the tree
             # to_append = [np.nan] * self.n_afc
-            # to_append[action] = self.tree_costs[depth]
-            # self.tree_cost_tracker[depth].append(to_append)
+            # to_append[action] = self.tree_rewards[depth]
+            # self.tree_reward_tracker[depth].append(to_append)
 
             # ## updates, conditional on first action
             # first_action = self.tree_actions[0]
             # to_append = [np.nan] * self.n_afc
-            # to_append[first_action] = self.tree_costs[depth]
-            # self.conditional_tree_cost_tracker[action][depth].append(to_append)
+            # to_append[first_action] = self.tree_rewards[depth]
+            # self.conditional_tree_reward_tracker[action][depth].append(to_append)
 
 
 
@@ -334,18 +334,18 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
         ### greedy:
 
-        ## get the total cost of the paths
+        ## get the total reward of the paths
         t = self.env.trial
-        path_costs = []
+        path_rewards = []
         for action in range(self.n_afc):
             path = self.env.path_states[t][action]
             path_weight_idx = self.env.path_weights[t][action]
-            weighted_costs = [float(self.env.costs[x, y]) * self.env.sim_weight_map[path_weight_idx[k]] for k, (x, y) in enumerate(path)]
-            path_costs.append(sum(weighted_costs))
+            weighted_rewards = [float(self.env.costs[x, y]) * self.env.sim_weight_map[path_weight_idx[k]] for k, (x, y) in enumerate(path)]
+            path_rewards.append(sum(weighted_rewards))
         
         ## take greedy action
-        best_ro_cost = max(path_costs)
-        ro_action = path_costs.index(best_ro_cost)
+        best_ro_reward = max(path_rewards)
+        ro_action = path_rewards.index(best_ro_reward)
         
         
         ### RANDOM: randomly choose between the paths
