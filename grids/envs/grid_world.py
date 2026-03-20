@@ -441,6 +441,8 @@ class GridEnv(gym.Env):
         ## hack... remove this once we've created new envs
         if not hasattr(self, 'costs'):
             self.costs = self.costss[self._trial]
+        if not hasattr(self, 'info'):
+            self.info = {}
         if not hasattr(self, 'path_weights'):
             self.path_aligned_states, self.path_orthogonal_states, self.path_weights = self.get_alignment(self.path_states)
 

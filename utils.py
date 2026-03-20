@@ -73,7 +73,7 @@ def make_bandit_env(n_arms=2, n_trials=20, alpha=1, beta=1, seed=None):
 
     # Import directly from the file to bypass the broken gym_bandits __init__.py
     _spec = _ilu.spec_from_file_location(
-        "bandit", "gym-bandit-environments/gym_bandits/bandit.py")
+        "bandit", "gym_bandits/bandit.py")
     _mod = _ilu.module_from_spec(_spec)
     _spec.loader.exec_module(_mod)
 

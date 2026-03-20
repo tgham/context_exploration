@@ -52,14 +52,19 @@ class Farmer(ABC):
     def init_sampler(self, env):
         """Delegate to the environment's task-specific sampler factory."""
 
-        ## pass task-specific parameters to env
-        env.receive_task_params(self.task_params)
+        ## pass task-specific parameters to env (not all envs support this)
+        if hasattr(env, 'receive_task_params'):
+            env.receive_task_params(self.task_params)
 
         ## make sampler if there is not one, otherwise we just need to update the sampler's observations
         if not hasattr(self, 'sampler') or self.sampler is None:
             self.sampler = env.make_sampler()
         else:
             self.sampler.set_obs(env.obs)
+
+        ## if dealing with context priors, give this to the sampler
+        if hasattr(self, 'context_prior'):
+            self.sampler.context_prior = self.context_prior
 
             
     ## agent-specific calculation of Q values based on posterior
@@ -583,7 +588,7 @@ class Farmer(ABC):
         self.init_sampler(env_copy)
 
         ## get posterior mean grid
-        self.posterior_mean_MDP = self.sampler.mean_mdp(context_prior=self.context_prior)
+        self.posterior_mean_MDP = self.sampler.mean_mdp()
 
         ## get the cost of each path under the posterior mean (weighted by arm_weight)
         t = env_copy.trial
@@ -613,6 +618,9 @@ class Farmer(ABC):
 
 ## define subclasses
 class BAMCP(Farmer):
+
+    _mcts_class = MonteCarloTreeSearch_AFC
+
     def __init__(self,
                  temp=1, lapse=0, horizon=3,
                  exploration_constant=None, discount_factor=None, n_samples=None,
@@ -627,20 +635,20 @@ class BAMCP(Farmer):
     def init_mcts(self, env, reset=True):
         """
         Initialise or update the MCTS object for tree search.
-        
+
         Args:
             env: The environment to use for MCTS.
             reset: If True, create a new MCTS object. If False, update the existing one.
         """
         if reset:
             tree = Tree()
-            self.mcts = MonteCarloTreeSearch_AFC(
-                env=env, 
-                tree=tree, 
-                exploration_constant=self.exploration_constant, 
-                discount_factor=self.discount_factor, 
-                horizon=self.horizon, 
-                real_future_paths=self.real_future_paths, 
+            self.mcts = self._mcts_class(
+                env=env,
+                tree=tree,
+                exploration_constant=self.exploration_constant,
+                discount_factor=self.discount_factor,
+                horizon=self.horizon,
+                real_future_paths=self.real_future_paths,
             )
         else:
             self.mcts.refresh_env(env)
@@ -665,7 +673,7 @@ class BAMCP(Farmer):
         assert self.mcts.root_trial == self.mcts.env.trial, 'trial mismatch between env and tree at start of search\n env trial: {} \n tree trial: {}'.format(self.mcts.env.trial, self.mcts.root_trial)
 
         ## generate new set of root samples
-        self.all_posterior_MDPs = self.sampler.sample_mdps(self.n_samples, context_prior=self.context_prior)
+        self.all_posterior_MDPs = self.sampler.sample_mdps(self.n_samples)
 
         ## debugging Q-vals
         self.mcts.Q_tracker = []
@@ -727,7 +735,7 @@ class BAMCP(Farmer):
 
         # ## debugging plot
         # # toplot_mean = np.mean([MDP.costs == self.sampler.low_cost for MDP in self.all_posterior_MDPs], axis=0) ## mean of binary grids
-        # toplot_mean = self.sampler.mean_mdp(context_prior=self.context_prior) ## or actual posterior mean
+        # toplot_mean = self.sampler.mean_mdp() ## or actual posterior mean
         # fig, axs = plt.subplots(1,1, figsize=(5,5))
         # plot_r(toplot_mean, axs, title = 'Posterior reward distribution\nmean of all root samples\nMCTS Q: {}'.format(np.round(MCTS_Q,2)))
         # plot_traj([env_copy.path_states[self.mcts.root_trial][c] for c in range(self.mcts.n_afc)], ax = axs)
@@ -792,79 +800,30 @@ class CE(Farmer):
 # ---------------------------------------------------------------------------
 # 3. BAMCP agent for bandits
 # ---------------------------------------------------------------------------
-class BanditBAMCP:
+class BanditBAMCP(BAMCP):
     """
-    Bayes-Adaptive Monte-Carlo Planning agent for multi-armed bandits.
+    BAMCP agent for multi-armed bandits.
 
-    On each trial:
-      1. Samples MDPs from the posterior (via BanditSampler)
-      2. Runs MCTS to get Q-value estimates for each arm
-      3. Converts Q-values to choice probabilities via softmax
+    Inherits all planning logic (init_sampler, init_mcts, search, compute_Q)
+    from BAMCP. Only the run loop differs to suit the bandit task structure.
     """
+
+    _mcts_class = MonteCarloTreeSearch_Bandit
 
     def __init__(self, n_samples=200, exploration_constant=2,
                  discount_factor=0.99, horizon=5, temp=1.0, lapse=0.0):
-        self.n_samples = n_samples
-        self.exploration_constant = exploration_constant
-        self.discount_factor = discount_factor
-        self.horizon = horizon
-        self.temp = temp
-        self.lapse = lapse
-        self.sampler = None
-        self.mcts = None
-
-    def softmax_choice(self, Q):
-        probs = (1 - self.lapse) * softmax(Q / self.temp) + self.lapse / len(Q)
-        return probs
-
-    def init_sampler(self, env):
-        # Always create fresh — BanditSampler is cheap, and this keeps
-        # sampler.env in sync with the current trial / obs state.
-        self.sampler = env.make_sampler()
-
-    def init_mcts(self, env, reset=True):
-        if reset:
-            tree = Tree()
-            self.mcts = MonteCarloTreeSearch_Bandit(
-                env=env, tree=tree,
-                exploration_constant=self.exploration_constant,
-                discount_factor=self.discount_factor,
-                horizon=self.horizon,
-            )
-        else:
-            self.mcts.refresh_env(env)
-
-    def search(self):
-        """Run MCTS with posterior root sampling."""
-        all_mdps = self.sampler.sample_mdps(self.n_samples)
-
-        for s in range(self.n_samples):
-            self.mcts.env = all_mdps[s]
-
-            action_leaf = self.mcts.traverse_tree()
-            self.mcts.rollout(action_leaf)
-            self.mcts.backup()
-
-        # Extract Q estimates
-        Q = np.full(self.mcts.n_afc, np.nan)
-        for action, leaf in self.mcts.tree.root.action_leaves.items():
-            if leaf is not None:
-                Q[action] = leaf.performance
-        return Q
-
-    def compute_Q(self, env):
-        self.init_sampler(env)
-        self.init_mcts(env, reset=True)
-        return self.search()
+        super().__init__(
+            temp=temp, lapse=lapse, horizon=horizon,
+            exploration_constant=exploration_constant,
+            discount_factor=discount_factor,
+            n_samples=n_samples,
+        )
 
     def run(self, env, greedy=False):
-        """
-        Run the agent on the bandit for n_trials, returning trial-by-trial data.
-        """
+        """Run the agent on the bandit for n_trials, returning trial-by-trial data."""
         n_trials = env.n_trials
         n_arms = env.n_afc
 
-        # Storage
         Q_history = np.zeros((n_trials, n_arms))
         p_choice_history = np.zeros((n_trials, n_arms))
         actions = np.zeros(n_trials, dtype=int)
@@ -878,27 +837,22 @@ class BanditBAMCP:
         env.reset()
 
         for t in range(n_trials):
-            # Plan via BAMCP on a deep copy (MCTS mutates the env)
             env_copy = copy.deepcopy(env)
             env_copy.set_sim(True)
 
             Q = self.compute_Q(env_copy)
-            probs = self.softmax_choice(Q)
-
-            ## let's also store posterior probabilities of the arms
+            probs = self.softmax(Q)
             mean_probs = self.sampler.mean_probs()
-
 
             Q_history[t] = Q
             p_choice_history[t] = probs
             post_probs[t] = mean_probs
-            # Choose action
+
             if greedy:
                 action = int(argm(Q.tolist(), float(np.nanmax(Q))))
             else:
                 action = int(np.random.choice(n_arms, p=probs))
 
-            # Take action in the *real* env
             env.set_sim(False)
             _, reward_list, terminated, truncated, _ = env.step(action)
             reward = reward_list[0]
@@ -908,7 +862,6 @@ class BanditBAMCP:
             chose_optimal[t] = (action == optimal_arm)
             bayes_regret[t] = env.p_dist[optimal_arm] - env.p_dist[action]
 
-            # Update sampler with new observations
             self.init_sampler(env)
 
             print(f"  trial {t+1:>3}/{n_trials}  |  arm={action}  "
@@ -928,5 +881,5 @@ class BanditBAMCP:
             'true_probs': env.p_dist.copy(),
             'optimal_arm': optimal_arm,
             'bayes_regret': bayes_regret,
-            'post_probs': post_probs
+            'post_probs': post_probs,
         }

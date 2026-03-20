@@ -239,7 +239,7 @@ class GridSampler:
         return posterior_col
 
     
-    def sample_mdps(self, n_samples, context_prior):
+    def sample_mdps(self, n_samples):
         """
         Sample n_samples MDP parameterisations from the posterior.
         
@@ -252,7 +252,7 @@ class GridSampler:
         """
         
         ## update context posterior and determine how many samples to draw under each context
-        context_indicators = np.random.binomial(1, context_prior, size=n_samples).astype(bool)
+        context_indicators = np.random.binomial(1, self.context_prior, size=n_samples).astype(bool)
         n_col_samples = int(np.sum(context_indicators))
         n_row_samples = n_samples - n_col_samples
 
@@ -295,7 +295,7 @@ class GridSampler:
     
 
 
-    def mean_mdp(self, context_prior):
+    def mean_mdp(self):
         """
         Compute the posterior mean MDP grid (no sampling).
         
@@ -310,8 +310,8 @@ class GridSampler:
         posterior_ps_row, posterior_qs_row = self.mean_probs(col_context=False)
 
         posterior_mean_mdp = (
-            context_prior * np.outer(posterior_ps_col, posterior_qs_col)
-            + (1 - context_prior) * np.outer(posterior_ps_row, posterior_qs_row)
+            self.context_prior * np.outer(posterior_ps_col, posterior_qs_col)
+            + (1 - self.context_prior) * np.outer(posterior_ps_row, posterior_qs_row)
         )
 
         ## pin observed cells
@@ -356,7 +356,7 @@ class BanditSampler:
             self.n_failures = np.bincount(obs_actions[obs_rewards == self.failure], minlength=self.n_afc).astype(int)
 
     ## sample mdps
-    def sample_mdps(self, n_samples):
+    def sample_mdps(self, n_samples, context_prior=None):
 
         ## sample posterior probabilities
         sampled_ps = np.zeros((n_samples, self.n_afc))
