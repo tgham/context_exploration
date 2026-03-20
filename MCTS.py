@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 import random
 from math import sqrt, log
 from bisect import bisect_left
-from utils import Action_Node, Tree, make_env, argm, data_keys, KL_divergence, get_next_state
+from utils import Action_Node, Tree, make_env, data_keys, KL_divergence, get_next_state
 import copy
 import numpy as np
 from tqdm.auto import tqdm
@@ -120,8 +120,8 @@ class MonteCarloTreeSearch():
                 self.node_id_path.append(node.node_id)
 
                 ## move in env
-                step_obs, rewards, terminated, truncated, _ = self.env.step(action_leaf.action)
-                self.tree_rewards.append(sum(rewards))
+                step_obs, reward, terminated, truncated, _ = self.env.step(action_leaf.action)
+                self.tree_rewards.append(reward)
 
                 ## continue down the tree if not terminated (NB: WE MAY ACTUALLY WANT TO STILL CREATE THE NODE FOR THE TERMINAL STATE)
                 if not terminated and not truncated:
@@ -138,7 +138,7 @@ class MonteCarloTreeSearch():
                     else:
 
                         ## create new node
-                        node = self.tree.add_state_node(state = self.env.current, node_id=next_node_id, reward = rewards, terminated=terminated, trial = node_trial, n_afc=self.n_afc, parent=action_leaf,
+                        node = self.tree.add_state_node(state = self.env.current, node_id=next_node_id, reward = reward, terminated=terminated, trial = node_trial, n_afc=self.n_afc, parent=action_leaf,
                                                         )
 
 
@@ -157,8 +157,8 @@ class MonteCarloTreeSearch():
 
         ## first need to get the starting reward r, which is essentially the reward of choice that corresponds to the action leaf
         first_trial = action_leaf.trial
-        _, rewards, terminated, truncated, _ = self.env.step(action_leaf.action)
-        total_reward = sum(rewards)
+        _, reward, terminated, truncated, _ = self.env.step(action_leaf.action)
+        total_reward = reward
 
         ## if final trial, just stop here
         if terminated or truncated:
@@ -171,8 +171,8 @@ class MonteCarloTreeSearch():
         while not terminated and not truncated:
             depth+=1
             ro_action = self.rollout_policy()
-            _, rewards, terminated, truncated, _ = self.env.step(ro_action)
-            total_reward += sum(rewards) * self.discount_factor**depth
+            _, reward, terminated, truncated, _ = self.env.step(ro_action)
+            total_reward += reward * self.discount_factor**depth
             remaining_ro_rewards.append(total_reward)
 
         self.tree_rewards.append(total_reward)
@@ -423,10 +423,19 @@ class MonteCarloTreeSearch_Bandit(MonteCarloTreeSearch):
     def rollout_policy(self):
 
         ## random
-        ro_action = random.choice(range(self.n_afc))
+        # ro_action = random.choice(range(self.n_afc))
 
         ## greedy wrt/ current MDP?
         # ro_action = np.argmax([self.env.p_dist[a] for a in range(self.n_afc)])
+
+        ## learned Q values - e-greedy
+        Q = self.env.Q
+        best_a = np.argmax(Q)
+        if random.random() < 0.1:  # epsilon = 0.1
+            ro_action = random.choice(range(self.n_afc))
+        else:
+            ro_action = best_a
+
 
         return ro_action
 

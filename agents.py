@@ -57,10 +57,11 @@ class Farmer(ABC):
             env.receive_task_params(self.task_params)
 
         ## make sampler if there is not one, otherwise we just need to update the sampler's observations
-        if not hasattr(self, 'sampler') or self.sampler is None:
-            self.sampler = env.make_sampler()
-        else:
-            self.sampler.set_obs(env.obs)
+        # if not hasattr(self, 'sampler') or self.sampler is None:
+        #     self.sampler = env.make_sampler()
+        # else:
+        #     self.sampler.set_obs(env.obs)
+        self.sampler = env.make_sampler()
 
         ## if dealing with context priors, give this to the sampler
         if hasattr(self, 'context_prior'):
@@ -448,11 +449,8 @@ class Farmer(ABC):
                     if not missed:
                         env_copy.set_sim(False)
                         action_sequence = env_copy.path_actions[t][action]
-                        _, costs, _, _, _ = env_copy.step(action)
-                        assert np.array_equal(costs, env_copy.trial_obs[:,-1]), 'costs do not match trial observations\n costs: {}, trial_obs: {}'.format(costs, env_copy.trial_obs[:,-1])
-                        assert len(costs) == len(action_sequence)+1, 'costs and action sequence do not match\n costs: {}, action sequence: {}'.format(len(costs), len(action_sequence))
-                        path_cost = np.sum(costs)
-                        self.total_costs[city, day, t] = path_cost
+                        _, cost, _, _, _ = env_copy.step(action)
+                        self.total_costs[city, day, t] = cost
                         self.path_quality[city, day, t] = self.total_costs[city, day, t]/self.path_len[city, day, t] ## i.e. cost as a proportion of path length
                         day_terminated = t == (n_trials-1)
 
@@ -850,8 +848,7 @@ class BanditBAMCP(BAMCP):
                 action = int(np.random.choice(n_arms, p=probs))
 
             env.set_sim(False)
-            _, reward_list, terminated, truncated, _ = env.step(action)
-            reward = reward_list[0]
+            _, reward, terminated, truncated, _ = env.step(action)
 
             actions[t] = action
             rewards[t] = reward

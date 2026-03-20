@@ -412,15 +412,6 @@ def value_iteration(dp_costs, goal, max_iters=1000, theta=0.0001, discount=0.99)
     return V, Q, A
 
 
-## random choice between multiple minima/maxima - optimized for small arrays
-def argm(x, extreme_val):
-    # For small arrays (typical: 2-4 elements), pure Python is faster
-    indices = [i for i, v in enumerate(x) if v == extreme_val]
-    n = len(indices)
-    if n == 1:
-        return indices[0]
-    return indices[np.random.randint(n)]
-
 ## calculate the angle between two nodes
 def node_angle(a,b):
     rad = np.arctan2(b[1]-a[1], b[0]-a[0])

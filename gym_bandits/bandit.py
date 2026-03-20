@@ -59,9 +59,6 @@ class BanditEnv(gym.Env):
         self.trunc_trial = trunc_trial
 
     def step(self, action):
-        if not self.sim:
-            assert self.action_space.contains(action)
-
         reward = 0
 
         ## random payout
@@ -81,6 +78,9 @@ class BanditEnv(gym.Env):
         ## only track obs history when not in sim mode
         if not self.sim:
             self.obs = np.vstack((self.obs, trial_obs))
+
+            ## Q-learning
+            self.Q[action] = self.Q[action] + self.LR * (reward + np.max(self.Q) - self.Q[action])
 
         ## termination condition determined by n_trials
         terminated = self._trial >= self.n_trials
@@ -169,13 +169,16 @@ class BanditEnvWrapper(BanditNArmedIndependentBeta):
     def reset(self):
         self._reset()
 
+        ## let's also store some Q values...
+        self.Q = np.zeros(self.n_afc)
+        self.LR = 0.1
+
     def set_sim(self, sim):
         self.sim = sim
 
     def step(self, action):
         trial_obs, reward, terminated, truncated, info = super().step(action)
-        # MCTS uses sum(rewards), so wrap scalar reward in a list
-        return trial_obs.reshape(1, -1), (reward,), terminated, truncated, info
+        return trial_obs.reshape(1, -1), reward, terminated, truncated, info
 
     def receive_task_params(self, task_params):
         pass  # no task-specific params for the bandit

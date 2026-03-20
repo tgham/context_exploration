@@ -1060,7 +1060,8 @@ class GridEnv(gym.Env):
         # Update trial counter
         self._trial += 1
 
-        return self.trial_obs, costs, self.terminated, truncated, self.info
+        cost = sum(costs)
+        return self.trial_obs, cost, self.terminated, truncated, self.info
         
     
 
