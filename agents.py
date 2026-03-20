@@ -18,7 +18,7 @@ from collections import defaultdict
 from IPython.display import display, clear_output
 from utils import *
 from base_kernels import *
-from MCTS import MonteCarloTreeSearch_AFC
+from MCTS import MonteCarloTreeSearch_AFC, MonteCarloTreeSearch_Bandit
 from tqdm.auto import tqdm
 import pandas as pd
 from scipy.special import beta, logsumexp, digamma, comb, betaln
@@ -784,3 +784,149 @@ class CE(Farmer):
     ## trivially need to do this
     def update_tree(self, env_copy, action):
         return True  # default: always reset
+    
+
+
+
+
+# ---------------------------------------------------------------------------
+# 3. BAMCP agent for bandits
+# ---------------------------------------------------------------------------
+class BanditBAMCP:
+    """
+    Bayes-Adaptive Monte-Carlo Planning agent for multi-armed bandits.
+
+    On each trial:
+      1. Samples MDPs from the posterior (via BanditSampler)
+      2. Runs MCTS to get Q-value estimates for each arm
+      3. Converts Q-values to choice probabilities via softmax
+    """
+
+    def __init__(self, n_samples=200, exploration_constant=2,
+                 discount_factor=0.99, horizon=5, temp=1.0, lapse=0.0):
+        self.n_samples = n_samples
+        self.exploration_constant = exploration_constant
+        self.discount_factor = discount_factor
+        self.horizon = horizon
+        self.temp = temp
+        self.lapse = lapse
+        self.sampler = None
+        self.mcts = None
+
+    def softmax_choice(self, Q):
+        probs = (1 - self.lapse) * softmax(Q / self.temp) + self.lapse / len(Q)
+        return probs
+
+    def init_sampler(self, env):
+        # Always create fresh — BanditSampler is cheap, and this keeps
+        # sampler.env in sync with the current trial / obs state.
+        self.sampler = env.make_sampler()
+
+    def init_mcts(self, env, reset=True):
+        if reset:
+            tree = Tree()
+            self.mcts = MonteCarloTreeSearch_Bandit(
+                env=env, tree=tree,
+                exploration_constant=self.exploration_constant,
+                discount_factor=self.discount_factor,
+                horizon=self.horizon,
+            )
+        else:
+            self.mcts.refresh_env(env)
+
+    def search(self):
+        """Run MCTS with posterior root sampling."""
+        all_mdps = self.sampler.sample_mdps(self.n_samples)
+
+        for s in range(self.n_samples):
+            self.mcts.env = all_mdps[s]
+
+            action_leaf = self.mcts.traverse_tree()
+            self.mcts.rollout(action_leaf)
+            self.mcts.backup()
+
+        # Extract Q estimates
+        Q = np.full(self.mcts.n_afc, np.nan)
+        for action, leaf in self.mcts.tree.root.action_leaves.items():
+            if leaf is not None:
+                Q[action] = leaf.performance
+        return Q
+
+    def compute_Q(self, env):
+        self.init_sampler(env)
+        self.init_mcts(env, reset=True)
+        return self.search()
+
+    def run(self, env, greedy=False):
+        """
+        Run the agent on the bandit for n_trials, returning trial-by-trial data.
+        """
+        n_trials = env.n_trials
+        n_arms = env.n_afc
+
+        # Storage
+        Q_history = np.zeros((n_trials, n_arms))
+        p_choice_history = np.zeros((n_trials, n_arms))
+        actions = np.zeros(n_trials, dtype=int)
+        rewards = np.zeros(n_trials)
+        chose_optimal = np.zeros(n_trials, dtype=bool)
+        bayes_regret = np.zeros(n_trials)
+        post_probs = np.zeros((n_trials, n_arms))
+
+        optimal_arm = np.argmax(env.p_dist)
+
+        env.reset()
+
+        for t in range(n_trials):
+            # Plan via BAMCP on a deep copy (MCTS mutates the env)
+            env_copy = copy.deepcopy(env)
+            env_copy.set_sim(True)
+
+            Q = self.compute_Q(env_copy)
+            probs = self.softmax_choice(Q)
+
+            ## let's also store posterior probabilities of the arms
+            mean_probs = self.sampler.mean_probs()
+
+
+            Q_history[t] = Q
+            p_choice_history[t] = probs
+            post_probs[t] = mean_probs
+            # Choose action
+            if greedy:
+                action = int(argm(Q.tolist(), float(np.nanmax(Q))))
+            else:
+                action = int(np.random.choice(n_arms, p=probs))
+
+            # Take action in the *real* env
+            env.set_sim(False)
+            _, reward_list, terminated, truncated, _ = env.step(action)
+            reward = reward_list[0]
+
+            actions[t] = action
+            rewards[t] = reward
+            chose_optimal[t] = (action == optimal_arm)
+            bayes_regret[t] = env.p_dist[optimal_arm] - env.p_dist[action]
+
+            # Update sampler with new observations
+            self.init_sampler(env)
+
+            print(f"  trial {t+1:>3}/{n_trials}  |  arm={action}  "
+                  f"reward={reward:.0f}  |  \n Q={np.round(Q, 3)}  | post={np.round(mean_probs, 3)}  |  "
+                  f"p={np.round(probs, 3)} ")
+
+            if terminated:
+                break
+
+        return {
+            'Q': Q_history,
+            'p_choice': p_choice_history,
+            'actions': actions,
+            'rewards': rewards,
+            'cumulative_reward': np.cumsum(rewards),
+            'chose_optimal': chose_optimal,
+            'true_probs': env.p_dist.copy(),
+            'optimal_arm': optimal_arm,
+            'bayes_regret': bayes_regret,
+            'post_probs': post_probs
+        }
