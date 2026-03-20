@@ -28,29 +28,22 @@ from scipy.special import beta, logsumexp, digamma, comb, betaln
 class Farmer(ABC):
 
     def __init__(self,
-                 temp=1, lapse=0, arm_weight=0, horizon=3, real_future_paths=True,
-                 exploration_constant=None, discount_factor=None, n_samples=None):
+                 temp=1, lapse=0, horizon=3,
+                 exploration_constant=None, discount_factor=None, n_samples=None,
+                 **task_params):
 
         ## behavioural parameters
         self.temp = temp
         self.lapse = lapse
-        self.arm_weight = arm_weight
-        self._cache_arm_weights()
+
+        ## task-specific parameters (passed through to env via receive_task_params)
+        self.task_params = task_params
 
         ## MCTS parameters
         self.horizon = horizon
-        self.real_future_paths = real_future_paths
         self.exploration_constant = exploration_constant
         self.discount_factor = discount_factor
         self.n_samples = n_samples
-
-        ## MCTS object (will be initialised when running BAMCP agent)
-        self.mcts = None
-
-        ## environment reference (set in compute_Q)
-        self.env = None
-    
-
     
     
     ### general methods for sampling, choice, fitting etc.
@@ -59,8 +52,8 @@ class Farmer(ABC):
     def init_sampler(self, env):
         """Delegate to the environment's task-specific sampler factory."""
 
-        ## set arm weights on env so sim_clones inherit them
-        env.set_sim_weights(self._aligned_weight, self._orthogonal_weight)
+        ## pass task-specific parameters to env
+        env.receive_task_params(self.task_params)
 
         ## make sampler if there is not one, otherwise we just need to update the sampler's observations
         if not hasattr(self, 'sampler') or self.sampler is None:
@@ -583,19 +576,6 @@ class Farmer(ABC):
 
 
 
-    ## calculate weighted cost based on aligned vs orthogonal states
-    def _cache_arm_weights(self):
-        """Cache the aligned/orthogonal weights based on arm_weight parameter."""
-        if self.arm_weight is None:
-            self._aligned_weight = 1.0
-            self._orthogonal_weight = 1.0
-        else:
-            # arm_weight > 0: favour aligned arm (reduce orthogonal weight)
-            # arm_weight < 0: favour orthogonal arm (reduce aligned weight)
-            self._aligned_weight = 1 - max(0.0, -self.arm_weight)
-            self._orthogonal_weight = 1 - max(0.0, self.arm_weight)
-
-
     ## act based on posterior mean grid
     def compute_CE_Q(self, env_copy):
 
@@ -634,9 +614,13 @@ class Farmer(ABC):
 ## define subclasses
 class BAMCP(Farmer):
     def __init__(self,
-                 temp=1, lapse=0, arm_weight=0, horizon=3, real_future_paths=True,
-                 exploration_constant=None, discount_factor=None, n_samples=None):
-        super().__init__(temp, lapse, arm_weight, horizon, real_future_paths, exploration_constant, discount_factor,n_samples)
+                 temp=1, lapse=0, horizon=3,
+                 exploration_constant=None, discount_factor=None, n_samples=None,
+                 **task_params):
+        super().__init__(temp, lapse, horizon, exploration_constant, discount_factor, n_samples,
+                         **task_params)
+        self.arm_weight = task_params.get('arm_weight', 0)
+        self.real_future_paths = task_params.get('real_future_paths', True)
 
 
     ## initialise MCTS object for tree search
@@ -781,10 +765,14 @@ class BAMCP(Farmer):
 
 
 class CE(Farmer):
-    def __init__(self, 
-                 temp=1, lapse=0, arm_weight=0, horizon=None, real_future_paths=None,
-                 exploration_constant=None, discount_factor=None, n_samples=None):
-        super().__init__(temp, lapse, arm_weight, horizon, real_future_paths, exploration_constant, discount_factor,n_samples)
+    def __init__(self,
+                 temp=1, lapse=0, horizon=None,
+                 exploration_constant=None, discount_factor=None, n_samples=None,
+                 **task_params):
+        super().__init__(temp, lapse, horizon, exploration_constant, discount_factor, n_samples,
+                         **task_params)
+        self.arm_weight = task_params.get('arm_weight', 0)
+        self.real_future_paths = task_params.get('real_future_paths', None)
 
     
     ## act based on posterior mean grid

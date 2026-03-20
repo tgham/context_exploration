@@ -20,7 +20,7 @@ from scipy.spatial.distance import cdist
 import gymnasium as gym
 from gymnasium.envs.registration import register, registry, make, spec
 import pickle
-import copy
+import copy 
 
 from utils import make_env, Node, Tree, argm, data_keys, grid_keys, parse_lists, KL_divergence, profile_func, KL_sim, value_iteration, generate_ppt_sequence
 from MCTS import MonteCarloTreeSearch, MonteCarloTreeSearch_AFC
@@ -76,10 +76,11 @@ def agent_loop(p, agent_params_list, hyperparams, agent_param_combos):
         discount_factor = hyperparams['discount_factor']
         n_samples = hyperparams['n_samples']
 
+        task_params = dict(arm_weight=arm_weight, real_future_paths=real_future)
         if agent == 'BAMCP':
-            farmer = BAMCP(temp=temp, lapse=lapse, arm_weight=arm_weight, horizon=horizon, real_future_paths=real_future, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples) ## known context if expt 3
+            farmer = BAMCP(temp=temp, lapse=lapse, horizon=horizon, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples, **task_params) ## known context if expt 3
         elif agent =='CE':
-            farmer = CE(temp=temp, lapse=lapse, arm_weight=arm_weight, horizon=horizon, real_future_paths=real_future, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples) ## known context if expt 3
+            farmer = CE(temp=temp, lapse=lapse, horizon=horizon, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples, **task_params) ## known context if expt 3
         sim_out = farmer.run(hyperparams, agent=agent, df_trials=None, envs=env_objects, fit=False, yoked=False, progress=False)
         sim_outs.append(sim_out)
     
@@ -228,7 +229,7 @@ for i, params in enumerate(agent_params_list):
     print(f"  [{i}] temp={params[0]}, lapse={params[1]}, arm_weight={params[2]}, horizon={params[3]}, real_future={params[4]}")
 
 hyperparams = {
-    'n_samples': 1000,
+    'n_samples': 10000,
     'exploration_constant': 1,
     'discount_factor': 1,
     'n_trials': n_trials,
