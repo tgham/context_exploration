@@ -129,6 +129,7 @@ class MonteCarloTreeSearch():
 
                     ## get the next node id, i.e. the informational state after taking this path
                     next_node_id = self.init_node_id(step_obs, action_leaf.parent_id)
+                    # print('tree actions and states: {}, {}, step_obs: {}, next node id: {}'.format(self.tree_actions, self.tree_rewards, step_obs, next_node_id))
                     node_trial += 1
                     assert node_trial == action_leaf.trial+1, 'trial mismatch between env and tree after step\n env: {} \n tree: {}'.format(node_trial, action_leaf.trial+1)
 
@@ -335,20 +336,80 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         ### greedy:
 
         ## get the total reward of the paths
-        t = self.env.trial
-        path_rewards = []
-        for action in range(self.n_afc):
-            path = self.env.path_states[t][action]
-            path_weight_idx = self.env.path_weights[t][action]
-            weighted_rewards = [float(self.env.costs[x, y]) * self.env.sim_weight_map[path_weight_idx[k]] for k, (x, y) in enumerate(path)]
-            path_rewards.append(sum(weighted_rewards))
+        # t = self.env.trial
+        # path_rewards = []
+        # for action in range(self.n_afc):
+        #     path = self.env.path_states[t][action]
+        #     path_weight_idx = self.env.path_weights[t][action]
+        #     weighted_rewards = [float(self.env.costs[x, y]) * self.env.sim_weight_map[path_weight_idx[k]] for k, (x, y) in enumerate(path)]
+        #     path_rewards.append(sum(weighted_rewards))
         
-        ## take greedy action
-        best_ro_reward = max(path_rewards)
-        ro_action = path_rewards.index(best_ro_reward)
-        
+        # ## take greedy action
+        # best_ro_reward = max(path_rewards)
+        # ro_action = path_rewards.index(best_ro_reward)
+
         
         ### RANDOM: randomly choose between the paths
-        # ro_action = random.choice(range(self.n_afc))
+        ro_action = random.choice(range(self.n_afc))
 
         return ro_action
+    
+
+# 2. Bandit-specific MCTS
+class MonteCarloTreeSearch_Bandit(MonteCarloTreeSearch):
+    """MCTS subclass with bandit-appropriate node IDs and rollout policy."""
+
+    def __init__(self, env, tree, exploration_constant=2,
+                 discount_factor=0.99, horizon=None):
+        super().__init__(env, tree, exploration_constant,
+                         discount_factor, horizon, real_future_paths=False)
+
+    
+    ## node_id is the sufficient statistic for the belief state in the bandit: the counts of successes and failures for each arm
+    ## stored as a flat tuple of length n_arms*2: (s0, f0, s1, f1, ...)
+    def init_node_id(self, obs=None, parent_node_id=None):
+        """
+        Node ID = sufficient statistic for Beta-Bernoulli bandit:
+        per-arm (n_successes, n_failures) counts, stored as a flat tuple.
+        """
+        n = self.n_afc
+        counts = list(parent_node_id) if parent_node_id is not None else [0] * (n * 2)
+
+        if len(obs) == 0:
+            return tuple(counts)
+
+        if obs.ndim == 1:
+            obs = obs.reshape(1, -1)
+
+        for action, reward in obs:
+            arm = int(action)
+            if reward == 1:
+                counts[arm * 2] += 1
+            else:
+                counts[arm * 2 + 1] += 1
+
+        return tuple(counts)
+
+
+    def refresh_env(self, env=None):
+        if env is not None:
+            self.env = env.unwrapped if hasattr(env, 'unwrapped') else env
+
+        self.root_trial = self.env.trial
+        self.horizon_trial = min(self.root_trial + self.horizon,
+                                 self.env.n_trials - 1)
+        self.env.set_trunc_trial(self.horizon_trial)
+
+    def rollout_policy(self):
+
+        ## random
+        # ro_action = random.choice(range(self.n_afc))
+
+        ## greedy wrt/ current MDP?
+        ro_action = np.argmax([self.env.p_dist[a] for a in range(self.n_afc)])
+
+        return ro_action
+
+    def check_node(self, node):
+        assert node.trial == self.env.trial, \
+            f'mismatch: node trial={node.trial}, env trial={self.env.trial}'
