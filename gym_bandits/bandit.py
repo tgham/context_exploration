@@ -37,6 +37,7 @@ class BanditEnv(gym.Env):
         self.p_dist = p_dist
         self.r_dist = r_dist
 
+        self.sim = False
         self.info = {} ## dummy info for compatibility with gym API
 
         self._trial = 0
@@ -58,7 +59,8 @@ class BanditEnv(gym.Env):
         self.trunc_trial = trunc_trial
 
     def step(self, action):
-        assert self.action_space.contains(action)
+        if not self.sim:
+            assert self.action_space.contains(action)
 
         reward = 0
 
@@ -74,26 +76,22 @@ class BanditEnv(gym.Env):
                 reward = np.random.normal(self.r_dist[action][0], self.r_dist[action][1])
 
         ## obs defined as action and reward r?
-        trial_obs = np.array([action, reward]) 
-        self.obs = np.vstack((self.obs, trial_obs)) ## add action and reward to obs history
+        trial_obs = np.array([action, reward])
+
+        ## only track obs history when not in sim mode
+        if not self.sim:
+            self.obs = np.vstack((self.obs, trial_obs))
 
         ## termination condition determined by n_trials
-        # terminated = True
-        if self._trial >= self.n_trials:
-            terminated = True
-        else:
-            terminated = False
+        terminated = self._trial >= self.n_trials
 
         ## truncated if we have reached horizon
-        if self._trial >= self.trunc_trial:
-            truncated = True
-        else:
-            truncated = False
+        truncated = self._trial >= self.trunc_trial
 
         ## update trial counter
         self._trial += 1
 
-        return trial_obs, reward, terminated, truncated, self.info #
+        return trial_obs, reward, terminated, truncated, self.info
 
     def _reset(self):
         self.set_trunc_trial(self.n_trials-1) ## default is no truncation
@@ -177,7 +175,7 @@ class BanditEnvWrapper(BanditNArmedIndependentBeta):
     def step(self, action):
         trial_obs, reward, terminated, truncated, info = super().step(action)
         # MCTS uses sum(rewards), so wrap scalar reward in a list
-        return trial_obs.reshape(1, -1), [reward], terminated, truncated, info
+        return trial_obs.reshape(1, -1), (reward,), terminated, truncated, info
 
     def receive_task_params(self, task_params):
         pass  # no task-specific params for the bandit
