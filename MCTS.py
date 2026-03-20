@@ -18,13 +18,12 @@ from plotter import *
 ## base class 
 class MonteCarloTreeSearch():
 
-    def __init__(self, env, tree, exploration_constant=2, discount_factor=0.99, horizon=None, real_future_paths=True):
+    def __init__(self, env, tree, exploration_constant=2, discount_factor=0.99, horizon=None):
         
         ## initialize tree and and MCTS params
         self.tree = tree
         self.discount_factor = discount_factor
         self.exploration_constant = exploration_constant
-        self.real_future_paths = real_future_paths
         if horizon is None:
             self.horizon = env.n_trials-1 #default to n_trials-1 (i.e. look to the end of the day, which is up to n_trials-1 from the root)
         else:
@@ -263,26 +262,36 @@ class MonteCarloTreeSearch():
         return exploitation_term + exploration_term
 
     
-    ## argmax based on UCT values? 
+    ## argmax based on UCT values?
     def best_child(self, node):
-    
-        ## get action children - iterate directly over values
-        action_leaves = list(node.action_leaves.values())
 
-        ## calculate UCT for each action leaf
         min_Q, max_Q = node.min_Q, node.max_Q
-        UCTs = [self.compute_UCT(node, leaf, min_Q, max_Q) for leaf in action_leaves]
-        max_UCT = max(UCTs)
-        max_idx = argm(UCTs, max_UCT)
-        best_child = action_leaves[max_idx]
+        norm_term = max_Q - min_Q + 1e-8
+        log_N = log(node.n_state_visits)
+        c = self.exploration_constant
 
-        return best_child
+        best_leaf = None
+        best_uct = -float('inf')
+        n_ties = 0
+
+        for leaf in node.action_leaves.values():
+            uct = (leaf.performance - min_Q) / norm_term + c * sqrt(log_N / leaf.n_action_visits)
+            if uct > best_uct:
+                best_uct = uct
+                best_leaf = leaf
+                n_ties = 1
+            elif uct == best_uct:
+                n_ties += 1
+                if np.random.randint(n_ties) == 0:
+                    best_leaf = leaf
+
+        return best_leaf
 
 
 class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
-    def __init__(self, env, tree, exploration_constant=2, discount_factor=0.99, horizon=None, real_future_paths=True):
-        super().__init__(env, tree, exploration_constant, discount_factor, horizon, real_future_paths)
+    def __init__(self, env, tree, exploration_constant=2, discount_factor=0.99, horizon=None):
+        super().__init__(env, tree, exploration_constant, discount_factor, horizon)
 
     ## node_ids are defined by the informational state, i.e. the counts of low and high cost states in each cell
     def init_node_id(self, obs=None, parent_node_id=None):
@@ -362,7 +371,7 @@ class MonteCarloTreeSearch_Bandit(MonteCarloTreeSearch):
     def __init__(self, env, tree, exploration_constant=2,
                  discount_factor=0.99, horizon=None):
         super().__init__(env, tree, exploration_constant,
-                         discount_factor, horizon, real_future_paths=False)
+                         discount_factor, horizon)
 
     
     ## node_id is the sufficient statistic for the belief state in the bandit: the counts of successes and failures for each arm
@@ -372,10 +381,21 @@ class MonteCarloTreeSearch_Bandit(MonteCarloTreeSearch):
         Node ID = sufficient statistic for Beta-Bernoulli bandit:
         per-arm (n_successes, n_failures) counts, stored as a flat tuple.
         """
-        n = self.n_afc
-        counts = list(parent_node_id) if parent_node_id is not None else [0] * (n * 2)
+        if parent_node_id is not None:
+            counts = list(parent_node_id)
+        else:
+            counts = [0] * (self.n_afc * 2)
 
         if len(obs) == 0:
+            return tuple(counts)
+
+        ## fast path for single observation (common case during tree traversal)
+        if obs.ndim == 2 and obs.shape[0] == 1:
+            arm = int(obs[0, 0])
+            if obs[0, 1] == 1:
+                counts[arm * 2] += 1
+            else:
+                counts[arm * 2 + 1] += 1
             return tuple(counts)
 
         if obs.ndim == 1:
@@ -403,10 +423,10 @@ class MonteCarloTreeSearch_Bandit(MonteCarloTreeSearch):
     def rollout_policy(self):
 
         ## random
-        # ro_action = random.choice(range(self.n_afc))
+        ro_action = random.choice(range(self.n_afc))
 
         ## greedy wrt/ current MDP?
-        ro_action = np.argmax([self.env.p_dist[a] for a in range(self.n_afc)])
+        # ro_action = np.argmax([self.env.p_dist[a] for a in range(self.n_afc)])
 
         return ro_action
 
