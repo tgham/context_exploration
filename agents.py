@@ -397,7 +397,7 @@ class Farmer(ABC):
                     assert not np.isnan(np.nansum(Q_vals)), 'no Q estimates": {}'.format(Q_vals)
                     if self.greedy:
                         max_Q = np.nanmax(Q_vals)
-                        action = argm(Q_vals, max_Q)
+                        action = np.argmax(Q_vals)
                     else:
                         action = np.random.choice(len(Q_vals), p=action_probs)
 
@@ -409,7 +409,7 @@ class Farmer(ABC):
 
                     ## let's also calculate the CE choice under the current agent's knowledge
                     CE_Q_vals = self.compute_CE_Q(env_copy)
-                    CE_action = argm(CE_Q_vals, np.max(CE_Q_vals))
+                    CE_action = np.argmax(CE_Q_vals)
                     CE_action_probs = self.softmax(CE_Q_vals)
                     self.CE_Q_vals[city, day, t] = CE_Q_vals
                     self.CE_actions[city, day, t] = CE_action
@@ -533,7 +533,6 @@ class Farmer(ABC):
                 'lapse': [],
                 'arm_weight': [],
                 'horizon': [],
-                'real_future_paths': []
             }
             for c in range(n_cities):
                 for d in range(n_days):
@@ -563,7 +562,6 @@ class Farmer(ABC):
                         sim_out['lapse'].append(self.lapse)
                         sim_out['arm_weight'].append(self.arm_weight)
                         sim_out['horizon'].append(self.horizon)
-                        sim_out['real_future_paths'].append(self.real_future_paths)
 
                         if self.n_afc==3:
                             sim_out['p_choice_C'].append(self.p_choice[c][d][t][2])
@@ -628,7 +626,6 @@ class BAMCP(Farmer):
         super().__init__(temp, lapse, horizon, exploration_constant, discount_factor, n_samples,
                          **task_params)
         self.arm_weight = task_params.get('arm_weight', 0)
-        self.real_future_paths = task_params.get('real_future_paths', True)
 
 
     ## initialise MCTS object for tree search
@@ -648,7 +645,6 @@ class BAMCP(Farmer):
                 exploration_constant=self.exploration_constant,
                 discount_factor=self.discount_factor,
                 horizon=self.horizon,
-                real_future_paths=self.real_future_paths,
             )
         else:
             self.mcts.refresh_env(env)
@@ -764,7 +760,8 @@ class BAMCP(Farmer):
             tree_reset = True
 
         ## hacky: unless full BAMCP with real future paths and full horizon, reset the tree
-        if (not self.real_future_paths) or (self.horizon < (env_copy.n_trials-t-1)):
+        # if (not self.real_future_paths) or (self.horizon < (env_copy.n_trials-t-1)):
+        if self.horizon < (env_copy.n_trials-t-1):
             tree_reset = True
     
         return tree_reset
@@ -780,7 +777,6 @@ class CE(Farmer):
         super().__init__(temp, lapse, horizon, exploration_constant, discount_factor, n_samples,
                          **task_params)
         self.arm_weight = task_params.get('arm_weight', 0)
-        self.real_future_paths = task_params.get('real_future_paths', None)
 
     
     ## act based on posterior mean grid
@@ -849,7 +845,7 @@ class BanditBAMCP(BAMCP):
             post_probs[t] = mean_probs
 
             if greedy:
-                action = int(argm(Q.tolist(), float(np.nanmax(Q))))
+                action = int(np.argmax(Q))
             else:
                 action = int(np.random.choice(n_arms, p=probs))
 
