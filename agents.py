@@ -73,6 +73,11 @@ class Farmer(ABC):
     def compute_Q(self, env_copy, tree_reset=True):
         pass
 
+    ## agent-specific CE (certainty-equivalent) Q values
+    @abstractmethod
+    def compute_CE_Q(self, env_copy):
+        pass
+
     ## choice function
     def softmax(self, Q):
         CPs = (1-self.lapse) * softmax(Q/self.temp) + self.lapse/len(Q)
@@ -577,7 +582,21 @@ class Farmer(ABC):
 
 
 
-    ## act based on posterior mean grid
+## define subclasses
+class BAMCP(Farmer):
+
+    _mcts_class = MonteCarloTreeSearch_AFC
+
+    def __init__(self,
+                 temp=1, lapse=0, horizon=3,
+                 exploration_constant=None, discount_factor=None, n_samples=None,
+                 **task_params):
+        super().__init__(temp, lapse, horizon, exploration_constant, discount_factor, n_samples,
+                         **task_params)
+        self.arm_weight = task_params.get('arm_weight', 0)
+
+
+    ## CE Q values: act based on posterior mean grid (AFC-specific)
     def compute_CE_Q(self, env_copy):
 
         ## get task-specific sampler
@@ -597,33 +616,9 @@ class Farmer(ABC):
             except:
                 weighted_costs = [float(env_copy.costss[t][x, y]) * env_copy.sim_weight_map[path_weight_idx[k]] for k, (x, y) in enumerate(path)]
             path_costs.append(sum(weighted_costs))
-        
-        ## debugging
-        # print(t,': CE_one_arm path costs:', path_costs)
-        # fig, axs = plt.subplots(1,1, figsize=(5,5))
-        # plot_r(self.posterior_mean_p_cost, axs, title = 'Posterior reward distribution\nmean root sample\npost obs')
-        # plot_traj([env_copy.path_states[t][c] for c in range(self.n_afc)], ax = axs)
-        # plot_obs(env_copy.obs, ax = axs, text=True)
-        # plt.show()
-        # if t==3:
-        #     raise Exception('check this')
-        
+
         CE_Q = np.array(path_costs)
         return CE_Q
-    
-
-## define subclasses
-class BAMCP(Farmer):
-
-    _mcts_class = MonteCarloTreeSearch_AFC
-
-    def __init__(self,
-                 temp=1, lapse=0, horizon=3,
-                 exploration_constant=None, discount_factor=None, n_samples=None,
-                 **task_params):
-        super().__init__(temp, lapse, horizon, exploration_constant, discount_factor, n_samples,
-                         **task_params)
-        self.arm_weight = task_params.get('arm_weight', 0)
 
 
     ## initialise MCTS object for tree search
@@ -777,12 +772,36 @@ class CE(Farmer):
         self.arm_weight = task_params.get('arm_weight', 0)
 
     
+    ## CE Q values: act based on posterior mean grid (AFC-specific)
+    def compute_CE_Q(self, env_copy):
+
+        ## get task-specific sampler
+        self.init_sampler(env_copy)
+
+        ## get posterior mean grid
+        self.posterior_mean_MDP = self.sampler.mean_mdp()
+
+        ## get the cost of each path under the posterior mean (weighted by arm_weight)
+        t = env_copy.trial
+        path_costs = []
+        for path_id in range(env_copy.n_afc):
+            path = env_copy.path_states[t][path_id]
+            path_weight_idx = env_copy.path_weights[t][path_id]
+            try:
+                weighted_costs = [float(env_copy.costs[x, y]) * env_copy.sim_weight_map[path_weight_idx[k]] for k, (x, y) in enumerate(path)]
+            except:
+                weighted_costs = [float(env_copy.costss[t][x, y]) * env_copy.sim_weight_map[path_weight_idx[k]] for k, (x, y) in enumerate(path)]
+            path_costs.append(sum(weighted_costs))
+
+        CE_Q = np.array(path_costs)
+        return CE_Q
+
     ## act based on posterior mean grid
     def compute_Q(self, env_copy, tree_reset=None):
         CE_Q = self.compute_CE_Q(env_copy)
         return CE_Q
 
-    
+
     ## trivially need to do this
     def update_tree(self, env_copy, action):
         return True  # default: always reset
@@ -813,7 +832,17 @@ class BanditBAMCP(BAMCP):
             n_samples=n_samples,
         )
 
-    def run(self, env, greedy=False):
+    ## CE Q values: posterior mean reward for each arm
+    def compute_CE_Q(self, env_copy):
+        self.init_sampler(env_copy)
+        mean_ps = self.sampler.mean_probs()
+
+        ## expected reward = p(success) * r_dist for each arm
+        r_dist = env_copy.r_dist
+        CE_Q = np.array([mean_ps[a] * r_dist[a] for a in range(env_copy.n_afc)])
+        return CE_Q
+
+    def run(self, env, greedy=False, verbose=True):
         """Run the agent on the bandit for n_trials, returning trial-by-trial data."""
         n_trials = env.n_trials
         n_arms = env.n_afc
@@ -825,6 +854,12 @@ class BanditBAMCP(BAMCP):
         chose_optimal = np.zeros(n_trials, dtype=bool)
         bayes_regret = np.zeros(n_trials)
         post_probs = np.zeros((n_trials, n_arms))
+
+        ## CE tracking — what would the CE agent have chosen with the same info?
+        CE_Q_history = np.zeros((n_trials, n_arms))
+        CE_actions = np.zeros(n_trials, dtype=int)
+        CE_chose_optimal = np.zeros(n_trials, dtype=bool)
+        CE_bayes_regret = np.zeros(n_trials)
 
         optimal_arm = np.argmax(env.p_dist)
 
@@ -838,14 +873,29 @@ class BanditBAMCP(BAMCP):
             probs = self.softmax(Q)
             mean_probs = self.sampler.mean_probs()
 
+            ## CE Q values under the same posterior
+            CE_Q = self.compute_CE_Q(env_copy)
+            CE_action = int(np.argmax(CE_Q))
+
             Q_history[t] = Q
             p_choice_history[t] = probs
             post_probs[t] = mean_probs
+            CE_Q_history[t] = CE_Q
+            CE_actions[t] = CE_action
+            CE_chose_optimal[t] = (CE_action == optimal_arm)
+            CE_bayes_regret[t] = env.p_dist[optimal_arm] - env.p_dist[CE_action]
 
             if greedy:
-                action = int(np.argmax(Q))
+                max_Q = np.nanmax(Q)
+                best_arms = np.where(Q == max_Q)[0]
+                action = int(np.random.choice(best_arms))
             else:
-                action = int(np.random.choice(n_arms, p=probs))
+                max_Q = np.nanmax(Q)
+                best_arms = np.where(Q == max_Q)[0]
+                if len(best_arms) > 1:
+                    action = int(np.random.choice(best_arms))
+                else:
+                    action = int(best_arms[0])
 
             env.set_sim(False)
             _, reward, terminated, truncated, _ = env.step(action)
@@ -857,9 +907,10 @@ class BanditBAMCP(BAMCP):
 
             self.init_sampler(env)
 
-            print(f"  trial {t+1:>3}/{n_trials}  |  arm={action}  "
-                  f"reward={reward:.0f}  |  \n Q={np.round(Q, 3)}  | post={np.round(mean_probs, 3)}  |  "
-                  f"p={np.round(probs, 3)} ")
+            if verbose:
+                print(f"  trial {t+1:>3}/{n_trials}  |  arm={action}  "
+                      f"reward={reward:.0f}  |  \n Q={np.round(Q, 3)}  CE_Q={np.round(CE_Q, 3)}  | post={np.round(mean_probs, 3)}  |  "
+                      f"p={np.round(probs, 3)} ")
 
             if terminated:
                 break
@@ -875,4 +926,21 @@ class BanditBAMCP(BAMCP):
             'optimal_arm': optimal_arm,
             'bayes_regret': bayes_regret,
             'post_probs': post_probs,
+            'CE_Q': CE_Q_history,
+            'CE_actions': CE_actions,
+            'CE_chose_optimal': CE_chose_optimal,
+            'CE_bayes_regret': CE_bayes_regret,
         }
+
+
+class BanditCE(BanditBAMCP):
+    """CE (certainty-equivalent) agent for multi-armed bandits.
+    Picks the arm with the highest posterior mean expected reward — no tree search."""
+
+    def __init__(self, temp=1.0, lapse=0.0):
+        super().__init__(n_samples=0, exploration_constant=0,
+                         discount_factor=1.0, horizon=0,
+                         temp=temp, lapse=lapse)
+
+    def compute_Q(self, env_copy, tree_reset=None):
+        return self.compute_CE_Q(env_copy)
