@@ -215,6 +215,14 @@ class MonteCarloTreeSearch():
                 (discounted_reward - action_leaf.performance) / action_leaf.n_action_visits
             )
 
+
+            ## save per-node max and min Q values to normalise Qs in UCT calculation
+            if action_leaf.performance > node.max_Q:
+                node.max_Q = action_leaf.performance
+            if action_leaf.performance < node.min_Q:
+                node.min_Q = action_leaf.performance
+
+            
             ## Move to the next node in the path if not at the end
             if depth < tree_len - 1:
                 next_node_id = self.node_id_path[depth+1]
@@ -245,36 +253,49 @@ class MonteCarloTreeSearch():
 
 
     ## calculate E-E value
-    def compute_UCT(self, node, action_leaf):
+    def compute_UCT(self, node, action_leaf, min_Q=None, max_Q=None): 
         assert action_leaf.n_action_visits > 0 or action_leaf.terminated, 'action leaf has not been visited: {}'.format(action_leaf)
-
-        remaining = self.horizon_trial - node.trial + 1
-        c = self.exploration_constant * self.return_ranges[remaining]
-        exploitation_term = action_leaf.performance
-        exploration_term = c * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
-
+        
+        ## standard case
+        # exploitation_term = action_leaf.performance
+        # exploration_term = self.exploration_constant * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
+        
+        ### or, min-max normalisation based on min and max for that node
+        norm_term = max_Q - min_Q + 1e-8 ## add small constant to avoid divide by zero
+        exploitation_term = (action_leaf.performance - min_Q) / norm_term
+        exploration_term = self.exploration_constant * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
+        
         return exploitation_term + exploration_term
 
     
     ## argmax based on UCT values?
     def best_child(self, node):
 
+        ## normalise by per-node Q
+        min_Q, max_Q = node.min_Q, node.max_Q
+        norm_term = max_Q - min_Q + 1e-8
         log_N = log(node.n_state_visits)
-        remaining = self.horizon_trial - node.trial + 1
-        c = self.exploration_constant * self.return_ranges[remaining]
-        # print('node trial: {}, c: {}'.format(node.trial, c))
+        c = self.exploration_constant
+
+        ## or, scale c by recursive sum of discounted rewwards from current node to end of horizon -e.g. for horizon 3, self.env.N + self.env.N*discount + self.env.N*discount^2 + self.env.N*discount^3
+        # # c = self.exploration_constant * (self.env.N/2 * (1 - self.discount_factor**(self.horizon - node.trial + 1)) / (1 - self.discount_factor)) ## AFC
+        # c = self.exploration_constant * (1/2 * (1 - self.discount_factor**(self.horizon - node.trial + 1)) / (1 - self.discount_factor)) ## bandit
+        # norm_term = 1
+        # log_N = log(node.n_state_visits) 
+        # min_Q = 0
+        
 
         best_leaf = None
         best_uct = -float('inf')
         n_ties = 0
-        # if node.trial == 0:
+        
+        # if node.trial==0:
         #     print()
 
         for leaf in node.action_leaves.values():
-            uct = leaf.performance + c * sqrt(log_N / leaf.n_action_visits)
-            # if node.trial == 0:
-                # print('exploitation: {}, exploration: {}, uct: {}'.format(leaf.performance, c * sqrt(log_N / leaf.n_action_visits), uct))
-
+            uct = (leaf.performance - min_Q) / norm_term + c * sqrt(log_N / leaf.n_action_visits)
+            # if node.trial==0:
+            #     print('exploitation: {}, exploration: {}, uct: {}'.format((leaf.performance - min_Q) / norm_term, c * sqrt(log_N / leaf.n_action_visits), uct))
             if uct > best_uct:
                 best_uct = uct
                 best_leaf = leaf
@@ -337,18 +358,6 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         self.horizon_trial = min(self.root_trial + self.horizon, self.env.n_trials-1)
         self.env.set_trunc_trial(self.horizon_trial)
 
-        ## precompute return range at each possible remaining depth for scaling exploration
-        ## reward_range_per_step = N (path_len * per-cell range of 1)
-        # reward_range_per_step = self.env.N 
-        reward_range_per_step = self.env.N *0.5 ## bc expected
-        H = self.horizon_trial - self.root_trial + 1
-        gamma = self.discount_factor
-        self.return_ranges = [0.0] * (H + 1)
-        geo_sum = 0.0
-        for h in range(1, H + 1):
-            geo_sum += gamma ** ((h - 1))
-            self.return_ranges[h] = reward_range_per_step * geo_sum
-
 
     ## rollout policy (greedy or random)
     def rollout_policy(self):
@@ -356,21 +365,21 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         ### greedy:
 
         ## get the total reward of the paths
-        # t = self.env.trial
-        # path_rewards = []
-        # for action in range(self.n_afc):
-        #     path = self.env.path_states[t][action]
-        #     path_weight_idx = self.env.path_weights[t][action]
-        #     weighted_rewards = [float(self.env.costs[x, y]) * self.env.sim_weight_map[path_weight_idx[k]] for k, (x, y) in enumerate(path)]
-        #     path_rewards.append(sum(weighted_rewards))
+        t = self.env.trial
+        path_rewards = []
+        for action in range(self.n_afc):
+            path = self.env.path_states[t][action]
+            path_weight_idx = self.env.path_weights[t][action]
+            weighted_rewards = [float(self.env.costs[x, y]) * self.env.sim_weight_map[path_weight_idx[k]] for k, (x, y) in enumerate(path)]
+            path_rewards.append(sum(weighted_rewards))
         
-        # ## take greedy action
-        # best_ro_reward = max(path_rewards)
-        # ro_action = path_rewards.index(best_ro_reward)
+        ## take greedy action
+        best_ro_reward = max(path_rewards)
+        ro_action = path_rewards.index(best_ro_reward)
 
         
         ### RANDOM: randomly choose between the paths
-        ro_action = random.choice(range(self.n_afc))
+        # ro_action = random.choice(range(self.n_afc))
 
         return ro_action
     
@@ -431,29 +440,13 @@ class MonteCarloTreeSearch_Bandit(MonteCarloTreeSearch):
                                  self.env.n_trials - 1)
         self.env.set_trunc_trial(self.horizon_trial)
 
-        ## precompute return range at each possible remaining depth for scaling exploration
-        ## rewards are 0 (failure) or r_dist[a] (success), so per-step range is max(r_dist)
-        r_dist = self.env.r_dist
-        if isinstance(r_dist[0], list):
-            reward_range_per_step = max(r[0] for r in r_dist)
-        else:
-            reward_range_per_step = max(r_dist)
-        H = self.horizon_trial - self.root_trial + 1
-        gamma = self.discount_factor
-        self.return_ranges = [0.0] * (H + 1)
-        geo_sum = 0.0
-        for h in range(1, H + 1):
-            geo_sum += gamma ** (h - 1)
-            self.return_ranges[h] = reward_range_per_step * geo_sum
-
     def rollout_policy(self):
 
         ## random
-        ro_action = random.choice(range(self.n_afc))
+        # ro_action = random.choice(range(self.n_afc))
 
         ## greedy wrt/ current MDP?
-        # ro_action = np.argmax([self.env.p_dist[a] for a in range(self.n_afc)])
-        # ro_action = np.argmax(self.env.p_dist)
+        ro_action = np.argmax(self.env.p_dist)
 
         ## learned Q values - e-greedy
         # Q = self.env.Q

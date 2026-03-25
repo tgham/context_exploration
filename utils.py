@@ -101,6 +101,10 @@ class Node:
         self.terminated = terminated
         self.node_id = node_id
 
+        ## save the max and min Q values observed among the children of this action node, for normalization purposes in the UCB formula
+        self.max_Q = -np.inf
+        self.min_Q = np.inf
+
         ## define valid actions
         self.untried_actions = list(range(n_afc))
 

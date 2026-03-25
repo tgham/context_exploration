@@ -889,6 +889,11 @@ class BanditBAMCP(BAMCP):
                 max_Q = np.nanmax(Q)
                 best_arms = np.where(Q == max_Q)[0]
                 action = int(np.random.choice(best_arms))
+
+                # debugging
+                if action != CE_action:
+                    if verbose:
+                        print(f"Trial {t+1}: Greedy action {action} differs from CE action {CE_action} with Q values {Q} and CE Q values {CE_Q}")
             else:
                 max_Q = np.nanmax(Q)
                 best_arms = np.where(Q == max_Q)[0]
@@ -908,9 +913,8 @@ class BanditBAMCP(BAMCP):
             self.init_sampler(env)
 
             if verbose:
-                print(f"  trial {t+1:>3}/{n_trials}  |  arm={action}  "
-                      f"reward={reward:.0f}  |  \n Q={np.round(Q, 3)}  CE_Q={np.round(CE_Q, 3)}  | post={np.round(mean_probs, 3)}  |  "
-                      f"p={np.round(probs, 3)} ")
+                print(f"  trial {t+1:>3}/{n_trials}  \n Q={np.round(Q, 3)}  CE_Q={np.round(CE_Q, 3)}"
+                      f"p={np.round(probs, 3)} \n pulled arm {action} with reward {reward:.0f}")
 
             if terminated:
                 break
