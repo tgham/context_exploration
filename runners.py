@@ -4,6 +4,120 @@ import pandas as pd
 from tqdm.auto import tqdm
 
 
+def extract_grid_info(agent, env_copy, city, day, t):
+    """Extract useful behavioural measures when yoking to human choices."""
+    paths = env_copy.path_states[t].copy()
+    obs_list = [tuple(obs[:2]) for obs in env_copy.obs.tolist()]
+    obs_list = list(set(obs_list)) # no repeated obs!
+    for i, path in enumerate(paths):
+        try:
+
+            ## get the number of states that overlap with the paths
+            overlap = set(path).intersection(set(obs_list))
+            path_past_overlap = len(overlap)
+
+            ## get the number of costs and no-costs that comprise these overlapping states
+            path_past_observed_high_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
+            path_past_observed_low_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
+            agent.path_future_overlaps[city, day, t, i] = env_copy.path_future_overlaps[t][i]
+            agent.path_past_overlaps[city, day, t, i] = path_past_overlap
+            agent.path_past_observed_high_costs[city, day, t, i] = path_past_observed_high_costs
+            agent.path_past_observed_low_costs[city, day, t, i] = path_past_observed_low_costs
+
+
+
+        ## sometimes need to convert each np array to list of tuples...
+        except:
+            # paths = [set(map(tuple, path)) for path in paths]
+            path = set(map(tuple, path))
+            overlap = set(path).intersection(set(obs_list))
+            path_past_overlap = len(overlap)
+            path_past_observed_high_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
+            path_past_observed_low_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
+            agent.path_future_overlaps[city, day, t, i] = env_copy.path_future_overlaps[t][i]
+            agent.path_past_overlaps[city, day, t, i] = path_past_overlap
+            agent.path_past_observed_high_costs[city, day, t, i] = path_past_observed_high_costs
+            agent.path_past_observed_low_costs[city, day, t, i] = path_past_observed_low_costs
+
+        assert agent.path_past_overlaps[city, day, t, i] == agent.path_past_observed_high_costs[city, day, t, i] + agent.path_past_observed_low_costs[city, day, t, i], 'path {} past overlap does not match observed costs and no-costs\n path past overlap: {}, path observed costs: {}, path observed no-costs: {}'.format(i+1, agent.path_past_overlaps[city, day, t, i], agent.path_past_observed_high_costs[city, day, t, i], agent.path_past_observed_low_costs[city, day, t, i])
+
+
+        ## get aligned vs orthogonal states
+        path_states = env_copy.path_states[t][i]
+        aligned_states, orthogonal_states = env_copy.path_aligned_states[t][i], env_copy.path_orthogonal_states[t][i]
+        agent.aligned_arm_len[city, day, t, i] = len(aligned_states)
+        agent.orthogonal_arm_len[city, day, t, i] = len(orthogonal_states)
+
+        ## get info on costs on rows and columns
+        observed_high_cost_cols = {obs[1] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost}
+        observed_low_cost_cols = {obs[1] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost}
+        observed_high_cost_rows = {obs[0] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost}
+        observed_low_cost_rows = {obs[0] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost}
+        observed_high_cost_states = {tuple(obs) for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost}
+        observed_low_cost_states = {tuple(obs) for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost}
+
+        if env_copy.context == 'column':
+
+            ### gen costs
+
+            ## count how many of these aligned states have observations on the main column
+            agent.aligned_arm_gen_high_costs[city, day, t, i] = sum(
+                1 for state in aligned_states
+                if (state[1] in observed_high_cost_cols)
+            )
+            agent.aligned_arm_gen_low_costs[city, day, t, i] = sum(
+                1 for state in aligned_states
+                if (state[1] in observed_low_cost_cols)
+            )
+
+            ## count how many of the orthogonal states have observations on their respective columns
+            agent.orthogonal_arm_gen_high_costs[city, day, t, i] = sum(
+                1 for state in orthogonal_states
+                if (state[1] in observed_high_cost_cols)
+            )
+            agent.orthogonal_arm_gen_low_costs[city, day, t, i] = sum(
+                1 for state in orthogonal_states
+                if (state[1] in observed_low_cost_cols)
+            )
+
+
+        elif env_copy.context == 'row':
+
+            ### gen costs
+
+            ## count how many of these aligned states have observations on the main row
+            agent.aligned_arm_gen_high_costs[city, day, t, i] = sum(
+                1 for state in aligned_states
+                if (state[0] in observed_high_cost_rows)
+                and (tuple(state) not in obs_list)
+            )
+            agent.aligned_arm_gen_low_costs[city, day, t, i] = sum(
+                1 for state in aligned_states
+                if (state[0] in observed_low_cost_rows)
+                and (tuple(state) not in obs_list)
+            )
+
+            ## count how many of the orthogonal states have observations on their respective rows
+            agent.orthogonal_arm_gen_high_costs[city, day, t, i] = sum(
+                1 for state in orthogonal_states
+                if (state[0] in observed_high_cost_rows)
+                and (tuple(state) not in obs_list)
+            )
+            agent.orthogonal_arm_gen_low_costs[city, day, t, i] = sum(
+                1 for state in orthogonal_states
+                if (state[0] in observed_low_cost_rows)
+                and (tuple(state) not in obs_list)
+            )
+
+        ## axis overlaps with future states
+        agent.path_future_rel_overlaps[city, day, t, i] = env_copy.path_future_rel_overlaps[t][i]
+        agent.path_future_irrel_overlaps[city, day, t, i] = env_copy.path_future_irrel_overlaps[t][i]
+
+    ## misc
+    agent.day_costs[city, day, t] = np.nansum(agent.total_costs[city, day, :t+1])
+    agent.path_len[city, day, t] = len(env_copy.path_states[t][0])
+
+
 def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit=True, yoked=False, progress=False):
     """Run an agent on the grid (AFC) task, looping over cities/days/trials."""
 
@@ -72,6 +186,13 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
     agent.aligned_arm_len = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.orthogonal_arm_len = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
 
+    ## define whether or not we're extracting expt info based on yoked
+    if yoked:
+        extract_fn = extract_grid_info
+    else:
+        extract_fn = lambda agent, env_copy, city, day, t: None
+    
+
     if progress:
         pbar = tqdm(total=n_cities*n_days*n_trials, desc='Running {} agent'.format(agent_name), leave=False)
 
@@ -124,120 +245,8 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                 env_copy.reset()
                 env_copy.set_sim(True)
 
-                ### if extracting useful behavioural measures, i.e. yoking to human choices
-
-                ## overlaps with previous observations
-                if yoked:
-                    paths = env_copy.path_states[t].copy()
-                    obs_list = [tuple(obs[:2]) for obs in env_copy.obs.tolist()]
-                    obs_list = list(set(obs_list)) # no repeated obs!
-                    for i, path in enumerate(paths):
-                        try:
-
-                            ## get the number of states that overlap with the paths
-                            overlap = set(path).intersection(set(obs_list))
-                            path_past_overlap = len(overlap)
-
-                            ## get the number of costs and no-costs that comprise these overlapping states
-                            path_past_observed_high_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
-                            path_past_observed_low_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
-                            agent.path_future_overlaps[city, day, t, i] = env_copy.path_future_overlaps[t][i]
-                            agent.path_past_overlaps[city, day, t, i] = path_past_overlap
-                            agent.path_past_observed_high_costs[city, day, t, i] = path_past_observed_high_costs
-                            agent.path_past_observed_low_costs[city, day, t, i] = path_past_observed_low_costs
-
-
-
-                        ## sometimes need to convert each np array to list of tuples...
-                        except:
-                            # paths = [set(map(tuple, path)) for path in paths]
-                            path = set(map(tuple, path))
-                            overlap = set(path).intersection(set(obs_list))
-                            path_past_overlap = len(overlap)
-                            path_past_observed_high_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
-                            path_past_observed_low_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
-                            agent.path_future_overlaps[city, day, t, i] = env_copy.path_future_overlaps[t][i]
-                            agent.path_past_overlaps[city, day, t, i] = path_past_overlap
-                            agent.path_past_observed_high_costs[city, day, t, i] = path_past_observed_high_costs
-                            agent.path_past_observed_low_costs[city, day, t, i] = path_past_observed_low_costs
-
-                        assert agent.path_past_overlaps[city, day, t, i] == agent.path_past_observed_high_costs[city, day, t, i] + agent.path_past_observed_low_costs[city, day, t, i], 'path {} past overlap does not match observed costs and no-costs\n path past overlap: {}, path observed costs: {}, path observed no-costs: {}'.format(i+1, agent.path_past_overlaps[city, day, t, i], agent.path_past_observed_high_costs[city, day, t, i], agent.path_past_observed_low_costs[city, day, t, i])
-
-
-                        ## get aligned vs orthogonal states
-                        path_states = env_copy.path_states[t][i]
-                        aligned_states, orthogonal_states = env_copy.path_aligned_states[t][i], env_copy.path_orthogonal_states[t][i]
-                        agent.aligned_arm_len[city, day, t, i] = len(aligned_states)
-                        agent.orthogonal_arm_len[city, day, t, i] = len(orthogonal_states)
-
-                        ## get info on costs on rows and columns
-                        observed_high_cost_cols = {obs[1] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost}
-                        observed_low_cost_cols = {obs[1] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost}
-                        observed_high_cost_rows = {obs[0] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost}
-                        observed_low_cost_rows = {obs[0] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost}
-                        observed_high_cost_states = {tuple(obs) for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost}
-                        observed_low_cost_states = {tuple(obs) for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost}
-
-                        if env_copy.context == 'column':
-
-                            ### gen costs
-
-                            ## count how many of these aligned states have observations on the main column
-                            agent.aligned_arm_gen_high_costs[city, day, t, i] = sum(
-                                1 for state in aligned_states
-                                if (state[1] in observed_high_cost_cols)
-                            )
-                            agent.aligned_arm_gen_low_costs[city, day, t, i] = sum(
-                                1 for state in aligned_states
-                                if (state[1] in observed_low_cost_cols)
-                            )
-
-                            ## count how many of the orthogonal states have observations on their respective columns
-                            agent.orthogonal_arm_gen_high_costs[city, day, t, i] = sum(
-                                1 for state in orthogonal_states
-                                if (state[1] in observed_high_cost_cols)
-                            )
-                            agent.orthogonal_arm_gen_low_costs[city, day, t, i] = sum(
-                                1 for state in orthogonal_states
-                                if (state[1] in observed_low_cost_cols)
-                            )
-
-
-                        elif env_copy.context == 'row':
-
-                            ### gen costs
-
-                            ## count how many of these aligned states have observations on the main row
-                            agent.aligned_arm_gen_high_costs[city, day, t, i] = sum(
-                                1 for state in aligned_states
-                                if (state[0] in observed_high_cost_rows)
-                                and (tuple(state) not in obs_list)
-                            )
-                            agent.aligned_arm_gen_low_costs[city, day, t, i] = sum(
-                                1 for state in aligned_states
-                                if (state[0] in observed_low_cost_rows)
-                                and (tuple(state) not in obs_list)
-                            )
-
-                            ## count how many of the orthogonal states have observations on their respective rows
-                            agent.orthogonal_arm_gen_high_costs[city, day, t, i] = sum(
-                                1 for state in orthogonal_states
-                                if (state[0] in observed_high_cost_rows)
-                                and (tuple(state) not in obs_list)
-                            )
-                            agent.orthogonal_arm_gen_low_costs[city, day, t, i] = sum(
-                                1 for state in orthogonal_states
-                                if (state[0] in observed_low_cost_rows)
-                                and (tuple(state) not in obs_list)
-                            )
-
-                        ## axis overlaps with future states
-                        agent.path_future_rel_overlaps[city, day, t, i] = env_copy.path_future_rel_overlaps[t][i]
-                        agent.path_future_irrel_overlaps[city, day, t, i] = env_copy.path_future_irrel_overlaps[t][i]
-
-                    ## misc
-                    agent.day_costs[city, day, t] = np.nansum(agent.total_costs[city, day, :t+1])
-                    agent.path_len[city, day, t] = len(env_copy.path_states[t][0])
+                ### extract useful behavioural measures (no-op if not yoked)
+                extract_fn(agent, env_copy, city, day, t)
 
 
                 ## agent-specific path selection
