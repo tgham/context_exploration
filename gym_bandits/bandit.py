@@ -184,6 +184,100 @@ class BanditEnvWrapper(BanditNArmedIndependentBeta):
         pass  # no task-specific params for the bandit
 
 
+# ---------------------------------------------------------------------------
+# Gittins-style bandit with a retirement (safe) arm
+# ---------------------------------------------------------------------------
+class GittinsBandit(BanditNArmedIndependentBeta):
+    """
+    N-armed bandit with an additional *retirement* arm (the last arm).
+
+    The first (bandits) arms behave identically to BanditNArmedIndependentBeta.
+    The final arm pays out ``lam / (1 - gam)`` with probability 1 and
+    terminates the episode immediately when pulled.
+
+    Parameters
+    ----------
+    bandits : int
+        Number of regular (risky) arms.
+    alpha, beta : float
+        Beta-distribution parameters for the risky arms.
+    gam : float
+        Discount factor used to define the retirement value.
+    lam : float
+        Per-period safe reward used to define the retirement value.
+    """
+
+    def __init__(self, bandits=10, alpha=1, beta=1, gam=0.9, lam=0.7029):
+        # Initialise the risky arms via the parent
+        super().__init__(bandits=bandits, alpha=alpha, beta=beta)
+
+        self.gam = gam
+        self.lam = lam
+
+        # Append the retirement arm
+        retirement_value = lam / (1 - gam)
+        self.p_dist = np.append(self.p_dist, 1.0)
+        self.r_dist = np.append(self.r_dist, retirement_value)
+
+        # Update action space to include the new arm
+        self.n_afc = len(self.p_dist)
+        self.action_space = spaces.Discrete(self.n_afc)
+
+    @property
+    def retirement_arm(self):
+        return self.n_afc - 1
+
+
+# ---------------------------------------------------------------------------
+# Gittins bandit wrapper for MCTS
+# ---------------------------------------------------------------------------
+class GittinsBanditWrapper(GittinsBandit):
+    """Adapts GittinsBandit to the interface expected by MCTS."""
+
+    def __init__(self, n_arms=5, alpha=1, beta=1, gam=0.9, lam=0.7029,
+                 n_trials=20):
+        super().__init__(bandits=n_arms, alpha=alpha, beta=beta,
+                         gam=gam, lam=lam)
+        self.n_trials = n_trials
+        self.sim = False
+
+    @property
+    def trial(self):
+        return self._trial
+
+    @property
+    def current(self):
+        return self._trial
+
+    def reset(self):
+        self._reset()
+        self.Q = np.zeros(self.n_afc)
+        self.LR = 0.1
+
+    def set_sim(self, sim):
+        self.sim = sim
+
+    def step(self, action):
+        
+        # Pulling the retirement arm: deterministic payout and episode ends
+        if action == self.retirement_arm:
+            reward = self.r_dist[action]
+            trial_obs = np.array([[action, reward]])
+
+            if not self.sim:
+                self.obs = np.vstack((self.obs, trial_obs.squeeze()))
+
+            self._trial += 1
+            terminated = True
+            truncated = True
+            return trial_obs, reward, terminated, truncated, self.info
+
+        # Regular arms: delegate to BanditEnv.step via super()
+        trial_obs, reward, terminated, truncated, info = BanditEnv.step(self, action)
+        return trial_obs.reshape(1, -1), reward, terminated, truncated, info
+
+    def receive_task_params(self, task_params):
+        pass
 
 
 

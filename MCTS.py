@@ -133,7 +133,6 @@ class MonteCarloTreeSearch():
 
                     ## get the next node id, i.e. the informational state after taking this path
                     next_node_id = self.init_node_id(step_obs, action_leaf.parent_id)
-                    # print('tree actions and states: {}, {}, step_obs: {}, next node id: {}'.format(self.tree_actions, self.tree_rewards, step_obs, next_node_id))
                     node_trial += 1
                     assert node_trial == action_leaf.trial+1, 'trial mismatch between env and tree after step\n env: {} \n tree: {}'.format(node_trial, action_leaf.trial+1)
 
@@ -161,7 +160,6 @@ class MonteCarloTreeSearch():
             return None
 
         ## first need to get the starting reward r, which is essentially the reward of choice that corresponds to the action leaf
-        first_trial = action_leaf.trial
         _, reward, terminated, truncated, _ = self.env.step(action_leaf.action)
         total_reward = reward
 
@@ -181,7 +179,7 @@ class MonteCarloTreeSearch():
             remaining_ro_rewards.append(total_reward)
 
         self.tree_rewards.append(total_reward)
-        assert len(remaining_ro_rewards)+first_trial+1 == self.horizon_trial + 1, 'remaining RO rewards do not match number of trials\n n remaining RO rewards: {}, n trials: {}'.format(len(remaining_ro_rewards), self.horizon_trial + 1)
+        # assert len(remaining_ro_rewards)+first_trial+1 == self.horizon_trial + 1, 'remaining RO rewards do not match number of trials\n n remaining RO rewards: {}, n trials: {}'.format(len(remaining_ro_rewards), self.horizon_trial + 1)
         return total_reward 
 
 
@@ -278,12 +276,17 @@ class MonteCarloTreeSearch():
         c = self.exploration_constant
 
         ## or, scale c by recursive sum of discounted rewwards from current node to end of horizon -e.g. for horizon 3, self.env.N + self.env.N*discount + self.env.N*discount^2 + self.env.N*discount^3
-        # # c = self.exploration_constant * (self.env.N/2 * (1 - self.discount_factor**(self.horizon - node.trial + 1)) / (1 - self.discount_factor)) ## AFC
+        # c = self.exploration_constant * (self.env.N/2 * (1 - self.discount_factor**(self.horizon - node.trial + 1)) / (1 - self.discount_factor)) ## AFC
         # c = self.exploration_constant * (1/2 * (1 - self.discount_factor**(self.horizon - node.trial + 1)) / (1 - self.discount_factor)) ## bandit
         # norm_term = 1
         # log_N = log(node.n_state_visits) 
         # min_Q = 0
-        
+
+        ## or, no normalisation
+        # c = self.exploration_constant
+        # log_N = log(node.n_state_visits)
+        # norm_term = 1
+        # min_Q = 0
 
         best_leaf = None
         best_uct = -float('inf')
@@ -291,6 +294,10 @@ class MonteCarloTreeSearch():
         
         # if node.trial==0:
         #     print()
+
+        # ## debugging: always select first action if trial==0
+        # if node.trial==0:
+        #     return list(node.action_leaves.values())[0]
 
         for leaf in node.action_leaves.values():
             uct = (leaf.performance - min_Q) / norm_term + c * sqrt(log_N / leaf.n_action_visits)
@@ -443,10 +450,10 @@ class MonteCarloTreeSearch_Bandit(MonteCarloTreeSearch):
     def rollout_policy(self):
 
         ## random
-        # ro_action = random.choice(range(self.n_afc))
+        ro_action = random.choice(range(self.n_afc))
 
         ## greedy wrt/ current MDP?
-        ro_action = np.argmax(self.env.p_dist)
+        # ro_action = np.argmax(self.env.p_dist)
 
         ## learned Q values - e-greedy
         # Q = self.env.Q

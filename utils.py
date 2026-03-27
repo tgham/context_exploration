@@ -84,6 +84,36 @@ def make_bandit_env(n_arms=2, n_trials=20, alpha=1, beta=1, seed=None):
     return env
 
 
+## create a bandit environment
+def make_gittins_bandit_env(n_arms=2, n_trials=20, alpha=1, beta=1, gam=0.4737, lam=0.7029, seed=None):
+    """
+    Create a BanditEnvWrapper (MCTS-compatible multi-armed bandit).
+
+    Args:
+        n_arms:   Number of arms.
+        n_trials: Number of trials the agent will play.
+        alpha:    Alpha parameter of the Beta prior from which arm probabilities are drawn.
+        beta:     Beta parameter of the Beta prior from which arm probabilities are drawn.
+        seed:     Optional random seed (set before arm probabilities are sampled).
+
+    Returns:
+        A BanditEnvWrapper instance ready for use with BAMCP / MCTS.
+    """
+    import importlib.util as _ilu
+
+    # Import directly from the file to bypass the broken gym_bandits __init__.py
+    _spec = _ilu.spec_from_file_location(
+        "bandit", "gym_bandits/bandit.py")
+    _mod = _ilu.module_from_spec(_spec)
+    _spec.loader.exec_module(_mod)
+
+    if seed is not None:
+        np.random.seed(seed)
+
+    env = _mod.GittinsBanditWrapper(n_arms=n_arms, alpha=alpha, beta=beta, n_trials=n_trials, gam=gam, lam=lam)
+    return env
+
+
 
 
 ## Node class
