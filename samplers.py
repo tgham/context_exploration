@@ -309,7 +309,7 @@ class GridSampler:
         posterior_ps_col, posterior_qs_col = self.mean_probs(col_context=True)
         posterior_ps_row, posterior_qs_row = self.mean_probs(col_context=False)
 
-        posterior_mean_mdp = (
+        posterior_mean_grid = (
             self.context_prior * np.outer(posterior_ps_col, posterior_qs_col)
             + (1 - self.context_prior) * np.outer(posterior_ps_row, posterior_qs_row)
         )
@@ -319,10 +319,31 @@ class GridSampler:
             i = int(i)
             j = int(j)
             prob = 1 if c == self.low_cost else 0
-            posterior_mean_mdp[i, j] = prob
+            posterior_mean_grid[i, j] = prob
+
+        posterior_mean_mdp = self.env.sim_clone(posterior_mean_grid)
 
         return posterior_mean_mdp
 
+    def posterior_mean_val(self):
+
+        ## get posterior mean grid
+        posterior_mean_mdp = self.mean_mdp()
+
+        ## get the cost of each path under the posterior mean (weighted by arm_weight)
+        t = self.env.trial
+        path_costs = []
+        for path_id in range(self.env.n_afc):
+            path = posterior_mean_mdp.path_states[t][path_id]
+            path_weight_idx = posterior_mean_mdp.path_weights[t][path_id]
+            try:
+                weighted_costs = [float(posterior_mean_mdp.costs[x, y]) * posterior_mean_mdp.sim_weight_map[path_weight_idx[k]] for k, (x, y) in enumerate(path)]
+            except:
+                weighted_costs = [float(posterior_mean_mdp.costss[t][x, y]) * posterior_mean_mdp.sim_weight_map[path_weight_idx[k]] for k, (x, y) in enumerate(path)]
+            path_costs.append(sum(weighted_costs))
+
+        posterior_mean_Q = np.array(path_costs)
+        return posterior_mean_Q
 
 
 ### MAB sampler
@@ -370,7 +391,7 @@ class BanditSampler:
 
         return sample_mdps
     
-    ## mean mdp
+    ## mean probs
     def mean_probs(self):
         mean_ps = np.zeros(self.n_afc)
         for a in range(self.n_afc):
@@ -379,3 +400,12 @@ class BanditSampler:
             mean_ps[a] = alpha / (alpha + beta)
 
         return mean_ps
+    
+    def posterior_mean_val(self):
+        mean_ps = self.mean_probs()
+
+        ## expected reward = p(success) * r_dist for each arm
+        r_dist = self.env.r_dist
+        posterior_mean_Q = np.array([mean_ps[a] * r_dist[a] for a in range(self.env.n_afc)])
+        
+        return posterior_mean_Q
