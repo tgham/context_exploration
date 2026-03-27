@@ -1588,7 +1588,7 @@ def load_data(path):
             context_prior=None
             known_context = True
         agent = CE(context_prior=context_prior, known_context=known_context)
-        agent.run(hyperparams=None, agent = 'human', df_trials= df_all.loc[df_all['pid'] == pid],envs=envs, fit=False, yoked = True)
+        agent.run(hyperparams=None, agent_name='human', df_trials=df_all.loc[df_all['pid'] == pid], envs=envs, fit=False, yoked=True)
 
         ## extract cost info
         df_all.loc[df_all['pid'] == pid, 'observed_cost'] = agent.total_costs.flatten()

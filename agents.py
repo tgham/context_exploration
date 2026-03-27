@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from enum import Enum
 from itertools import product
-import copy
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
@@ -19,9 +18,8 @@ from IPython.display import display, clear_output
 from utils import *
 from base_kernels import *
 from MCTS import MonteCarloTreeSearch_AFC, MonteCarloTreeSearch_Bandit
-from tqdm.auto import tqdm
-import pandas as pd
 from scipy.special import beta, logsumexp, digamma, comb, betaln
+from runners import run_grid, run_bandit
 
 
 ### base farmer model?
@@ -30,6 +28,7 @@ class Farmer(ABC):
     def __init__(self,
                  temp=1, lapse=0, horizon=3,
                  exploration_constant=None, discount_factor=None, n_samples=None,
+                 run_fn=None,
                  **task_params):
 
         ## behavioural parameters
@@ -44,6 +43,9 @@ class Farmer(ABC):
         self.exploration_constant = exploration_constant
         self.discount_factor = discount_factor
         self.n_samples = n_samples
+
+        ## run function
+        self.run_fn = run_fn
     
     
     ### general methods for sampling, choice, fitting etc.
@@ -126,459 +128,11 @@ class Farmer(ABC):
         return pseudo_r2, p_value
     
 
-    ### bespoke methods 
-        
-    ## run agent on participant's trial sequence
-    def run(self, hyperparams, agent = 'CE', df_trials=None, envs=None,fit=True, yoked=False, progress=False):
-        
-        ## init expt info
-        try:
-            n_trials = int(df_trials['trial'].max())
-            n_days = int(df_trials['day'].max() )
-            n_cities = int(df_trials['city'].max())
-            N = envs['city_1_grid_1_env_object'][0].N
-            n_afc = df_trials['path_chosen'].nunique()
-        except:
-            n_trials = hyperparams['n_trials']
-            n_days = hyperparams['n_days']
-            n_cities = hyperparams['n_cities']
-            N = hyperparams['N']
-            n_afc = hyperparams['n_afc']
+    ### bespoke methods
 
-        ## determine policy - i.e. greedy vs softmax
-        if hyperparams is None:
-            hyperparams = {}
-        if 'greedy' in hyperparams:
-            self.greedy = hyperparams['greedy']
-        else:
-            self.greedy = True
-
-        ## initialise model's internal variables
-        self.n_afc = n_afc ## can sort this out later
-        self.p_choice = np.zeros((n_cities, n_days, n_trials, self.n_afc))
-        self.p_correct = np.zeros((n_cities, n_days, n_trials))
-        self.Q_vals = np.zeros((n_cities, n_days, n_trials, self.n_afc))
-        self.actions = np.zeros((n_cities, n_days, n_trials))
-        self.CE_actions = np.zeros((n_cities, n_days, n_trials)) + np.nan
-        self.CE_p_choice = np.zeros((n_cities, n_days, n_trials, self.n_afc)) + np.nan
-        self.CE_p_correct = np.zeros((n_cities, n_days, n_trials)) + np.nan
-        self.CE_Q_vals = np.zeros((n_cities, n_days, n_trials, self.n_afc)) + np.nan
-        self.context_priors = np.zeros((n_cities, n_days, n_trials))
-        self.context_posteriors = np.zeros((n_cities, n_days, n_trials))
-        self.leaf_visits = np.zeros((n_cities, n_days, n_trials, self.n_afc))
-        self.total_costs = np.zeros((n_cities, n_days, n_trials))
-        self.path_quality = np.zeros((n_cities, n_days, n_trials)) 
-        self.true_context = []
-        if fit:
-            self.n_total_trials = len(df_trials)
-            self.trial_loss = np.zeros(self.n_total_trials)
-
-        ## for extracting some useful trial data...
-        self.path_future_overlaps = np.zeros((n_cities, n_days, n_trials, self.n_afc))
-        self.path_future_rel_overlaps = np.zeros((n_cities, n_days, n_trials, self.n_afc))
-        self.path_future_irrel_overlaps = np.zeros((n_cities, n_days, n_trials, self.n_afc))
-        self.path_past_overlaps = np.zeros((n_cities, n_days, n_trials, self.n_afc))
-        self.path_past_observed_high_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
-        self.path_past_observed_low_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
-        self.path_len = np.zeros((n_cities, n_days, n_trials))
-        self.day_costs = np.zeros((n_cities, n_days, n_trials)) ## i.e. the cost of the path chosen by the participant on that trial
-        self.distr_diff = np.zeros((n_cities, n_days, n_trials)) 
-        
-        ## observations on the context-aligned and orthogonal arm of each path
-        self.aligned_arm_actual_high_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
-        self.aligned_arm_actual_low_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
-        self.orthogonal_arm_actual_high_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
-        self.orthogonal_arm_actual_low_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
-        self.aligned_arm_gen_high_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
-        self.aligned_arm_gen_low_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
-        self.orthogonal_arm_gen_high_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
-        self.orthogonal_arm_gen_low_costs = np.zeros((n_cities, n_days, n_trials, self.n_afc))
-        self.aligned_arm_len = np.zeros((n_cities, n_days, n_trials, self.n_afc))
-        self.orthogonal_arm_len = np.zeros((n_cities, n_days, n_trials, self.n_afc))
-
-        if progress:
-            pbar = tqdm(total=n_cities*n_days*n_trials, desc='Running {} agent'.format(agent), leave=False)
-
-        ## loop through cities
-        for city in range(n_cities):
-            
-            ## expts 1-2 - unknown context
-            start_of_day_context_prior = 0.5 
-
-            ## loop through days
-            for day in range(n_days):
-
-                ## get the environment for this day
-                if envs:
-                    env = envs['city_{}_grid_{}_env_object'.format(city+1, day+1)][0]
-
-                    ## need to do some fixes for old envs
-                    if env.expt == '2AFC':
-                        env.expt = 'AFC'
-                    
-                    ## get context alignment of states
-                    env.path_aligned_states, env.path_orthogonal_states, env.path_weights = env.get_alignment(env.path_states)
-
-                env_copy = copy.deepcopy(env)
-                assert not hasattr(env_copy, 'obs'), 'env_copy.obs should not exist before the first trial: {}'.format(len(env_copy.obs),', city:', city+1, 'day:', day+1)
-                
-                ## expt 3 - context is known
-                if env_copy.context == 'column':
-                    start_of_day_context_prior = 1.0
-                elif env_copy.context == 'row':
-                    start_of_day_context_prior = 0.0
-                
-                ## context prior resets
-                self.context_prior = start_of_day_context_prior
-
-
-                ## FIX FOR OLD ENVS: rename some attributes (episode --> trial, etc.)
-                if hasattr(env_copy, 'n_episodes'):
-                    env_copy.n_trials = env_copy.n_episodes
-
-                ## initialise planner
-                self.mcts = None
-                tree_reset = True
-
-
-                ## loop through trials within day
-                for t in range(n_trials):
-
-                    ## reset env/trial
-                    env_copy.reset()
-                    env_copy.set_sim(True)
-
-                    ### if extracting useful behavioural measures, i.e. yoking to human choices
-
-                    ## overlaps with previous observations
-                    if yoked:
-                        paths = env_copy.path_states[t].copy()
-                        obs_list = [tuple(obs[:2]) for obs in env_copy.obs.tolist()]
-                        obs_list = list(set(obs_list)) # no repeated obs!
-                        for i, path in enumerate(paths):
-                            try:
-                                
-                                ## get the number of states that overlap with the paths
-                                overlap = set(path).intersection(set(obs_list))
-                                path_past_overlap = len(overlap)
-
-                                ## get the number of costs and no-costs that comprise these overlapping states
-                                path_past_observed_high_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
-                                path_past_observed_low_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
-                                self.path_future_overlaps[city, day, t, i] = env_copy.path_future_overlaps[t][i]
-                                self.path_past_overlaps[city, day, t, i] = path_past_overlap
-                                self.path_past_observed_high_costs[city, day, t, i] = path_past_observed_high_costs
-                                self.path_past_observed_low_costs[city, day, t, i] = path_past_observed_low_costs
-                                
-
-                        
-                            ## sometimes need to convert each np array to list of tuples...
-                            except:
-                                # paths = [set(map(tuple, path)) for path in paths]
-                                path = set(map(tuple, path))
-                                overlap = set(path).intersection(set(obs_list))
-                                path_past_overlap = len(overlap)
-                                path_past_observed_high_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
-                                path_past_observed_low_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
-                                self.path_future_overlaps[city, day, t, i] = env_copy.path_future_overlaps[t][i]
-                                self.path_past_overlaps[city, day, t, i] = path_past_overlap
-                                self.path_past_observed_high_costs[city, day, t, i] = path_past_observed_high_costs
-                                self.path_past_observed_low_costs[city, day, t, i] = path_past_observed_low_costs
-                            
-                            assert self.path_past_overlaps[city, day, t, i] == self.path_past_observed_high_costs[city, day, t, i] + self.path_past_observed_low_costs[city, day, t, i], 'path {} past overlap does not match observed costs and no-costs\n path past overlap: {}, path observed costs: {}, path observed no-costs: {}'.format(i+1, self.path_past_overlaps[city, day, t, i], self.path_past_observed_high_costs[city, day, t, i], self.path_past_observed_low_costs[city, day, t, i])
-                            
-
-                            ## get aligned vs orthogonal states
-                            path_states = env_copy.path_states[t][i]
-                            aligned_states, orthogonal_states = env_copy.path_aligned_states[t][i], env_copy.path_orthogonal_states[t][i]
-                            self.aligned_arm_len[city, day, t, i] = len(aligned_states)
-                            self.orthogonal_arm_len[city, day, t, i] = len(orthogonal_states)
-
-                            ## get info on costs on rows and columns
-                            observed_high_cost_cols = {obs[1] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost}
-                            observed_low_cost_cols = {obs[1] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost}
-                            observed_high_cost_rows = {obs[0] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost}
-                            observed_low_cost_rows = {obs[0] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost}
-                            observed_high_cost_states = {tuple(obs) for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost}
-                            observed_low_cost_states = {tuple(obs) for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost}
-
-                            if env_copy.context == 'column':
-                                
-                                ### actual costs
-                                
-                                ## count how many of these aligned states have actual high and low costs
-                                # self.aligned_arm_actual_high_costs[city, day, t, i] = sum(1 for state in aligned_states if state in observed_high_cost_states)
-                                # self.aligned_arm_actual_low_costs[city, day, t, i] = sum(1 for state in aligned_states if state in observed_low_cost_states)
-
-                                # ## count how many of the orthogonal states have actual high and low costs
-                                # self.orthogonal_arm_actual_high_costs[city, day, t, i] = sum(1 for state in orthogonal_states if state in observed_high_cost_states)
-                                # self.orthogonal_arm_actual_low_costs[city, day, t, i] = sum(1 for state in orthogonal_states if state in observed_low_cost_states)
-
-                                
-                                ### gen costs
-                                
-                                ## count how many of these aligned states have observations on the main column
-                                self.aligned_arm_gen_high_costs[city, day, t, i] = sum(
-                                    1 for state in aligned_states
-                                    if (state[1] in observed_high_cost_cols) 
-                                    # and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
-                                )
-                                self.aligned_arm_gen_low_costs[city, day, t, i] = sum(
-                                    1 for state in aligned_states 
-                                    if (state[1] in observed_low_cost_cols)
-                                    # and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
-                                )
-
-                                ## count how many of the orthogonal states have observations on their respective columns
-                                self.orthogonal_arm_gen_high_costs[city, day, t, i] = sum(
-                                    1 for state in orthogonal_states 
-                                    if (state[1] in observed_high_cost_cols)
-                                    # and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
-                                )
-                                self.orthogonal_arm_gen_low_costs[city, day, t, i] = sum(
-                                    1 for state in orthogonal_states 
-                                    if (state[1] in observed_low_cost_cols)
-                                    # and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
-                                )
-                                
-
-                            elif env_copy.context == 'row':
-
-                                ### actual costs
-
-                                ## count how many of these aligned states have actual high and low costs
-                                # self.aligned_arm_actual_high_costs[city, day, t, i] = sum(
-                                #     1 for state in aligned_states 
-                                #     if state in observed_high_cost_states)
-                                # self.aligned_arm_actual_low_costs[city, day, t, i] = sum(
-                                #     1 for state in aligned_states if state in observed_low_cost_states)
-
-                                # ## count how many of the orthogonal states have actual high and low costs
-                                # self.orthogonal_arm_actual_high_costs[city, day, t, i] = sum(
-                                #     1 for state in orthogonal_states if state in observed_high_cost_states)
-                                # self.orthogonal_arm_actual_low_costs[city, day, t, i] = sum(
-                                #     1 for state in orthogonal_states if state in observed_low_cost_states)
-
-                                
-                                ### gen costs
-                                
-                                ## count how many of these aligned states have observations on the main row
-                                self.aligned_arm_gen_high_costs[city, day, t, i] = sum(
-                                    1 for state in aligned_states 
-                                    if (state[0] in observed_high_cost_rows)
-                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
-                                )
-                                self.aligned_arm_gen_low_costs[city, day, t, i] = sum(
-                                    1 for state in aligned_states 
-                                    if (state[0] in observed_low_cost_rows)
-                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
-                                )
-
-                                ## count how many of the orthogonal states have observations on their respective rows
-                                self.orthogonal_arm_gen_high_costs[city, day, t, i] = sum(
-                                    1 for state in orthogonal_states 
-                                    if (state[0] in observed_high_cost_rows)
-                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
-                                )
-                                self.orthogonal_arm_gen_low_costs[city, day, t, i] = sum(
-                                    1 for state in orthogonal_states 
-                                    if (state[0] in observed_low_cost_rows)
-                                    and (tuple(state) not in obs_list) ## exclude states that are themselves observed, since these would be captured in the 'actual' costs above
-                                )
-                            
-                            ## axis overlaps with future states
-                            self.path_future_rel_overlaps[city, day, t, i] = env_copy.path_future_rel_overlaps[t][i]
-                            self.path_future_irrel_overlaps[city, day, t, i] = env_copy.path_future_irrel_overlaps[t][i]
-                    
-                        ## misc
-                        self.day_costs[city, day, t] = np.nansum(self.total_costs[city, day, :t+1]) ## i.e. costs observed so far today
-                        self.path_len[city, day, t] = len(env_copy.path_states[t][0])
-                        
-                    
-                    ## agent-specific path selection
-                    Q_vals = self.compute_Q(env_copy, tree_reset)
-                    action_probs = self.softmax(Q_vals)
-
-                    ## action selection
-                    assert not np.isnan(np.nansum(Q_vals)), 'no Q estimates": {}'.format(Q_vals)
-                    if self.greedy:
-                        max_Q = np.nanmax(Q_vals)
-                        action = np.argmax(Q_vals)
-                    else:
-                        action = np.random.choice(len(Q_vals), p=action_probs)
-
-                    self.actions[city, day, t] = action
-                    self.Q_vals[city, day, t] = Q_vals
-                    self.p_choice[city, day, t] = action_probs
-                    correct_path = np.argmax(env_copy.path_actual_costs[t])
-                    self.p_correct[city, day, t] = self.p_choice[city, day, t][correct_path]
-
-                    ## let's also calculate the CE choice under the current agent's knowledge
-                    CE_Q_vals = self.compute_CE_Q(env_copy)
-                    CE_action = np.argmax(CE_Q_vals)
-                    CE_action_probs = self.softmax(CE_Q_vals)
-                    self.CE_Q_vals[city, day, t] = CE_Q_vals
-                    self.CE_actions[city, day, t] = CE_action
-                    self.CE_p_choice[city, day, t] = CE_action_probs
-                    self.CE_p_correct[city, day, t] = self.CE_p_choice[city, day, t][correct_path]
-
-
-                    ### take ppt's action if a) we are fitting, or b) we are extracting behavioural measures by yoking to ppt's choices
-                    missed=False
-                    if (fit) or (yoked):
-
-                        ## first check if the participant has made a choice
-                        try:
-                            missed = pd.isna(df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_chosen'].values[0])
-                        except:
-                            missed = True
-
-                        ## if the participant has made a choice, then we use their action (rather than the model's)
-                        if not missed:
-                            action = df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_chosen'].values[0]=='b'                        
-                            assert np.isclose(df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_A_expected_cost'].values[0], env_copy.path_expected_costs[t][0], rtol=1e-5), 'expected cost does not match ppt data\n env: {}, ppt: {}'.format(env_copy.path_expected_costs[t][0], df_trials.loc[(df_trials['city'] == city+1) & (df_trials['day'] == day+1) & (df_trials['trial'] == t+1), 'path_A_expected_cost'].values[0])
-
-                        else:
-                            # print('missed in city {}, day {}, trial {}'.format(city+1, day+1, t+1))
-                            # print('start: {}, goal: {}'.format(env_copy.starts[t], env_copy.goal))
-                            self.p_choice[city, day, t] = np.nan
-                            self.p_correct[city, day, t] = np.nan
-                            self.Q_vals[city, day, t] = np.nan
-                            self.actions[city, day, t] = np.nan
-                            self.context_priors[city, day, t] = np.nan
-                            self.context_posteriors[city, day, t] = np.nan
-                            self.leaf_visits[city, day, t] = np.nan
-                            self.total_costs[city, day, t] = np.nan
-
-                    ## only interact with the environment if participant made a choice
-                    if not missed:
-                        env_copy.set_sim(False)
-                        action_sequence = env_copy.path_actions[t][action]
-                        _, cost, _, _, _ = env_copy.step(action)
-                        self.total_costs[city, day, t] = cost
-                        self.path_quality[city, day, t] = self.total_costs[city, day, t]/self.path_len[city, day, t] ## i.e. cost as a proportion of path length
-                        day_terminated = t == (n_trials-1)
-
-
-                    ## else, skip to next trial??
-                    else:
-                        env_copy._trial += 1 
-                        print('skipping city {}, day {}, trial {} because participant missed their choice'.format(city+1, day+1, t+1))
-
-                    
-                    ## update MCTS tree
-                    if (not missed) and (not day_terminated):
-                        tree_reset = self.update_tree(env_copy, action)
-                    else:
-                        tree_reset = True
-                    
-                    ## update the sampler with the new observations
-                    self.sampler.set_obs(env_copy.obs)
-                    
-                    ## get the context prior - i.e. the probability with which samples were drawn
-                    context_prior = self.context_prior ## this is the prior that was used to generate the samples for this trial, which we will need to calculate the context posterior
-
-                    ## update the context prior for the next trial
-                    context_posterior = self.sampler.update_context_posterior(start_of_day_context_prior)
-                    self.context_prior = context_posterior
-                    self.context_priors[city, day, t] = context_prior
-                    self.context_posteriors[city, day, t] = context_posterior
-
-                    ## carry over the context prob to the next run, if on the final trial of the day
-                    if t == (n_trials-1):
-                        start_of_day_context_prior = context_posterior
-
-                        ## also need to clear sampler
-                        self.sampler = None
-
-                    ## update progress bar
-                    if progress:
-                        pbar.update(1)
-            self.true_context.append(env_copy.context)
-        if progress:
-            pbar.close()
-
-        ## if we are fitting, calculate the loss
-        if fit:
-            self.loss_func(df_trials)
-            return self.loss
-        
-        ## or, if we are running our own simulations, give the simulation output
-        elif (not fit) & (df_trials is None): 
-            sim_out ={
-                'participant':[],
-                'agent':[],
-                'city':[],
-                'day':[],
-                'trial':[],
-                'context':[],
-                'actions':[],
-                'CE_actions':[],
-                'distr_diff':[],
-                'p_choice_A':[],
-                'p_choice_B':[],
-                'p_choice_C':[],
-                'p_correct':[],
-                'Q_a':[],
-                'Q_b':[],
-                'Q_c':[],
-                'CE_p_choice_A':[],
-                'CE_p_choice_B':[],
-                'CE_p_choice_C':[],
-                'CE_p_correct':[],
-                'CE_Q_a':[],
-                'CE_Q_b':[],
-                'CE_Q_c':[],
-                'leaf_visits_a':[],
-                'leaf_visits_b':[],
-                'leaf_visits_c':[],
-                'temp': [],
-                'lapse': [],
-                'arm_weight': [],
-                'horizon': [],
-            }
-            for c in range(n_cities):
-                for d in range(n_days):
-                    for t in range(n_trials):
-                        sim_out['participant'].append(envs['participant'])
-                        sim_out['agent'].append(agent)
-                        sim_out['city'].append(c+1)
-                        sim_out['day'].append(d+1)
-                        sim_out['trial'].append(t+1)
-                        sim_out['actions'].append(self.actions[c][d][t])
-                        sim_out['CE_actions'].append(self.CE_actions[c][d][t])
-                        sim_out['distr_diff'].append(self.distr_diff[c][d][t])
-                        sim_out['context'].append(self.true_context[c])
-                        sim_out['p_correct'].append(self.p_correct[c][d][t])
-                        sim_out['p_choice_A'].append(self.p_choice[c][d][t][0])
-                        sim_out['p_choice_B'].append(self.p_choice[c][d][t][1])
-                        sim_out['Q_a'].append(self.Q_vals[c][d][t][0])
-                        sim_out['Q_b'].append(self.Q_vals[c][d][t][1])
-                        sim_out['leaf_visits_a'].append(self.leaf_visits[c][d][t][0])
-                        sim_out['leaf_visits_b'].append(self.leaf_visits[c][d][t][1])
-                        sim_out['CE_p_correct'].append(self.CE_p_correct[c][d][t])
-                        sim_out['CE_p_choice_A'].append(self.CE_p_choice[c][d][t][0])
-                        sim_out['CE_p_choice_B'].append(self.CE_p_choice[c][d][t][1])
-                        sim_out['CE_Q_a'].append(self.CE_Q_vals[c][d][t][0])
-                        sim_out['CE_Q_b'].append(self.CE_Q_vals[c][d][t][1])
-                        sim_out['temp'].append(self.temp)
-                        sim_out['lapse'].append(self.lapse)
-                        sim_out['arm_weight'].append(self.arm_weight)
-                        sim_out['horizon'].append(self.horizon)
-
-                        if self.n_afc==3:
-                            sim_out['p_choice_C'].append(self.p_choice[c][d][t][2])
-                            sim_out['leaf_visits_c'].append(self.leaf_visits[c][d][t][2])
-                            sim_out['Q_c'].append(self.Q_vals[c][d][t][2])
-                            sim_out['CE_p_choice_C'].append(self.CE_p_choice[c][d][t][2])
-                            sim_out['CE_Q_c'].append(self.CE_Q_vals[c][d][t][2])
-                        else:
-                            sim_out['p_choice_C'].append(np.nan)
-                            sim_out['leaf_visits_c'].append(np.nan)
-                            sim_out['Q_c'].append(np.nan)
-                            sim_out['CE_p_choice_C'].append(np.nan)
-                            sim_out['CE_Q_c'].append(np.nan)
-            return sim_out
+    ## run agent — delegates to the injected run function
+    def run(self, *args, **kwargs):
+        return self.run_fn(self, *args, **kwargs)
 
 
 
@@ -590,9 +144,10 @@ class BAMCP(Farmer):
     def __init__(self,
                  temp=1, lapse=0, horizon=3,
                  exploration_constant=None, discount_factor=None, n_samples=None,
+                 run_fn=run_grid,
                  **task_params):
         super().__init__(temp, lapse, horizon, exploration_constant, discount_factor, n_samples,
-                         **task_params)
+                         run_fn=run_fn, **task_params)
         self.arm_weight = task_params.get('arm_weight', 0)
 
 
@@ -766,9 +321,10 @@ class CE(Farmer):
     def __init__(self,
                  temp=1, lapse=0, horizon=None,
                  exploration_constant=None, discount_factor=None, n_samples=None,
+                 run_fn=run_grid,
                  **task_params):
         super().__init__(temp, lapse, horizon, exploration_constant, discount_factor, n_samples,
-                         **task_params)
+                         run_fn=run_fn, **task_params)
         self.arm_weight = task_params.get('arm_weight', 0)
 
     
@@ -824,12 +380,14 @@ class BanditBAMCP(BAMCP):
     _mcts_class = MonteCarloTreeSearch_Bandit
 
     def __init__(self, n_samples=200, exploration_constant=2,
-                 discount_factor=0.99, horizon=5, temp=1.0, lapse=0.0):
+                 discount_factor=0.99, horizon=5, temp=1.0, lapse=0.0,
+                 run_fn=run_bandit):
         super().__init__(
             temp=temp, lapse=lapse, horizon=horizon,
             exploration_constant=exploration_constant,
             discount_factor=discount_factor,
             n_samples=n_samples,
+            run_fn=run_fn,
         )
 
     ## CE Q values: posterior mean reward for each arm
@@ -841,100 +399,6 @@ class BanditBAMCP(BAMCP):
         r_dist = env_copy.r_dist
         CE_Q = np.array([mean_ps[a] * r_dist[a] for a in range(env_copy.n_afc)])
         return CE_Q
-
-    def run(self, env, greedy=False, verbose=True):
-        """Run the agent on the bandit for n_trials, returning trial-by-trial data."""
-        n_trials = env.n_trials
-        n_arms = env.n_afc
-
-        Q_history = np.zeros((n_trials, n_arms))
-        p_choice_history = np.zeros((n_trials, n_arms))
-        actions = np.zeros(n_trials, dtype=int)
-        rewards = np.zeros(n_trials)
-        chose_optimal = np.zeros(n_trials, dtype=bool)
-        bayes_regret = np.zeros(n_trials)
-        post_probs = np.zeros((n_trials, n_arms))
-
-        ## CE tracking — what would the CE agent have chosen with the same info?
-        CE_Q_history = np.zeros((n_trials, n_arms))
-        CE_actions = np.zeros(n_trials, dtype=int)
-        CE_chose_optimal = np.zeros(n_trials, dtype=bool)
-        CE_bayes_regret = np.zeros(n_trials)
-
-        optimal_arm = np.argmax(env.p_dist)
-
-        env.reset()
-
-        for t in range(n_trials):
-            env_copy = copy.deepcopy(env)
-            env_copy.set_sim(True)
-
-            Q = self.compute_Q(env_copy)
-            probs = self.softmax(Q)
-            mean_probs = self.sampler.mean_probs()
-
-            ## CE Q values under the same posterior
-            CE_Q = self.compute_CE_Q(env_copy)
-            CE_action = int(np.argmax(CE_Q))
-
-            Q_history[t] = Q
-            p_choice_history[t] = probs
-            post_probs[t] = mean_probs
-            CE_Q_history[t] = CE_Q
-            CE_actions[t] = CE_action
-            CE_chose_optimal[t] = (CE_action == optimal_arm)
-            CE_bayes_regret[t] = env.p_dist[optimal_arm] - env.p_dist[CE_action]
-
-            if greedy:
-                max_Q = np.nanmax(Q)
-                best_arms = np.where(Q == max_Q)[0]
-                action = int(np.random.choice(best_arms))
-
-                # debugging
-                if action != CE_action:
-                    if verbose:
-                        print(f"Trial {t+1}: Greedy action {action} differs from CE action {CE_action} with Q values {Q} and CE Q values {CE_Q}")
-            else:
-                max_Q = np.nanmax(Q)
-                best_arms = np.where(Q == max_Q)[0]
-                if len(best_arms) > 1:
-                    action = int(np.random.choice(best_arms))
-                else:
-                    action = int(best_arms[0])
-
-            env.set_sim(False)
-            _, reward, terminated, truncated, _ = env.step(action)
-
-            actions[t] = action
-            rewards[t] = reward
-            chose_optimal[t] = (action == optimal_arm)
-            bayes_regret[t] = env.p_dist[optimal_arm] - env.p_dist[action]
-
-            self.init_sampler(env)
-
-            if verbose:
-                print(f"  trial {t+1:>3}/{n_trials}  \n Q={np.round(Q, 3)}  CE_Q={np.round(CE_Q, 3)}"
-                      f"p={np.round(probs, 3)} \n pulled arm {action} with reward {reward:.0f}")
-
-            if terminated:
-                break
-
-        return {
-            'Q': Q_history,
-            'p_choice': p_choice_history,
-            'actions': actions,
-            'rewards': rewards,
-            'cumulative_reward': np.cumsum(rewards),
-            'chose_optimal': chose_optimal,
-            'true_probs': env.p_dist.copy(),
-            'optimal_arm': optimal_arm,
-            'bayes_regret': bayes_regret,
-            'post_probs': post_probs,
-            'CE_Q': CE_Q_history,
-            'CE_actions': CE_actions,
-            'CE_chose_optimal': CE_chose_optimal,
-            'CE_bayes_regret': CE_bayes_regret,
-        }
 
 
 class BanditCE(BanditBAMCP):

@@ -13,7 +13,6 @@ import seaborn as sns
 import importlib
 from scipy.stats import bernoulli
 import warnings
-from GP import *
 from plotter import *
 from scipy.special import softmax
 from scipy.spatial.distance import cdist
@@ -22,7 +21,7 @@ from gymnasium.envs.registration import register, registry, make, spec
 import pickle
 import copy 
 
-from utils import make_env, Node, Tree, argm, data_keys, grid_keys, parse_lists, KL_divergence, profile_func, KL_sim, value_iteration, generate_ppt_sequence
+from utils import make_env, Node, Tree, data_keys, grid_keys, parse_lists, KL_divergence, profile_func, KL_sim, value_iteration, generate_ppt_sequence
 from MCTS import MonteCarloTreeSearch, MonteCarloTreeSearch_AFC
 
 import IPython
@@ -81,7 +80,7 @@ def agent_loop(p, agent_params_list, hyperparams, agent_param_combos):
             farmer = BAMCP(temp=temp, lapse=lapse, horizon=horizon, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples, **task_params) ## known context if expt 3
         elif agent =='CE':
             farmer = CE(temp=temp, lapse=lapse, horizon=horizon, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples, **task_params) ## known context if expt 3
-        sim_out = farmer.run(hyperparams, agent=agent, df_trials=None, envs=env_objects, fit=False, yoked=False, progress=False)
+        sim_out = farmer.run(hyperparams, agent_name=agent, df_trials=None, envs=env_objects, fit=False, yoked=False, progress=False)
         sim_outs.append(sim_out)
     
     ## join sim_outs together
