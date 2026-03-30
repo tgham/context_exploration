@@ -147,6 +147,8 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
     agent.n_afc = n_afc
     agent.p_choice = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.p_correct = np.zeros((n_cities, n_days, n_trials))
+    agent.p_chose_orthogonal = np.zeros((n_cities, n_days, n_trials))
+    agent.p_chose_more_future_rel_overlap = np.zeros((n_cities, n_days, n_trials))
     agent.Q_vals = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.actions = np.zeros((n_cities, n_days, n_trials))
     agent.CE_actions = np.zeros((n_cities, n_days, n_trials)) + np.nan
@@ -276,6 +278,31 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                 agent.CE_p_choice[city, day, t] = CE_action_probs
                 agent.CE_p_correct[city, day, t] = agent.CE_p_choice[city, day, t][correct_path]
 
+                ## get info on orthogonal/overlap of paths
+                more_future_rel_overlap = np.argmax(env_copy.path_future_rel_overlaps[t])
+                agent.p_chose_more_future_rel_overlap[city, day, t] = agent.p_choice[city, day, t][more_future_rel_overlap]
+                if env_copy.context == 'row':
+                    if env_copy.dominant_axis_A == 'row':
+                        aligned_path = 0
+                        orthogonal_path = 1
+                    elif env_copy.dominant_axis_A == 'column':
+                        aligned_path = 1
+                        orthogonal_path = 0
+                    else: #i.e. t1, no dominant axis
+                        aligned_path = 0
+                        orthogonal_path = 1
+                elif env_copy.context == 'column':
+                    if env_copy.dominant_axis_A == 'column':
+                        aligned_path = 0
+                        orthogonal_path = 1
+                    elif env_copy.dominant_axis_A == 'row':
+                        aligned_path = 1
+                        orthogonal_path = 0
+                    else: #i.e. t1, no dominant axis
+                        aligned_path = 0
+                        orthogonal_path = 1
+                agent.p_chose_orthogonal[city, day, t] = agent.p_choice[city, day, t][orthogonal_path]
+
 
                 ### take ppt's action if a) we are fitting, or b) we are extracting behavioural measures by yoking to ppt's choices
                 missed=False
@@ -295,6 +322,8 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                     else:
                         agent.p_choice[city, day, t] = np.nan
                         agent.p_correct[city, day, t] = np.nan
+                        agent.p_chose_more_future_rel_overlap[city, day, t] = np.nan
+                        agent.p_chose_orthogonal[city, day, t] = np.nan
                         agent.Q_vals[city, day, t] = np.nan
                         agent.actions[city, day, t] = np.nan
                         agent.context_priors[city, day, t] = np.nan
@@ -371,6 +400,8 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
             'p_choice_B':[],
             'p_choice_C':[],
             'p_correct':[],
+            'p_chose_more_future_rel_overlap':[],
+            'p_chose_orthogonal':[],
             'Q_a':[],
             'Q_b':[],
             'Q_c':[],
@@ -402,6 +433,8 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                     sim_out['distr_diff'].append(agent.distr_diff[c][d][t])
                     sim_out['context'].append(agent.true_context[c])
                     sim_out['p_correct'].append(agent.p_correct[c][d][t])
+                    sim_out['p_chose_more_future_rel_overlap'].append(agent.p_chose_more_future_rel_overlap[c][d][t])
+                    sim_out['p_chose_orthogonal'].append(agent.p_chose_orthogonal[c][d][t])
                     sim_out['p_choice_A'].append(agent.p_choice[c][d][t][0])
                     sim_out['p_choice_B'].append(agent.p_choice[c][d][t][1])
                     sim_out['Q_a'].append(agent.Q_vals[c][d][t][0])
