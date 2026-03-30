@@ -1,31 +1,40 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from matplotlib.colors import LinearSegmentedColormap
 
 ## visualise the samples
-def plot_r(sampled_rewards, ax, title=None, cbar=False, binary = False):
+def plot_r(sampled_rewards, ax, title=None, cbar=False, binary = False, valence = 'reward'):
     
     if not binary:
         vmin = 0
         vmax = 1
-        sns.heatmap(sampled_rewards, ax=ax, cbar=cbar, square=True, cmap='viridis', 
+        if valence == 'cost':
+            cmap = LinearSegmentedColormap.from_list("grey_red", ["lightgrey", "red"])
+            label = 'p(no cost)'
+        elif valence == 'reward':
+            cmap = LinearSegmentedColormap.from_list("grey_green", ["lightgrey", "green"])
+            label = 'p(reward)'
+        sns.heatmap(sampled_rewards, ax=ax, cbar=cbar, square=True, cmap=cmap, 
                     vmin=vmin, 
                     vmax=vmax,
-                        cbar_kws={'ticks': [0, 1], 'label': 'p(toll)', 'shrink': 0.7})
+                        cbar_kws={'ticks': [0, 1], 'label': label, 'shrink': 0.7})
         
     elif binary:
         ## determine whether we're plotting costs or rewards
-        if np.min(sampled_rewards) < 0:
+        if valence == 'cost':
             palette = sns.color_palette(["lightgrey", "red"])
             sampled_rewards = np.where(sampled_rewards==-1, 1, 0)  ## convert to 1 for low cost, 0 for high cost
-        else:
+            label = 'p(no cost)'
+        elif valence == 'reward':
             palette = sns.color_palette(["lightgrey", "green"])
-        vmin = np.min(sampled_rewards)
-        vmax = np.max(sampled_rewards)
+            label = 'p(reward)'
+        vmin = np.nanmin(sampled_rewards)
+        vmax = np.nanmax(sampled_rewards)
         sns.heatmap(sampled_rewards, ax=ax, cbar=cbar, square=True, cmap=palette, 
             vmin=vmin, 
             vmax=vmax,
-            cbar_kws={'ticks': [0, 1], 'label': 'p(low cost)', 'shrink': 0.7})
+            cbar_kws={'ticks': [0, 1], 'label': label, 'shrink': 0.7})
     # ax.imshow(sampled_rewards, extent=(0, self.N, 0, self.N), origin = 'upper')
     # ax.set_xticks(np.arange(0, self.N+1, 5))
     # ax.set_yticks(np.arange(0, self.N+1, 5))
@@ -36,8 +45,7 @@ def plot_r(sampled_rewards, ax, title=None, cbar=False, binary = False):
     ax.set_title(title)
     # ax.set_title('Sampled Reward Distribution,\nkernel: {}'.format(self.kernel_type))
     if cbar:
-        ax.collections[0].colorbar.set_label('p(low cost)') 
-        # ax.collections[0].colorbar.set_label('Route cost')
+        ax.collections[0].colorbar.set_label(label, fontsize = 15)
 
     ## plot grid lines
     N = sampled_rewards.shape[0]
