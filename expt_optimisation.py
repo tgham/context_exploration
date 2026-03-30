@@ -30,8 +30,9 @@ import multiprocess as mp
 import pingouin as pg
 from scipy.special import expit
 
-from agents import Farmer, BAMCP, CE
+from agents import BAMCP, CE
 from samplers import GridSampler
+from runners import run_grid
 
 
 warnings.filterwarnings('ignore')
@@ -44,7 +45,7 @@ def agent_loop(p, agent_params_list, hyperparams, agent_param_combos):
     
     Args:
         p: participant index
-        agent_params_list: list of parameter settings, each a list [temp, lapse, arm_weight, horizon, real_future]
+        agent_params_list: list of parameter settings, each a list [temp, lapse, arm_weight, horizon]
         hyperparams: dictionary of hyperparameters
         agent_param_combos: list of (agent_name, param_idx) tuples
     """
@@ -68,18 +69,17 @@ def agent_loop(p, agent_params_list, hyperparams, agent_param_combos):
         lapse = agent_params[1]
         arm_weight = agent_params[2]
         horizon = agent_params[3]
-        real_future = agent_params[4]
 
         ## unpack hyperparams
         exploration_constant = hyperparams['exploration_constant']
         discount_factor = hyperparams['discount_factor']
         n_samples = hyperparams['n_samples']
 
-        task_params = dict(arm_weight=arm_weight, real_future_paths=real_future)
+        task_params = dict(arm_weight=arm_weight)
         if agent == 'BAMCP':
-            farmer = BAMCP(temp=temp, lapse=lapse, horizon=horizon, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples, **task_params) ## known context if expt 3
+            farmer = BAMCP(mcts_class=MonteCarloTreeSearch_AFC, run_fn=run_grid, temp=temp, lapse=lapse, horizon=horizon, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples, **task_params) ## known context if expt 3
         elif agent =='CE':
-            farmer = CE(temp=temp, lapse=lapse, horizon=horizon, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples, **task_params) ## known context if expt 3
+            farmer = CE(mcts_class=MonteCarloTreeSearch_AFC, run_fn=run_grid, temp=temp, lapse=lapse, horizon=horizon, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples, **task_params) ## known context if expt 3
         sim_out = farmer.run(hyperparams, agent_name=agent, df_trials=None, envs=env_objects, fit=False, yoked=False, progress=False)
         sim_outs.append(sim_out)
     
@@ -163,7 +163,6 @@ all_sim_out = {
         'lapse':[],
         'arm_weight':[],
         'horizon':[],
-        'real_future_paths':[],
         'city':[],
         'day':[],
         'trial':[],
@@ -206,10 +205,6 @@ param_settings = {
                 # 1, 
                 3
                 ],
-    'real_future': [
-                    True
-                    # ,False
-                    ],   # whether to use real future paths
 }
 
 ## Generate all combinations of parameter settings
@@ -218,14 +213,13 @@ param_combinations = list(itertools.product(
     param_settings['lapse'],
     param_settings['arm_weight'],
     param_settings['horizon'],
-    param_settings['real_future']
 ))
 
 ## Convert to list of lists for indexing
 agent_params_list = [list(combo) for combo in param_combinations]
 print(f"Running {len(agent_params_list)} parameter combinations:")
 for i, params in enumerate(agent_params_list):
-    print(f"  [{i}] temp={params[0]}, lapse={params[1]}, arm_weight={params[2]}, horizon={params[3]}, real_future={params[4]}")
+    print(f"  [{i}] temp={params[0]}, lapse={params[1]}, arm_weight={params[2]}, horizon={params[3]}")
 
 hyperparams = {
     'n_samples': 10000,
@@ -240,7 +234,7 @@ hyperparams = {
 }
 agents = [
     'BAMCP', 
-    # 'CE', 
+    'CE', 
     # 'CE_one_arm'
     ]
 
@@ -316,7 +310,6 @@ print()
 print('Simulation complete')
 print()
 
-## convert dict to df
 df_sim = pd.DataFrame(all_sim_out)
 
 
