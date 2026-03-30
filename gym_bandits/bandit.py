@@ -1,4 +1,5 @@
 import numpy as np
+import random as _random
 import gym
 from gym import spaces
 from gym.utils import seeding
@@ -62,7 +63,7 @@ class BanditEnv(gym.Env):
         reward = 0
 
         ## random payout
-        if np.random.uniform() < self.p_dist[action]:
+        if _random.random() < self.p_dist[action]:
 
             ## binary reward
             if not isinstance(self.r_dist[action], list):
@@ -72,8 +73,8 @@ class BanditEnv(gym.Env):
             else:
                 reward = np.random.normal(self.r_dist[action][0], self.r_dist[action][1])
 
-        ## obs defined as action and reward r?
-        trial_obs = np.array([action, reward])
+        ## obs as lightweight tuple
+        trial_obs = (action, reward)
 
         ## only track obs history when not in sim mode
         if not self.sim:
@@ -177,8 +178,7 @@ class BanditEnvWrapper(BanditNArmedIndependentBeta):
         self.sim = sim
 
     def step(self, action):
-        trial_obs, reward, terminated, truncated, info = super().step(action)
-        return trial_obs.reshape(1, -1), reward, terminated, truncated, info
+        return super().step(action)
 
     def receive_task_params(self, task_params):
         pass  # no task-specific params for the bandit
@@ -258,14 +258,14 @@ class GittinsBanditWrapper(GittinsBandit):
         self.sim = sim
 
     def step(self, action):
-        
+
         # Pulling the retirement arm: deterministic payout and episode ends
         if action == self.retirement_arm:
             reward = self.r_dist[action]
-            trial_obs = np.array([[action, reward]])
+            trial_obs = (action, reward)
 
             if not self.sim:
-                self.obs = np.vstack((self.obs, trial_obs.squeeze()))
+                self.obs = np.vstack((self.obs, trial_obs))
 
             self._trial += 1
             terminated = True
@@ -273,8 +273,7 @@ class GittinsBanditWrapper(GittinsBandit):
             return trial_obs, reward, terminated, truncated, self.info
 
         # Regular arms: delegate to BanditEnv.step via super()
-        trial_obs, reward, terminated, truncated, info = BanditEnv.step(self, action)
-        return trial_obs.reshape(1, -1), reward, terminated, truncated, info
+        return BanditEnv.step(self, action)
 
     def receive_task_params(self, task_params):
         pass
