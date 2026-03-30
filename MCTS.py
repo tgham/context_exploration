@@ -169,13 +169,13 @@ class MonteCarloTreeSearch():
             return total_reward
         
         ## else, loop through remaining trials
-        depth = 0
+        discount_power = 1.0
         remaining_ro_rewards = []
         while not terminated and not truncated:
-            depth+=1
+            discount_power *= self.discount_factor
             ro_action = self.rollout_policy()
             _, reward, terminated, truncated, _ = self.env.step(ro_action)
-            total_reward += reward * self.discount_factor**depth
+            total_reward += reward * discount_power
             remaining_ro_rewards.append(total_reward)
 
         self.tree_rewards.append(total_reward)
@@ -215,10 +215,8 @@ class MonteCarloTreeSearch():
 
 
             ## save per-node max and min Q values to normalise Qs in UCT calculation
-            if action_leaf.performance > node.max_Q:
-                node.max_Q = action_leaf.performance
-            if action_leaf.performance < node.min_Q:
-                node.min_Q = action_leaf.performance
+            node.max_Q = max(node.max_Q, action_leaf.performance)
+            node.min_Q = min(node.min_Q, action_leaf.performance)
 
             
             ## Move to the next node in the path if not at the end
@@ -288,6 +286,13 @@ class MonteCarloTreeSearch():
         # norm_term = 1
         # min_Q = 0
 
+        ## or, normalise by the max reward of the env (which is known in these cases)
+        # c = self.exploration_constant
+        # norm_term = (1-self.discount_factor**(self.horizon-node.trial))/(1-self.discount_factor) ## bandit
+        # # norm_term = self.env.N * norm_term ## AFC
+        # min_Q = 0
+        # log_N = log(node.n_state_visits)
+
         best_leaf = None
         best_uct = -float('inf')
         n_ties = 0
@@ -295,8 +300,8 @@ class MonteCarloTreeSearch():
         # if node.trial==0:
         #     print()
 
-        # ## debugging: always select first action if trial==0
-        # if node.trial==0:
+        # ## debugging: force first action if trial==0
+        # if node.trial==self.root_trial:
         #     return list(node.action_leaves.values())[0]
 
         for leaf in node.action_leaves.values():
@@ -416,15 +421,16 @@ class MonteCarloTreeSearch_Bandit(MonteCarloTreeSearch):
         if len(obs) == 0:
             return tuple(counts)
 
-        ## fast path for single observation (common case during tree traversal)
-        if obs.ndim == 2 and obs.shape[0] == 1:
-            arm = int(obs[0, 0])
-            if obs[0, 1] == 1:
+        ## fast path for single observation tuple (common case during tree traversal)
+        if isinstance(obs, tuple):
+            arm = int(obs[0])
+            if obs[1] == 1:
                 counts[arm * 2] += 1
             else:
                 counts[arm * 2 + 1] += 1
             return tuple(counts)
 
+        ## numpy array path (used for initial obs from real env)
         if obs.ndim == 1:
             obs = obs.reshape(1, -1)
 
@@ -450,7 +456,7 @@ class MonteCarloTreeSearch_Bandit(MonteCarloTreeSearch):
     def rollout_policy(self):
 
         ## random
-        ro_action = random.choice(range(self.n_afc))
+        ro_action = int(random.random() * self.n_afc)
 
         ## greedy wrt/ current MDP?
         # ro_action = np.argmax(self.env.p_dist)
@@ -459,7 +465,7 @@ class MonteCarloTreeSearch_Bandit(MonteCarloTreeSearch):
         # Q = self.env.Q
         # best_a = np.argmax(Q)
         # if random.random() < 0.5:  # epsilon = 0.5
-        #     ro_action = random.choice(range(self.n_afc))
+        #     ro_action = random.randrange(self.n_afc)
         # else:
         #     ro_action = best_a
 
