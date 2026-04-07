@@ -71,7 +71,7 @@ def main():
     parser.add_argument('--n_sims', type=int, default=10)
     parser.add_argument('--n_arms', type=int, default=1)
     parser.add_argument('--n_trials', type=int, default=100)
-    parser.add_argument('--gam', type=float, default=0.95)
+    parser.add_argument('--gam', type=float, default=0.9)
     parser.add_argument('--lam', type=float, default=0.5)
     parser.add_argument('--n_samples', type=int, default=250000)
     parser.add_argument('--exploration_constant', type=float, default=3.0)
@@ -83,8 +83,12 @@ def main():
     parser.add_argument('--output', type=str, default='useful_saves/bandits/gittins_results.csv')
     args = parser.parse_args()
 
+    
     alphas = np.arange(1, args.n_alphas + 1) 
-    betas = alphas + 1
+    betas = alphas 
+    betas1 = alphas + 1
+    alphas = np.concatenate([alphas, alphas]) 
+    betas = np.concatenate([betas, betas1])   
 
     shared_kwargs = dict(
         n_arms=args.n_arms, n_trials=args.n_trials, gam=args.gam, lam=args.lam,
