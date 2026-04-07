@@ -168,6 +168,13 @@ class MonteCarloTreeSearch():
             self.tree_rewards.append(total_reward)
             return total_reward
         
+        ## in bandit problem, we can take an analytical rollout substitute
+        best_arm_p = np.nanmax(self.env.p_dist)
+        delayed_reward = best_arm_p / (1 - self.discount_factor)
+        total_reward += (self.discount_factor * delayed_reward)
+        self.tree_rewards.append(total_reward)
+        return total_reward 
+        
         ## else, loop through remaining trials
         discount_power = 1.0
         remaining_ro_rewards = []
