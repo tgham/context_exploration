@@ -1,8 +1,8 @@
 import numpy as np
 import random as _random
-import gym
-from gym import spaces
-from gym.utils import seeding
+import gymnasium as gym
+from gymnasium import spaces
+from gymnasium.utils import seeding
 from abc import ABC, abstractmethod
 import copy
 

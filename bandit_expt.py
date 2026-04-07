@@ -16,17 +16,18 @@ n_trials = 300
 alpha = 1
 beta = 1
 n_sims = 100
-parallel = False
-n_workers = np.min([mp.cpu_count(), n_sims])
+parallel = True
+max_workers = 100
+n_workers = np.min([mp.cpu_count(), n_sims, max_workers])
 output_path = 'useful_saves/bandits/{}_arms_{}_sims.csv'.format(n_arms, n_sims)
 
 # --- Agents ---
 bamcp_agent = BAMCP(
     mcts_class=MonteCarloTreeSearch_Bandit, run_fn=run_bandit,
-    n_samples=50000,
+    n_samples=100000,
     exploration_constant=3,
-    discount_factor=0.9,
-    horizon=50,
+    discount_factor=0.99,
+    horizon=100,
     temp=1,
     lapse=0,
 )
@@ -46,7 +47,7 @@ def run_one_sim(sim_idx, agents, n_arms, alpha, beta, n_trials):
     for name, agent in agents.items():
         agent_copy = copy.deepcopy(agent)
         env_copy = copy.deepcopy(env)
-        sim_results[name] = agent_copy.run(env_copy, greedy=True, verbose=True)
+        sim_results[name] = agent_copy.run(env_copy, greedy=True, verbose=False)
     return sim_results
 
 
