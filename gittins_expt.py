@@ -80,7 +80,7 @@ def main():
                         help='Number of parallel workers (default: CPU count)')
     parser.add_argument('--n_alphas', type=int, default=10,
                         help='Number of alpha values to simulate (default: 10)')
-    parser.add_argument('--output', type=str, default='bandit_sim_results.csv')
+    parser.add_argument('--output', type=str, default='useful_saves/bandits/gittins_results.csv')
     args = parser.parse_args()
 
     alphas = np.arange(1, args.n_alphas + 1) 
