@@ -1,17 +1,18 @@
 """
-Single-run bandit MCTS experiments with controlled posteriors.
+Parallelised bandit MCTS experiments with controlled posteriors.
 
 For a 2-armed bandit:
 - Arm 0: fixed Beta(1, 1) prior
 - Arm 1: varied priors where alpha = beta, beta+1, or beta+2
 
 Pulls arm 1 until observations match the desired Beta prior, then runs MCTS.
+Parallelises over (sim_idx, alpha, beta) combinations.
 """
 
 import argparse
 import numpy as np
 import pandas as pd
-from tqdm.auto import tqdm
+from multiprocessing import Pool
 
 from utils import make_bandit_env
 from MCTS import MonteCarloTreeSearch_Bandit
@@ -65,9 +66,9 @@ def find_matching_env(alpha, beta, n_trials=100, max_retries=100):
     return None, None, None
 
 
-def run_single_experiment(alpha, beta, n_trials=100, n_samples=250000,
+def run_single_experiment(sim_idx, alpha, beta, n_trials=100, n_samples=250000,
                          exploration_constant=3.0, discount_factor=0.9,
-                         horizon=100, max_retries=50):
+                         horizon=100, max_retries=100):
     """
     Run one MCTS experiment with arm 1 having Beta(alpha, beta) prior.
 
@@ -78,11 +79,7 @@ def run_single_experiment(alpha, beta, n_trials=100, n_samples=250000,
     env, sampler, n_pulls = find_matching_env(alpha, beta, n_trials, max_retries)
 
     if env is None:
-        print(f"  Failed to find matching env for Beta({alpha}, {beta}) after {max_retries} retries")
         return None
-
-    print(f"  Found matching observations after {n_pulls} pulls on arm 1")
-    print(f"  Posterior means: {sampler.mean_probs()}")
 
     # Set to sim mode and run MCTS
     env.set_sim(True)
@@ -105,6 +102,7 @@ def run_single_experiment(alpha, beta, n_trials=100, n_samples=250000,
         visits[action] = leaf.n_action_visits
 
     return {
+        'sim': sim_idx,
         'alpha': alpha,
         'beta': beta,
         'offset': alpha - beta,  # 0, 1, or 2
@@ -115,16 +113,26 @@ def run_single_experiment(alpha, beta, n_trials=100, n_samples=250000,
     }
 
 
+def _worker(args_tuple):
+    """Unpack args tuple for Pool.map."""
+    sim_idx, alpha, beta, kwargs = args_tuple
+    return run_single_experiment(sim_idx, alpha, beta, **kwargs)
+
+
 def main():
     parser = argparse.ArgumentParser(description='Bandit MCTS with controlled posteriors')
+    parser.add_argument('--n_sims', type=int, default=10,
+                        help='Number of simulations per (alpha, beta) pair')
     parser.add_argument('--n_trials', type=int, default=100)
     parser.add_argument('--max_beta', type=int, default=8)
     parser.add_argument('--n_samples', type=int, default=250000)
     parser.add_argument('--exploration_constant', type=float, default=3.0)
     parser.add_argument('--discount_factor', type=float, default=0.9)
     parser.add_argument('--horizon', type=int, default=100)
-    parser.add_argument('--max_retries', type=int, default=50,
+    parser.add_argument('--max_retries', type=int, default=100,
                         help='Max retries to find matching env per experiment')
+    parser.add_argument('--n_workers', type=int, default=None,
+                        help='Number of parallel workers (default: CPU count)')
     parser.add_argument('--output', type=str, default='bandit_single_search_results.csv')
     args = parser.parse_args()
 
@@ -136,26 +144,32 @@ def main():
             alpha = beta + offset
             experiments.append((alpha, beta))
 
-    print(f"Running {len(experiments)} experiments...")
+    shared_kwargs = dict(
+        n_trials=args.n_trials,
+        n_samples=args.n_samples,
+        exploration_constant=args.exploration_constant,
+        discount_factor=args.discount_factor,
+        horizon=args.horizon,
+        max_retries=args.max_retries,
+    )
 
-    results = []
-    for alpha, beta in tqdm(experiments, desc='Experiments'):
-        print(f"\nBeta({alpha}, {beta}) [offset={alpha - beta}]")
-        result = run_single_experiment(
-            alpha, beta,
-            n_trials=args.n_trials,
-            n_samples=args.n_samples,
-            exploration_constant=args.exploration_constant,
-            discount_factor=args.discount_factor,
-            horizon=args.horizon,
-            max_retries=args.max_retries,
-        )
-        if result is not None:
-            results.append(result)
+    # Build task list: one entry per (sim, alpha, beta)
+    tasks = []
+    for sim_idx in range(args.n_sims):
+        for alpha, beta in experiments:
+            tasks.append((sim_idx, alpha, beta, shared_kwargs))
+
+    print(f'Running {len(tasks)} tasks across {args.n_workers or "all"} workers...')
+
+    with Pool(processes=args.n_workers) as pool:
+        results = pool.map(_worker, tasks)
+
+    # Filter out None results (failed initializations)
+    results = [r for r in results if r is not None]
 
     df = pd.DataFrame(results)
     df.to_csv(args.output, index=False)
-    print(f"\nSaved {len(df)} experiments to {args.output}")
+    print(f'Saved {len(df)} experiments to {args.output}')
 
 
 if __name__ == '__main__':
