@@ -111,14 +111,10 @@ beta_params = {
     'beta_row': 0.25,
     'alpha_col':0.25,
     'beta_col': 0.25
-    # 'alpha_row': 0.5,
-    # 'beta_row': 0.5,
-    # 'alpha_col': 10,
-    # 'beta_col': 0.1
     }
 
 ## trial info
-n_sim_participants = 2
+n_sim_participants = 50
 n_cities = 32
 n_days = 1
 n_trials = 4
@@ -172,6 +168,8 @@ all_sim_out = {
         'p_choice_B':[],
         'p_choice_C':[],
         'p_correct':[],
+        'p_chose_more_future_rel_overlap':[],
+        'p_chose_orthogonal':[],
         'Q_a':[],
         'Q_b':[],
         'Q_c':[],
@@ -199,7 +197,7 @@ param_settings = {
     'lapse': [0],          # lapse rate values to try
     'arm_weight': [
                     0,
-                    # 1
+                    1
                     ],  
     'horizon': [
                 # 1, 
@@ -222,9 +220,9 @@ for i, params in enumerate(agent_params_list):
     print(f"  [{i}] temp={params[0]}, lapse={params[1]}, arm_weight={params[2]}, horizon={params[3]}")
 
 hyperparams = {
-    'n_samples': 10000,
-    'exploration_constant': 1,
-    'discount_factor': 1,
+    'n_samples': 50000,
+    'exploration_constant': 3,
+    'discount_factor': 0.9,
     'n_trials': n_trials,
     'n_afc': n_afc,
     'n_days': n_days,
@@ -235,7 +233,6 @@ hyperparams = {
 agents = [
     'BAMCP', 
     'CE', 
-    # 'CE_one_arm'
     ]
 
 ## Generate all agent/parameter combinations (Each combo is (agent_name, param_idx))
