@@ -8,8 +8,8 @@ collecting estimated Q-values and visit counts per arm, then saves to CSV.
 import argparse
 import numpy as np
 import pandas as pd
-from multiprocessing import Pool
 from functools import partial
+import multiprocess as mp
 
 from utils import make_gittins_bandit_env
 from MCTS import MonteCarloTreeSearch_Bandit
@@ -56,6 +56,7 @@ def run_single_sim(sim_idx, alpha, beta, n_arms, n_trials, gam, lam,
             'arm': arm,
             'Q': MCTS_Q[arm] if arm < len(MCTS_Q) else np.nan,
             'n_visits': visits.get(arm, 0),
+            'max_depth': agent.mcts.tree.max_depth(agent.mcts.tree.root),
         })
     return rows
 
@@ -106,7 +107,7 @@ def main():
 
     print(f'Running {len(tasks)} tasks across {args.n_workers or "all"} workers...')
 
-    with Pool(processes=args.n_workers) as pool:
+    with mp.Pool(processes=args.n_workers) as pool:
         results = pool.map(_worker, tasks)
 
     # Flatten list of lists
@@ -114,7 +115,7 @@ def main():
     df = pd.DataFrame(all_rows)
 
     path = 'useful_saves/bandits/gittins_{}_sims_{}_samples_{}_discount_{}_expl_{}_lam.csv'.format(args.n_sims,
-    args.n_samples, args.discount_factor, args.exploration_constant, args.lam)
+    args.n_samples, args.gam, args.exploration_constant, args.lam)
 
     df.to_csv(path, index=False)
     print(f'Saved {len(df)} rows to {path}')
