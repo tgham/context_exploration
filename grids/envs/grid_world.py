@@ -1008,11 +1008,10 @@ class GridEnv(gym.Env):
         self.sim_weight_map = np.array([aligned_weight, orthogonal_weight])
 
     def receive_task_params(self, task_params):
-        arm_weight = task_params.get('arm_weight', None)
-        if arm_weight is not None:
-            aligned = 1 - max(0.0, -arm_weight)
-            orthogonal = 1 - max(0.0, arm_weight)
-            self.set_sim_weights(aligned, orthogonal)
+        aligned_weight = task_params.get('aligned_weight', None)
+        orthogonal_weight = task_params.get('orthogonal_weight', None)
+        if aligned_weight is not None and orthogonal_weight is not None:
+            self.set_sim_weights(aligned_weight, orthogonal_weight)
 
     ## receiving predictions from the agent
     def receive_predictions(self, costs):

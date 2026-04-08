@@ -150,7 +150,8 @@ class BAMCP(Farmer):
             mcts_class, run_fn,
             temp, lapse, horizon, exploration_constant, discount_factor, n_samples,
             **task_params)
-        self.arm_weight = task_params.get('arm_weight', 0)
+        self.aligned_weight = task_params.get('aligned_weight', 1.0)
+        self.orthogonal_weight = task_params.get('orthogonal_weight', 1.0)
 
 
     ## initialise MCTS object for tree search
@@ -304,7 +305,8 @@ class CE(BAMCP):
                          temp=temp, lapse=lapse, horizon=horizon,
                          exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples,
                          **task_params)
-        self.arm_weight = task_params.get('arm_weight', 0)
+        self.aligned_weight = task_params.get('aligned_weight', 1.0)
+        self.orthogonal_weight = task_params.get('orthogonal_weight', 1.0)
 
 
     ## act based on posterior mean grid
