@@ -151,6 +151,7 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
     agent.p_chose_more_future_rel_overlap = np.zeros((n_cities, n_days, n_trials))
     agent.Q_vals = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.actions = np.zeros((n_cities, n_days, n_trials))
+    agent.objective = np.zeros((n_cities, n_days, n_trials))
     agent.CE_actions = np.zeros((n_cities, n_days, n_trials)) + np.nan
     agent.CE_p_choice = np.zeros((n_cities, n_days, n_trials, agent.n_afc)) + np.nan
     agent.CE_p_correct = np.zeros((n_cities, n_days, n_trials)) + np.nan
@@ -268,6 +269,11 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                 agent.p_choice[city, day, t] = action_probs
                 correct_path = np.argmax(env_copy.path_actual_costs[t])
                 agent.p_correct[city, day, t] = agent.p_choice[city, day, t][correct_path]
+                # agent.objective[city, day, t] = env_copy.objective
+                if env_copy.objective == 'costs':
+                    agent.objective[city, day, t] = -1
+                elif env_copy.objective == 'rewards':
+                    agent.objective[city, day, t] = 1
 
                 ## let's also calculate the CE choice under the current agent's knowledge
                 CE_Q_vals = agent.compute_CE_Q(env_copy)
@@ -289,8 +295,8 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                         aligned_path = 1
                         orthogonal_path = 0
                     else: #i.e. t1, no dominant axis
-                        aligned_path = 0
-                        orthogonal_path = 1
+                        aligned_path = np.nan
+                        orthogonal_path = np.nan
                 elif env_copy.context == 'column':
                     if env_copy.dominant_axis_A == 'column':
                         aligned_path = 0
@@ -299,8 +305,8 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                         aligned_path = 1
                         orthogonal_path = 0
                     else: #i.e. t1, no dominant axis
-                        aligned_path = 0
-                        orthogonal_path = 1
+                        aligned_path = np.nan
+                        orthogonal_path = np.nan
                 agent.p_chose_orthogonal[city, day, t] = agent.p_choice[city, day, t][orthogonal_path]
 
 
@@ -322,6 +328,11 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                     else:
                         agent.p_choice[city, day, t] = np.nan
                         agent.p_correct[city, day, t] = np.nan
+                        # agent.objective[city, day, t] = env_copy.objective
+                        if env_copy.objective == 'costs':
+                            agent.objective[city, day, t] = -1
+                        elif env_copy.objective == 'rewards':
+                            agent.objective[city, day, t] = 1
                         agent.p_chose_more_future_rel_overlap[city, day, t] = np.nan
                         agent.p_chose_orthogonal[city, day, t] = np.nan
                         agent.Q_vals[city, day, t] = np.nan
@@ -393,8 +404,10 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
             'day':[],
             'trial':[],
             'context':[],
+            'objective':[],
             'actions':[],
             'CE_actions':[],
+            'total_costs':[],
             'distr_diff':[],
             'p_choice_A':[],
             'p_choice_B':[],
@@ -428,8 +441,10 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                     sim_out['city'].append(c+1)
                     sim_out['day'].append(d+1)
                     sim_out['trial'].append(t+1)
+                    sim_out['objective'].append(agent.objective[c][d][t])
                     sim_out['actions'].append(agent.actions[c][d][t])
                     sim_out['CE_actions'].append(agent.CE_actions[c][d][t])
+                    sim_out['total_costs'].append(agent.total_costs[c][d][t])
                     sim_out['distr_diff'].append(agent.distr_diff[c][d][t])
                     sim_out['context'].append(agent.true_context[c])
                     sim_out['p_correct'].append(agent.p_correct[c][d][t])

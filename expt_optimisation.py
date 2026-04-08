@@ -126,7 +126,7 @@ expt_info = {
 }
 
 ## init df for saving expt info
-df_expt = pd.DataFrame(columns=['participant', 'city', 'context', 'grid','trial', 
+df_expt = pd.DataFrame(columns=['participant', 'city', 'context', 'grid','trial', 'objective',
                                 'better_path',
                                 'start_A','start_B','goal_A','goal_B', 'path_A', 'path_B',
                                 'path_A_expected_cost', 'path_B_expected_cost',
@@ -162,8 +162,10 @@ all_sim_out = {
         'city':[],
         'day':[],
         'trial':[],
+        'objective':[],
         'context':[],
         'actions':[],
+        'total_costs':[],
         'p_choice_A':[],
         'p_choice_B':[],
         'p_choice_C':[],
@@ -186,7 +188,7 @@ all_sim_out = {
         'CE_p_correct':[],
         'distr_diff':[]
     }
-parallel = False
+parallel = True
 n_cores = 128
 create=False
 

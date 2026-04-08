@@ -735,7 +735,7 @@ def generate_ppt_sequence(p, n_cities, n_days, n_trials, expt_info, beta_params,
                     row.update(row_c)
                 df_expt = pd.concat([df_expt, pd.DataFrame([row])], ignore_index=True)
             env_key = f'city_{c+1}_grid_{i+1}'
-            env_costs[env_key] = env.costss[0].tolist()
+            env_costs[env_key] = env.costs.tolist()
             env_objects[env_key + '_env_object'] = [env]
         env_objects['participant'] = p
         env_costs['grid_size'] = N
