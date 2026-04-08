@@ -80,15 +80,17 @@ def main():
                         help='Number of parallel workers (default: CPU count)')
     parser.add_argument('--n_alphas', type=int, default=10,
                         help='Number of alpha values to simulate (default: 10)')
-    parser.add_argument('--output', type=str, default='useful_saves/bandits/gittins_results.csv')
     args = parser.parse_args()
 
     
+    ## a=b
     alphas = np.arange(1, args.n_alphas + 1) 
     betas = alphas 
-    betas1 = alphas + 1
-    alphas = np.concatenate([alphas, alphas]) 
-    betas = np.concatenate([betas, betas1])   
+
+    ## a=b+1
+    # betas1 = alphas + 1
+    # alphas = np.concatenate([alphas, alphas]) 
+    # betas = np.concatenate([betas, betas1])   
 
     shared_kwargs = dict(
         n_arms=args.n_arms, n_trials=args.n_trials, gam=args.gam, lam=args.lam,
@@ -110,9 +112,12 @@ def main():
     # Flatten list of lists
     all_rows = [row for batch in results for row in batch]
     df = pd.DataFrame(all_rows)
-    df.to_csv(args.output, index=False)
-    print(f'Saved {len(df)} rows to {args.output}')
 
+    path = 'useful_saves/bandits/gittins_{}_sims_{}_samples_{}_discount_{}_expl_{}_lam.csv'.format(args.n_sims,
+    args.n_samples, args.discount_factor, args.exploration_constant, args.lam)
+
+    df.to_csv(path, index=False)
+    print(f'Saved {len(df)} rows to {path}')
 
 if __name__ == '__main__':
     main()

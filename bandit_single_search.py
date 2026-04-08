@@ -133,16 +133,29 @@ def main():
                         help='Max retries to find matching env per experiment')
     parser.add_argument('--n_workers', type=int, default=None,
                         help='Number of parallel workers (default: CPU count)')
-    parser.add_argument('--output', type=str, default='bandit_single_search_results.csv')
     args = parser.parse_args()
 
-    # Generate (alpha, beta) pairs
+    # Generate (alpha, beta) pairs, where alpha => beta, and beta is max 10
+    # experiments = []
+    # for beta in range(1, args.max_beta + 1):
+    #     offset = 0
+    #     max_10 = False
+    #     while not max_10:
+    #         alpha = beta + offset
+    #         if alpha > 10:
+    #             max_10 = True
+    #         else:
+    #             experiments.append((alpha, beta))
+    #             offset += 1
+    
     # For each beta in [1, max_beta], test alpha = beta, beta+1, beta+2
     experiments = []
+    max_alpha = 10
     for beta in range(1, args.max_beta + 1):
-        for offset in [0, 1, 2]:
+        for offset in [0, 1, 2, 3, 4, 5]:
             alpha = beta + offset
-            experiments.append((alpha, beta))
+            if alpha <= max_alpha:
+                experiments.append((alpha, beta))
 
     shared_kwargs = dict(
         n_trials=args.n_trials,
@@ -167,10 +180,12 @@ def main():
     # Filter out None results (failed initializations)
     results = [r for r in results if r is not None]
 
-    df = pd.DataFrame(results)
-    df.to_csv(args.output, index=False)
-    print(f'Saved {len(df)} experiments to {args.output}')
+    path = 'useful_saves/bandits/bandit_single_search_{}_samples_{}_discount_{}_expl.csv'.format(
+        args.n_samples, args.discount_factor, args.exploration_constant)
 
+    df = pd.DataFrame(results)
+    df.to_csv(path, index=False)
+    print(f'Saved {len(df)} experiments to {path}')
 
 if __name__ == '__main__':
     main()

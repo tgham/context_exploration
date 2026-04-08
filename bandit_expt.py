@@ -19,7 +19,6 @@ n_sims = 100
 parallel = True
 max_workers = 100
 n_workers = np.min([mp.cpu_count(), n_sims, max_workers])
-output_path = 'useful_saves/bandits/{}_arms_{}_sims.csv'.format(n_arms, n_sims)
 
 # --- Agents ---
 bamcp_agent = BAMCP(
@@ -39,6 +38,8 @@ agents = {
     'BAMCP': bamcp_agent,
     'CE': ce_agent,
 }
+
+output_path = 'useful_saves/bandits/{}_arms_{}_sims_{}_discount_{}_expl.csv'.format(n_arms, n_sims, bamcp_agent.discount_factor, bamcp_agent.exploration_constant)
 
 
 def run_one_sim(sim_idx, agents, n_arms, alpha, beta, n_trials):
