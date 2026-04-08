@@ -1038,18 +1038,22 @@ class GridEnv(gym.Env):
             costs: list of costs at each state
         """
         path = self.path_states[self._trial][action]
+        path_arr = np.array(path, dtype=np.int64)
+        costs = self.costs[path_arr[:, 0], path_arr[:, 1]].astype(np.float64)
+        self.trial_obs = np.column_stack([path_arr, costs])
+        # self.trial_obs = [(x, y, costs[k]) for k, (x, y) in enumerate(path)]
 
         ## apply reward-func weighting in sim mode
         if self.sim:
             path_weight_idx = self.path_weights[self._trial][action]
-            costs = [float(self.costs[x, y]) * self.sim_weight_map[path_weight_idx[k]] for k, (x, y) in enumerate(path)]
-            self.trial_obs = [(x, y, costs[k]) for k, (x, y) in enumerate(path)]
+            weighted_costs = [float(self.costs[x, y]) * self.sim_weight_map[path_weight_idx[k]] for k, (x, y) in enumerate(path)]
+            # print('original costs:', costs)
+            # print('weighted costs:', weighted_costs)
+            # print('path weight indices:', self.path_weights[self._trial][action])
+            cost = sum(weighted_costs)
         else:
-            path_arr = np.array(path, dtype=np.int64)
-            costs = self.costs[path_arr[:, 0], path_arr[:, 1]].astype(np.float64)
-            self.trial_obs = np.column_stack([path_arr, costs])
             self.obs = np.vstack([self.obs, self.trial_obs])
-            
+            cost = sum(costs)
             
         # Mark as terminated if done final trial
         self.terminated = self._trial >= self.n_trials - 1
@@ -1060,7 +1064,6 @@ class GridEnv(gym.Env):
         # Update trial counter
         self._trial += 1
 
-        cost = sum(costs)
         return self.trial_obs, cost, self.terminated, truncated, self.info
         
     
