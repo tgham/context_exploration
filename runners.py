@@ -288,26 +288,29 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                 more_future_rel_overlap = np.argmax(env_copy.path_future_rel_overlaps[t])
                 agent.p_chose_more_future_rel_overlap[city, day, t] = agent.p_choice[city, day, t][more_future_rel_overlap]
                 if env_copy.context == 'row':
-                    if env_copy.dominant_axis_A == 'row':
+                    if env_copy.dominant_axis_A[t] == 'horizontal':
                         aligned_path = 0
                         orthogonal_path = 1
-                    elif env_copy.dominant_axis_A == 'column':
+                    elif env_copy.dominant_axis_A[t] == 'vertical':
                         aligned_path = 1
                         orthogonal_path = 0
-                    else: #i.e. t1, no dominant axis
+                    elif env_copy.dominant_axis_A[t] == 'L-shaped':
                         aligned_path = np.nan
                         orthogonal_path = np.nan
                 elif env_copy.context == 'column':
-                    if env_copy.dominant_axis_A == 'column':
+                    if env_copy.dominant_axis_A[t] == 'vertical':
                         aligned_path = 0
                         orthogonal_path = 1
-                    elif env_copy.dominant_axis_A == 'row':
+                    elif env_copy.dominant_axis_A[t] == 'horizontal':
                         aligned_path = 1
                         orthogonal_path = 0
-                    else: #i.e. t1, no dominant axis
+                    elif env_copy.dominant_axis_A[t] == 'L-shaped':
                         aligned_path = np.nan
                         orthogonal_path = np.nan
-                agent.p_chose_orthogonal[city, day, t] = agent.p_choice[city, day, t][orthogonal_path]
+                if not np.isnan(orthogonal_path):
+                    agent.p_chose_orthogonal[city, day, t] = agent.p_choice[city, day, t][orthogonal_path]
+                else:
+                    agent.p_chose_orthogonal[city, day, t] = np.nan
 
 
                 ### take ppt's action if a) we are fitting, or b) we are extracting behavioural measures by yoking to ppt's choices
