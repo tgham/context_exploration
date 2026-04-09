@@ -433,7 +433,8 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
             'leaf_visits_c':[],
             'temp': [],
             'lapse': [],
-            'arm_weight': [],
+            'aligned_weight': [],
+            'orthogonal_weight': [],
             'horizon': [],
         }
         for c in range(n_cities):
@@ -466,7 +467,8 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                     sim_out['CE_Q_b'].append(agent.CE_Q_vals[c][d][t][1])
                     sim_out['temp'].append(agent.temp)
                     sim_out['lapse'].append(agent.lapse)
-                    sim_out['arm_weight'].append(agent.arm_weight)
+                    sim_out['aligned_weight'].append(agent.aligned_weight)
+                    sim_out['orthogonal_weight'].append(agent.orthogonal_weight)
                     sim_out['horizon'].append(agent.horizon)
 
                     if agent.n_afc==3:
