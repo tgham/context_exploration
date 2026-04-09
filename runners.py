@@ -10,6 +10,7 @@ def extract_grid_info(agent, env_copy, city, day, t):
     obs_list = [tuple(obs[:2]) for obs in env_copy.obs.tolist()]
     obs_list = list(set(obs_list)) # no repeated obs!
     for i, path in enumerate(paths):
+        
         try:
 
             ## get the number of states that overlap with the paths
@@ -112,7 +113,7 @@ def extract_grid_info(agent, env_copy, city, day, t):
         ## axis overlaps with future states
         agent.path_future_rel_overlaps[city, day, t, i] = env_copy.path_future_rel_overlaps[t][i]
         agent.path_future_irrel_overlaps[city, day, t, i] = env_copy.path_future_irrel_overlaps[t][i]
-
+    
     ## misc
     agent.day_costs[city, day, t] = np.nansum(agent.total_costs[city, day, :t+1])
     agent.path_len[city, day, t] = len(env_copy.path_states[t][0])
@@ -186,8 +187,10 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
     agent.aligned_arm_gen_low_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.orthogonal_arm_gen_high_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.orthogonal_arm_gen_low_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
-    agent.aligned_arm_len = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
-    agent.orthogonal_arm_len = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
+    agent.aligned_path_aligned_arm_len = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
+    agent.aligned_path_orthogonal_arm_len = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
+    agent.orthogonal_path_aligned_arm_len = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
+    agent.orthogonal_path_orthogonal_arm_len = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
 
     ## define whether or not we're extracting expt info based on yoked
     if yoked:
@@ -309,8 +312,19 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                         orthogonal_path = np.nan
                 if not np.isnan(orthogonal_path):
                     agent.p_chose_orthogonal[city, day, t] = agent.p_choice[city, day, t][orthogonal_path]
+                    
+                    ## also save arm lengths etc.
+                    agent.aligned_path_aligned_arm_len[city,day,t] = agent.aligned_arm_len[city, day, t, aligned_path]
+                    agent.aligned_path_orthogonal_arm_len[city,day,t] = agent.orthogonal_arm_len[city, day, t, aligned_path]
+                    agent.orthogonal_path_aligned_arm_len[city,day,t] = agent.aligned_arm_len[city, day, t, orthogonal_path]
+                    agent.orthogonal_path_orthogonal_arm_len[city,day,t] = agent.orthogonal_arm_len[city, day, t, orthogonal_path]
+
                 else:
                     agent.p_chose_orthogonal[city, day, t] = np.nan
+                    agent.aligned_path_aligned_arm_len[city,day,t] = np.nan
+                    agent.aligned_path_orthogonal_arm_len[city,day,t] = np.nan
+                    agent.orthogonal_path_aligned_arm_len[city,day,t] = np.nan
+                    agent.orthogonal_path_orthogonal_arm_len[city,day,t] = np.nan
 
 
                 ### take ppt's action if a) we are fitting, or b) we are extracting behavioural measures by yoking to ppt's choices
@@ -428,6 +442,10 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
             'CE_Q_a':[],
             'CE_Q_b':[],
             'CE_Q_c':[],
+            'aligned_path_aligned_arm_len':[],
+            'aligned_path_orthogonal_arm_len':[],
+            'orthogonal_path_aligned_arm_len':[],
+            'orthogonal_path_orthogonal_arm_len':[],
             'leaf_visits_a':[],
             'leaf_visits_b':[],
             'leaf_visits_c':[],
@@ -464,6 +482,10 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                     sim_out['CE_p_choice_B'].append(agent.CE_p_choice[c][d][t][1])
                     sim_out['CE_Q_a'].append(agent.CE_Q_vals[c][d][t][0])
                     sim_out['CE_Q_b'].append(agent.CE_Q_vals[c][d][t][1])
+                    sim_out['aligned_path_aligned_arm_len'].append(agent.aligned_path_aligned_arm_len[c][d][t])
+                    sim_out['aligned_path_orthogonal_arm_len'].append(agent.aligned_path_orthogonal_arm_len[c][d][t])
+                    sim_out['orthogonal_path_aligned_arm_len'].append(agent.orthogonal_path_aligned_arm_len[c][d][t])
+                    sim_out['orthogonal_path_orthogonal_arm_len'].append(agent.orthogonal_path_orthogonal_arm_len[c][d][t])
                     sim_out['temp'].append(agent.temp)
                     sim_out['lapse'].append(agent.lapse)
                     sim_out['arm_weight'].append(agent.arm_weight)
