@@ -45,7 +45,7 @@ def agent_loop(p, agent_params_list, hyperparams, agent_param_combos):
     
     Args:
         p: participant index
-        agent_params_list: list of parameter settings, each a list [temp, lapse, arm_weight, horizon]
+        agent_params_list: list of parameter settings, each a list [temp, lapse, weights, horizon]
         hyperparams: dictionary of hyperparameters
         agent_param_combos: list of (agent_name, param_idx) tuples
     """
@@ -67,15 +67,16 @@ def agent_loop(p, agent_params_list, hyperparams, agent_param_combos):
         ## unpack params 
         temp = agent_params[0]
         lapse = agent_params[1]
-        arm_weight = agent_params[2]
-        horizon = agent_params[3]
+        aligned_weight = agent_params[2]
+        orthogonal_weight = agent_params[3]
+        horizon = agent_params[4]
 
         ## unpack hyperparams
         exploration_constant = hyperparams['exploration_constant']
         discount_factor = hyperparams['discount_factor']
         n_samples = hyperparams['n_samples']
 
-        task_params = dict(arm_weight=arm_weight)
+        task_params = dict(aligned_weight=aligned_weight, orthogonal_weight=orthogonal_weight)
         if agent == 'BAMCP':
             farmer = BAMCP(mcts_class=MonteCarloTreeSearch_AFC, run_fn=run_grid, temp=temp, lapse=lapse, horizon=horizon, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples, **task_params) ## known context if expt 3
         elif agent =='CE':
@@ -157,7 +158,8 @@ all_sim_out = {
         'agent':[],
         'temp':[],
         'lapse':[],
-        'arm_weight':[],
+        'aligned_weight':[],
+        'orthogonal_weight':[],
         'horizon':[],
         'city':[],
         'day':[],
@@ -197,9 +199,13 @@ create=False
 param_settings = {
     'temp': [1],           # temperature values to try
     'lapse': [0],          # lapse rate values to try
-    'arm_weight': [
+    'aligned_weight': [
+                    1,
+                    2
+                    ],  
+    'orthogonal_weight': [
                     0,
-                    1
+                    1,
                     ],  
     'horizon': [
                 # 1, 
@@ -211,7 +217,8 @@ param_settings = {
 param_combinations = list(itertools.product(
     param_settings['temp'],
     param_settings['lapse'],
-    param_settings['arm_weight'],
+    param_settings['aligned_weight'],
+    param_settings['orthogonal_weight'],
     param_settings['horizon'],
 ))
 
@@ -219,7 +226,7 @@ param_combinations = list(itertools.product(
 agent_params_list = [list(combo) for combo in param_combinations]
 print(f"Running {len(agent_params_list)} parameter combinations:")
 for i, params in enumerate(agent_params_list):
-    print(f"  [{i}] temp={params[0]}, lapse={params[1]}, arm_weight={params[2]}, horizon={params[3]}")
+    print(f"  [{i}] temp={params[0]}, lapse={params[1]}, aligned_weight={params[2]}, orthogonal_weight={params[3]}, horizon={params[4]}")
 
 hyperparams = {
     'n_samples': 50000,
