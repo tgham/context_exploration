@@ -14,7 +14,9 @@ def plot_r(sampled_rewards, ax, title=None, cbar=False, binary = False, valence 
             label = 'p(no cost)'
         elif valence == 'reward':
             cmap = LinearSegmentedColormap.from_list("grey_green", ["lightgrey", "green"])
-            label = 'p(reward)'
+            # label = 'p(reward)'
+            # label  = r"$\mathbb{E}[p(reward)]$"
+            label = 'E[p(reward)]'
         sns.heatmap(sampled_rewards, ax=ax, cbar=cbar, square=True, cmap=cmap, 
                     vmin=vmin, 
                     vmax=vmax,
@@ -28,7 +30,9 @@ def plot_r(sampled_rewards, ax, title=None, cbar=False, binary = False, valence 
             label = 'p(no cost)'
         elif valence == 'reward':
             palette = sns.color_palette(["lightgrey", "green"])
-            label = 'p(reward)'
+            # label = 'E[p(reward)]'
+            label  = r"$\mathbb{E}[p(reward)]$"
+
         vmin = np.nanmin(sampled_rewards)
         vmax = np.nanmax(sampled_rewards)
         sns.heatmap(sampled_rewards, ax=ax, cbar=cbar, square=True, cmap=palette, 
