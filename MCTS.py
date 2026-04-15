@@ -1,19 +1,7 @@
 from abc import ABC, abstractmethod
 import random
 from math import sqrt, log
-from bisect import bisect_left
-from utils import Action_Node, Tree, make_env, data_keys, KL_divergence, get_next_state
-import copy
 import numpy as np
-from tqdm.auto import tqdm
-import os
-from scipy.spatial.distance import cdist
-from scipy.stats import gaussian_kde
-from scipy import special
-from scipy.special import softmax
-
-from plotter import *
-# from agents import Farmer
 
 ## base class 
 class MonteCarloTreeSearch():
@@ -169,11 +157,11 @@ class MonteCarloTreeSearch():
             return total_reward
         
         ## in bandit problem, we can take an analytical rollout substitute
-        best_arm_p = np.nanmax(self.env.p_dist)
-        delayed_reward = best_arm_p / (1 - self.discount_factor)
-        total_reward += (self.discount_factor * delayed_reward)
-        self.tree_rewards.append(total_reward)
-        return total_reward 
+        # best_arm_p = max(self.env.p_dist)
+        # delayed_reward = best_arm_p / (1 - self.discount_factor)
+        # total_reward += (self.discount_factor * delayed_reward)
+        # self.tree_rewards.append(total_reward)
+        # return total_reward 
         
         ## else, loop through remaining trials
         discount_power = 1.0
@@ -321,7 +309,7 @@ class MonteCarloTreeSearch():
                 n_ties = 1
             elif uct == best_uct:
                 n_ties += 1
-                if np.random.randint(n_ties) == 0:
+                if random.randrange(n_ties) == 0:
                     best_leaf = leaf
 
         return best_leaf
@@ -482,3 +470,233 @@ class MonteCarloTreeSearch_Bandit(MonteCarloTreeSearch):
     def check_node(self, node):
         assert node.trial == self.env.trial, \
             f'mismatch: node trial={node.trial}, env trial={self.env.trial}'
+
+
+
+
+### MCTS components
+class Node:
+
+    def __init__(self, state, node_id, reward, terminated, trial,
+                    n_afc=2,
+                 ):
+
+        ## state info
+        self.state = state
+        self.n_state_visits = 0
+        self.reward = reward
+        self.trial = trial
+        self.terminated = terminated
+        self.node_id = node_id
+
+        ## save the max and min Q values observed among the children of this action node, for normalization purposes in the UCB formula
+        ## (pure-Python inf avoids cpyext numpy overhead under PyPy; numerically identical to np.inf)
+        self.max_Q = float('-inf')
+        self.min_Q = float('inf')
+
+        ## define valid actions
+        self.untried_actions = list(range(n_afc))
+
+        ## action leaves
+        self.action_leaves = {a: None for a in self.untried_actions}
+
+
+    def __str__(self):
+        action_leaves_msg = {action: np.round(leaf.performance,3) if leaf is not None else None for action, leaf in self.action_leaves.items()}
+        return "state {}: (trial={}, visits={}, terminated={})\n{})".format(
+                                                    self.state,
+                                                    self.trial,
+                                                  self.n_state_visits,
+                                                  self.terminated,
+                                                  action_leaves_msg
+                                                  )
+
+    ## select a random untried action
+    def untried_action(self):
+        idx = random.randint(0, len(self.untried_actions) - 1)
+
+        # Swap with last element and pop for removal
+        self.untried_actions[idx], self.untried_actions[-1] = self.untried_actions[-1], self.untried_actions[idx]
+        return self.untried_actions.pop()
+
+
+class Action_Node:
+
+    def __init__(self, action, trial, parent_id):
+        self.action = action
+        self.performance = None
+        self.n_action_visits = 0
+        self.trial = trial
+        self.parent_id = parent_id
+        self.children={}
+
+    def __str__(self):
+        return "(action={}, n_children={}, visits={}, performance={:0.3f})".format(
+                                                  self.action,
+                                                  len(self.children.keys()),
+                                                  self.n_action_visits,
+                                                  self.performance,
+                                                  )
+
+
+class Tree:
+
+    def __init__(self):
+        self.root = None
+
+    ## check if node is expandable
+    def is_expandable(self, node):
+        return node.untried_actions and not node.terminated
+
+    ## attach action leaf to child state
+    def add_state_node(self, state, node_id, reward, terminated, trial, n_afc=2, parent=None,
+                       ):
+
+        ## create a new node
+        node = Node(state=state, node_id=node_id, reward=reward, terminated=terminated, trial = trial,
+                    n_afc=n_afc
+                    )
+
+
+        ### store parent-child relationships
+
+        ## if no action led to this node, then this is the root
+        if parent is None:
+            self.root = node
+        else:
+
+            ## add this state node to the children of the previous action leaf
+            parent.children[node.node_id] = node
+
+        return node
+
+    def get_children(self, node, dummy=False):
+        children = []
+        for a, leaf in node.action_leaves.items():
+            if leaf is not None:
+                for child_key in leaf.children.keys():
+                    child = leaf.children[child_key]
+                    children.append(tuple((a, leaf, child_key, child)))
+
+                ## if there are no children (i.e. the S-A leaf has been made, but doesn't have any S nodes), add a dummy child
+                if dummy:
+                    if len(leaf.children) == 0:
+                        children.append(tuple((a, leaf, None, None)))
+        return children
+
+
+    def print_tree(self, node, indent="", is_last=True, dummy=False, depth=0, max_depth=None):
+        """
+        Recursively print the tree structure with markers, visit counts, and values.
+        """
+        # Stop printing if max depth is reached
+        if max_depth is not None and depth > max_depth:
+            return
+
+        # Get the current node
+        if dummy:
+            if node is None:
+                return
+            else:
+                node_label = f"{node.reward}"
+        else:
+            node_label = f"{node.reward}"
+        trial_label = f"{node.trial}"
+
+        # Add branch marker
+        branch = "└── " if is_last else "├── "
+        print(f"{indent}{branch}Node: {node_label}, Trial: {trial_label}, Visits: {node.n_state_visits}")
+
+        # Update indentation for children
+        child_indent = indent + ("    " if is_last else "│   ")
+
+        # Group children by action
+        children_by_action = {}
+        for action, leaf, child_id, child_node in self.get_children(node, dummy):
+            if action not in children_by_action:
+                children_by_action[action] = []
+            children_by_action[action].append((leaf, child_id, child_node))
+
+        # Find the best action based on performance
+        best_action = max(
+            children_by_action.items(),
+            key=lambda item: item[1][0][0].performance,
+            default=(None, [])
+        )[0]
+
+        # Iterate through actions and their corresponding children
+        num_actions = len(children_by_action)
+        for i, (action, children) in enumerate(children_by_action.items()):
+            is_action_last = i == num_actions - 1
+
+            leaf = children[0][0]
+            action_label = f"Action {action}, (n_v: {leaf.n_action_visits},  branch factor: {len(children)}, perf: {leaf.performance:.2f})"
+
+            if action == best_action:
+                action_label = f"\033[1m{action_label}\033[0m"
+
+            action_branch = "└── " if is_action_last else "├── "
+            print(f"{child_indent}{action_branch}{action_label}")
+
+            sub_child_indent = child_indent + ("    " if is_action_last else "│   ")
+
+            for j, (leaf, child_id, child_node) in enumerate(children):
+                is_child_last = j == len(children) - 1
+
+                self.print_tree(
+                    child_node,
+                    indent=sub_child_indent,
+                    is_last=is_child_last,
+                    dummy=dummy,
+                    depth=depth + 1,
+                    max_depth=max_depth
+                )
+
+
+    def max_depth(self, node):
+        """Recursively calculate the maximum depth of the tree starting from the given node."""
+        if not self.get_children(node):
+            return 1
+
+        child_depths = []
+        for _, _, _, child_node in self.get_children(node):
+            child_depths.append(self.max_depth(child_node))
+
+        return 1 + max(child_depths)
+
+
+    ## function for getting the max and min Q-values at a given depth of the tree
+    def min_max_Q(self, node, depth, current_depth=0):
+        """Recursively calculate the maximum and minimum Q-values at a given depth of the tree."""
+        if current_depth == depth:
+            Qs = []
+            for a in node.action_leaves.keys():
+                if node.action_leaves[a] is not None:
+                    Qs.append(node.action_leaves[a].performance)
+            if len(Qs) == 0:
+                return np.inf, -np.inf
+            return min(Qs), max(Qs)
+
+        max_Q = -np.inf
+        min_Q = np.inf
+        for _, _, _, child_node in self.get_children(node):
+            child_min_Q, child_max_Q = self.min_max_Q(child_node, depth, current_depth + 1)
+            max_Q = max(max_Q, child_max_Q)
+            min_Q = min(min_Q, child_min_Q)
+
+        return min_Q, max_Q
+
+
+    ## prune, i.e. after taking a step, keep only that subtree
+    def prune(self, action, next_node_id):
+
+        ## delete actions not taken
+        actions_to_delete = [a for a in self.root.action_leaves.keys() if (a != action) and (self.root.action_leaves[a] is not None)]
+        for a in actions_to_delete:
+            del self.root.action_leaves[a]
+
+        ## delete subtree for the other state children reachable from the root-action pair
+        self.root.action_leaves[action].children = {next_node_id: self.root.action_leaves[action].children[next_node_id]}
+
+        ## update the root
+        self.root = self.root.action_leaves[action].children[next_node_id]
