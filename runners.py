@@ -18,8 +18,12 @@ def extract_grid_info(agent, env_copy, city, day, t):
             path_past_overlap = len(overlap)
 
             ## get the number of costs and no-costs that comprise these overlapping states
-            path_past_observed_high_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
-            path_past_observed_low_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
+            try:
+                path_past_observed_high_costs = sum(env_copy.costs[obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
+                path_past_observed_low_costs = sum(env_copy.costs[obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
+            except:
+                path_past_observed_high_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
+                path_past_observed_low_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
             agent.path_future_overlaps[city, day, t, i] = env_copy.path_future_overlaps[t][i]
             agent.path_past_overlaps[city, day, t, i] = path_past_overlap
             agent.path_past_observed_high_costs[city, day, t, i] = path_past_observed_high_costs
@@ -33,8 +37,12 @@ def extract_grid_info(agent, env_copy, city, day, t):
             path = set(map(tuple, path))
             overlap = set(path).intersection(set(obs_list))
             path_past_overlap = len(overlap)
-            path_past_observed_high_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
-            path_past_observed_low_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
+            try:
+                path_past_observed_high_costs = sum(env_copy.costs[obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
+                path_past_observed_low_costs = sum(env_copy.costs[obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
+            except:
+                path_past_observed_high_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
+                path_past_observed_low_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
             agent.path_future_overlaps[city, day, t, i] = env_copy.path_future_overlaps[t][i]
             agent.path_past_overlaps[city, day, t, i] = path_past_overlap
             agent.path_past_observed_high_costs[city, day, t, i] = path_past_observed_high_costs
@@ -50,12 +58,26 @@ def extract_grid_info(agent, env_copy, city, day, t):
         agent.orthogonal_arm_len[city, day, t, i] = len(orthogonal_states)
 
         ## get info on costs on rows and columns
-        observed_high_cost_cols = {obs[1] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost}
-        observed_low_cost_cols = {obs[1] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost}
-        observed_high_cost_rows = {obs[0] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost}
-        observed_low_cost_rows = {obs[0] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost}
-        observed_high_cost_states = {tuple(obs) for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost}
-        observed_low_cost_states = {tuple(obs) for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost}
+        observed_high_cost_cols = {obs[1] for obs in obs_list if env_copy.costs[int(obs[0]), int(obs[1])] == env_copy.high_cost}
+        observed_low_cost_cols = {obs[1] for obs in obs_list if  env_copy.costs[int(obs[0]), int(obs[1])] == env_copy.low_cost}
+        observed_high_cost_rows = {obs[0] for obs in obs_list if env_copy.costs[int(obs[0]), int(obs[1])] == env_copy.high_cost}
+        observed_low_cost_rows = {obs[0] for obs in obs_list if  env_copy.costs[int(obs[0]), int(obs[1])] == env_copy.low_cost}
+        observed_high_cost_states = {tuple(obs) for obs in obs_list if env_copy.costs[int(obs[0]), int(obs[1])] == env_copy.high_cost}
+        observed_low_cost_states = {tuple(obs) for obs in obs_list if env_copy.costs[int(obs[0]), int(obs[1])] == env_copy.low_cost}
+        # try:
+        #     observed_high_cost_cols = {obs[1] for obs in obs_list if env_copy.costs[obs[0], obs[1]] == env_copy.high_cost}
+        #     observed_low_cost_cols = {obs[1] for obs in obs_list if env_copy.costs[obs[0], obs[1]] == env_copy.low_cost}
+        #     observed_high_cost_rows = {obs[0] for obs in obs_list if env_copy.costs[obs[0], obs[1]] == env_copy.high_cost}
+        #     observed_low_cost_rows = {obs[0] for obs in obs_list if env_copy.costs[obs[0], obs[1]] == env_copy.low_cost}
+        #     observed_high_cost_states = {tuple(obs) for obs in obs_list if env_copy.costs[obs[0], obs[1]] == env_copy.high_cost}
+        #     observed_low_cost_states = {tuple(obs) for obs in obs_list if env_copy.costs[obs[0], obs[1]] == env_copy.low_cost}
+        # except:
+        #     observed_high_cost_cols = {obs[1] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost}
+        #     observed_low_cost_cols = {obs[1] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost}
+        #     observed_high_cost_rows = {obs[0] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost}
+        #     observed_low_cost_rows = {obs[0] for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost}
+        #     observed_high_cost_states = {tuple(obs) for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost}
+        #     observed_low_cost_states = {tuple(obs) for obs in obs_list if env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost}
 
         if env_copy.context == 'column':
 
@@ -187,16 +209,19 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
     agent.aligned_arm_gen_low_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.orthogonal_arm_gen_high_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.orthogonal_arm_gen_low_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
-    agent.aligned_path_aligned_arm_len = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
-    agent.aligned_path_orthogonal_arm_len = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
-    agent.orthogonal_path_aligned_arm_len = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
-    agent.orthogonal_path_orthogonal_arm_len = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
+    agent.aligned_arm_len = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
+    agent.orthogonal_arm_len = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
+    agent.aligned_path_aligned_arm_len = np.zeros((n_cities, n_days, n_trials))
+    agent.aligned_path_orthogonal_arm_len = np.zeros((n_cities, n_days, n_trials))
+    agent.orthogonal_path_aligned_arm_len = np.zeros((n_cities, n_days, n_trials))
+    agent.orthogonal_path_orthogonal_arm_len = np.zeros((n_cities, n_days, n_trials))
 
     ## define whether or not we're extracting expt info based on yoked
-    if yoked:
-        extract_fn = extract_grid_info
-    else:
-        extract_fn = lambda agent, env_copy, city, day, t: None
+    # if yoked:
+    #     extract_fn = extract_grid_info
+    # else:
+    #     extract_fn = lambda agent, env_copy, city, day, t: None
+    extract_fn = extract_grid_info
     
 
     if progress:
