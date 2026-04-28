@@ -9,13 +9,13 @@ Safe for single-node execution (CPU generation -> GPU training) without CUDA dea
 USAGE EXAMPLES
 ================================================================================
     # RUN EVERYTHING ON A SINGLE NODE (Viper-GPU)
-    python tesbi_e2e.py --stage all --n_sims 30000 --epochs 100 --sst_folder "./data/example_processed_data"
+    python tesbi_e2e.py --stage all --n_sims 30000 --epochs 100
 
     # OR RUN STAGES INDIVIDUALLY:
     python tesbi_e2e.py --stage simulate --n_sims 30000
     python tesbi_e2e.py --stage train --epochs 100
     python tesbi_e2e.py --stage recover --K 20 --num_post 1000
-    python tesbi_e2e.py --stage posterior --sst_folder "./data/example_processed_data" 
+    python tesbi_e2e.py --stage posterior --df_path expt/data/complete/expt_3/df.csv
 ================================================================================
 """
 import sys
@@ -26,10 +26,9 @@ import argparse
 import warnings
 import multiprocessing
 import gc
+import pickle
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
-import zipfile
-import tempfile
 
 import pandas as pd
 import numpy as np
@@ -39,17 +38,16 @@ from torch.utils.data import Dataset, DataLoader, TensorDataset
 from joblib import Parallel, delayed
 import zuko
 
+
 # ==============================================================================
 # PATH CONFIGURATION
 # ==============================================================================
 current_dir = Path(__file__).resolve().parent
-sys.path.append(str(current_dir.parent))
+sys.path.append(str(current_dir.parent.parent))
 
-# Local modules
-from utils.preprocessing import preprocessing
-from core.models import POMDP
-from core import simulation
-
+from MCTS import MonteCarloTreeSearch_AFC
+from agents import BAMCP
+from runners import run_grid
 # ==============================================================================
 # CPU CORES SETUP (No global GPU init to prevent multi-processing deadlock)
 # ==============================================================================
@@ -57,40 +55,52 @@ try:
     N_JOBS = int(os.environ.get("SLURM_CPUS_PER_TASK"))
 except (ValueError, TypeError):
     N_JOBS = multiprocessing.cpu_count()
+N_JOBS = 10
 
 # ==============================================================================
 # CONFIGURATION
 # ==============================================================================
-USE_PREPROCESSING = True # when use  real abcd data
-# USE_PREPROCESSING = False # when use example data
-
+# Parameter Ranges
 PARAM_RANGES = {
-    "q_d_n": (0.0, 1.0),
-    "q_d":   (0.5, 1.0),
-    "q_s_n": (0.0, 1.0),
-    "q_s":   (0.5, 1.0),
-    "cost_stop_error": (0.01, 2.0),
-    "inv_temp":     (1, 100)
-}
+    "temp": (0.0, 3.0),
+    "lapse":   (0.0, 1.0),
+    "aligned_weight": (0.0, 1.0),
+    "orthogonal_weight":   (0.0, 1.0),
+    "horizon": (1, 3),
+    }
 
-LINEAR_PARAMS = ["q_d_n", "q_d", "q_s_n", "q_s", "inv_temp"]
-LOG_PARAMS = ["cost_stop_error"]
-PARAM_ORDER = LINEAR_PARAMS + LOG_PARAMS
+PARAM_ORDER = ["temp", "lapse", "aligned_weight", "orthogonal_weight", "horizon"]
 
 FIXED_PARAMS = {
-    "cost_time": 0.001,
-    "cost_go_error":   1.0,
-    "cost_go_missing": 1.0,
-    "rate_stop_trial": 1.0 / 6.0
+    "n_samples": 500,
+    "exploration_constant": 3,
+    "discount_factor":   0.9,
+    }
+
+# Experiment Structure (expt 3: 32 cities × 1 day × 4 trials = 128 binary choices)
+HYPERPARAMS = {
+    "n_trials": 4,
+    "n_days": 1,
+    "n_cities": 32,
+    "N": 9,
+    "n_afc": 2,
+    "greedy": True,
 }
+LOG_PARAMS = [] ## empty for now
 
-RESULT_LEVELS = ["GS", "GE", "GM", "SS", "SE"]
-
-ART_DIR = Path("outputs/")
+ART_DIR = Path("../outputs/")
 DATASET_PATH = ART_DIR / "simulated_dataset.pt"
 MODEL_PATH = ART_DIR / "amortized_inference_net.pth"
 RECOVERY_CSV = ART_DIR / "params_recovery.csv"
 POST_SUMMARY_CSV = ART_DIR / "params_posteriors.csv"
+
+# Shared env file used for all simulations (single trial sequence)
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+ENV_PATH = PROJECT_ROOT / "expt/assets/trial_sequences/expt_3/env_objects/expt_3_env_objects_1.pkl"
+DEFAULT_DF_PATH = PROJECT_ROOT / "expt/data/complete/expt_3/df.csv"
+
+with open(ENV_PATH, "rb") as f:
+    ENV_OBJECTS = pickle.load(f)
 
 # ==============================================================================
 # PARAMETER SCALING (Min-Max + Log)
@@ -138,54 +148,56 @@ def scaled_to_dict(scaled_vec: np.ndarray) -> Dict[str, float]:
 # ==============================================================================
 # SIMULATOR & FEATURE ENGINEERING
 # ==============================================================================
-def simulate_data(params: Dict[str, float], seed: Optional[int] = None) -> pd.DataFrame:
+def simulate_data(params: Dict[str, float], envs: Dict, seed: Optional[int] = None) -> np.ndarray:
+    """
+    Runs the BAMCP simulator for a single parameter set on the given envs.
+
+    Args:
+        params: Dict with keys matching PARAM_ORDER + FIXED_PARAMS
+                (temp, lapse, aligned_weight, orthogonal_weight, horizon,
+                 n_samples, exploration_constant, discount_factor).
+        envs: Environment objects dict (from load_env_objects).
+        seed: Random seed for reproducibility.
+
+    Returns:
+        Binary choice vector of shape (N_TRIALS_TOTAL,) as float32.
+    """
     if seed is not None:
         np.random.seed(seed)
         random.seed(seed)
         torch.manual_seed(seed)
-    pomdp = POMDP(**params)
-    pomdp.value_iteration_tensor()
-    arr = simulation.simu_task(pomdp)
-    return pd.DataFrame(arr, columns=["result", "rt", "ssd"])
 
-def build_per_trial_features(df: pd.DataFrame, use_index=True) -> np.ndarray:
-    N = len(df)
-    idx_map = {k: i for i, k in enumerate(RESULT_LEVELS)}
-    oh = np.zeros((N, len(RESULT_LEVELS)), dtype=np.float32)
-    res = df["result"].astype(str).values
-    for t, r in enumerate(res):
-        if r in idx_map:
-            oh[t, idx_map[r]] = 1.0
+    bamcp = BAMCP(
+        mcts_class=MonteCarloTreeSearch_AFC,
+        run_fn=run_grid,
+        temp=params["temp"],
+        lapse=params["lapse"],
+        horizon=int(round(params["horizon"])),
+        exploration_constant=params["exploration_constant"],
+        discount_factor=params["discount_factor"],
+        n_samples=params["n_samples"],
+        aligned_weight=params["aligned_weight"],
+        orthogonal_weight=params["orthogonal_weight"],
+    )
 
-    rt = pd.to_numeric(df["rt"], errors="coerce").values.astype(np.float32)
-    ssd = pd.to_numeric(df["ssd"], errors="coerce").values.astype(np.float32)
-    
-    rt_nan = np.isnan(rt).astype(np.float32)
-    ssd_nan = np.isnan(ssd).astype(np.float32)
-    rt = np.nan_to_num(rt, nan=0.0)
-    ssd = np.nan_to_num(ssd, nan=0.0)
+    sim_out = bamcp.run(
+        HYPERPARAMS,
+        agent_name="BAMCP",
+        df_trials=None,
+        envs=envs,
+        fit=False,
+        yoked=False,
+        progress=False,
+    )
 
-    prev_oh = np.roll(oh, 1, axis=0); prev_oh[0, :] = 0.0
-    prev_rt = np.roll(rt, 1); prev_rt[0] = 0.0
-    prev_ssd = np.roll(ssd, 1); prev_ssd[0] = 0.0
-    delta_ssd = ssd - prev_ssd
-
-    cols = [
-        oh, rt[:, None], ssd[:, None], rt_nan[:, None], ssd_nan[:, None],
-        prev_oh, prev_rt[:, None], prev_ssd[:, None], delta_ssd[:, None]
-    ]
-    if use_index:
-        t_idx = np.linspace(-1.0, 1.0, N, dtype=np.float32)[:, None]
-        cols.append(t_idx)
-
-    return np.concatenate(cols, axis=1).astype(np.float32)
+    choices = np.array(sim_out["actions"], dtype=np.float32)
+    return choices
 
 def worker_simulate(i, omega, seed_offset=0):
     omega_scaled = scale_params(omega)
     param_dict = scaled_to_dict(omega_scaled)
-    df = simulate_data(param_dict, seed=seed_offset + i)
-    x_features = build_per_trial_features(df)
-    return x_features, omega_scaled
+    choices = simulate_data(param_dict, ENV_OBJECTS, seed=seed_offset + i)
+    return choices, omega_scaled
 
 # ==============================================================================
 # END-TO-END MODEL: TRANSFORMER + ZUKO FLOW
@@ -205,7 +217,7 @@ class SinusoidalPE(nn.Module):
         return x + self.pe[:N].unsqueeze(0)
 
 class EndToEndTeSBI(nn.Module):
-    def __init__(self, in_dim=18, d_model=64, n_heads=4, n_layers=2, param_dim=6):
+    def __init__(self, in_dim=1, d_model=64, n_heads=4, n_layers=2, param_dim=5):
         super().__init__()
         self.proj = nn.Linear(in_dim, d_model)
         self.pe = SinusoidalPE(d_model)
@@ -242,21 +254,28 @@ class EndToEndTeSBI(nn.Module):
 # ==============================================================================
 # PIPELINE STAGES
 # ==============================================================================
-def stage_simulate(n_sims: int):
-    print(f"\n [Simulate] Generating {n_sims} datasets in parallel using {N_JOBS} CPUs...")
+def stage_simulate(n_sims: int, parallel: bool):
     ART_DIR.mkdir(parents=True, exist_ok=True)
     
     omegas = sample_prior(n_sims)
-    results = Parallel(n_jobs=N_JOBS, verbose=1)(
-        delayed(worker_simulate)(i, omegas[i]) for i in range(n_sims)
-    )
+    if parallel:
+        print(f"\n [Simulate] Generating {n_sims} datasets in parallel using {N_JOBS} CPUs...")
+        results = Parallel(n_jobs=N_JOBS, verbose=1)(
+            delayed(worker_simulate)(i, omegas[i]) for i in range(n_sims)
+        )
+    else:
+        print(f"\n [Simulate] Generating {n_sims} datasets sequentially on CPU...")
+        results = [worker_simulate(i, omegas[i]) for i in range(n_sims)]
     
     X_data = [r[0] for r in results]
     Y_data = [r[1] for r in results]
     
-    X_tensor = torch.tensor(np.array(X_data), dtype=torch.float32)
+    X_tensor = torch.tensor(np.array(X_data), dtype=torch.float32).unsqueeze(-1)  # (n_sims, n_trials, 1)
     Y_tensor = torch.tensor(np.array(Y_data), dtype=torch.float32)
     
+    # print(f" example X[0]: {X_tensor[0].squeeze().numpy()}")
+    # print(f" example Y[0]: {Y_tensor[0].numpy()}")
+
     dataset = TensorDataset(X_tensor, Y_tensor)
     torch.save(dataset, DATASET_PATH)
     print(f"[Simulate] Dataset successfully saved to {DATASET_PATH}")
@@ -278,7 +297,7 @@ def stage_train(epochs: int, batch_size=128, lr=1e-3, patience=15):
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
     val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
     
-    model = EndToEndTeSBI(in_dim=18, param_dim=len(PARAM_ORDER)).to(device)
+    model = EndToEndTeSBI(in_dim=1, param_dim=len(PARAM_ORDER)).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-5)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
     
@@ -329,7 +348,7 @@ def stage_recover(K: int, num_post: int):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"\n [Recovery] Checking {K} ground-truth cases on {str(device).upper()}...")
     
-    model = EndToEndTeSBI(in_dim=18, param_dim=len(PARAM_ORDER)).to(device)
+    model = EndToEndTeSBI(in_dim=1, param_dim=len(PARAM_ORDER)).to(device)
     model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
     model.eval()
     
@@ -338,10 +357,9 @@ def stage_recover(K: int, num_post: int):
     
     for i in range(K):
         gt_params = scaled_to_dict(scale_params(omegas_raw[i]))
-        df_obs = simulate_data(gt_params, seed=4242 + i)
-        
-        X = build_per_trial_features(df_obs)
-        tensor_x = torch.tensor(X[None, ...], dtype=torch.float32).to(device)
+        X = simulate_data(gt_params, ENV_OBJECTS, seed=4242 + i)
+
+        tensor_x = torch.tensor(X[None, :, None], dtype=torch.float32).to(device)
         
         with torch.no_grad():
             posterior_dist = model(tensor_x)
@@ -362,94 +380,57 @@ def stage_recover(K: int, num_post: int):
     pd.DataFrame(details).to_csv(RECOVERY_CSV, index=False)
     print(f"\n [Recovery] Results saved to {RECOVERY_CSV}")
 
-def stage_inference(sst_folder: str, glob_pat: str, num_samples: int):
+def stage_inference(df_path: str, num_samples: int):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     out_root = ART_DIR / "subjects"
     out_root.mkdir(parents=True, exist_ok=True)
-    
-    folder_path = Path(sst_folder)
-    zip_files = list(folder_path.glob("*.zip"))
-    csv_files = list(folder_path.glob(glob_pat))
-    
-    model = EndToEndTeSBI(in_dim=18, param_dim=len(PARAM_ORDER)).to(device)
+
+    n_trials_total = HYPERPARAMS["n_cities"] * HYPERPARAMS["n_days"] * HYPERPARAMS["n_trials"]
+
+    df = pd.read_csv(df_path, low_memory=False)
+    pids = df["pid"].unique()
+    print(f"\n [Inference] Processing {len(pids)} participants from {df_path} on {str(device).upper()}...")
+
+    model = EndToEndTeSBI(in_dim=1, param_dim=len(PARAM_ORDER)).to(device)
     model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
     model.eval()
-    
+
     summaries = []
-    
-    if zip_files:
-        print(f"\n [Inference] Detected ZIP files. Processing {len(zip_files)} real subjects on {str(device).upper()}...")
-        with tempfile.TemporaryDirectory() as tmpdir:
-            for fp in zip_files:
-                try:
-                    subject_id = fp.name.split('_baseline_')[0]
-                    with zipfile.ZipFile(fp, 'r') as zr:
-                        zr.extractall(tmpdir)
-                    
-                    extracted_csvs = list(Path(tmpdir).rglob(f"*{subject_id}*.csv"))
-                    if not extracted_csvs:
-                        continue
-                        
-                    target_csv = extracted_csvs[0]
-                    df_obs = preprocessing(str(target_csv)) if USE_PREPROCESSING else pd.read_csv(str(target_csv))
-                    
-                    X = build_per_trial_features(df_obs)
-                    tensor_x = torch.tensor(X[None, ...], dtype=torch.float32).to(device)
+    for pid in pids:
+        try:
+            df_ppt = df.loc[df["pid"] == pid].sort_values(["city", "day", "trial"])
+            choices = (df_ppt["path_chosen"] == "b").values.astype(np.float32)
 
-                    with torch.no_grad():
-                        posterior_dist = model(tensor_x)
-                        samples_scaled = posterior_dist.sample((num_samples,))[:, 0, :].cpu().numpy()
-                    
-                    rows = [scaled_to_dict(s) for s in samples_scaled]
-                    post_df = pd.DataFrame(rows)
-                    summ = post_df.describe(percentiles=[0.05, 0.5, 0.95]).T[["mean", "std", "5%", "50%", "95%"]]
-                    
-                    subj_dir = out_root / f"{subject_id}_baseline"
-                    subj_dir.mkdir(exist_ok=True)
-                    post_df.to_csv(subj_dir / "posterior_samples.csv", index=False)
-                    summ.to_csv(subj_dir / "posterior_summary.csv")
-                    
-                    s_row = summ.copy(); s_row["subject_id"] = subject_id; s_row["subject_year"] = "baseline"
-                    summaries.append(s_row.reset_index())
-                    
-                    target_csv.unlink()
-                except Exception as e:
-                    print(f" [Error] {fp.name}: {e}")
-    else:
-        print(f"\n [Inference] Processing {len(csv_files)} real subjects from CSV files on {str(device).upper()}...")
-        for fp in csv_files:
-            try:
-                parts = fp.name.split('_')
-                sid = parts[1] if len(parts) > 1 else fp.stem
-                year = parts[2] if len(parts) > 2 else "unknown"
+            if len(choices) != n_trials_total:
+                print(f" [Skip] {pid}: {len(choices)} trials != expected {n_trials_total}")
+                continue
 
-                df_obs = preprocessing(str(fp)) if USE_PREPROCESSING else pd.read_csv(str(fp))
-                X = build_per_trial_features(df_obs)
-                tensor_x = torch.tensor(X[None, ...], dtype=torch.float32).to(device)
+            tensor_x = torch.tensor(choices[None, :, None], dtype=torch.float32).to(device)
 
-                with torch.no_grad():
-                    posterior_dist = model(tensor_x)
-                    samples_scaled = posterior_dist.sample((num_samples,))[:, 0, :].cpu().numpy()
-                
-                rows = [scaled_to_dict(s) for s in samples_scaled]
-                post_df = pd.DataFrame(rows)
-                summ = post_df.describe(percentiles=[0.05, 0.5, 0.95]).T[["mean", "std", "5%", "50%", "95%"]]
-                
-                subj_dir = out_root / f"{sid}_{year}"
-                subj_dir.mkdir(exist_ok=True)
-                post_df.to_csv(subj_dir / "posterior_samples.csv", index=False)
-                summ.to_csv(subj_dir / "posterior_summary.csv")
-                
-                s_row = summ.copy(); s_row["subject_id"] = sid; s_row["subject_year"] = year
-                summaries.append(s_row.reset_index())
-            except Exception as e:
-                print(f" [Error] {fp.name}: {e}")
+            with torch.no_grad():
+                posterior_dist = model(tensor_x)
+                samples_scaled = posterior_dist.sample((num_samples,))[:, 0, :].cpu().numpy()
+
+            rows = [scaled_to_dict(s) for s in samples_scaled]
+            post_df = pd.DataFrame(rows)
+            summ = post_df.describe(percentiles=[0.05, 0.5, 0.95]).T[["mean", "std", "5%", "50%", "95%"]]
+
+            subj_dir = out_root / str(pid)
+            subj_dir.mkdir(exist_ok=True)
+            post_df.to_csv(subj_dir / "posterior_samples.csv", index=False)
+            summ.to_csv(subj_dir / "posterior_summary.csv")
+
+            s_row = summ.copy()
+            s_row["pid"] = pid
+            summaries.append(s_row.reset_index())
+        except Exception as e:
+            print(f" [Error] {pid}: {e}")
 
     if summaries:
         pd.concat(summaries).to_csv(POST_SUMMARY_CSV, index=False)
         print(f"\n [Inference] All summaries saved to {POST_SUMMARY_CSV}")
     else:
-        print("\n [Inference] No summaries generated. Check if files were properly read.")
+        print("\n [Inference] No summaries generated.")
 
 
 # ==============================================================================
@@ -467,16 +448,17 @@ if __name__ == "__main__":
     parser.add_argument("--n_sims", type=int, default=30000, help="Number of simulated datasets")
     parser.add_argument("--epochs", type=int, default=100, help="Training epochs")
     parser.add_argument("--batch_size", type=int, default=128, help="Batch size")
+    parser.add_argument("--parallel", type=int, default=1, help="Use parallel CPU simulation")
     parser.add_argument("--K", type=int, default=20, help="Recovery test cases")
     parser.add_argument("--num_post", type=int, default=1000, help="Samples per recovery/inference")
-    parser.add_argument("--sst_folder", type=str, default=None, help="Folder of real CSVs")
-    parser.add_argument("--glob_pat", type=str, default="*.csv", help="File pattern for inference")
+    parser.add_argument("--df_path", type=str, default=str(DEFAULT_DF_PATH),
+                        help="Path to participant choice CSV (expt_3 df.csv)")
 
     args = parser.parse_args()
     
     # 1. GENERATE DATA (PURE CPU)
     if args.stage in ["all", "simulate"]:
-        stage_simulate(args.n_sims)
+        stage_simulate(args.n_sims, args.parallel==1)
         
     # 2. CLEAR MEMORY BEFORE GPU TASKS
     if args.stage == "all":
@@ -493,7 +475,4 @@ if __name__ == "__main__":
         
     # 5. INFERENCE (GPU)
     if args.stage in ["all", "posterior"]:
-        if args.sst_folder:
-            stage_inference(args.sst_folder, args.glob_pat, args.num_post)
-        else:
-            print(" [WARNING] Skipping posterior inference: Please provide --sst_folder.")
+        stage_inference(args.df_path, args.num_post)
