@@ -472,6 +472,72 @@ class MonteCarloTreeSearch_Bandit(MonteCarloTreeSearch):
             f'mismatch: node trial={node.trial}, env trial={self.env.trial}'
 
 
+# 3. Empowerment-specific MCTS
+class MonteCarloTreeSearch_Emp(MonteCarloTreeSearch):
+    """MCTS subclass with bandit-appropriate node IDs and rollout policy."""
+
+    def __init__(self, env, tree, exploration_constant=2,
+                 discount_factor=0.99, horizon=None):
+        super().__init__(env, tree, exploration_constant,
+                         discount_factor, horizon)
+
+    
+    ## node_id is the sufficient statistic for the multinomial distirbution in the empowerment problem: the counts of each outcome for each arm
+    def init_node_id(self, obs=None, parent_node_id=None):
+        """
+        Node ID = sufficient statistic for multinomial bandit:
+        per-arm counts for each outcome, stored as a flat tuple of length
+        n_afc * n_outcomes: (arm0_o0, arm0_o1, ..., arm1_o0, ...).
+        """
+        n_outcomes = self.env.n_outcomes
+
+        if parent_node_id is not None:
+            counts = list(parent_node_id)
+        else:
+            counts = [0] * (self.n_afc * n_outcomes)
+
+        if len(obs) == 0:
+            return tuple(counts)
+
+        ## fast path for single observation tuple (common during tree traversal)
+        if isinstance(obs, tuple):
+            arm = int(obs[0])
+            outcome = int(obs[1])
+            counts[arm * n_outcomes + outcome] += 1
+            return tuple(counts)
+
+        ## numpy array path (used for initial obs from real env)
+        if obs.ndim == 1:
+            obs = obs.reshape(1, -1)
+
+        for action, outcome in obs:
+            arm = int(action)
+            counts[arm * n_outcomes + int(outcome)] += 1
+
+        return tuple(counts)
+
+
+    def refresh_env(self, env=None):
+        if env is not None:
+            self.env = env.unwrapped if hasattr(env, 'unwrapped') else env
+
+        self.root_trial = self.env.trial
+        self.horizon_trial = min(self.root_trial + self.horizon,
+                                 self.env.n_trials - 1)
+        self.env.set_trunc_trial(self.horizon_trial)
+
+    def rollout_policy(self):
+
+        ## random
+        ro_action = int(random.random() * self.n_afc)
+
+        return ro_action
+
+    def check_node(self, node):
+        assert node.trial == self.env.trial, \
+            f'mismatch: node trial={node.trial}, env trial={self.env.trial}'
+
+
 
 
 ### MCTS components
