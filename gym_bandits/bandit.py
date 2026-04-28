@@ -6,7 +6,7 @@ from gymnasium.utils import seeding
 from abc import ABC, abstractmethod
 import copy
 
-from samplers import BanditSampler
+from samplers import BanditSampler, EmpSampler
 
 
 class BanditEnv(gym.Env):
@@ -280,144 +280,127 @@ class GittinsBanditWrapper(GittinsBandit):
 
 
 
-# ############### Bandits written by Thomas Lecat #################
-
-# class BanditTwoArmedIndependentUniform(BanditEnv):
-# 	"""
-# 	2 armed bandit giving a reward of 1 with inDependent probabilities p_1 and p_2
-# 	"""
-# 	def __init__(self, bandits=2):
-# 		p_dist = np.random.uniform(size=bandits)
-# 		r_dist = np.full(bandits,1)
-
-# 		BanditEnv.__init__(self, p_dist = p_dist, r_dist=r_dist)
-
-# class BanditTwoArmedDependentUniform(BanditEnv):
-#     """
-#     2 armed bandit giving a reward of 1 with probabilities p_1 ~ U[0,1] and p_2 = 1 - p_1
-#     """
-#     def __init__(self):
-#         p = np.random.uniform()
-#         p_dist = [p, 1-p]
-#         r_dist = [1, 1]
-#         info={'parameter':p}
-#         BanditEnv.__init__(self, p_dist = p_dist, r_dist = r_dist, info = info)
-
-# class BanditTwoArmedDependentEasy(BanditEnv):
-#     """
-#     2 armed bandit giving a reward of 1 with probabilities p_1 ~ U[0.1,0.9] and p_2 = 1 - p_1
-#     """
-#     def __init__(self):
-#         p = [0.1,0.9][np.random.randint(0,2)]
-#         p_dist = [p, 1-p]
-#         r_dist = [1, 1]
-#         optimal_arm = np.abs(1-int(round(p)))
-#         info = {'optimal_arm':optimal_arm}
-#         BanditEnv.__init__(self, p_dist = p_dist, r_dist = r_dist, info=info)
-
-# class BanditTwoArmedDependentMedium(BanditEnv):
-#     """
-#     2 armed bandit giving a reward of 1 with probabilities p_1 ~ U[0.25,0.75] and p_2 = 1 - p_1
-#     """
-#     def __init__(self):
-#         p = [0.25,0.75][np.random.randint(0,2)]
-#         p_dist = [p, 1-p]
-#         r_dist = [1, 1]
-#         optimal_arm = np.abs(1-int(round(p)))
-#         info = {'optimal_arm':optimal_arm}
-#         BanditEnv.__init__(self, p_dist = p_dist, r_dist = r_dist, info=info)
-
-# class BanditTwoArmedDependentHard(BanditEnv):
-#     """
-#     2 armed bandit giving a reward of 1 with probabilities p_1 ~ U[0.4,0.6] and p_2 = 1 - p_1
-#     """
-#     def __init__(self):
-#         p = [0.4,0.6][np.random.randint(0,2)]
-#         p_dist = [p, 1-p]
-#         r_dist = [1, 1]
-#         optimal_arm = np.abs(1-int(round(p)))
-#         info = {'optimal_arm':optimal_arm}
-#         BanditEnv.__init__(self, p_dist = p_dist, r_dist = r_dist, info=info)
-
-# class BanditElevenArmedWithIndex(BanditEnv):
-#     """
-#     11 armed bandit:
-#     1 out of the 10 first arms gives a reward of 5 (optimal arm), the 9 other arms give reward of 1.1. The 11th arm gives a reward of 0.1 * index of the optimal arm.
-#     """
-#     def __init__(self):
-#         index = np.random.randint(0,10)
-#         p_dist = np.full(11,1)
-#         r_dist = np.full(11,1.1)
-#         r_dist[index] = 5
-#         r_dist[-1] = 0.1*(index+1) # Note: we add 1 because the arms are indexed from 1 to 10, not 0 to 9
-#         info = {'optimal_arm':10*index}
-#         BanditEnv.__init__(self, p_dist = p_dist, r_dist = r_dist, info=info)
 
 
-# ###################### Bandits written by Jesse Coopper #########################
 
-# class BanditTwoArmedDeterministicFixed(BanditEnv):
-#     """Simplest case where one bandit always pays, and the other always doesn't"""
-#     def __init__(self):
-#         BanditEnv.__init__(self, p_dist=[1, 0], r_dist=[1, 1], info={'optimal_arm':1})
+# ---------------------------------------------------------------------------
+# Empowerment bandit: each arm induces a categorical distribution over m outcomes
+# ---------------------------------------------------------------------------
+class EmpBandit(BanditEnv):
+    """
+    n-armed bandit where each arm a induces a categorical distribution over
+    m possible outcomes. Pulling arm a samples an outcome o ~ Cat(P[a, :]).
+
+    Parameters
+    ----------
+    n_arms : int
+        Number of actions.
+    n_outcomes : int
+        Number of possible outcomes per arm.
+    p_matrix : np.ndarray, optional
+        (n_arms, n_outcomes) row-stochastic matrix. If None, rows are drawn
+        from a symmetric Dirichlet(alpha).
+    alpha : float
+        Dirichlet concentration used when p_matrix is None.
+    """
+
+    def __init__(self, n_arms=5, n_outcomes=3, p_matrix=None, alpha=1.0, ell=1.0, seed=None):
+        if p_matrix is None:
+            p_matrix = np.random.dirichlet(np.full(n_outcomes, alpha), size=n_arms)
+            p_matrix = p_matrix.reshape((n_arms, n_outcomes))
+            
+        p_matrix = np.asarray(p_matrix, dtype=float)
+
+        if p_matrix.shape != (n_arms, n_outcomes):
+            raise ValueError("p_matrix must have shape (n_arms, n_outcomes)")
+        if not np.allclose(p_matrix.sum(axis=1), 1.0):
+            raise ValueError("Each row of p_matrix must sum to 1")
+
+        self.n_outcomes = n_outcomes
+        self.p_matrix = p_matrix
+        self.alpha = alpha
+        self.alphas = np.full_like(p_matrix, alpha)  # Dirichlet parameters for each arm
+        self.posterior_p_matrix = self.alphas/self.alphas.sum(axis=1, keepdims=True)
+        self.ell = ell
+
+        self.sim = False
+        self.info = {}
+
+        self._trial = 0
+        self.n_trials = 10
+
+        self.n_afc = n_arms
+        self.action_space = spaces.Discrete(n_arms)
+        self.observation_space = spaces.Discrete(n_outcomes)
+
+        self._seed(seed)
+
+    @staticmethod
+    def empowerment(p_matrix, ell):
+        """Emp_ell(theta) = sum_{s'} [max_a p(s'|a)]^ell."""
+        return float(np.sum(np.max(p_matrix, axis=0) ** ell))
+    
+
+    def posterior_update(self, action, outcome):
+        self.alphas[action, outcome] += 1
+        self.posterior_p_matrix[action, :] = self.alphas[action, :] / self.alphas[action, :].sum()
+        
+
+    def step(self, action):
+        outcome = int(self.np_random.choice(self.n_outcomes, p=self.p_matrix[action]))
+        trial_obs = (action, outcome)
+
+        if not self.sim:
+            self.obs = np.vstack((self.obs, trial_obs))
+            self.posterior_update(action, outcome)
+
+        terminated = self._trial >= self.n_trials
+        truncated = self._trial >= self.trunc_trial
+        self._trial += 1
+        if terminated or truncated or not self.sim:
+            reward = self.empowerment(self.posterior_p_matrix, self.ell)
+        else:
+            reward = 0.0
+
+        return trial_obs, reward, terminated, truncated, self.info
+
+    def sim_clone(self, p_matrix):
+        sim_env = copy.copy(self)
+        sim_env.p_matrix = np.asarray(p_matrix, dtype=float)
+        sim_env.posterior_p_matrix = sim_env.p_matrix
+        sim_env.sim = True
+        return sim_env
+
+    def make_sampler(self):
+        return EmpSampler(self)
 
 
-# class BanditTwoArmedHighLowFixed(BanditEnv):
-#     """Stochastic version with a large difference between which bandit pays out of two choices"""
-#     def __init__(self):
-#         BanditEnv.__init__(self, p_dist=[0.8, 0.2], r_dist=[1, 1], info={'optimal_arm':1})
+# ---------------------------------------------------------------------------
+# Empowerment bandit wrapper for MCTS
+# ---------------------------------------------------------------------------
+class EmpBanditWrapper(EmpBandit):
+    """Adapts EmpBandit to the interface expected by MCTS."""
 
+    def __init__(self, n_arms=5, n_outcomes=3, alpha=1.0, ell=1.0, n_trials=20, seed=None):
+        super().__init__(n_arms=n_arms, n_outcomes=n_outcomes, alpha=alpha, ell=ell, seed=seed)
+        self.n_trials = n_trials
 
-# class BanditTwoArmedHighHighFixed(BanditEnv):
-#     """Stochastic version with a small difference between which bandit pays where both are good"""
-#     def __init__(self):
-#         BanditEnv.__init__(self, p_dist=[0.8, 0.9], r_dist=[1, 1], info={'optimal_arm':2})
+    @property
+    def trial(self):
+        return self._trial
 
+    @property
+    def current(self):
+        return self._trial
 
-# class BanditTwoArmedLowLowFixed(BanditEnv):
-#     """Stochastic version with a small difference between which bandit pays where both are bad"""
-#     def __init__(self):
-#         BanditEnv.__init__(self, p_dist=[0.1, 0.2], r_dist=[1, 1], info={'optimal_arm':2})
+    def reset(self):
+        self._reset()
+        self.Q = np.zeros(self.n_afc)
+        self.LR = 0.1
 
+    def set_sim(self, sim):
+        self.sim = sim
 
-# class BanditTenArmedRandomFixed(BanditEnv):
-#     """10 armed bandit with random probabilities assigned to payouts"""
-#     def __init__(self, bandits=10):
-#         p_dist = np.random.uniform(size=bandits)
-#         r_dist = np.full(bandits, 1)
-#         BanditEnv.__init__(self, p_dist=p_dist, r_dist=r_dist)
+    def receive_task_params(self, task_params):
+        pass
 
-
-# class BanditTenArmedUniformDistributedReward(BanditEnv):
-#     """10 armed bandit with that always pays out with a reward selected from a uniform distribution"""
-#     def __init__(self, bandits=10):
-#         p_dist = np.full(bandits, 1)
-#         r_dist = np.random.uniform(size=bandits)
-#         BanditEnv.__init__(self, p_dist=p_dist, r_dist=r_dist)
-
-
-# class BanditTenArmedRandomRandom(BanditEnv):
-#     """10 armed bandit with random probabilities assigned to both payouts and rewards"""
-#     def __init__(self, bandits=10):
-#         p_dist = np.random.uniform(size=bandits)
-#         r_dist = np.random.uniform(size=bandits)
-#         BanditEnv.__init__(self, p_dist=p_dist, r_dist=r_dist)
-
-
-# class BanditTenArmedGaussian(BanditEnv):
-#     """
-#     10 armed bandit mentioned on page 30 of Sutton and Barto's
-#     [Reinforcement Learning: An Introduction](https://www.dropbox.com/s/b3psxv2r0ccmf80/book2015oct.pdf?dl=0)
-
-#     Actions always pay out
-#     Mean of payout is pulled from a normal distribution (0, 1) (called q*(a))
-#     Actual reward is drawn from a normal distribution (q*(a), 1)
-#     """
-#     def __init__(self, bandits=10):
-#         p_dist = np.full(bandits, 1)
-#         r_dist = []
-
-#         for i in range(bandits):
-#             r_dist.append([np.random.normal(0, 1), 1])
-
-#         BanditEnv.__init__(self, p_dist=p_dist, r_dist=r_dist)

@@ -407,5 +407,48 @@ class BanditSampler:
         ## expected reward = p(success) * r_dist for each arm
         r_dist = self.env.r_dist
         posterior_mean_Q = np.array([mean_ps[a] * r_dist[a] for a in range(self.env.n_afc)])
-        
+
         return posterior_mean_Q
+    
+### multi-nomial sampler
+class EmpSampler:
+    def __init__(self, env):
+        self.alpha = env.alpha
+        self.n_afc = env.n_afc
+        self.k = env.n_outcomes
+        self.env = env
+        self.set_obs(env.obs)
+
+    ## update counts from obs history
+    def set_obs(self, obs):
+        self.obs = obs
+        self.obs_matrix = np.zeros((self.k, self.n_afc), dtype=int)
+        
+        ## counts for each arm-outcome combination
+        if len(self.obs) > 0:
+            for a in range(self.n_afc):
+                for o in range(self.k):
+                    self.obs_matrix[o, a] = np.sum((self.obs[:, 0] == a) & (self.obs[:, 1] == o))
+
+    ## sample mdps
+    def sample_mdps(self, n_samples, context_prior=None):
+
+        ## sample posterior probabilities
+        sampled_ps = np.zeros((n_samples, self.n_afc, self.k))
+        for a in range(self.n_afc):
+            alpha_vector = self.alpha + self.obs_matrix[:, a]
+            sampled_ps[:, a, :] = np.random.dirichlet(alpha_vector, size=n_samples)
+
+        ## clone environment for each sample
+        sample_mdps = [self.env.sim_clone(sampled_ps[s]) for s in range(n_samples)]
+
+        return sample_mdps
+    
+    ## means
+    def mean_probs(self):
+        mean_ps = np.zeros((self.n_afc, self.k))
+        for a in range(self.n_afc):
+            alpha_vector = self.alpha + self.obs_matrix[:, a]
+            mean_ps[a, :] = alpha_vector / np.sum(alpha_vector)
+
+        return mean_ps

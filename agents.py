@@ -16,8 +16,8 @@ import heapq
 from collections import defaultdict
 from IPython.display import display, clear_output
 from utils import *
-from base_kernels import *
 from scipy.special import beta, logsumexp, digamma, comb, betaln
+from MCTS import *
 
 
 ### base farmer model
@@ -319,7 +319,3 @@ class CE(BAMCP):
     def update_tree(self, env_copy, action):
         return True  # default: always reset
     
-
-
-
-

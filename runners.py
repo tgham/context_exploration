@@ -626,3 +626,58 @@ def run_bandit(agent, env, greedy=False, verbose=True):
         'CE_chose_optimal': CE_chose_optimal,
         'CE_bayes_regret': CE_bayes_regret,
     }
+
+def run_emp(agent, env, verbose=True):
+    """Run an agent on the empowerment bandit task for n_trials."""
+    n_trials = env.n_trials
+    n_arms = env.n_afc
+    n_outcomes = env.n_outcomes
+
+    p_choice_history = np.zeros((n_trials, n_arms))
+    actions = np.zeros(n_trials, dtype=int)
+    outcomes = np.zeros(n_trials, dtype=int)
+    rewards = np.zeros(n_trials)
+
+    env.reset()
+
+    for t in range(n_trials):
+        env_copy = copy.deepcopy(env)
+        env_copy.set_sim(True)
+        
+
+        Q = agent.compute_Q(env_copy)
+        probs = agent.softmax(Q)
+        mean_probs = agent.sampler.mean_probs()
+        max_Q = np.nanmax(Q)
+        best_arms = np.where(Q == max_Q)[0]
+        if len(best_arms) > 1:
+            action = int(np.random.choice(best_arms))
+        else:            
+            action = int(best_arms[0])
+        
+        p_choice_history[t] = probs
+
+        env.set_sim(False)
+        (_, outcome), reward, terminated, truncated, _ = env.step(action)
+
+        actions[t] = action
+        outcomes[t] = outcome
+        rewards[t] = reward
+
+        if verbose:
+            print(f"  trial {t+1:>3}/{n_trials}  Q-values {np.round(Q, 3)}  pulled arm {action}, outcome {outcome}, "
+                  f"empowerment reward {reward:.4f}")
+
+        if terminated or truncated:
+            break
+
+    return {
+        'p_choice': p_choice_history,
+        'actions': actions,
+        'outcomes': outcomes,
+        'rewards': rewards,
+        'cumulative_reward': np.cumsum(rewards),
+        'true_p_matrix': env.p_matrix.copy(),
+        'posterior_p_matrix': env.posterior_p_matrix.copy(),
+        'ell': env.ell,
+    }
