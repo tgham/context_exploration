@@ -89,10 +89,11 @@ HYPERPARAMS = {
 LOG_PARAMS = [] ## empty for now
 
 ART_DIR = Path("../outputs/")
-DATASET_PATH = ART_DIR / "simulated_dataset.pt"
-MODEL_PATH = ART_DIR / "amortized_inference_net.pth"
-RECOVERY_CSV = ART_DIR / "params_recovery.csv"
-POST_SUMMARY_CSV = ART_DIR / "params_posteriors.csv"
+RUN_DIR = ART_DIR  # overridden in __main__ once n_sims / n_samples are known
+DATASET_PATH = RUN_DIR / "simulated_dataset.pt"
+MODEL_PATH = RUN_DIR / "amortized_inference_net.pth"
+RECOVERY_CSV = RUN_DIR / "params_recovery.csv"
+POST_SUMMARY_CSV = RUN_DIR / "params_posteriors.csv"
 
 # Shared env file used for all simulations (single trial sequence)
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -255,16 +256,16 @@ class EndToEndTeSBI(nn.Module):
 # PIPELINE STAGES
 # ==============================================================================
 def stage_simulate(n_sims: int, parallel: bool):
-    ART_DIR.mkdir(parents=True, exist_ok=True)
+    RUN_DIR.mkdir(parents=True, exist_ok=True)
     
     omegas = sample_prior(n_sims)
     if parallel:
-        print(f"\n [Simulate] Generating {n_sims} datasets in parallel using {N_JOBS} CPUs...")
+        print(f"\n [Simulate] Generating {n_sims} datasets from BAMCP with {args.n_samples} samples in parallel using {N_JOBS} CPUs...")
         results = Parallel(n_jobs=N_JOBS, verbose=1)(
             delayed(worker_simulate)(i, omegas[i]) for i in range(n_sims)
         )
     else:
-        print(f"\n [Simulate] Generating {n_sims} datasets sequentially on CPU...")
+        print(f"\n [Simulate] Generating {n_sims} datasets from BAMCP with {args.n_samples} samples sequentially on CPU...")
         results = [worker_simulate(i, omegas[i]) for i in range(n_sims)]
     
     X_data = [r[0] for r in results]
@@ -382,7 +383,7 @@ def stage_recover(K: int, num_post: int):
 
 def stage_inference(df_path: str, num_samples: int):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    out_root = ART_DIR / "subjects"
+    out_root = RUN_DIR / "subjects"
     out_root.mkdir(parents=True, exist_ok=True)
 
     n_trials_total = HYPERPARAMS["n_cities"] * HYPERPARAMS["n_days"] * HYPERPARAMS["n_trials"]
@@ -446,6 +447,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="End-to-End TeSBI Pipeline (Transformer + Zuko)")
     parser.add_argument("--stage", choices=["all", "simulate", "train", "recover", "posterior"], required=True)
     parser.add_argument("--n_sims", type=int, default=30000, help="Number of simulated datasets")
+    parser.add_argument("--n_samples", type=int, default=FIXED_PARAMS["n_samples"],
+                        help="BAMCP MCTS rollouts per decision (samples per simulated model)")
     parser.add_argument("--epochs", type=int, default=100, help="Training epochs")
     parser.add_argument("--batch_size", type=int, default=128, help="Batch size")
     parser.add_argument("--parallel", type=int, default=1, help="Use parallel CPU simulation")
@@ -455,7 +458,16 @@ if __name__ == "__main__":
                         help="Path to participant choice CSV (expt_3 df.csv)")
 
     args = parser.parse_args()
-    
+
+    FIXED_PARAMS["n_samples"] = args.n_samples
+    RUN_DIR = ART_DIR / f"{args.n_sims}_sims_{args.n_samples}_samples"
+    RUN_DIR.mkdir(parents=True, exist_ok=True)
+    DATASET_PATH = RUN_DIR / "simulated_dataset.pt"
+    MODEL_PATH = RUN_DIR / "amortized_inference_net.pth"
+    RECOVERY_CSV = RUN_DIR / "params_recovery.csv"
+    POST_SUMMARY_CSV = RUN_DIR / "params_posteriors.csv"
+    print(f"[Setup] Run directory: {RUN_DIR}")
+
     # 1. GENERATE DATA (PURE CPU)
     if args.stage in ["all", "simulate"]:
         stage_simulate(args.n_sims, args.parallel==1)
