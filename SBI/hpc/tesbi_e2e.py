@@ -55,7 +55,7 @@ try:
     N_JOBS = int(os.environ.get("SLURM_CPUS_PER_TASK"))
 except (ValueError, TypeError):
     N_JOBS = multiprocessing.cpu_count()
-N_JOBS = 10
+
 
 # ==============================================================================
 # CONFIGURATION
@@ -72,7 +72,7 @@ PARAM_RANGES = {
 PARAM_ORDER = ["temp", "lapse", "aligned_weight", "orthogonal_weight", "horizon"]
 
 FIXED_PARAMS = {
-    "n_samples": 500,
+    "n_samples": 10000,
     "exploration_constant": 3,
     "discount_factor":   0.9,
     }
