@@ -1,4 +1,5 @@
 import copy
+import itertools
 import numpy as np
 import pandas as pd
 from tqdm.auto import tqdm
@@ -680,4 +681,107 @@ def run_emp(agent, env, verbose=True):
         'true_p_matrix': env.p_matrix.copy(),
         'posterior_p_matrix': env.posterior_p_matrix.copy(),
         'ell': env.ell,
+    }
+
+
+def _enumerate_emp_Q(current_alphas, n_arms, n_outcomes, h, ell):
+    """Exact Q per first action by exhaustive (a, o) enumeration.
+
+    Sequence weights are the posterior-predictive probability.
+    Empowerment is evaluated on posterior = current_alphas + sequence counts.
+    """
+    Q = np.zeros(n_arms)
+    Z = np.zeros(n_arms)
+    pairs = list(itertools.product(range(n_arms), range(n_outcomes)))
+
+    for seq in itertools.product(pairs, repeat=h):
+        a_1 = seq[0][0]
+        seq_counts = np.zeros((n_arms, n_outcomes), dtype=int)
+        log_w = 0.0
+        for (a, o) in seq:
+            num = current_alphas[a, o] + seq_counts[a, o]
+            den = current_alphas[a].sum()  + seq_counts[a].sum()
+            log_w += np.log(num) - np.log(den)
+            seq_counts[a, o] += 1
+
+        final_alphas = current_alphas + seq_counts
+        posterior_p = final_alphas / final_alphas.sum(axis=1, keepdims=True)
+        emp = float(np.sum(np.max(posterior_p, axis=0) ** ell))
+
+        w = np.exp(log_w)
+        Q[a_1] += w * emp
+        Z[a_1] += w
+
+    return Q / Z
+
+
+def run_emp_enum(agent, env, horizon=None, verbose=True):
+    """Run an empowerment-bandit agent that estimates Q-values by exhaustive
+    enumeration over all future (action, outcome) sequences instead of BAMCP.
+
+    At each trial, enumerates every sequence of length h = min(horizon, remaining
+    trials), weights it by its prior-predictive probability under the env's
+    symmetric Dirichlet prior, and computes end-state empowerment from the
+    posterior obtained by adding sequence counts to env.alphas. Q[a] is the
+    weighted mean empowerment across all sequences whose first action is a.
+    """
+    n_trials = env.n_trials
+    n_arms = env.n_afc
+    n_outcomes = env.n_outcomes
+    alpha = env.alpha
+    ell = env.ell
+
+    Q_history = np.zeros((n_trials, n_arms))
+    p_choice_history = np.zeros((n_trials, n_arms))
+    actions = np.zeros(n_trials, dtype=int)
+    outcomes = np.zeros(n_trials, dtype=int)
+    rewards = np.zeros(n_trials)
+
+    env.reset()
+
+    ## calculate initial empowerment under flat prior
+    flat_prior_p = np.ones((n_arms, n_outcomes)) / n_outcomes
+    print('initial emp:', env.empowerment(flat_prior_p, ell))
+
+    for t in range(n_trials):
+        h = (n_trials - t) if horizon is None else min(horizon, n_trials - t)
+
+        Q = _enumerate_emp_Q(env.alphas.copy(), n_arms, n_outcomes, h, ell)
+        probs = agent.softmax(Q)
+
+        max_Q = np.nanmax(Q)
+        best_arms = np.where(Q == max_Q)[0]
+        if len(best_arms) > 1:
+            action = int(np.random.choice(best_arms))
+        else:
+            action = int(best_arms[0])
+
+        Q_history[t] = Q
+        p_choice_history[t] = probs
+
+        env.set_sim(False)
+        (_, outcome), reward, terminated, truncated, _ = env.step(action)
+
+        actions[t] = action
+        outcomes[t] = outcome
+        rewards[t] = reward
+
+        if verbose:
+            print(f"  trial {t+1:>3}/{n_trials}  Q={np.round(Q, 4)}  "
+                  f"pulled arm {action}, outcome {outcome}, "
+                  f"empowerment reward {reward:.4f}")
+
+        if terminated or truncated:
+            break
+
+    return {
+        'Q': Q_history,
+        'p_choice': p_choice_history,
+        'actions': actions,
+        'outcomes': outcomes,
+        'rewards': rewards,
+        'cumulative_reward': np.cumsum(rewards),
+        'true_p_matrix': env.p_matrix.copy(),
+        'posterior_p_matrix': env.posterior_p_matrix.copy(),
+        'ell': ell,
     }
