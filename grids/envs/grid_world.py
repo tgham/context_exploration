@@ -393,6 +393,10 @@ class GridEnv(gym.Env):
     def current(self):
         return self.starts[self._trial]
     
+    # increment trial
+    def increment_trial(self):
+        self._trial += 1
+    
     ## set the horizon trial in the env
     def set_trunc_trial(self, trunc_trial):
         self.trunc_trial = trunc_trial
@@ -1060,7 +1064,7 @@ class GridEnv(gym.Env):
         truncated = self._trial >= self.trunc_trial
 
         # Update trial counter
-        self._trial += 1
+        self.increment_trial()
 
         return self.trial_obs, cost, self.terminated, truncated, self.info
         
