@@ -42,8 +42,8 @@ def extract_grid_info(agent, env_copy, city, day, t):
                 path_past_observed_high_costs = sum(env_copy.costs[obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
                 path_past_observed_low_costs = sum(env_copy.costs[obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
             except:
-                path_past_observed_high_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
-                path_past_observed_low_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
+                path_past_observed_high_costs = sum(env_copy.costss[t][int(obs[0]), int(obs[1])] == env_copy.high_cost for obs in overlap)
+                path_past_observed_low_costs = sum(env_copy.costss[t][int(obs[0]), int(obs[1])] == env_copy.low_cost for obs in overlap)
             agent.path_future_overlaps[city, day, t, i] = env_copy.path_future_overlaps[t][i]
             agent.path_past_overlaps[city, day, t, i] = path_past_overlap
             agent.path_past_observed_high_costs[city, day, t, i] = path_past_observed_high_costs
@@ -248,6 +248,10 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                 ## get context alignment of states
                 env.path_aligned_states, env.path_orthogonal_states, env.path_weights = env.get_alignment(env.path_states)
 
+                ## some envs are outdated and need to be given sim_weight_map
+                if not hasattr(env, 'sim_weight_map'):
+                    env.set_sim_weights(agent.aligned_weight, agent.orthogonal_weight)
+
             env_copy = copy.deepcopy(env)
             assert not hasattr(env_copy, 'obs'), 'env_copy.obs should not exist before the first trial: {}'.format(len(env_copy.obs),', city:', city+1, 'day:', day+1)
 
@@ -397,7 +401,8 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
 
                 ## else, skip to next trial??
                 else:
-                    env_copy._trial += 1
+                    # env_copy._trial += 1
+                    env_copy.increment_trial()
                     print('skipping city {}, day {}, trial {} because participant missed their choice'.format(city+1, day+1, t+1))
 
 
@@ -684,11 +689,58 @@ def run_emp(agent, env, verbose=True):
     }
 
 
-def _enumerate_emp_Q(current_alphas, n_arms, n_outcomes, h, ell):
-    """Exact Q per first action by exhaustive (a, o) enumeration.
+def _bellman_emp_V(alphas, n_arms, n_outcomes, depth, ell):
+    """Bayes-adaptive optimal value with `depth` future pulls remaining.
 
-    Sequence weights are the posterior-predictive probability.
-    Empowerment is evaluated on posterior = current_alphas + sequence counts.
+    V(h, 0)   = emp_l(h)
+    V(h, d>0) = max_a sum_o p(o|a, h) * V(h u (a,o), d-1)
+
+    `alphas` is the running Dirichlet posterior; mutated in place and restored.
+    """
+    if depth == 0:
+        posterior_p = alphas / alphas.sum(axis=1, keepdims=True)
+        return float(np.sum(np.max(posterior_p, axis=0) ** ell))
+
+    best = -np.inf
+    for a in range(n_arms):
+        denom = alphas[a].sum()
+        ev = 0.0
+        for o in range(n_outcomes):
+            p_o = alphas[a, o] / denom
+            alphas[a, o] += 1
+            ev += p_o * _bellman_emp_V(alphas, n_arms, n_outcomes, depth - 1, ell)
+            alphas[a, o] -= 1
+        if ev > best:
+            best = ev
+    return best
+
+
+def _bellman_emp_Q(current_alphas, n_arms, n_outcomes, h, ell):
+    """Per-first-action Bayes-adaptive optimal Q with horizon h.
+
+    Q[a_1] = sum_o p(o|a_1, h) * V(h u (a_1, o), depth = h-1).
+    Subsequent actions are taken to maximise expected end-state empowerment
+    given the resulting belief, i.e. argmax_a inside _bellman_emp_V.
+    """
+    Q = np.zeros(n_arms)
+    work = current_alphas.astype(float).copy()
+    for a in range(n_arms):
+        denom = work[a].sum()
+        for o in range(n_outcomes):
+            p_o = work[a, o] / denom
+            work[a, o] += 1
+            Q[a] += p_o * _bellman_emp_V(work, n_arms, n_outcomes, h - 1, ell)
+            work[a, o] -= 1
+    return Q
+
+
+def _uniform_tail_emp_Q(current_alphas, n_arms, n_outcomes, h, ell):
+    """Q per first action by exhaustive (a, o) enumeration with PPD weights.
+
+    Equivalent to assuming a uniform random policy over subsequent actions
+    a_2, ..., a_h and weighting outcome sequences by their posterior-predictive
+    probability under env.alphas. A lower bound on Bayes-adaptive optimal Q;
+    kept alongside _bellman_emp_Q for empirical comparison.
     """
     Q = np.zeros(n_arms)
     Z = np.zeros(n_arms)
@@ -700,7 +752,7 @@ def _enumerate_emp_Q(current_alphas, n_arms, n_outcomes, h, ell):
         log_w = 0.0
         for (a, o) in seq:
             num = current_alphas[a, o] + seq_counts[a, o]
-            den = current_alphas[a].sum()  + seq_counts[a].sum()
+            den = current_alphas[a].sum() + seq_counts[a].sum()
             log_w += np.log(num) - np.log(den)
             seq_counts[a, o] += 1
 
@@ -715,20 +767,34 @@ def _enumerate_emp_Q(current_alphas, n_arms, n_outcomes, h, ell):
     return Q / Z
 
 
-def run_emp_enum(agent, env, horizon=None, verbose=True):
-    """Run an empowerment-bandit agent that estimates Q-values by exhaustive
-    enumeration over all future (action, outcome) sequences instead of BAMCP.
+def run_emp_enum(agent, env, horizon=None, policy='bellman', verbose=True):
+    """Run an empowerment-bandit agent with exact Q estimates.
 
-    At each trial, enumerates every sequence of length h = min(horizon, remaining
-    trials), weights it by its prior-predictive probability under the env's
-    symmetric Dirichlet prior, and computes end-state empowerment from the
-    posterior obtained by adding sequence counts to env.alphas. Q[a] is the
-    weighted mean empowerment across all sequences whose first action is a.
+    `policy='bellman'` (default): Bayes-adaptive optimal Q via the recursion
+        V(h, 0)   = emp_l(h)
+        V(h, d>0) = max_a sum_o p(o|a,h) V(h u (a,o), d-1)
+        Q(h, a_1) = sum_o p(o|a_1, h) V(h u (a_1, o), H-1)
+    Subsequent actions are assumed Bayes-optimal -- this is the value BAMCP
+    approximates.
+
+    `policy='uniform_tail'`: Q under a uniform random follow-up policy --
+    exhaustive enumeration of all (a, o) sequences with posterior-predictive
+    weights, averaged uniformly over the action tail. Lower bound on the
+    Bellman Q; useful as a comparison baseline.
+
+    H = min(horizon, n_trials - t) is the remaining horizon at each trial,
+    p(o|a, h) is the posterior predictive of the env's Dirichlet posterior.
     """
+    if policy == 'bellman':
+        Q_fn = _bellman_emp_Q
+    elif policy == 'uniform_tail':
+        Q_fn = _uniform_tail_emp_Q
+    else:
+        raise ValueError(f"unknown policy {policy!r}; expected 'bellman' or 'uniform_tail'")
+
     n_trials = env.n_trials
     n_arms = env.n_afc
     n_outcomes = env.n_outcomes
-    alpha = env.alpha
     ell = env.ell
 
     Q_history = np.zeros((n_trials, n_arms))
@@ -746,7 +812,7 @@ def run_emp_enum(agent, env, horizon=None, verbose=True):
     for t in range(n_trials):
         h = (n_trials - t) if horizon is None else min(horizon, n_trials - t)
 
-        Q = _enumerate_emp_Q(env.alphas.copy(), n_arms, n_outcomes, h, ell)
+        Q = Q_fn(env.alphas.copy(), n_arms, n_outcomes, h, ell)
         probs = agent.softmax(Q)
 
         max_Q = np.nanmax(Q)
