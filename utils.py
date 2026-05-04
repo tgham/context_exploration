@@ -3,6 +3,7 @@ import gymnasium as gym
 from gymnasium import spaces
 from gymnasium.envs.registration import register, registry
 import numpy as np
+from MCTS import MonteCarloTreeSearch_AFC
 from plotter import *
 import matplotlib.pyplot as plt
 from matplotlib import animation
@@ -715,8 +716,9 @@ def save_rotated_data(rotated_data, output_file):
         with open(output_file, 'wb') as f:
             pickle.dump(rotated_data, f)
 
-def load_data(path):
-    from agents import Farmer, CE ## for later simulation
+def load_data(path, ppc = False):
+    from agents import BAMCP, CE ## for later simulation
+    from runners import run_grid
     fieldnames = [
         "pid", 
         "trial", "city", "path_chosen", "button_pressed", "reaction_time_ms", 
@@ -1343,7 +1345,8 @@ def load_data(path):
             N=9
             context_prior=None
             known_context = True
-        agent = CE(context_prior=context_prior, known_context=known_context)
+        # agent = CE(context_prior=context_prior, known_context=known_context)
+        agent = CE(mcts_class=MonteCarloTreeSearch_AFC, run_fn=run_grid, ) ## known context if expt 3
         agent.run(hyperparams=None, agent_name='human', df_trials=df_all.loc[df_all['pid'] == pid], envs=envs, fit=False, yoked=True)
 
         ## extract cost info
