@@ -18,7 +18,7 @@ micromamba activate chickpeas
 # srun python -u ./gittins_expt.py --n_sims 100 --n_workers 50 --n_alphas 20 --n_samples 500000
 # srun python -u ./bandit_single_search.py --n_sims 100 --n_workers 100 --max_beta 8 --n_samples 1000000 --exploration_constant 3.01
 
-# srun python -u ./SBI/hpc/tesbi_e2e.py --stage all --n_sims 10000 
-srun python -u ./SBI/hpc/tesbi_e2e.py --stage recover --K 50 --num_post 1000
+srun python -u ./SBI/hpc/tesbi_e2e.py --stage all --n_samples 50000
+# srun python -u ./SBI/hpc/tesbi_e2e.py --stage recover --K 50 --num_post 1000
 
 
