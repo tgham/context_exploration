@@ -66,13 +66,13 @@ PARAM_RANGES = {
     "lapse":   (0.0, 1.0),
     "aligned_weight": (0.0, 1.0),
     "orthogonal_weight":   (0.0, 1.0),
-    "horizon": (1, 3),
+    "horizon": (0, 3),
     }
 
 PARAM_ORDER = ["temp", "lapse", "aligned_weight", "orthogonal_weight", "horizon"]
 
 FIXED_PARAMS = {
-    "n_samples": 500,
+    "n_samples": 50000,
     "exploration_constant": 3,
     "discount_factor":   0.9,
     }
@@ -98,10 +98,26 @@ POST_SUMMARY_CSV = RUN_DIR / "params_posteriors.csv"
 # Shared env file used for all simulations (single trial sequence)
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ENV_PATH = PROJECT_ROOT / "expt/assets/trial_sequences/expt_3/env_objects/expt_3_env_objects_1.pkl"
+ENV_OBJECTS_DIR = ENV_PATH.parent
 DEFAULT_DF_PATH = PROJECT_ROOT / "expt/data/complete/expt_3/df.csv"
+ID_MAPPING_PATH = PROJECT_ROOT / "expt/data/complete/expt_3/id_mapping_expt_3.pkl"
 
 with open(ENV_PATH, "rb") as f:
     ENV_OBJECTS = pickle.load(f)
+
+def load_env_objects(env_id):
+    """Load the env objects dict for a given sequence ID."""
+    path = ENV_OBJECTS_DIR / f"expt_3_env_objects_{env_id}.pkl"
+    with open(path, "rb") as f:
+        return pickle.load(f)
+
+def _load_id_mapping():
+    with open(ID_MAPPING_PATH, "rb") as f:
+        return pickle.load(f)
+
+def _env_id_for_pid(id_mapping, pid):
+    """expt_3 branch of utils.load_data: id_mapping[pid][12:] is the env-object id."""
+    return id_mapping[pid][12:]
 
 # ==============================================================================
 # PARAMETER SCALING (Min-Max + Log)
@@ -434,6 +450,78 @@ def stage_inference(df_path: str, num_samples: int):
         print("\n [Inference] No summaries generated.")
 
 
+PPC_FIELDS = ["p_correct", "p_chose_orthogonal", "p_chose_more_future_rel_overlap", 'aligned_path_aligned_arm_len', 'aligned_path_orthogonal_arm_len', 'orthogonal_path_aligned_arm_len', 'orthogonal_path_orthogonal_arm_len', 'objective','context']
+
+
+def worker_ppc(pid, env_id, params, seed):
+    """Load this pid's envs, run BAMCP at `params`, return a long-format DataFrame
+    with city/day/trial + the three PPC fields, tagged with pid."""
+    if seed is not None:
+        np.random.seed(seed); random.seed(seed); torch.manual_seed(seed)
+
+    envs = load_env_objects(env_id)
+    bamcp = BAMCP(
+        mcts_class=MonteCarloTreeSearch_AFC,
+        run_fn=run_grid,
+        temp=params["temp"],
+        lapse=params["lapse"],
+        horizon=int(round(params["horizon"])),
+        exploration_constant=params["exploration_constant"],
+        discount_factor=params["discount_factor"],
+        n_samples=params["n_samples"],
+        aligned_weight=params["aligned_weight"],
+        orthogonal_weight=params["orthogonal_weight"],
+    )
+    sim_out = bamcp.run(
+        HYPERPARAMS, agent_name="BAMCP", df_trials=None,
+        envs=envs, fit=False, yoked=False, progress=False,
+    )
+
+    df = pd.DataFrame({k: sim_out[k] for k in ["city", "day", "trial"] + PPC_FIELDS})
+    df["pid"] = pid
+    return df
+
+
+def stage_ppc(df_path: str, post_csv: Optional[str] = None):
+    """Posterior predictive check: simulate BAMCP at each pid's posterior-mean params
+    on that pid's own env objects. Parallelised across pids."""
+    csv_path = Path(post_csv) if post_csv else POST_SUMMARY_CSV
+    post_df = pd.read_csv(csv_path)
+    means = post_df.pivot_table(index="pid", columns="index", values="mean")
+
+    df_all = pd.read_csv(df_path, low_memory=False)
+    pids = sorted(df_all["pid"].unique())
+    id_mapping = _load_id_mapping()
+
+    tasks = []
+    for i, pid in enumerate(pids):
+        if pid not in means.index:
+            print(f"   [skip] {pid}: no posterior row"); continue
+        if pid not in id_mapping:
+            print(f"   [skip] {pid}: not in id_mapping"); continue
+        env_id = _env_id_for_pid(id_mapping, pid)
+        row = means.loc[pid]
+        params = {k: float(row[k]) for k in PARAM_ORDER}
+        params.update(FIXED_PARAMS)
+        
+        ## debugging: change n_samples to 10
+        # params["n_samples"] = 2
+
+        tasks.append((pid, env_id, params, 4242 + i))
+
+    print(f"\n [PPC] Simulating {len(tasks)} participants in parallel ({N_JOBS} workers)...")
+    results = Parallel(n_jobs=N_JOBS, verbose=1)(
+        delayed(worker_ppc)(pid, env_id, params, seed)
+        for (pid, env_id, params, seed) in tasks
+    )
+
+    df_ppc = pd.concat(results, ignore_index=True)
+    out_path = RUN_DIR / "ppc.csv"
+    df_ppc.to_csv(out_path, index=False)
+    print(f"  [PPC] Saved to {out_path}")
+    return df_ppc
+
+
 # ==============================================================================
 # MAIN
 # ==============================================================================
@@ -445,7 +533,7 @@ if __name__ == "__main__":
     np.random.seed(SEED); random.seed(SEED); torch.manual_seed(SEED)
 
     parser = argparse.ArgumentParser(description="End-to-End TeSBI Pipeline (Transformer + Zuko)")
-    parser.add_argument("--stage", choices=["all", "simulate", "train", "recover", "posterior"], required=True)
+    parser.add_argument("--stage", choices=["all", "simulate", "train", "recover", "posterior", "ppc"], required=True)
     parser.add_argument("--n_sims", type=int, default=30000, help="Number of simulated datasets")
     parser.add_argument("--n_samples", type=int, default=FIXED_PARAMS["n_samples"],
                         help="BAMCP MCTS rollouts per decision (samples per simulated model)")
@@ -456,6 +544,8 @@ if __name__ == "__main__":
     parser.add_argument("--num_post", type=int, default=1000, help="Samples per recovery/inference")
     parser.add_argument("--df_path", type=str, default=str(DEFAULT_DF_PATH),
                         help="Path to participant choice CSV (expt_3 df.csv)")
+    parser.add_argument("--post_csv", type=str, default=None,
+                        help="Path to params_posteriors.csv for PPC (default: POST_SUMMARY_CSV)")
 
     args = parser.parse_args()
 
@@ -488,3 +578,7 @@ if __name__ == "__main__":
     # 5. INFERENCE (GPU)
     if args.stage in ["all", "posterior"]:
         stage_inference(args.df_path, args.num_post)
+
+    # 6. POSTERIOR PREDICTIVE CHECK (CPU, parallel over pids)
+    if args.stage in ["all", "ppc"]:
+        stage_ppc(args.df_path, args.post_csv)
