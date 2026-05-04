@@ -55,7 +55,7 @@ try:
     N_JOBS = int(os.environ.get("SLURM_CPUS_PER_TASK"))
 except (ValueError, TypeError):
     N_JOBS = multiprocessing.cpu_count()
-N_JOBS = 10
+
 
 # ==============================================================================
 # CONFIGURATION
