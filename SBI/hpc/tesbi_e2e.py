@@ -88,7 +88,7 @@ HYPERPARAMS = {
 }
 LOG_PARAMS = [] ## empty for now
 
-ART_DIR = Path("../outputs/")
+ART_DIR = Path("SBI/outputs/")
 RUN_DIR = ART_DIR  # overridden in __main__ once n_sims / n_samples are known
 DATASET_PATH = RUN_DIR / "simulated_dataset.pt"
 MODEL_PATH = RUN_DIR / "amortized_inference_net.pth"
