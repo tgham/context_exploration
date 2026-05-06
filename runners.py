@@ -715,7 +715,7 @@ def _bellman_emp_V(alphas, n_arms, n_outcomes, depth, ell):
     return best
 
 
-def _bellman_emp_Q(current_alphas, n_arms, n_outcomes, h, ell):
+def _bellman_emp_Q(current_alphas, n_arms, n_outcomes, h, ell, verbose=False):
     """Per-first-action Bayes-adaptive optimal Q with horizon h.
 
     Q[a_1] = sum_o p(o|a_1, h) * V(h u (a_1, o), depth = h-1).
@@ -729,7 +729,10 @@ def _bellman_emp_Q(current_alphas, n_arms, n_outcomes, h, ell):
         for o in range(n_outcomes):
             p_o = work[a, o] / denom
             work[a, o] += 1
-            Q[a] += p_o * _bellman_emp_V(work, n_arms, n_outcomes, h - 1, ell)
+            V = _bellman_emp_V(work, n_arms, n_outcomes, h - 1, ell)
+            Q[a] += p_o * V
+            if verbose:
+                print(f"action {a}, outcome {o}, p(o|a,h)={p_o:.4f}, V(h u (a,o), h-1)={V:.4f}")
             work[a, o] -= 1
     return Q
 
@@ -786,7 +789,7 @@ def run_emp_enum(agent, env, horizon=None, policy='bellman', verbose=True):
     p(o|a, h) is the posterior predictive of the env's Dirichlet posterior.
     """
     if policy == 'bellman':
-        Q_fn = _bellman_emp_Q
+        Q_fn = lambda alphas, n_a, n_o, h_, e: _bellman_emp_Q(alphas, n_a, n_o, h_, e, verbose=verbose)
     elif policy == 'uniform_tail':
         Q_fn = _uniform_tail_emp_Q
     else:
@@ -799,6 +802,8 @@ def run_emp_enum(agent, env, horizon=None, policy='bellman', verbose=True):
 
     Q_history = np.zeros((n_trials, n_arms))
     p_choice_history = np.zeros((n_trials, n_arms))
+    p_repeat_choice = np.zeros(n_trials)
+    emp_improvement = np.zeros((n_trials, n_arms))
     actions = np.zeros(n_trials, dtype=int)
     outcomes = np.zeros(n_trials, dtype=int)
     rewards = np.zeros(n_trials)
@@ -807,7 +812,8 @@ def run_emp_enum(agent, env, horizon=None, policy='bellman', verbose=True):
 
     ## calculate initial empowerment under flat prior
     flat_prior_p = np.ones((n_arms, n_outcomes)) / n_outcomes
-    print('initial emp:', env.empowerment(flat_prior_p, ell))
+    prev_emp = env.empowerment(flat_prior_p, ell)
+    print('initial emp:', prev_emp)
 
     for t in range(n_trials):
         h = (n_trials - t) if horizon is None else min(horizon, n_trials - t)
@@ -832,6 +838,15 @@ def run_emp_enum(agent, env, horizon=None, policy='bellman', verbose=True):
         outcomes[t] = outcome
         rewards[t] = reward
 
+        emp_improvement[t] = Q / prev_emp
+        prev_emp = reward
+
+        if t == 0:
+            p_repeat_choice[t] = np.nan
+        else:
+            last_action = actions[t-1]
+            p_repeat_choice[t] = probs[last_action]
+
         if verbose:
             print(f"  trial {t+1:>3}/{n_trials}  Q={np.round(Q, 4)}  "
                   f"pulled arm {action}, outcome {outcome}, "
@@ -843,11 +858,109 @@ def run_emp_enum(agent, env, horizon=None, policy='bellman', verbose=True):
     return {
         'Q': Q_history,
         'p_choice': p_choice_history,
+        'p_repeat_choice': p_repeat_choice,
         'actions': actions,
         'outcomes': outcomes,
+        'emp_improvement': emp_improvement,
         'rewards': rewards,
         'cumulative_reward': np.cumsum(rewards),
         'true_p_matrix': env.p_matrix.copy(),
         'posterior_p_matrix': env.posterior_p_matrix.copy(),
         'ell': ell,
     }
+
+
+def enumerate_emp_histories(n_arms=2, n_outcomes=2, n_trials=3, alpha=1.0,
+                            ells=(0.33, 1.0, 3.0), temp=1.0):
+    """Enumerate every reachable (a, o) history of length 0..n_trials-1.
+
+    For each history h and each ell, computes:
+      - current_emp: empowerment of the posterior implied by h
+      - Q[a]: Bayes-adaptive optimal value of taking arm a from h with the
+        remaining horizon n_trials - len(h)
+      - probs[a]: softmax(Q / temp) — the agent's choice probabilities
+      - p_repeat: probs[h[-1][0]] if h non-empty else NaN
+      - delta_emp[a]: 1-step expected empowerment gain
+            E_o~p(o|a,h)[Emp(h u (a,o))] - Emp(h)
+
+    Returns a long-format DataFrame with one row per (ell, history).
+    """
+    import importlib.util as _ilu
+    from scipy.special import softmax as _softmax
+
+    _spec = _ilu.spec_from_file_location("bandit", "gym_bandits/bandit.py")
+    _mod = _ilu.module_from_spec(_spec)
+    _spec.loader.exec_module(_mod)
+    EmpBandit = _mod.EmpBandit
+
+    rows = []
+    pairs = list(itertools.product(range(n_arms), range(n_outcomes)))
+
+    for ell in ells:
+        for t in range(n_trials):
+            for history in itertools.product(pairs, repeat=t):
+                alphas = np.full((n_arms, n_outcomes), float(alpha))
+                for (a, o) in history:
+                    alphas[a, o] += 1
+
+                current_p = alphas / alphas.sum(axis=1, keepdims=True)
+                current_emp = EmpBandit.empowerment(current_p, ell)
+
+                h_remaining = n_trials - t
+                Q = _bellman_emp_Q(alphas.copy(), n_arms, n_outcomes,
+                                   h_remaining, ell, verbose=False)
+
+                probs = _softmax(Q / temp)
+
+                delta_emp = np.zeros(n_arms)
+                for a in range(n_arms):
+                    denom = alphas[a].sum()
+                    expected = 0.0
+                    for o in range(n_outcomes):
+                        p_o = alphas[a, o] / denom
+                        next_alphas = alphas.copy()
+                        next_alphas[a, o] += 1
+                        next_p = next_alphas / next_alphas.sum(axis=1, keepdims=True)
+                        expected += p_o * EmpBandit.empowerment(next_p, ell)
+                    delta_emp[a] = expected - current_emp
+                    # delta_emp[a] = Q[a] - current_emp
+
+                prev_action = history[-1][0] if t > 0 else None
+                p_repeat = probs[prev_action] if prev_action is not None else np.nan
+
+                row = {
+                    'ell': ell,
+                    't': t,
+                    'history': history,
+                    'history_str': '-'.join(f'a{a}o{o}' for (a, o) in history) or 'init',
+                    'prev_action': prev_action if prev_action is not None else np.nan,
+                    'current_emp': current_emp,
+                    'p_repeat': p_repeat,
+                }
+                for a in range(n_arms):
+                    row[f'Q_{a}'] = Q[a]
+                    row[f'p_{a}'] = probs[a]
+                    row[f'delta_emp_{a}'] = delta_emp[a]
+                rows.append(row)
+
+    df = pd.DataFrame(rows)
+    df['history_counts'], df['history_counts_str'] = zip(*df['history'].apply(get_history_counts))
+
+    return df
+
+
+## define unordered 'history_counts', i.e. sufficient statistic for belief state
+def get_history_counts(history):
+    if history == 'init':
+        return 'init'
+    pairs = history
+    counts = {}
+    for pair in pairs:
+        counts[pair] = counts.get(pair, 0) + 1
+    sorted_counts = tuple(sorted(counts.items()))
+    str_counts = '-'.join(f'a{a}o{o}:{count}' for ((a, o), count) in sorted_counts)
+    return sorted_counts, str_counts
+
+
+
+
