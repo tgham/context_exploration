@@ -38,6 +38,9 @@ USAGE EXAMPLES
     python tesbi.py --stage recover --K 200 --num_post 4000
     python tesbi.py --stage posterior --num_samples 4000
     python tesbi.py --stage ppc
+
+--- or, run all in one line
+    python tesbi.py --stage all --n1_pre 30000 --n2 20000 --density nsf
 ================================================================================
 """
 import sys
@@ -669,17 +672,24 @@ def _embed_observation(x_raw: np.ndarray, encoder: TrialTransformer,
 def run_recovery(args, prior, posterior, encoder, stdzr):
     """Validates the posterior against known ground-truth simulated cases."""
     _load_sim_envs(args.env_id)
-    encoder = encoder.to(device)
 
     print(f"\n [Recovery] Checking {args.K} ground-truth cases...")
     omegas_true = prior.sample((args.K,)).cpu()
-    details = []
 
+    encoder.cpu()
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+    X_list = _parallel_simulate(omegas_true, seed_offset=4242)
+
+    encoder.to(device)
+    encoder.eval()
+
+    details = []
     for i in range(args.K):
         gt_params = untransform(omegas_true[i])
-        choices = simulate_data(gt_params, _SIM_ENVS, seed=4242 + i)
-        x_raw = build_features_from_sim(choices)               # (N, 1)
-        x_obs = _embed_observation(x_raw, encoder, stdzr)      # (1, out_dim) z-scored
+        x_obs = _embed_observation(X_list[i], encoder, stdzr)  # (1, out_dim) z-scored
 
         samples = posterior.sample((args.num_post,), x=x_obs).cpu()
 
