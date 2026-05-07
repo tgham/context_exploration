@@ -689,7 +689,7 @@ def run_emp(agent, env, verbose=True):
     }
 
 
-def _bellman_emp_V(alphas, n_arms, n_outcomes, depth, ell):
+def _bellman_emp_V(alphas, n_arms, n_outcomes, depth, termination_arm, ell):
     """Bayes-adaptive optimal value with `depth` future pulls remaining.
 
     V(h, 0)   = emp_l(h)
@@ -697,43 +697,50 @@ def _bellman_emp_V(alphas, n_arms, n_outcomes, depth, ell):
 
     `alphas` is the running Dirichlet posterior; mutated in place and restored.
     """
+    posterior_p = alphas / alphas.sum(axis=1, keepdims=True)
     if depth == 0:
-        posterior_p = alphas / alphas.sum(axis=1, keepdims=True)
         return float(np.sum(np.max(posterior_p, axis=0) ** ell))
-
-    best = -np.inf
+    if termination_arm:
+        best = float(np.sum(np.max(posterior_p, axis=0) ** ell)) ## value of terminating immediately, i.e. current empowerment, without any more samples
+    else:
+        best = -np.inf
     for a in range(n_arms):
         denom = alphas[a].sum()
         ev = 0.0
         for o in range(n_outcomes):
             p_o = alphas[a, o] / denom
             alphas[a, o] += 1
-            ev += p_o * _bellman_emp_V(alphas, n_arms, n_outcomes, depth - 1, ell)
+            ev += p_o * _bellman_emp_V(alphas, n_arms, n_outcomes, depth - 1, termination_arm, ell)
             alphas[a, o] -= 1
         if ev > best:
             best = ev
     return best
 
 
-def _bellman_emp_Q(current_alphas, n_arms, n_outcomes, h, ell, verbose=False):
+def _bellman_emp_Q(current_alphas, n_arms, n_outcomes, h, termination_arm, ell, verbose=False):
     """Per-first-action Bayes-adaptive optimal Q with horizon h.
 
     Q[a_1] = sum_o p(o|a_1, h) * V(h u (a_1, o), depth = h-1).
     Subsequent actions are taken to maximise expected end-state empowerment
     given the resulting belief, i.e. argmax_a inside _bellman_emp_V.
     """
-    Q = np.zeros(n_arms)
+    Q = np.zeros(n_arms + termination_arm)
     work = current_alphas.astype(float).copy()
     for a in range(n_arms):
         denom = work[a].sum()
         for o in range(n_outcomes):
             p_o = work[a, o] / denom
             work[a, o] += 1
-            V = _bellman_emp_V(work, n_arms, n_outcomes, h - 1, ell)
+            V = _bellman_emp_V(work, n_arms, n_outcomes, h - 1, termination_arm, ell)
             Q[a] += p_o * V
             if verbose:
                 print(f"action {a}, outcome {o}, p(o|a,h)={p_o:.4f}, V(h u (a,o), h-1)={V:.4f}")
             work[a, o] -= 1
+
+    ## Q(terminate) is just the immediate empowerment under the current belief, no future pulls
+    if termination_arm:
+        posterior_p = current_alphas / current_alphas.sum(axis=1, keepdims=True)
+        Q[-1] = float(np.sum(np.max(posterior_p, axis=0) ** ell))
     return Q
 
 
@@ -770,13 +777,15 @@ def _uniform_tail_emp_Q(current_alphas, n_arms, n_outcomes, h, ell):
     return Q / Z
 
 
-def run_emp_enum(agent, env, horizon=None, policy='bellman', verbose=True):
+def run_emp_enum(agent, env, horizon=None, policy='bellman', termination_arm=None, verbose=True):
     """Run an empowerment-bandit agent with exact Q estimates.
 
     `policy='bellman'` (default): Bayes-adaptive optimal Q via the recursion
         V(h, 0)   = emp_l(h)
-        V(h, d>0) = max_a sum_o p(o|a,h) V(h u (a,o), d-1)
+        V(h, d>0) = max( emp_l(h),                                       # terminate
+                         max_a sum_o p(o|a,h) V(h u (a,o), d-1) )        # pull arm a
         Q(h, a_1) = sum_o p(o|a_1, h) V(h u (a_1, o), H-1)
+        Q(h, terminate) = emp_l(h)
     Subsequent actions are assumed Bayes-optimal -- this is the value BAMCP
     approximates.
 
@@ -785,25 +794,38 @@ def run_emp_enum(agent, env, horizon=None, policy='bellman', verbose=True):
     weights, averaged uniformly over the action tail. Lower bound on the
     Bellman Q; useful as a comparison baseline.
 
+    `termination_arm`: if True (or auto-detected from `env.termination_arm`),
+    the agent has an extra action that immediately collects the current
+    empowerment and ends the episode. `uniform_tail` does not currently
+    support termination.
+
     H = min(horizon, n_trials - t) is the remaining horizon at each trial,
     p(o|a, h) is the posterior predictive of the env's Dirichlet posterior.
     """
+    if termination_arm is None:
+        termination_arm = bool(getattr(env, 'termination_arm', False))
+
     if policy == 'bellman':
-        Q_fn = lambda alphas, n_a, n_o, h_, e: _bellman_emp_Q(alphas, n_a, n_o, h_, e, verbose=verbose)
+        Q_fn = lambda alphas, n_a, n_o, h_, e: _bellman_emp_Q(
+            alphas, n_a, n_o, h_, termination_arm, e, verbose=verbose)
     elif policy == 'uniform_tail':
+        if termination_arm:
+            raise NotImplementedError("uniform_tail policy does not support termination_arm")
         Q_fn = _uniform_tail_emp_Q
     else:
         raise ValueError(f"unknown policy {policy!r}; expected 'bellman' or 'uniform_tail'")
 
     n_trials = env.n_trials
-    n_arms = env.n_afc
+    n_arms = getattr(env, 'n_arms', env.n_afc - int(termination_arm))
     n_outcomes = env.n_outcomes
     ell = env.ell
+    n_actions = n_arms + int(termination_arm)
+    terminate_idx = n_arms if termination_arm else None
 
-    Q_history = np.zeros((n_trials, n_arms))
-    p_choice_history = np.zeros((n_trials, n_arms))
+    Q_history = np.zeros((n_trials, n_actions))
+    p_choice_history = np.zeros((n_trials, n_actions))
     p_repeat_choice = np.zeros(n_trials)
-    emp_improvement = np.zeros((n_trials, n_arms))
+    emp_improvement = np.zeros((n_trials, n_actions))
     actions = np.zeros(n_trials, dtype=int)
     outcomes = np.zeros(n_trials, dtype=int)
     rewards = np.zeros(n_trials)
@@ -815,6 +837,7 @@ def run_emp_enum(agent, env, horizon=None, policy='bellman', verbose=True):
     prev_emp = env.empowerment(flat_prior_p, ell)
     print('initial emp:', prev_emp)
 
+    last_t = n_trials - 1
     for t in range(n_trials):
         h = (n_trials - t) if horizon is None else min(horizon, n_trials - t)
 
@@ -837,6 +860,7 @@ def run_emp_enum(agent, env, horizon=None, policy='bellman', verbose=True):
         actions[t] = action
         outcomes[t] = outcome
         rewards[t] = reward
+        last_t = t
 
         emp_improvement[t] = Q / prev_emp
         prev_emp = reward
@@ -848,29 +872,34 @@ def run_emp_enum(agent, env, horizon=None, policy='bellman', verbose=True):
             p_repeat_choice[t] = probs[last_action]
 
         if verbose:
+            action_str = 'terminate' if action == terminate_idx else f'arm {action}'
             print(f"  trial {t+1:>3}/{n_trials}  Q={np.round(Q, 4)}  "
-                  f"pulled arm {action}, outcome {outcome}, "
+                  f"chose {action_str}, outcome {outcome}, "
                   f"empowerment reward {reward:.4f}")
 
         if terminated or truncated:
             break
 
+    ## trim trailing zeros if the agent terminated early
+    keep = last_t + 1
     return {
-        'Q': Q_history,
-        'p_choice': p_choice_history,
-        'p_repeat_choice': p_repeat_choice,
-        'actions': actions,
-        'outcomes': outcomes,
-        'emp_improvement': emp_improvement,
-        'rewards': rewards,
-        'cumulative_reward': np.cumsum(rewards),
+        'Q': Q_history[:keep],
+        'p_choice': p_choice_history[:keep],
+        'p_repeat_choice': p_repeat_choice[:keep],
+        'actions': actions[:keep],
+        'outcomes': outcomes[:keep],
+        'emp_improvement': emp_improvement[:keep],
+        'rewards': rewards[:keep],
+        'cumulative_reward': np.cumsum(rewards[:keep]),
         'true_p_matrix': env.p_matrix.copy(),
         'posterior_p_matrix': env.posterior_p_matrix.copy(),
         'ell': ell,
+        'termination_arm': termination_arm,
+        'terminated_early': terminated and (action == terminate_idx) if termination_arm else False,
     }
 
 
-def enumerate_emp_histories(n_arms=2, n_outcomes=2, n_trials=3, alpha=1.0,
+def enumerate_emp_histories(n_arms=2, n_outcomes=2, n_trials=3, alpha=1.0, termination_arm = True,
                             ells=(0.33, 1.0, 3.0), temp=1.0):
     """Enumerate every reachable (a, o) history of length 0..n_trials-1.
 
@@ -907,8 +936,9 @@ def enumerate_emp_histories(n_arms=2, n_outcomes=2, n_trials=3, alpha=1.0,
                 current_emp = EmpBandit.empowerment(current_p, ell)
 
                 h_remaining = n_trials - t
-                Q = _bellman_emp_Q(alphas.copy(), n_arms, n_outcomes,
-                                   h_remaining, ell, verbose=False)
+                Q = _bellman_emp_Q(alphas.copy(), n_arms, n_outcomes, 
+                                   h_remaining, termination_arm, ell, verbose=False)
+                best_a = np.argmax(Q)
 
                 probs = _softmax(Q / temp)
 
@@ -936,11 +966,15 @@ def enumerate_emp_histories(n_arms=2, n_outcomes=2, n_trials=3, alpha=1.0,
                     'prev_action': prev_action if prev_action is not None else np.nan,
                     'current_emp': current_emp,
                     'p_repeat': p_repeat,
+                    'best_a': best_a,
                 }
                 for a in range(n_arms):
                     row[f'Q_{a}'] = Q[a]
                     row[f'p_{a}'] = probs[a]
                     row[f'delta_emp_{a}'] = delta_emp[a]
+                if termination_arm:
+                    row['Q_terminate'] = Q[-1]
+                    row['p_terminate'] = probs[-1]
                 rows.append(row)
 
     df = pd.DataFrame(rows)

@@ -304,11 +304,12 @@ class EmpBandit(BanditEnv):
         Dirichlet concentration used when p_matrix is None.
     """
 
-    def __init__(self, n_arms=5, n_outcomes=3, p_matrix=None, alpha=1.0, ell=1.0, seed=None):
+    def __init__(self, n_arms=5, n_outcomes=3, p_matrix=None, alpha=1.0, ell=1.0,
+                 termination_arm=False, seed=None):
         if p_matrix is None:
             p_matrix = np.random.dirichlet(np.full(n_outcomes, alpha), size=n_arms)
             p_matrix = p_matrix.reshape((n_arms, n_outcomes))
-            
+
         p_matrix = np.asarray(p_matrix, dtype=float)
 
         if p_matrix.shape != (n_arms, n_outcomes):
@@ -329,8 +330,11 @@ class EmpBandit(BanditEnv):
         self._trial = 0
         self.n_trials = 10
 
-        self.n_afc = n_arms
-        self.action_space = spaces.Discrete(n_arms)
+        self.n_arms = n_arms
+        self.termination_arm = bool(termination_arm)
+        self.terminate_action = n_arms if self.termination_arm else None
+        self.n_afc = n_arms + int(self.termination_arm)
+        self.action_space = spaces.Discrete(self.n_afc)
         self.observation_space = spaces.Discrete(n_outcomes)
 
         self._seed(seed)
@@ -344,9 +348,17 @@ class EmpBandit(BanditEnv):
     def posterior_update(self, action, outcome):
         self.alphas[action, outcome] += 1
         self.posterior_p_matrix[action, :] = self.alphas[action, :] / self.alphas[action, :].sum()
-        
 
     def step(self, action):
+        ## voluntary termination: collect current empowerment, end episode, no posterior update
+        if self.termination_arm and action == self.terminate_action:
+            trial_obs = (action, -1)
+            reward = self.empowerment(self.posterior_p_matrix, self.ell)
+            if not self.sim:
+                self.obs = np.vstack((self.obs, trial_obs))
+            self._trial += 1
+            return trial_obs, reward, True, False, self.info
+
         outcome = int(self.np_random.choice(self.n_outcomes, p=self.p_matrix[action]))
         trial_obs = (action, outcome)
 
@@ -381,8 +393,10 @@ class EmpBandit(BanditEnv):
 class EmpBanditWrapper(EmpBandit):
     """Adapts EmpBandit to the interface expected by MCTS."""
 
-    def __init__(self, n_arms=5, n_outcomes=3, alpha=1.0, ell=1.0, n_trials=20, seed=None):
-        super().__init__(n_arms=n_arms, n_outcomes=n_outcomes, alpha=alpha, ell=ell, seed=seed)
+    def __init__(self, n_arms=5, n_outcomes=3, alpha=1.0, ell=1.0, n_trials=20,
+                 termination_arm=False, seed=None):
+        super().__init__(n_arms=n_arms, n_outcomes=n_outcomes, alpha=alpha, ell=ell,
+                         termination_arm=termination_arm, seed=seed)
         self.n_trials = n_trials
 
     @property

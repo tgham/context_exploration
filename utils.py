@@ -114,7 +114,8 @@ def make_gittins_bandit_env(n_arms=2, n_trials=20, alpha=1, beta=1, gam=0.4737, 
     return env
 
 ## create empowerment env
-def make_emp_env(n_arms=3, n_outcomes=5, n_trials=20, alpha=1.0, ell=1.0, seed=None):
+def make_emp_env(n_arms=3, n_outcomes=5, n_trials=20, alpha=1.0, ell=1.0,
+                 termination_arm=False, seed=None):
     """
     Create an EmpBanditWrapper (MCTS-compatible empowerment bandit).
 
@@ -140,7 +141,8 @@ def make_emp_env(n_arms=3, n_outcomes=5, n_trials=20, alpha=1.0, ell=1.0, seed=N
         np.random.seed(seed)
 
     env = _mod.EmpBanditWrapper(
-        n_arms=n_arms, n_outcomes=n_outcomes, alpha=alpha, ell=ell, n_trials=n_trials, seed=seed
+        n_arms=n_arms, n_outcomes=n_outcomes, alpha=alpha, ell=ell, n_trials=n_trials,
+        termination_arm=termination_arm, seed=seed,
     )
     return env
 
