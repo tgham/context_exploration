@@ -45,7 +45,7 @@ def agent_loop(p, agent_params_list, hyperparams, agent_param_combos):
     
     Args:
         p: participant index
-        agent_params_list: list of parameter settings, each a list [temp, lapse, weights, horizon]
+        agent_params_list: list of parameter settings, each a list [temp, weights, horizon]
         hyperparams: dictionary of hyperparameters
         agent_param_combos: list of (agent_name, param_idx) tuples
     """
@@ -66,10 +66,9 @@ def agent_loop(p, agent_params_list, hyperparams, agent_param_combos):
 
         ## unpack params 
         temp = agent_params[0]
-        lapse = agent_params[1]
-        aligned_weight = agent_params[2]
-        orthogonal_weight = agent_params[3]
-        horizon = agent_params[4]
+        aligned_weight = agent_params[1]
+        orthogonal_weight = agent_params[2]
+        horizon = agent_params[3]
 
         ## unpack hyperparams
         exploration_constant = hyperparams['exploration_constant']
@@ -78,9 +77,9 @@ def agent_loop(p, agent_params_list, hyperparams, agent_param_combos):
 
         task_params = dict(aligned_weight=aligned_weight, orthogonal_weight=orthogonal_weight)
         if agent == 'BAMCP':
-            farmer = BAMCP(mcts_class=MonteCarloTreeSearch_AFC, run_fn=run_grid, temp=temp, lapse=lapse, horizon=horizon, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples, **task_params) ## known context if expt 3
+            farmer = BAMCP(mcts_class=MonteCarloTreeSearch_AFC, run_fn=run_grid, temp=temp, horizon=horizon, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples, **task_params) ## known context if expt 3
         elif agent =='CE':
-            farmer = CE(mcts_class=MonteCarloTreeSearch_AFC, run_fn=run_grid, temp=temp, lapse=lapse, horizon=horizon, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples, **task_params) ## known context if expt 3
+            farmer = CE(mcts_class=MonteCarloTreeSearch_AFC, run_fn=run_grid, temp=temp, horizon=horizon, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples, **task_params) ## known context if expt 3
         sim_out = farmer.run(hyperparams, agent_name=agent, df_trials=None, envs=env_objects, fit=False, yoked=False, progress=False)
         sim_outs.append(sim_out)
     
@@ -157,7 +156,6 @@ all_sim_out = {
         'participant':[],
         'agent':[],
         'temp':[],
-        'lapse':[],
         'aligned_weight':[],
         'orthogonal_weight':[],
         'horizon':[],
@@ -202,7 +200,6 @@ create=False
 ## Define parameter variations to sweep over
 param_settings = {
     'temp': [1],           # temperature values to try
-    'lapse': [0],          # lapse rate values to try
     'aligned_weight': [
                     1,
                     2
@@ -220,7 +217,6 @@ param_settings = {
 ## Generate all combinations of parameter settings
 param_combinations = list(itertools.product(
     param_settings['temp'],
-    param_settings['lapse'],
     param_settings['aligned_weight'],
     param_settings['orthogonal_weight'],
     param_settings['horizon'],
@@ -230,7 +226,7 @@ param_combinations = list(itertools.product(
 agent_params_list = [list(combo) for combo in param_combinations]
 print(f"Running {len(agent_params_list)} parameter combinations:")
 for i, params in enumerate(agent_params_list):
-    print(f"  [{i}] temp={params[0]}, lapse={params[1]}, aligned_weight={params[2]}, orthogonal_weight={params[3]}, horizon={params[4]}")
+    print(f"  [{i}] temp={params[0]}, aligned_weight={params[1]}, orthogonal_weight={params[2]}, horizon={params[3]}")
 
 hyperparams = {
     'n_samples': 50000,

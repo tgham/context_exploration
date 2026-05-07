@@ -481,7 +481,6 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
             'leaf_visits_b':[],
             'leaf_visits_c':[],
             'temp': [],
-            'lapse': [],
             'aligned_weight': [],
             'orthogonal_weight': [],
             'horizon': [],
@@ -519,7 +518,6 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                     sim_out['orthogonal_path_aligned_arm_len'].append(agent.orthogonal_path_aligned_arm_len[c][d][t])
                     sim_out['orthogonal_path_orthogonal_arm_len'].append(agent.orthogonal_path_orthogonal_arm_len[c][d][t])
                     sim_out['temp'].append(agent.temp)
-                    sim_out['lapse'].append(agent.lapse)
                     sim_out['aligned_weight'].append(agent.aligned_weight)
                     sim_out['orthogonal_weight'].append(agent.orthogonal_weight)
                     sim_out['horizon'].append(agent.horizon)

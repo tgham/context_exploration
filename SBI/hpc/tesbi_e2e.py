@@ -60,16 +60,15 @@ except (ValueError, TypeError):
 # ==============================================================================
 # CONFIGURATION
 # ==============================================================================
-# Parameter Ranges
+# Parameter Ranges 
 PARAM_RANGES = {
     "temp": (0.0, 3.0),
-    "lapse":   (0.0, 1.0),
     "aligned_weight": (0.0, 1.0),
     "orthogonal_weight":   (0.0, 1.0),
     "horizon": (0, 3),
     }
 
-PARAM_ORDER = ["temp", "lapse", "aligned_weight", "orthogonal_weight", "horizon"]
+PARAM_ORDER = ["temp", "aligned_weight", "orthogonal_weight", "horizon"]
 
 FIXED_PARAMS = {
     "n_samples": 50000,
@@ -171,7 +170,7 @@ def simulate_data(params: Dict[str, float], envs: Dict, seed: Optional[int] = No
 
     Args:
         params: Dict with keys matching PARAM_ORDER + FIXED_PARAMS
-                (temp, lapse, aligned_weight, orthogonal_weight, horizon,
+                (temp, aligned_weight, orthogonal_weight, horizon,
                  n_samples, exploration_constant, discount_factor).
         envs: Environment objects dict (from load_env_objects).
         seed: Random seed for reproducibility.
@@ -188,7 +187,6 @@ def simulate_data(params: Dict[str, float], envs: Dict, seed: Optional[int] = No
         mcts_class=MonteCarloTreeSearch_AFC,
         run_fn=run_grid,
         temp=params["temp"],
-        lapse=params["lapse"],
         horizon=int(round(params["horizon"])),
         exploration_constant=params["exploration_constant"],
         discount_factor=params["discount_factor"],
@@ -464,7 +462,6 @@ def worker_ppc(pid, env_id, params, seed):
         mcts_class=MonteCarloTreeSearch_AFC,
         run_fn=run_grid,
         temp=params["temp"],
-        lapse=params["lapse"],
         horizon=int(round(params["horizon"])),
         exploration_constant=params["exploration_constant"],
         discount_factor=params["discount_factor"],
