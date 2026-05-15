@@ -164,6 +164,12 @@ def _env_id_for_pid(id_mapping, pid):
 ART_DIR = Path("SBI/outputs/2_step/")
 RUN_DIR = ART_DIR  # overridden in main() once n_pre/n1/n2/n_samples are known
 ENC_PATH = RUN_DIR / "encoder.pt"
+PRETRAIN_X_PATH = RUN_DIR / "pretrain_X.npy"
+PRETRAIN_OMEGA_PATH = RUN_DIR / "pretrain_omega.npy"
+SNPE_R1_X_PATH = RUN_DIR / "snpe_r1_X.npy"
+SNPE_R1_OMEGA_PATH = RUN_DIR / "snpe_r1_omega.npy"
+SNPE_R2_X_PATH = RUN_DIR / "snpe_r2_X.npy"
+SNPE_R2_OMEGA_PATH = RUN_DIR / "snpe_r2_omega.npy"
 STD_MEAN_PATH = RUN_DIR / "embeds_mean.npy"
 STD_STD_PATH = RUN_DIR / "embeds_std.npy"
 POST1_PATH = RUN_DIR / "posterior_round1.pkl"
@@ -536,23 +542,55 @@ def _parallel_simulate(omegas: torch.Tensor, seed_offset: int = 0) -> List[np.nd
     return Parallel(n_jobs=N_JOBS, verbose=1)(tasks)
 
 
+def _simulate_or_load(
+    omegas: torch.Tensor, seed_offset: int,
+    x_path: Optional[Path], omega_path: Optional[Path],
+) -> Tuple[List[np.ndarray], torch.Tensor]:
+    """
+    Return (X_list, omegas). If both cache paths exist, load from disk and skip
+    simulation. Otherwise run _parallel_simulate, save X (N, T, F) and omega
+    (N, D) as separate .npy files, then return.
+    """
+    if x_path is not None and omega_path is not None and x_path.exists() and omega_path.exists():
+        print(f"  [Cache] Loading simulations from {x_path.name} / {omega_path.name}")
+        X_arr = np.load(x_path)
+        X_list = [X_arr[i] for i in range(len(X_arr))]
+        omegas = torch.tensor(np.load(omega_path), dtype=torch.float32)
+        return X_list, omegas
+    X_list = _parallel_simulate(omegas, seed_offset=seed_offset)
+    if x_path is not None and omega_path is not None:
+        x_path.parent.mkdir(parents=True, exist_ok=True)
+        np.save(x_path, np.stack(X_list))
+        np.save(omega_path, omegas.numpy())
+        print(f"  [Cache] Saved X -> {x_path.name}, omega -> {omega_path.name}")
+    return X_list, omegas
+
+
 def simulate_round(sampler_fn, n_samples, encoder: TrialTransformer,
-                   seed_offset: int = 0) -> SimulationBlock:
+                   seed_offset: int = 0,
+                   x_path: Optional[Path] = None,
+                   omega_path: Optional[Path] = None) -> SimulationBlock:
     """
     Simulate n_samples (omega, choices) pairs, then push each through the (frozen)
     encoder to produce embeddings. Returns SimulationBlock(omegas, embeds).
 
     The encoder is parked on CPU during the joblib parallel sim to avoid CUDA /
     multiprocessing conflicts, then moved back to GPU for embedding.
+
+    If x_path and omega_path both exist on disk, simulation is skipped and the
+    cached arrays are loaded instead.
     """
     omegas = sampler_fn((n_samples,)).cpu()
 
-    encoder.cpu()
-    gc.collect()
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
+    cached = (x_path is not None and omega_path is not None
+              and x_path.exists() and omega_path.exists())
+    if not cached:
+        encoder.cpu()
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
-    X_list = _parallel_simulate(omegas, seed_offset=seed_offset)
+    X_list, omegas = _simulate_or_load(omegas, seed_offset, x_path, omega_path)
 
     encoder.to(device)
     encoder.eval()
@@ -578,8 +616,8 @@ def run_pretrain(args, prior):
     """
     print(f"\n [Pretrain] Simulating {args.n1_pre} pairs for encoder pretraining...")
     omegas = prior.sample((args.n1_pre,)).cpu()
-    X_list = _parallel_simulate(omegas, seed_offset=0)
-    Omega_list = [omegas[i].numpy() for i in range(args.n1_pre)]
+    X_list, omegas = _simulate_or_load(omegas, 0, PRETRAIN_X_PATH, PRETRAIN_OMEGA_PATH)
+    Omega_list = [omegas[i].numpy() for i in range(len(omegas))]
 
     encoder, _ = train_encoder_on_simulations(
         X_list, Omega_list,
@@ -590,7 +628,6 @@ def run_pretrain(args, prior):
     )
     torch.save(encoder.state_dict(), ENC_PATH)
     print(f"  [Pretrain] Encoder saved to {ENC_PATH}")
-
 
 def run_snpe(args, prior, encoder):
     """
@@ -607,7 +644,8 @@ def run_snpe(args, prior, encoder):
 
     # --- Round 1 ---
     print(f"\n [Round1] Simulating {args.n1_pre} pairs...")
-    block1 = simulate_round(prior.sample, args.n1_pre, encoder, seed_offset=0)
+    block1 = simulate_round(prior.sample, args.n1_pre, encoder, seed_offset=0,
+                            x_path=SNPE_R1_X_PATH, omega_path=SNPE_R1_OMEGA_PATH)
 
     stdzr = SummaryStandardizer()
     embeds_1_z = stdzr.fit_transform(block1.embeds.numpy())
@@ -645,7 +683,8 @@ def run_snpe(args, prior, encoder):
                 post_samples.to(device),
             ], dim=0)
 
-        block2 = simulate_round(proposal_sampler, args.n2, encoder, seed_offset=1_000_000)
+        block2 = simulate_round(proposal_sampler, args.n2, encoder, seed_offset=1_000_000,
+                                x_path=SNPE_R2_X_PATH, omega_path=SNPE_R2_OMEGA_PATH)
         embeds_2_z = stdzr.transform(block2.embeds.numpy())  # reuse R1 standardiser
 
         omegas_all = torch.cat([block1.omegas, block2.omegas], dim=0)
@@ -877,12 +916,20 @@ def main():
 
     global RUN_DIR, ENC_PATH, STD_MEAN_PATH, STD_STD_PATH
     global POST1_PATH, POSTF_PATH, RECOVERY_CSV, POST_SUMMARY_CSV
+    global PRETRAIN_X_PATH, PRETRAIN_OMEGA_PATH
+    global SNPE_R1_X_PATH, SNPE_R1_OMEGA_PATH, SNPE_R2_X_PATH, SNPE_R2_OMEGA_PATH
     FIXED_PARAMS["n_samples"] = args.n_samples
     RUN_DIR = ART_DIR / (
         f"{args.n1_pre}_n1sims_{args.n2}_n2sims_{args.n_samples}_samples"
     )
     RUN_DIR.mkdir(parents=True, exist_ok=True)
     ENC_PATH = RUN_DIR / "encoder.pt"
+    PRETRAIN_X_PATH = RUN_DIR / "pretrain_X.npy"
+    PRETRAIN_OMEGA_PATH = RUN_DIR / "pretrain_omega.npy"
+    SNPE_R1_X_PATH = RUN_DIR / "snpe_r1_X.npy"
+    SNPE_R1_OMEGA_PATH = RUN_DIR / "snpe_r1_omega.npy"
+    SNPE_R2_X_PATH = RUN_DIR / "snpe_r2_X.npy"
+    SNPE_R2_OMEGA_PATH = RUN_DIR / "snpe_r2_omega.npy"
     STD_MEAN_PATH = RUN_DIR / "embeds_mean.npy"
     STD_STD_PATH = RUN_DIR / "embeds_std.npy"
     POST1_PATH = RUN_DIR / "posterior_round1.pkl"
