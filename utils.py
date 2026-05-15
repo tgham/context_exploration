@@ -1163,6 +1163,15 @@ def load_data(path, ppc = False):
     df_all.loc[df_all['path_chosen'] == df_all['more_future_irrel_overlap'], 'chose_more_future_irrel_overlap'] = True
     df_all.loc[df_all['path_chosen'] != df_all['more_future_irrel_overlap'], 'chose_more_future_irrel_overlap'] = False
 
+    ## for now, let's force t1 paths with more future rel overlap to be orthogonal too
+    df_all.loc[(df_all['trial']==1) & (df_all['more_future_rel_overlap'] == 'a'), 'orthogonal_path'] = 'a'
+    df_all.loc[(df_all['trial']==1) & (df_all['more_future_rel_overlap'] == 'b'), 'orthogonal_path'] = 'b'
+    df_all.loc[(df_all['trial']==1) & (df_all['more_future_rel_overlap'] == 'a'), 'aligned_path'] = 'b'
+    df_all.loc[(df_all['trial']==1) & (df_all['more_future_rel_overlap'] == 'b'), 'aligned_path'] = 'a'
+    df_all.loc[(df_all['trial']==1) & (df_all['chose_more_future_rel_overlap'] == True), 'chose_orthogonal'] = True
+    df_all.loc[(df_all['trial']==1) & (df_all['chose_more_future_rel_overlap'] == True), 'chose_aligned'] = False
+    df_all.loc[(df_all['trial']==1) & (df_all['chose_more_future_rel_overlap'] == False), 'chose_orthogonal'] = False
+    df_all.loc[(df_all['trial']==1) & (df_all['chose_more_future_rel_overlap'] == False), 'chose_aligned'] = True
 
 
     ### get some additional data

@@ -319,6 +319,7 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
 
                 ## get info on orthogonal/overlap of paths
                 more_future_rel_overlap = np.argmax(env_copy.path_future_rel_overlaps[t])
+                less_future_rel_overlap = np.argmin(env_copy.path_future_rel_overlaps[t])
                 agent.p_chose_more_future_rel_overlap[city, day, t] = agent.p_choice[city, day, t][more_future_rel_overlap]
                 if env_copy.context == 'row':
                     if env_copy.dominant_axis_A[t] == 'horizontal':
@@ -328,8 +329,15 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                         aligned_path = 1
                         orthogonal_path = 0
                     elif env_copy.dominant_axis_A[t] == 'L-shaped':
-                        aligned_path = np.nan
-                        orthogonal_path = np.nan
+                        
+                        ## define as nan
+                        # aligned_path = np.nan
+                        # orthogonal_path = np.nan
+
+                        ## or, we can define orthogonal path as that with more future rel overlap
+                        aligned_path = less_future_rel_overlap
+                        orthogonal_path = more_future_rel_overlap
+                        
                 elif env_copy.context == 'column':
                     if env_copy.dominant_axis_A[t] == 'vertical':
                         aligned_path = 0
@@ -338,8 +346,15 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                         aligned_path = 1
                         orthogonal_path = 0
                     elif env_copy.dominant_axis_A[t] == 'L-shaped':
-                        aligned_path = np.nan
-                        orthogonal_path = np.nan
+                        
+                        ## define as nan
+                        # aligned_path = np.nan
+                        # orthogonal_path = np.nan
+
+                        ## or, we can define orthogonal path as that with more future rel overlap
+                        aligned_path = less_future_rel_overlap
+                        orthogonal_path = more_future_rel_overlap
+                        
                 if not np.isnan(orthogonal_path):
                     agent.p_chose_orthogonal[city, day, t] = agent.p_choice[city, day, t][orthogonal_path]
                     
