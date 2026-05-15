@@ -52,7 +52,6 @@ import argparse
 import warnings
 import multiprocessing
 from dataclasses import dataclass
-from functools import lru_cache
 from typing import Dict, List, Optional, Tuple
 from pathlib import Path
 
@@ -489,10 +488,15 @@ def train_encoder_on_simulations(
 # 5. SIMULATION WORKER
 # ==============================================================================
 
-@lru_cache(maxsize=None)
+_ENV_OBJECTS_CACHE: Dict[int, object] = {}
+
 def _load_env_objects_cached(env_id: int):
     """Per-worker cache so each process pays the disk cost at most once per env."""
-    return load_env_objects(env_id)
+    cached = _ENV_OBJECTS_CACHE.get(env_id)
+    if cached is None:
+        cached = load_env_objects(env_id)
+        _ENV_OBJECTS_CACHE[env_id] = cached
+    return cached
 
 
 def _sample_env_ids(n: int, seed: int = 0) -> List[int]:
@@ -525,10 +529,11 @@ def _parallel_simulate(omegas: torch.Tensor, seed_offset: int = 0) -> List[np.nd
     env_ids = _sample_env_ids(n, seed=seed_offset)
     print(f"  Launching parallel simulation ({n} sims, {N_JOBS} workers, "
           f"{len(set(env_ids))} unique env_ids)...")
-    return Parallel(n_jobs=N_JOBS, verbose=1)(
-        delayed(worker_simulate)(i, omegas[i], env_ids[i], seed_offset=seed_offset)
+    tasks = [
+        delayed(worker_simulate)(int(i), omegas[i].clone(), int(env_ids[i]), int(seed_offset))
         for i in range(n)
-    )
+    ]
+    return Parallel(n_jobs=N_JOBS, verbose=1)(tasks)
 
 
 def simulate_round(sampler_fn, n_samples, encoder: TrialTransformer,
