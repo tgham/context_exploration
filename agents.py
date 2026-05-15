@@ -7,7 +7,6 @@ import numpy as np
 from plotter import *
 import matplotlib.pyplot as plt
 from matplotlib import animation
-import seaborn as sns
 import scipy
 from scipy.spatial.distance import cdist
 from scipy.special import softmax
