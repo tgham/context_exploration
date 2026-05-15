@@ -52,6 +52,7 @@ import argparse
 import warnings
 import multiprocessing
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Dict, List, Optional, Tuple
 from pathlib import Path
 
@@ -216,7 +217,8 @@ def simulate_data(params: Dict[str, float], envs: Dict, seed: Optional[int] = No
         progress=False,
     )
 
-    choices = np.array(sim_out["actions"], dtype=np.float32)
+    ## choice data, sampled from choice probabilities
+    choices = np.random.binomial(1, sim_out['p_chose_orthogonal'])
     return choices
 
 
@@ -268,7 +270,8 @@ def build_features_from_participant(df_participant: pd.DataFrame) -> np.ndarray:
     Output: float32 array of shape (N_TRIALS_TOTAL, 1).
     """
     df_sorted = df_participant.sort_values(["city", "day", "trial"])
-    choices = (df_sorted["path_chosen"] == "b").values.astype(np.float32)
+    # choices = (df_sorted["path_chosen"] == "b").values.astype(np.float32)
+    choices = (df_sorted["chose_orthogonal"] == True).values.astype(np.float32)
     return choices.reshape(-1, 1)
 
 
@@ -486,25 +489,32 @@ def train_encoder_on_simulations(
 # 5. SIMULATION WORKER
 # ==============================================================================
 
-# Single shared env set, loaded once and used for ALL simulations.
-# This ensures choice differences are driven by parameter variation, not grids.
-_SIM_ENVS = None
-
-def _load_sim_envs(env_id: int):
-    """Load one env set to be shared across all simulation workers."""
-    global _SIM_ENVS
-    _SIM_ENVS = load_env_objects(env_id)
-    print(f"  [Sim Envs] Loaded env set {env_id} "
-          f"({HYPERPARAMS['n_cities']} cities x {HYPERPARAMS['n_trials']} trials).")
+@lru_cache(maxsize=None)
+def _load_env_objects_cached(env_id: int):
+    """Per-worker cache so each process pays the disk cost at most once per env."""
+    return load_env_objects(env_id)
 
 
-def worker_simulate(i, omega, seed_offset=0):
+def _sample_env_ids(n: int, seed: int = 0) -> List[int]:
+    """Assign env_ids to n simulations by cycling through a shuffled list of
+    participant pids and mapping each via _env_id_for_pid. Lets the encoder see
+    a variety of environments rather than one fixed grid."""
+    df_all = pd.read_csv(str(PARTICIPANT_DATA_CSV), low_memory=False)
+    id_mapping = _load_id_mapping()
+    pids = [p for p in df_all["pid"].unique().tolist() if p in id_mapping]
+    rng = np.random.default_rng(seed)
+    rng.shuffle(pids)
+    return [int(_env_id_for_pid(id_mapping, pids[i % len(pids)])) for i in range(n)]
+
+
+def worker_simulate(i, omega, env_id, seed_offset=0):
     """
-    Simulate one (params, choices) pair using the shared env set.
+    Simulate one (params, choices) pair on the assigned env set.
     Called by joblib Parallel — must be a top-level function.
     """
     params = untransform(omega)
-    choices = simulate_data(params, _SIM_ENVS, seed=seed_offset + i)
+    envs = _load_env_objects_cached(int(env_id))
+    choices = simulate_data(params, envs, seed=seed_offset + i)
     return build_features_from_sim(choices)
 
 
@@ -512,9 +522,11 @@ def _parallel_simulate(omegas: torch.Tensor, seed_offset: int = 0) -> List[np.nd
     """Run the BAMCP simulator in parallel for a batch of omegas. Returns list of
     per-trial feature arrays of shape (N_TRIALS_TOTAL, 1)."""
     n = omegas.shape[0]
-    print(f"  Launching parallel simulation ({n} sims, {N_JOBS} workers)...")
+    env_ids = _sample_env_ids(n, seed=seed_offset)
+    print(f"  Launching parallel simulation ({n} sims, {N_JOBS} workers, "
+          f"{len(set(env_ids))} unique env_ids)...")
     return Parallel(n_jobs=N_JOBS, verbose=1)(
-        delayed(worker_simulate)(i, omegas[i], seed_offset=seed_offset)
+        delayed(worker_simulate)(i, omegas[i], env_ids[i], seed_offset=seed_offset)
         for i in range(n)
     )
 
@@ -559,8 +571,6 @@ def run_pretrain(args, prior):
     encoder under MSE loss to predict omega. Saves the frozen-ready encoder
     state_dict to ENC_PATH.
     """
-    _load_sim_envs(args.env_id)
-
     print(f"\n [Pretrain] Simulating {args.n1_pre} pairs for encoder pretraining...")
     omegas = prior.sample((args.n1_pre,)).cpu()
     X_list = _parallel_simulate(omegas, seed_offset=0)
@@ -588,7 +598,6 @@ def run_snpe(args, prior, encoder):
     The encoder is NOT passed to sbi as embedding_net — sbi sees the
     precomputed standardised embeddings as `x`.
     """
-    _load_sim_envs(args.env_id)
     encoder = encoder.to(device)
 
     # --- Round 1 ---
@@ -671,8 +680,6 @@ def _embed_observation(x_raw: np.ndarray, encoder: TrialTransformer,
 
 def run_recovery(args, prior, posterior, encoder, stdzr):
     """Validates the posterior against known ground-truth simulated cases."""
-    _load_sim_envs(args.env_id)
-
     print(f"\n [Recovery] Checking {args.K} ground-truth cases...")
     omegas_true = prior.sample((args.K,)).cpu()
 
@@ -849,8 +856,6 @@ def main():
                         help="BAMCP MCTS rollouts per decision (samples per simulated model)")
     parser.add_argument("--mix_prior_frac", type=float, default=0.2, help="Prior fraction in Round 2 proposal")
     parser.add_argument("--density", choices=["nsf", "maf", "mdn"], default="nsf", help="Density estimator")
-    parser.add_argument("--env_id", type=int, default=1,
-                        help="Env object ID to use for all simulations (same grids for every agent)")
 
     # Recovery args
     parser.add_argument("--K", type=int, default=20, help="Recovery test cases")
