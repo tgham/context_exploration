@@ -110,15 +110,18 @@ PARAM_RANGES = {
     "temp": (0.0, 3.0),
     "aligned_weight": (0.0, 1.0),
     "orthogonal_weight":   (0.0, 1.0),
-    "horizon": (0, 3),
+    # "horizon": (0, 3),
     }
 
-PARAM_ORDER = ["temp", "aligned_weight", "orthogonal_weight", "horizon"]
+PARAM_ORDER = ["temp", "aligned_weight", "orthogonal_weight", 
+            #    "horizon"
+               ]
 
 FIXED_PARAMS = {
     "n_samples": 10000,
     "exploration_constant": 3,
     "discount_factor":   0.9,
+    "horizon": 3 ## override for now
     }
 
 # Experiment Structure (expt 3: 32 cities × 1 day × 4 trials = 128 binary choices)
@@ -204,7 +207,8 @@ def simulate_data(params: Dict[str, float], envs: Dict, seed: Optional[int] = No
         mcts_class=MonteCarloTreeSearch_AFC,
         run_fn=run_grid,
         temp=params["temp"],
-        horizon=int(round(params["horizon"])),
+        # horizon=int(round(params["horizon"])),
+        horizon=params["horizon"],
         exploration_constant=params["exploration_constant"],
         discount_factor=params["discount_factor"],
         n_samples=params["n_samples"],
@@ -545,13 +549,14 @@ def _parallel_simulate(omegas: torch.Tensor, seed_offset: int = 0) -> List[np.nd
 def _simulate_or_load(
     omegas: torch.Tensor, seed_offset: int,
     x_path: Optional[Path], omega_path: Optional[Path],
+    force: bool = False,
 ) -> Tuple[List[np.ndarray], torch.Tensor]:
     """
-    Return (X_list, omegas). If both cache paths exist, load from disk and skip
-    simulation. Otherwise run _parallel_simulate, save X (N, T, F) and omega
-    (N, D) as separate .npy files, then return.
+    Return (X_list, omegas). If both cache paths exist (and force is False), load
+    from disk and skip simulation. Otherwise run _parallel_simulate, save X (N, T, F)
+    and omega (N, D) as separate .npy files, then return.
     """
-    if x_path is not None and omega_path is not None and x_path.exists() and omega_path.exists():
+    if not force and x_path is not None and omega_path is not None and x_path.exists() and omega_path.exists():
         print(f"  [Cache] Loading simulations from {x_path.name} / {omega_path.name}")
         X_arr = np.load(x_path)
         X_list = [X_arr[i] for i in range(len(X_arr))]
@@ -569,7 +574,8 @@ def _simulate_or_load(
 def simulate_round(sampler_fn, n_samples, encoder: TrialTransformer,
                    seed_offset: int = 0,
                    x_path: Optional[Path] = None,
-                   omega_path: Optional[Path] = None) -> SimulationBlock:
+                   omega_path: Optional[Path] = None,
+                   force: bool = False) -> SimulationBlock:
     """
     Simulate n_samples (omega, choices) pairs, then push each through the (frozen)
     encoder to produce embeddings. Returns SimulationBlock(omegas, embeds).
@@ -582,7 +588,7 @@ def simulate_round(sampler_fn, n_samples, encoder: TrialTransformer,
     """
     omegas = sampler_fn((n_samples,)).cpu()
 
-    cached = (x_path is not None and omega_path is not None
+    cached = (not force and x_path is not None and omega_path is not None
               and x_path.exists() and omega_path.exists())
     if not cached:
         encoder.cpu()
@@ -590,7 +596,7 @@ def simulate_round(sampler_fn, n_samples, encoder: TrialTransformer,
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-    X_list, omegas = _simulate_or_load(omegas, seed_offset, x_path, omega_path)
+    X_list, omegas = _simulate_or_load(omegas, seed_offset, x_path, omega_path, force=force)
 
     encoder.to(device)
     encoder.eval()
@@ -616,7 +622,7 @@ def run_pretrain(args, prior):
     """
     print(f"\n [Pretrain] Simulating {args.n1_pre} pairs for encoder pretraining...")
     omegas = prior.sample((args.n1_pre,)).cpu()
-    X_list, omegas = _simulate_or_load(omegas, 0, PRETRAIN_X_PATH, PRETRAIN_OMEGA_PATH)
+    X_list, omegas = _simulate_or_load(omegas, 0, PRETRAIN_X_PATH, PRETRAIN_OMEGA_PATH, force=args.resim)
     Omega_list = [omegas[i].numpy() for i in range(len(omegas))]
 
     encoder, _ = train_encoder_on_simulations(
@@ -645,7 +651,7 @@ def run_snpe(args, prior, encoder):
     # --- Round 1 ---
     print(f"\n [Round1] Simulating {args.n1_pre} pairs...")
     block1 = simulate_round(prior.sample, args.n1_pre, encoder, seed_offset=0,
-                            x_path=SNPE_R1_X_PATH, omega_path=SNPE_R1_OMEGA_PATH)
+                            x_path=SNPE_R1_X_PATH, omega_path=SNPE_R1_OMEGA_PATH, force=args.resim)
 
     stdzr = SummaryStandardizer()
     embeds_1_z = stdzr.fit_transform(block1.embeds.numpy())
@@ -684,7 +690,7 @@ def run_snpe(args, prior, encoder):
             ], dim=0)
 
         block2 = simulate_round(proposal_sampler, args.n2, encoder, seed_offset=1_000_000,
-                                x_path=SNPE_R2_X_PATH, omega_path=SNPE_R2_OMEGA_PATH)
+                                x_path=SNPE_R2_X_PATH, omega_path=SNPE_R2_OMEGA_PATH, force=args.resim)
         embeds_2_z = stdzr.transform(block2.embeds.numpy())  # reuse R1 standardiser
 
         omegas_all = torch.cat([block1.omegas, block2.omegas], dim=0)
@@ -823,7 +829,7 @@ def worker_ppc(pid, env_id, params, seed):
         mcts_class=MonteCarloTreeSearch_AFC,
         run_fn=run_grid,
         temp=params["temp"],
-        horizon=int(round(params["horizon"])),
+        horizon=params["horizon"],
         exploration_constant=params["exploration_constant"],
         discount_factor=params["discount_factor"],
         n_samples=params["n_samples"],
@@ -894,6 +900,7 @@ def main():
     parser.add_argument("--epochs", type=int, default=5, help="Encoder pretraining epochs")
     parser.add_argument("--patience", type=int, default=10, help="Early-stopping patience")
     parser.add_argument("--n2", type=int, default=15000, help="SNPE Round 2 simulations (0 to skip)")
+    parser.add_argument("--resim", action="store_true", help="Re-simulate even if cached X/omega files exist")
 
     # SNPE args
     parser.add_argument("--n_samples", type=int, default=FIXED_PARAMS["n_samples"],
