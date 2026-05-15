@@ -319,6 +319,7 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
 
                 ## get info on orthogonal/overlap of paths
                 more_future_rel_overlap = np.argmax(env_copy.path_future_rel_overlaps[t])
+                less_future_rel_overlap = np.argmin(env_copy.path_future_rel_overlaps[t])
                 agent.p_chose_more_future_rel_overlap[city, day, t] = agent.p_choice[city, day, t][more_future_rel_overlap]
                 if env_copy.context == 'row':
                     if env_copy.dominant_axis_A[t] == 'horizontal':
@@ -328,8 +329,15 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                         aligned_path = 1
                         orthogonal_path = 0
                     elif env_copy.dominant_axis_A[t] == 'L-shaped':
-                        aligned_path = np.nan
-                        orthogonal_path = np.nan
+                        
+                        ## define as nan
+                        # aligned_path = np.nan
+                        # orthogonal_path = np.nan
+
+                        ## or, we can define orthogonal path as that with more future rel overlap
+                        aligned_path = less_future_rel_overlap
+                        orthogonal_path = more_future_rel_overlap
+                        
                 elif env_copy.context == 'column':
                     if env_copy.dominant_axis_A[t] == 'vertical':
                         aligned_path = 0
@@ -338,8 +346,15 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                         aligned_path = 1
                         orthogonal_path = 0
                     elif env_copy.dominant_axis_A[t] == 'L-shaped':
-                        aligned_path = np.nan
-                        orthogonal_path = np.nan
+                        
+                        ## define as nan
+                        # aligned_path = np.nan
+                        # orthogonal_path = np.nan
+
+                        ## or, we can define orthogonal path as that with more future rel overlap
+                        aligned_path = less_future_rel_overlap
+                        orthogonal_path = more_future_rel_overlap
+                        
                 if not np.isnan(orthogonal_path):
                     agent.p_chose_orthogonal[city, day, t] = agent.p_choice[city, day, t][orthogonal_path]
                     
@@ -403,7 +418,7 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                 else:
                     # env_copy._trial += 1
                     env_copy.increment_trial()
-                    print('skipping city {}, day {}, trial {} because participant missed their choice'.format(city+1, day+1, t+1))
+                    # print('skipping city {}, day {}, trial {} because participant missed their choice'.format(city+1, day+1, t+1))
 
 
                 ## update MCTS tree
@@ -631,7 +646,7 @@ def run_bandit(agent, env, greedy=False, verbose=True):
         'CE_bayes_regret': CE_bayes_regret,
     }
 
-def run_emp(agent, env, verbose=True):
+def run_emp_bamcp(agent, env, verbose=True):
     """Run an agent on the empowerment bandit task for n_trials."""
     n_trials = env.n_trials
     n_arms = env.n_afc
@@ -775,7 +790,7 @@ def _uniform_tail_emp_Q(current_alphas, n_arms, n_outcomes, h, ell):
     return Q / Z
 
 
-def run_emp_enum(agent, env, horizon=None, policy='bellman', termination_arm=None, verbose=True):
+def run_emp(agent, env, horizon=None, policy='bellman', termination_arm=None, verbose=True):
     """Run an empowerment-bandit agent with exact Q estimates.
 
     `policy='bellman'` (default): Bayes-adaptive optimal Q via the recursion
@@ -933,14 +948,19 @@ def enumerate_emp_histories(n_arms=2, n_outcomes=2, n_trials=3, alpha=1.0, termi
                 current_p = alphas / alphas.sum(axis=1, keepdims=True)
                 current_emp = EmpBandit.empowerment(current_p, ell)
 
+                ## calculate max reachabilities
+                max_reach = np.max(current_p, axis=0)
+
                 h_remaining = n_trials - t
                 Q = _bellman_emp_Q(alphas.copy(), n_arms, n_outcomes, 
                                    h_remaining, termination_arm, ell, verbose=False)
                 best_a = np.argmax(Q)
 
                 probs = _softmax(Q / temp)
+                policy_entropy = -np.sum(probs * np.log(probs + 1e-12))
 
                 delta_emp = np.zeros(n_arms)
+                entropy = np.zeros(n_arms)
                 for a in range(n_arms):
                     denom = alphas[a].sum()
                     expected = 0.0
@@ -951,10 +971,24 @@ def enumerate_emp_histories(n_arms=2, n_outcomes=2, n_trials=3, alpha=1.0, termi
                         next_p = next_alphas / next_alphas.sum(axis=1, keepdims=True)
                         expected += p_o * EmpBandit.empowerment(next_p, ell)
                     delta_emp[a] = expected - current_emp
-                    # delta_emp[a] = Q[a] - current_emp
+                    entropy[a] = EmpBandit.entropy(alphas[a])
+                
+                if best_a < n_arms:
+                    chosen_entropy = entropy[best_a]
+                else:
+                    chosen_entropy = np.nan
+                chosen_prob = probs[best_a]
 
                 prev_action = history[-1][0] if t > 0 else None
                 p_repeat = probs[prev_action] if prev_action is not None else np.nan
+
+                ## choose least sampled (if there are ties, choose the max)
+                least_sampled = np.where(alphas.sum(axis=1) == alphas.sum(axis=1).min())[0]
+                if len(least_sampled) > 1:
+                    p_choose_least_sampled = probs[least_sampled].max()
+
+                else:
+                    p_choose_least_sampled = probs[least_sampled[0]]
 
                 row = {
                     'ell': ell,
@@ -964,12 +998,20 @@ def enumerate_emp_histories(n_arms=2, n_outcomes=2, n_trials=3, alpha=1.0, termi
                     'prev_action': prev_action if prev_action is not None else np.nan,
                     'current_emp': current_emp,
                     'p_repeat': p_repeat,
+                    'p_choose_least_sampled': p_choose_least_sampled,
                     'best_a': best_a,
+                    'policy_entropy': policy_entropy,
+                    'chosen_prob': chosen_prob,
+                    'chosen_entropy': chosen_entropy,
+                    'total_entropy': np.sum(entropy),
                 }
                 for a in range(n_arms):
                     row[f'Q_{a}'] = Q[a]
                     row[f'p_{a}'] = probs[a]
                     row[f'delta_emp_{a}'] = delta_emp[a]
+                    row[f'entropy_{a}'] = entropy[a]
+                for o in range(n_outcomes):
+                    row[f'max_reach__{o}'] = max_reach[o]
                 if termination_arm:
                     row['Q_terminate'] = Q[-1]
                     row['p_terminate'] = probs[-1]

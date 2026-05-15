@@ -110,15 +110,18 @@ PARAM_RANGES = {
     "temp": (0.0, 3.0),
     "aligned_weight": (0.0, 1.0),
     "orthogonal_weight":   (0.0, 1.0),
-    "horizon": (0, 3),
+    # "horizon": (0, 3),
     }
 
-PARAM_ORDER = ["temp", "aligned_weight", "orthogonal_weight", "horizon"]
+PARAM_ORDER = ["temp", "aligned_weight", "orthogonal_weight", 
+            #    "horizon"
+               ]
 
 FIXED_PARAMS = {
     "n_samples": 10000,
     "exploration_constant": 3,
     "discount_factor":   0.9,
+    "horizon": 3 ## override for now
     }
 
 # Experiment Structure (expt 3: 32 cities × 1 day × 4 trials = 128 binary choices)
@@ -164,6 +167,12 @@ def _env_id_for_pid(id_mapping, pid):
 ART_DIR = Path("SBI/outputs/2_step/")
 RUN_DIR = ART_DIR  # overridden in main() once n_pre/n1/n2/n_samples are known
 ENC_PATH = RUN_DIR / "encoder.pt"
+PRETRAIN_X_PATH = RUN_DIR / "pretrain_X.npy"
+PRETRAIN_OMEGA_PATH = RUN_DIR / "pretrain_omega.npy"
+SNPE_R1_X_PATH = RUN_DIR / "snpe_r1_X.npy"
+SNPE_R1_OMEGA_PATH = RUN_DIR / "snpe_r1_omega.npy"
+SNPE_R2_X_PATH = RUN_DIR / "snpe_r2_X.npy"
+SNPE_R2_OMEGA_PATH = RUN_DIR / "snpe_r2_omega.npy"
 STD_MEAN_PATH = RUN_DIR / "embeds_mean.npy"
 STD_STD_PATH = RUN_DIR / "embeds_std.npy"
 POST1_PATH = RUN_DIR / "posterior_round1.pkl"
@@ -198,7 +207,8 @@ def simulate_data(params: Dict[str, float], envs: Dict, seed: Optional[int] = No
         mcts_class=MonteCarloTreeSearch_AFC,
         run_fn=run_grid,
         temp=params["temp"],
-        horizon=int(round(params["horizon"])),
+        # horizon=int(round(params["horizon"])),
+        horizon=params["horizon"],
         exploration_constant=params["exploration_constant"],
         discount_factor=params["discount_factor"],
         n_samples=params["n_samples"],
@@ -216,7 +226,8 @@ def simulate_data(params: Dict[str, float], envs: Dict, seed: Optional[int] = No
         progress=False,
     )
 
-    choices = np.array(sim_out["actions"], dtype=np.float32)
+    ## choice data, sampled from choice probabilities
+    choices = np.random.binomial(1, sim_out['p_chose_orthogonal'])
     return choices
 
 
@@ -268,7 +279,8 @@ def build_features_from_participant(df_participant: pd.DataFrame) -> np.ndarray:
     Output: float32 array of shape (N_TRIALS_TOTAL, 1).
     """
     df_sorted = df_participant.sort_values(["city", "day", "trial"])
-    choices = (df_sorted["path_chosen"] == "b").values.astype(np.float32)
+    # choices = (df_sorted["path_chosen"] == "b").values.astype(np.float32)
+    choices = (df_sorted["chose_orthogonal"] == True).values.astype(np.float32)
     return choices.reshape(-1, 1)
 
 
@@ -486,25 +498,37 @@ def train_encoder_on_simulations(
 # 5. SIMULATION WORKER
 # ==============================================================================
 
-# Single shared env set, loaded once and used for ALL simulations.
-# This ensures choice differences are driven by parameter variation, not grids.
-_SIM_ENVS = None
+_ENV_OBJECTS_CACHE: Dict[int, object] = {}
 
-def _load_sim_envs(env_id: int):
-    """Load one env set to be shared across all simulation workers."""
-    global _SIM_ENVS
-    _SIM_ENVS = load_env_objects(env_id)
-    print(f"  [Sim Envs] Loaded env set {env_id} "
-          f"({HYPERPARAMS['n_cities']} cities x {HYPERPARAMS['n_trials']} trials).")
+def _load_env_objects_cached(env_id: int):
+    """Per-worker cache so each process pays the disk cost at most once per env."""
+    cached = _ENV_OBJECTS_CACHE.get(env_id)
+    if cached is None:
+        cached = load_env_objects(env_id)
+        _ENV_OBJECTS_CACHE[env_id] = cached
+    return cached
 
 
-def worker_simulate(i, omega, seed_offset=0):
+def _sample_env_ids(n: int, seed: int = 0) -> List[int]:
+    """Assign env_ids to n simulations by cycling through a shuffled list of
+    participant pids and mapping each via _env_id_for_pid. Lets the encoder see
+    a variety of environments rather than one fixed grid."""
+    df_all = pd.read_csv(str(PARTICIPANT_DATA_CSV), low_memory=False)
+    id_mapping = _load_id_mapping()
+    pids = [p for p in df_all["pid"].unique().tolist() if p in id_mapping]
+    rng = np.random.default_rng(seed)
+    rng.shuffle(pids)
+    return [int(_env_id_for_pid(id_mapping, pids[i % len(pids)])) for i in range(n)]
+
+
+def worker_simulate(i, omega, env_id, seed_offset=0):
     """
-    Simulate one (params, choices) pair using the shared env set.
+    Simulate one (params, choices) pair on the assigned env set.
     Called by joblib Parallel — must be a top-level function.
     """
     params = untransform(omega)
-    choices = simulate_data(params, _SIM_ENVS, seed=seed_offset + i)
+    envs = _load_env_objects_cached(int(env_id))
+    choices = simulate_data(params, envs, seed=seed_offset + i)
     return build_features_from_sim(choices)
 
 
@@ -512,30 +536,67 @@ def _parallel_simulate(omegas: torch.Tensor, seed_offset: int = 0) -> List[np.nd
     """Run the BAMCP simulator in parallel for a batch of omegas. Returns list of
     per-trial feature arrays of shape (N_TRIALS_TOTAL, 1)."""
     n = omegas.shape[0]
-    print(f"  Launching parallel simulation ({n} sims, {N_JOBS} workers)...")
-    return Parallel(n_jobs=N_JOBS, verbose=1)(
-        delayed(worker_simulate)(i, omegas[i], seed_offset=seed_offset)
+    env_ids = _sample_env_ids(n, seed=seed_offset)
+    print(f"  Launching parallel simulation ({n} sims, {N_JOBS} workers, "
+          f"{len(set(env_ids))} unique env_ids)...")
+    tasks = [
+        delayed(worker_simulate)(int(i), omegas[i].clone(), int(env_ids[i]), int(seed_offset))
         for i in range(n)
-    )
+    ]
+    return Parallel(n_jobs=N_JOBS, verbose=1)(tasks)
+
+
+def _simulate_or_load(
+    omegas: torch.Tensor, seed_offset: int,
+    x_path: Optional[Path], omega_path: Optional[Path],
+    force: bool = False,
+) -> Tuple[List[np.ndarray], torch.Tensor]:
+    """
+    Return (X_list, omegas). If both cache paths exist (and force is False), load
+    from disk and skip simulation. Otherwise run _parallel_simulate, save X (N, T, F)
+    and omega (N, D) as separate .npy files, then return.
+    """
+    if not force and x_path is not None and omega_path is not None and x_path.exists() and omega_path.exists():
+        print(f"  [Cache] Loading simulations from {x_path.name} / {omega_path.name}")
+        X_arr = np.load(x_path)
+        X_list = [X_arr[i] for i in range(len(X_arr))]
+        omegas = torch.tensor(np.load(omega_path), dtype=torch.float32)
+        return X_list, omegas
+    X_list = _parallel_simulate(omegas, seed_offset=seed_offset)
+    if x_path is not None and omega_path is not None:
+        x_path.parent.mkdir(parents=True, exist_ok=True)
+        np.save(x_path, np.stack(X_list))
+        np.save(omega_path, omegas.numpy())
+        print(f"  [Cache] Saved X -> {x_path.name}, omega -> {omega_path.name}")
+    return X_list, omegas
 
 
 def simulate_round(sampler_fn, n_samples, encoder: TrialTransformer,
-                   seed_offset: int = 0) -> SimulationBlock:
+                   seed_offset: int = 0,
+                   x_path: Optional[Path] = None,
+                   omega_path: Optional[Path] = None,
+                   force: bool = False) -> SimulationBlock:
     """
     Simulate n_samples (omega, choices) pairs, then push each through the (frozen)
     encoder to produce embeddings. Returns SimulationBlock(omegas, embeds).
 
     The encoder is parked on CPU during the joblib parallel sim to avoid CUDA /
     multiprocessing conflicts, then moved back to GPU for embedding.
+
+    If x_path and omega_path both exist on disk, simulation is skipped and the
+    cached arrays are loaded instead.
     """
     omegas = sampler_fn((n_samples,)).cpu()
 
-    encoder.cpu()
-    gc.collect()
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
+    cached = (not force and x_path is not None and omega_path is not None
+              and x_path.exists() and omega_path.exists())
+    if not cached:
+        encoder.cpu()
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
-    X_list = _parallel_simulate(omegas, seed_offset=seed_offset)
+    X_list, omegas = _simulate_or_load(omegas, seed_offset, x_path, omega_path, force=force)
 
     encoder.to(device)
     encoder.eval()
@@ -559,12 +620,10 @@ def run_pretrain(args, prior):
     encoder under MSE loss to predict omega. Saves the frozen-ready encoder
     state_dict to ENC_PATH.
     """
-    _load_sim_envs(args.env_id)
-
     print(f"\n [Pretrain] Simulating {args.n1_pre} pairs for encoder pretraining...")
     omegas = prior.sample((args.n1_pre,)).cpu()
-    X_list = _parallel_simulate(omegas, seed_offset=0)
-    Omega_list = [omegas[i].numpy() for i in range(args.n1_pre)]
+    X_list, omegas = _simulate_or_load(omegas, 0, PRETRAIN_X_PATH, PRETRAIN_OMEGA_PATH, force=args.resim)
+    Omega_list = [omegas[i].numpy() for i in range(len(omegas))]
 
     encoder, _ = train_encoder_on_simulations(
         X_list, Omega_list,
@@ -575,7 +634,6 @@ def run_pretrain(args, prior):
     )
     torch.save(encoder.state_dict(), ENC_PATH)
     print(f"  [Pretrain] Encoder saved to {ENC_PATH}")
-
 
 def run_snpe(args, prior, encoder):
     """
@@ -588,12 +646,12 @@ def run_snpe(args, prior, encoder):
     The encoder is NOT passed to sbi as embedding_net — sbi sees the
     precomputed standardised embeddings as `x`.
     """
-    _load_sim_envs(args.env_id)
     encoder = encoder.to(device)
 
     # --- Round 1 ---
     print(f"\n [Round1] Simulating {args.n1_pre} pairs...")
-    block1 = simulate_round(prior.sample, args.n1_pre, encoder, seed_offset=0)
+    block1 = simulate_round(prior.sample, args.n1_pre, encoder, seed_offset=0,
+                            x_path=SNPE_R1_X_PATH, omega_path=SNPE_R1_OMEGA_PATH, force=args.resim)
 
     stdzr = SummaryStandardizer()
     embeds_1_z = stdzr.fit_transform(block1.embeds.numpy())
@@ -631,7 +689,8 @@ def run_snpe(args, prior, encoder):
                 post_samples.to(device),
             ], dim=0)
 
-        block2 = simulate_round(proposal_sampler, args.n2, encoder, seed_offset=1_000_000)
+        block2 = simulate_round(proposal_sampler, args.n2, encoder, seed_offset=1_000_000,
+                                x_path=SNPE_R2_X_PATH, omega_path=SNPE_R2_OMEGA_PATH, force=args.resim)
         embeds_2_z = stdzr.transform(block2.embeds.numpy())  # reuse R1 standardiser
 
         omegas_all = torch.cat([block1.omegas, block2.omegas], dim=0)
@@ -671,8 +730,6 @@ def _embed_observation(x_raw: np.ndarray, encoder: TrialTransformer,
 
 def run_recovery(args, prior, posterior, encoder, stdzr):
     """Validates the posterior against known ground-truth simulated cases."""
-    _load_sim_envs(args.env_id)
-
     print(f"\n [Recovery] Checking {args.K} ground-truth cases...")
     omegas_true = prior.sample((args.K,)).cpu()
 
@@ -772,7 +829,7 @@ def worker_ppc(pid, env_id, params, seed):
         mcts_class=MonteCarloTreeSearch_AFC,
         run_fn=run_grid,
         temp=params["temp"],
-        horizon=int(round(params["horizon"])),
+        horizon=params["horizon"],
         exploration_constant=params["exploration_constant"],
         discount_factor=params["discount_factor"],
         n_samples=params["n_samples"],
@@ -843,14 +900,13 @@ def main():
     parser.add_argument("--epochs", type=int, default=5, help="Encoder pretraining epochs")
     parser.add_argument("--patience", type=int, default=10, help="Early-stopping patience")
     parser.add_argument("--n2", type=int, default=15000, help="SNPE Round 2 simulations (0 to skip)")
+    parser.add_argument("--resim", action="store_true", help="Re-simulate even if cached X/omega files exist")
 
     # SNPE args
     parser.add_argument("--n_samples", type=int, default=FIXED_PARAMS["n_samples"],
                         help="BAMCP MCTS rollouts per decision (samples per simulated model)")
     parser.add_argument("--mix_prior_frac", type=float, default=0.2, help="Prior fraction in Round 2 proposal")
     parser.add_argument("--density", choices=["nsf", "maf", "mdn"], default="nsf", help="Density estimator")
-    parser.add_argument("--env_id", type=int, default=1,
-                        help="Env object ID to use for all simulations (same grids for every agent)")
 
     # Recovery args
     parser.add_argument("--K", type=int, default=20, help="Recovery test cases")
@@ -867,12 +923,20 @@ def main():
 
     global RUN_DIR, ENC_PATH, STD_MEAN_PATH, STD_STD_PATH
     global POST1_PATH, POSTF_PATH, RECOVERY_CSV, POST_SUMMARY_CSV
+    global PRETRAIN_X_PATH, PRETRAIN_OMEGA_PATH
+    global SNPE_R1_X_PATH, SNPE_R1_OMEGA_PATH, SNPE_R2_X_PATH, SNPE_R2_OMEGA_PATH
     FIXED_PARAMS["n_samples"] = args.n_samples
     RUN_DIR = ART_DIR / (
         f"{args.n1_pre}_n1sims_{args.n2}_n2sims_{args.n_samples}_samples"
     )
     RUN_DIR.mkdir(parents=True, exist_ok=True)
     ENC_PATH = RUN_DIR / "encoder.pt"
+    PRETRAIN_X_PATH = RUN_DIR / "pretrain_X.npy"
+    PRETRAIN_OMEGA_PATH = RUN_DIR / "pretrain_omega.npy"
+    SNPE_R1_X_PATH = RUN_DIR / "snpe_r1_X.npy"
+    SNPE_R1_OMEGA_PATH = RUN_DIR / "snpe_r1_omega.npy"
+    SNPE_R2_X_PATH = RUN_DIR / "snpe_r2_X.npy"
+    SNPE_R2_OMEGA_PATH = RUN_DIR / "snpe_r2_omega.npy"
     STD_MEAN_PATH = RUN_DIR / "embeds_mean.npy"
     STD_STD_PATH = RUN_DIR / "embeds_std.npy"
     POST1_PATH = RUN_DIR / "posterior_round1.pkl"

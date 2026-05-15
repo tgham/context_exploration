@@ -5,6 +5,7 @@ from gymnasium import spaces
 from gymnasium.utils import seeding
 from abc import ABC, abstractmethod
 import copy
+from scipy.special import gamma, digamma
 
 from samplers import BanditSampler, EmpSampler
 
@@ -344,6 +345,12 @@ class EmpBandit(BanditEnv):
         """Emp_ell(theta) = sum_{s'} [max_a p(s'|a)]^ell."""
         return float(np.sum(np.max(p_matrix, axis=0) ** ell))
     
+    @staticmethod
+    def entropy(alphas):
+        a0 = np.sum(alphas)
+        log_beta_a = np.log(np.prod(gamma(alphas)) / gamma(a0))
+        entropy = log_beta_a + (a0 - len(alphas)) * digamma(a0) - np.sum((alphas - 1) * digamma(alphas))
+        return entropy
 
     def posterior_update(self, action, outcome):
         self.alphas[action, outcome] += 1
