@@ -403,7 +403,7 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                 else:
                     # env_copy._trial += 1
                     env_copy.increment_trial()
-                    print('skipping city {}, day {}, trial {} because participant missed their choice'.format(city+1, day+1, t+1))
+                    # print('skipping city {}, day {}, trial {} because participant missed their choice'.format(city+1, day+1, t+1))
 
 
                 ## update MCTS tree
@@ -957,7 +957,7 @@ def enumerate_emp_histories(n_arms=2, n_outcomes=2, n_trials=3, alpha=1.0, termi
                         expected += p_o * EmpBandit.empowerment(next_p, ell)
                     delta_emp[a] = expected - current_emp
                     entropy[a] = EmpBandit.entropy(alphas[a])
-                # if not terminate
+                
                 if best_a < n_arms:
                     chosen_entropy = entropy[best_a]
                 else:
