@@ -119,10 +119,11 @@ def extract_grid_info(agent, env_copy, city, day, t):
                 if (state[1] in observed_low_cost_cols)
                 and (tuple(state) not in obs_list)
             )
-
-            ## should just be the sum
             assert agent.gen_high_costs[city, day, t, i] == agent.aligned_arm_gen_high_costs[city, day, t, i] + agent.orthogonal_arm_gen_high_costs[city, day, t, i], 'gen high costs does not match sum of aligned and orthogonal arm gen high costs\n gen high costs: {}, aligned arm gen high costs: {}, orthogonal arm gen high costs: {}'.format(agent.gen_high_costs[city, day, t, i], agent.aligned_arm_gen_high_costs[city, day, t, i], agent.orthogonal_arm_gen_high_costs[city, day, t, i])
             assert agent.gen_low_costs[city, day, t, i] == agent.aligned_arm_gen_low_costs[city, day, t, i] + agent.orthogonal_arm_gen_low_costs[city, day, t, i], 'gen low costs does not match sum of aligned and orthogonal arm gen low costs\n gen low costs: {}, aligned arm gen low costs: {}, orthogonal arm gen low costs: {}'.format(agent.gen_low_costs[city, day, t, i], agent.aligned_arm_gen_low_costs[city, day, t, i], agent.orthogonal_arm_gen_low_costs[city, day, t, i])
+
+            ## net gen costs 
+            agent.gen_net_costs[city, day, t, i] = agent.gen_high_costs[city, day, t, i] - agent.gen_low_costs[city, day, t, i]
 
         elif env_copy.context == 'row':
 
@@ -165,6 +166,9 @@ def extract_grid_info(agent, env_copy, city, day, t):
             )
             assert agent.gen_high_costs[city, day, t, i] == agent.aligned_arm_gen_high_costs[city, day, t, i] + agent.orthogonal_arm_gen_high_costs[city, day, t, i], 'gen high costs does not match sum of aligned and orthogonal arm gen high costs\n gen high costs: {}, aligned arm gen high costs: {}, orthogonal arm gen high costs: {}'.format(agent.gen_high_costs[city, day, t, i], agent.aligned_arm_gen_high_costs[city, day, t, i], agent.orthogonal_arm_gen_high_costs[city, day, t, i])
             assert agent.gen_low_costs[city, day, t, i] == agent.aligned_arm_gen_low_costs[city, day, t, i] + agent.orthogonal_arm_gen_low_costs[city, day, t, i], 'gen low costs does not match sum of aligned and orthogonal arm gen low costs\n gen low costs: {}, aligned arm gen low costs: {}, orthogonal arm gen low costs: {}'.format(agent.gen_low_costs[city, day, t, i], agent.aligned_arm_gen_low_costs[city, day, t, i], agent.orthogonal_arm_gen_low_costs[city, day, t, i])
+
+            ## net gen costs
+            agent.gen_net_costs[city, day, t, i] = agent.gen_high_costs[city, day, t, i] - agent.gen_low_costs[city, day, t, i]
 
 
         ## axis overlaps with future states
@@ -242,6 +246,7 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
     agent.orthogonal_arm_actual_low_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.gen_high_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.gen_low_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
+    agent.gen_net_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.aligned_arm_gen_high_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.aligned_arm_gen_low_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.orthogonal_arm_gen_high_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
@@ -268,6 +273,7 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
     agent.orthogonal_arm_len_diff = np.zeros((n_cities, n_days, n_trials))
     agent.gen_high_costs_diff = np.zeros((n_cities, n_days, n_trials))
     agent.gen_low_costs_diff = np.zeros((n_cities, n_days, n_trials))
+    agent.gen_net_costs_diff = np.zeros((n_cities, n_days, n_trials))
     agent.aligned_arm_gen_high_costs_diff = np.zeros((n_cities, n_days, n_trials))
     agent.aligned_arm_gen_low_costs_diff = np.zeros((n_cities, n_days, n_trials))
     agent.orthogonal_arm_gen_high_costs_diff = np.zeros((n_cities, n_days, n_trials))
@@ -428,6 +434,8 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                     agent.aligned_path_gen_low_costs[city,day,t]  = agent.gen_low_costs[city, day, t, aligned_path]
                     agent.orthogonal_path_gen_high_costs[city,day,t] = agent.gen_high_costs[city, day, t, orthogonal_path]
                     agent.orthogonal_path_gen_low_costs[city,day,t]  = agent.gen_low_costs[city, day, t, orthogonal_path]
+                    agent.aligned_path_gen_net_costs[city,day,t] = agent.gen_net_costs[city, day, t, aligned_path]
+                    agent.orthogonal_path_gen_net_costs[city,day,t] = agent.gen_net_costs[city, day, t, orthogonal_path]
                     agent.aligned_path_aligned_arm_gen_high_costs[city,day,t] = agent.aligned_arm_gen_high_costs[city, day, t, aligned_path]
                     agent.aligned_path_aligned_arm_gen_low_costs[city,day,t]  = agent.aligned_arm_gen_low_costs[city, day, t, aligned_path]
                     agent.aligned_path_orthogonal_arm_gen_high_costs[city,day,t] = agent.orthogonal_arm_gen_high_costs[city, day, t, aligned_path]
@@ -453,6 +461,10 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                     agent.gen_low_costs_diff[city,day,t] = (
                         agent.orthogonal_path_gen_low_costs[city, day, t]
                         - agent.aligned_path_gen_low_costs[city, day, t]
+                    )
+                    agent.gen_net_costs_diff[city,day,t] = (
+                        agent.orthogonal_path_gen_net_costs[city, day, t]
+                        - agent.aligned_path_gen_net_costs[city, day, t]
                     )
                     agent.aligned_arm_gen_high_costs_diff[city,day,t] = (
                         agent.orthogonal_path_aligned_arm_gen_high_costs[city,day,t]
@@ -629,6 +641,8 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                     sim_out['aligned_path_gen_low_costs'].append(agent.aligned_path_gen_low_costs[c][d][t])
                     sim_out['orthogonal_path_gen_high_costs'].append(agent.orthogonal_path_gen_high_costs[c][d][t])
                     sim_out['orthogonal_path_gen_low_costs'].append(agent.orthogonal_path_gen_low_costs[c][d][t])
+                    sim_out['aligned_path_gen_net_costs'].append(agent.aligned_path_gen_net_costs[c][d][t])
+                    sim_out['orthogonal_path_gen_net_costs'].append(agent.orthogonal_path_gen_net_costs[c][d][t])
                     sim_out['aligned_path_aligned_arm_gen_high_costs'].append(agent.aligned_path_aligned_arm_gen_high_costs[c][d][t])
                     sim_out['aligned_path_aligned_arm_gen_low_costs'].append(agent.aligned_path_aligned_arm_gen_low_costs[c][d][t])
                     sim_out['aligned_path_orthogonal_arm_gen_high_costs'].append(agent.aligned_path_orthogonal_arm_gen_high_costs[c][d][t])
@@ -641,6 +655,7 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                     sim_out['orthogonal_arm_len_diff'].append(agent.orthogonal_arm_len_diff[c][d][t])
                     sim_out['gen_high_costs_diff'].append(agent.gen_high_costs_diff[c][d][t])
                     sim_out['gen_low_costs_diff'].append(agent.gen_low_costs_diff[c][d][t])
+                    sim_out['gen_net_costs_diff'].append(agent.gen_net_costs_diff[c][d][t])
                     sim_out['aligned_arm_gen_high_costs_diff'].append(agent.aligned_arm_gen_high_costs_diff[c][d][t])
                     sim_out['aligned_arm_gen_low_costs_diff'].append(agent.aligned_arm_gen_low_costs_diff[c][d][t])
                     sim_out['orthogonal_arm_gen_high_costs_diff'].append(agent.orthogonal_arm_gen_high_costs_diff[c][d][t])
