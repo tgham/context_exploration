@@ -1409,6 +1409,36 @@ def load_data(path, ppc = False):
         df_all.loc[df_all['pid'] == pid, 'path_B_orthogonal_arm_actual_high_costs'] = agent.orthogonal_arm_actual_high_costs[:,:,:,1].flatten()
         df_all.loc[df_all['pid'] == pid, 'path_A_orthogonal_arm_actual_low_costs'] = agent.orthogonal_arm_actual_low_costs[:,:,:,0].flatten()
         df_all.loc[df_all['pid'] == pid, 'path_B_orthogonal_arm_actual_low_costs'] = agent.orthogonal_arm_actual_low_costs[:,:,:,1].flatten()
+        
+        df_all.loc[df_all['pid'] == pid, 'aligned_path_aligned_arm_len'] = agent.aligned_path_aligned_arm_len[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'aligned_path_orthogonal_arm_len'] = agent.aligned_path_orthogonal_arm_len[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'orthogonal_path_aligned_arm_len'] = agent.orthogonal_path_aligned_arm_len[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'orthogonal_path_orthogonal_arm_len'] = agent.orthogonal_path_orthogonal_arm_len[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'aligned_arm_len_diff'] = agent.aligned_arm_len_diff[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'orthogonal_arm_len_diff'] = agent.orthogonal_arm_len_diff[:,:,:].flatten()
+
+
+        df_all.loc[df_all['pid'] == pid, 'aligned_path_aligned_arm_gen_high_costs'] = agent.aligned_path_aligned_arm_gen_high_costs[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'aligned_path_orthogonal_arm_gen_high_costs'] = agent.aligned_path_orthogonal_arm_gen_high_costs[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'orthogonal_path_aligned_arm_gen_high_costs'] = agent.orthogonal_path_aligned_arm_gen_high_costs[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'orthogonal_path_orthogonal_arm_gen_high_costs'] = agent.orthogonal_path_orthogonal_arm_gen_high_costs[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'aligned_path_aligned_arm_gen_low_costs'] = agent.aligned_path_aligned_arm_gen_low_costs[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'aligned_path_orthogonal_arm_gen_low_costs'] = agent.aligned_path_orthogonal_arm_gen_low_costs[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'orthogonal_path_aligned_arm_gen_low_costs'] = agent.orthogonal_path_aligned_arm_gen_low_costs[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'orthogonal_path_orthogonal_arm_gen_low_costs'] = agent.orthogonal_path_orthogonal_arm_gen_low_costs[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'aligned_arm_gen_high_costs_diff'] = agent.aligned_arm_gen_high_costs_diff[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'aligned_arm_gen_low_costs_diff'] = agent.aligned_arm_gen_low_costs_diff[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'orthogonal_arm_gen_high_costs_diff'] = agent.orthogonal_arm_gen_high_costs_diff[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'orthogonal_arm_gen_low_costs_diff'] = agent.orthogonal_arm_gen_low_costs_diff[:,:,:].flatten()
+
+
+
+
+        ## quick check that diff between gen_costs matches agent.orthogonal_arm_gen_high_costs_diff
+        assert np.allclose(abs(df_all.loc[df_all['pid'] == pid, 'path_A_aligned_arm_gen_high_costs'] - df_all.loc[df_all['pid'] == pid, 'path_B_aligned_arm_gen_high_costs']), abs(agent.aligned_arm_gen_high_costs_diff.flatten())) , 'Mismatch in aligned arm gen high costs diff: {} vs {}'.format((df_all.loc[df_all['pid'] == pid, 'path_A_aligned_arm_gen_high_costs'] - df_all.loc[df_all['pid'] == pid, 'path_B_aligned_arm_gen_high_costs']), agent.aligned_arm_gen_high_costs_diff.flatten())
+        assert np.allclose(abs(df_all.loc[df_all['pid'] == pid, 'path_A_aligned_arm_gen_low_costs'] - df_all.loc[df_all['pid'] == pid, 'path_B_aligned_arm_gen_low_costs']), abs(agent.aligned_arm_gen_low_costs_diff.flatten())) , 'Mismatch in aligned arm gen low costs diff: {} vs {}'.format((df_all.loc[df_all['pid'] == pid, 'path_A_aligned_arm_gen_low_costs'] - df_all.loc[df_all['pid'] == pid, 'path_B_aligned_arm_gen_low_costs']), agent.aligned_arm_gen_low_costs_diff.flatten())
+        assert np.allclose(abs(df_all.loc[df_all['pid'] == pid, 'path_A_orthogonal_arm_gen_high_costs'] - df_all.loc[df_all['pid'] == pid, 'path_B_orthogonal_arm_gen_high_costs']), abs(agent.orthogonal_arm_gen_high_costs_diff.flatten())) , 'Mismatch in orthogonal arm gen high costs diff: {} vs {}'.format((df_all.loc[df_all['pid'] == pid, 'path_A_orthogonal_arm_gen_high_costs'] - df_all.loc[df_all['pid'] == pid, 'path_B_orthogonal_arm_gen_high_costs']), agent.orthogonal_arm_gen_high_costs_diff.flatten())
+        assert np.allclose(abs(df_all.loc[df_all['pid'] == pid, 'path_A_orthogonal_arm_gen_low_costs'] - df_all.loc[df_all['pid'] == pid, 'path_B_orthogonal_arm_gen_low_costs']), abs(agent.orthogonal_arm_gen_low_costs_diff.flatten())) , 'Mismatch in orthogonal arm gen low costs diff: {} vs {}'.format((df_all.loc[df_all['pid'] == pid, 'path_A_orthogonal_arm_gen_low_costs'] - df_all.loc[df_all['pid'] == pid, 'path_B_orthogonal_arm_gen_low_costs']), agent.orthogonal_arm_gen_low_costs_diff.flatten())
 
         
         ## extract CE choices
@@ -1528,40 +1558,6 @@ def load_data(path, ppc = False):
         axis=1
     )
     
-    ## get obs on the col/row
-    df_all['aligned_path_aligned_arm_gen_high_costs'] = df_all.apply(
-            lambda row: row['path_A_aligned_arm_gen_high_costs'] if row['aligned_path'] == 'a' else row['path_B_aligned_arm_gen_high_costs'] if row['aligned_path'] == 'b' else np.nan,
-            axis=1
-        )
-    df_all['aligned_path_aligned_arm_gen_low_costs'] = df_all.apply(
-        lambda row: row['path_A_aligned_arm_gen_low_costs'] if row['aligned_path'] == 'a' else row['path_B_aligned_arm_gen_low_costs'] if row['aligned_path'] == 'b' else np.nan,
-        axis=1
-    )
-    df_all['orthogonal_path_aligned_arm_gen_high_costs'] = df_all.apply(
-        lambda row: row['path_A_aligned_arm_gen_high_costs'] if row['orthogonal_path'] == 'a' else row['path_B_aligned_arm_gen_high_costs'] if row['orthogonal_path'] == 'b' else np.nan,
-        axis=1
-    )
-    df_all['orthogonal_path_aligned_arm_gen_low_costs'] = df_all.apply(
-        lambda row: row['path_A_aligned_arm_gen_low_costs'] if row['orthogonal_path'] == 'a' else row['path_B_aligned_arm_gen_low_costs'] if row['orthogonal_path'] == 'b' else np.nan,
-        axis=1
-    )
-    df_all['aligned_path_orthogonal_arm_gen_high_costs'] = df_all.apply(
-        lambda row: row['path_A_orthogonal_arm_gen_high_costs'] if row['aligned_path'] == 'a' else row['path_B_orthogonal_arm_gen_high_costs'] if row['aligned_path'] == 'b' else np.nan,
-        axis=1
-    )
-    df_all['aligned_path_orthogonal_arm_gen_low_costs'] = df_all.apply(
-        lambda row: row['path_A_orthogonal_arm_gen_low_costs'] if row['aligned_path'] == 'a' else row['path_B_orthogonal_arm_gen_low_costs'] if row['aligned_path'] == 'b' else np.nan,
-        axis=1
-    )
-    df_all['orthogonal_path_orthogonal_arm_gen_high_costs'] = df_all.apply(
-        lambda row: row['path_A_orthogonal_arm_gen_high_costs'] if row['orthogonal_path'] == 'a' else row['path_B_orthogonal_arm_gen_high_costs'] if row['orthogonal_path'] == 'b' else np.nan,
-        axis=1
-    )
-    df_all['orthogonal_path_orthogonal_arm_gen_low_costs'] = df_all.apply(
-        lambda row: row['path_A_orthogonal_arm_gen_low_costs'] if row['orthogonal_path'] == 'a' else row['path_B_orthogonal_arm_gen_low_costs'] if row['orthogonal_path'] == 'b' else np.nan,
-        axis=1
-    )
-    
 
     ## get future rel/irrel overlaps on the aligned/orthogonal path
     df_all['aligned_path_future_rel_overlaps'] = df_all.apply(
@@ -1583,16 +1579,7 @@ def load_data(path, ppc = False):
 
 
     ## diffs (orthogonal - aligned)
-    df_all['aligned_arm_len_diff'] = df_all['orthogonal_path_aligned_arm_len'] - df_all['aligned_path_aligned_arm_len']
-    df_all['orthogonal_arm_len_diff'] = df_all['orthogonal_path_orthogonal_arm_len'] - df_all['aligned_path_orthogonal_arm_len']
-    df_all['aligned_arm_actual_high_costs_diff'] = df_all['orthogonal_path_aligned_arm_actual_high_costs'] - df_all['aligned_path_aligned_arm_actual_high_costs']
-    df_all['aligned_arm_actual_low_costs_diff'] = df_all['orthogonal_path_aligned_arm_actual_low_costs'] - df_all['aligned_path_aligned_arm_actual_low_costs']
-    df_all['orthogonal_arm_actual_high_costs_diff'] = df_all['orthogonal_path_orthogonal_arm_actual_high_costs'] - df_all['aligned_path_orthogonal_arm_actual_high_costs']
-    df_all['orthogonal_arm_actual_low_costs_diff'] = df_all['orthogonal_path_orthogonal_arm_actual_low_costs'] - df_all['aligned_path_orthogonal_arm_actual_low_costs']
-    df_all['aligned_arm_gen_high_costs_diff'] = df_all['orthogonal_path_aligned_arm_gen_high_costs'] - df_all['aligned_path_aligned_arm_gen_high_costs']
-    df_all['aligned_arm_gen_low_costs_diff'] = df_all['orthogonal_path_aligned_arm_gen_low_costs'] - df_all['aligned_path_aligned_arm_gen_low_costs']
-    df_all['orthogonal_arm_gen_high_costs_diff'] = df_all['orthogonal_path_orthogonal_arm_gen_high_costs'] - df_all['aligned_path_orthogonal_arm_gen_high_costs']
-    df_all['orthogonal_arm_gen_low_costs_diff'] = df_all['orthogonal_path_orthogonal_arm_gen_low_costs'] - df_all['aligned_path_orthogonal_arm_gen_low_costs']
+    assert np.allclose(df_all['aligned_arm_gen_high_costs_diff'], df_all['orthogonal_path_aligned_arm_gen_high_costs'] - df_all['aligned_path_aligned_arm_gen_high_costs']), 'Mismatch in aligned arm gen high costs diff: {} vs {}'.format(df_all['aligned_arm_gen_high_costs_diff'], df_all['orthogonal_path_aligned_arm_gen_high_costs'] - df_all['aligned_path_aligned_arm_gen_high_costs']) ##e.g. 
     df_all['future_rel_overlaps_diff'] = df_all['orthogonal_path_future_rel_overlaps'] - df_all['aligned_path_future_rel_overlaps']
     df_all['future_irrel_overlaps_diff'] = df_all['orthogonal_path_future_irrel_overlaps'] - df_all['aligned_path_future_irrel_overlaps']
 
