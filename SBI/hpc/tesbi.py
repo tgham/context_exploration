@@ -46,6 +46,7 @@ USAGE EXAMPLES
 import sys
 import os
 import gc
+import json
 import random
 import pickle
 import argparse
@@ -136,6 +137,51 @@ HYPERPARAMS = {
 
 N_TRIALS_TOTAL = HYPERPARAMS["n_cities"] * HYPERPARAMS["n_days"] * HYPERPARAMS["n_trials"]  # 128
 
+# ==============================================================================
+# FEATURE SCHEMA
+# ==============================================================================
+# SAVED_FIELDS: full per-trial schema persisted to disk after each simulation.
+# Adding/removing fields here requires resimulating (the on-disk shape changes).
+SAVED_FIELDS = [
+
+    ## basic info
+    "trial", "city", "day", 
+    "chose_orthogonal", "p_chose_orthogonal", "objective",
+
+    ## arm lengths 
+    "aligned_path_aligned_arm_len", "aligned_path_orthogonal_arm_len",
+    "orthogonal_path_aligned_arm_len", "orthogonal_path_orthogonal_arm_len",
+    "aligned_arm_len_diff", "orthogonal_arm_len_diff",
+
+    ## total gen costs
+    "aligned_path_gen_high_costs", "aligned_path_gen_low_costs",
+    "orthogonal_path_gen_high_costs", "orthogonal_path_gen_low_costs",
+    "gen_high_costs_diff", "gen_low_costs_diff",
+    "aligned_path_gen_net_costs",
+    "orthogonal_path_gen_net_costs",
+    "gen_net_costs_diff",
+    
+    ## arm gen costs
+    # "aligned_path_aligned_arm_gen_high_costs", "aligned_path_aligned_arm_gen_low_costs",
+    # "aligned_path_orthogonal_arm_gen_high_costs", "aligned_path_orthogonal_arm_gen_low_costs",
+    # "orthogonal_path_aligned_arm_gen_high_costs", "orthogonal_path_aligned_arm_gen_low_costs",
+    # "orthogonal_path_orthogonal_arm_gen_high_costs", "orthogonal_path_orthogonal_arm_gen_low_costs",
+    # "aligned_arm_gen_high_costs_diff", "aligned_arm_gen_low_costs_diff",
+    # "orthogonal_arm_gen_high_costs_diff", "orthogonal_arm_gen_low_costs_diff",
+
+    ## overlaps
+    "future_rel_overlap_aligned_path", "future_rel_overlap_orthogonal_path", "future_rel_overlap_diff",
+]
+
+# FEATURES: subset of SAVED_FIELDS that the encoder actually sees. Edit this
+# list to try a new feature set without resimulating — but you must delete (or
+# move) the cached encoder.pt since its input dim is baked in.
+FEATURES = [
+    "chose_orthogonal",
+    "trial",
+    "gen_net_costs_diff",
+]
+
 # Environment Objects
 ENV_OBJECTS_DIR = PROJECT_ROOT / "expt/assets/trial_sequences/expt_3/env_objects"
 PARTICIPANT_DATA_CSV = PROJECT_ROOT / "expt/data/complete/expt_3/df.csv"
@@ -167,11 +213,14 @@ def _env_id_for_pid(id_mapping, pid):
 ART_DIR = Path("SBI/outputs/2_step/")
 RUN_DIR = ART_DIR  # overridden in main() once n_pre/n1/n2/n_samples are known
 ENC_PATH = RUN_DIR / "encoder.pt"
-PRETRAIN_X_PATH = RUN_DIR / "pretrain_X.npy"
+PRETRAIN_DATA_PATH = RUN_DIR / "pretrain_data.npy"
+PRETRAIN_COLUMNS_PATH = RUN_DIR / "pretrain_columns.json"
 PRETRAIN_OMEGA_PATH = RUN_DIR / "pretrain_omega.npy"
-SNPE_R1_X_PATH = RUN_DIR / "snpe_r1_X.npy"
+SNPE_R1_DATA_PATH = RUN_DIR / "snpe_r1_data.npy"
+SNPE_R1_COLUMNS_PATH = RUN_DIR / "snpe_r1_columns.json"
 SNPE_R1_OMEGA_PATH = RUN_DIR / "snpe_r1_omega.npy"
-SNPE_R2_X_PATH = RUN_DIR / "snpe_r2_X.npy"
+SNPE_R2_DATA_PATH = RUN_DIR / "snpe_r2_data.npy"
+SNPE_R2_COLUMNS_PATH = RUN_DIR / "snpe_r2_columns.json"
 SNPE_R2_OMEGA_PATH = RUN_DIR / "snpe_r2_omega.npy"
 STD_MEAN_PATH = RUN_DIR / "embeds_mean.npy"
 STD_STD_PATH = RUN_DIR / "embeds_std.npy"
@@ -188,15 +237,10 @@ def simulate_data(params: Dict[str, float], envs: Dict, seed: Optional[int] = No
     """
     Runs the BAMCP simulator for a single parameter set on the given envs.
 
-    Args:
-        params: Dict with keys matching PARAM_ORDER + FIXED_PARAMS
-                (temp, aligned_weight, orthogonal_weight, horizon,
-                 n_samples, exploration_constant, discount_factor).
-        envs: Environment objects dict (from load_env_objects).
-        seed: Random seed for reproducibility.
-
-    Returns:
-        Binary choice vector of shape (N_TRIALS_TOTAL,) as float32.
+    Returns the full per-trial raw matrix of shape
+        (N_TRIALS_TOTAL, len(SAVED_FIELDS))
+    as float32. Columns follow `SAVED_FIELDS`. Downstream code derives the
+    encoder input (subset / on-the-fly diffs) via `build_features_from_sim`.
     """
     if seed is not None:
         np.random.seed(seed)
@@ -207,7 +251,6 @@ def simulate_data(params: Dict[str, float], envs: Dict, seed: Optional[int] = No
         mcts_class=MonteCarloTreeSearch_AFC,
         run_fn=run_grid,
         temp=params["temp"],
-        # horizon=int(round(params["horizon"])),
         horizon=params["horizon"],
         exploration_constant=params["exploration_constant"],
         discount_factor=params["discount_factor"],
@@ -226,9 +269,31 @@ def simulate_data(params: Dict[str, float], envs: Dict, seed: Optional[int] = No
         progress=False,
     )
 
-    ## choice data, sampled from choice probabilities
-    choices = np.random.binomial(1, sim_out['p_chose_orthogonal'])
-    return choices
+    p_orth = np.asarray(sim_out["p_chose_orthogonal"], dtype=np.float64)
+    chose_orthogonal = np.random.binomial(1, p_orth).astype(np.float32)
+    
+    # Sample once at sim time; saved alongside p_chose_orthogonal so re-sampling
+    # is also possible later if a feature set wants stochastic choices.
+    # p_for_sample = np.where(np.isnan(p_orth), 0.0, p_orth)
+    # chose_orthogonal = np.random.binomial(1, p_for_sample).astype(np.float32)
+    # chose_orthogonal = np.where(np.isnan(p_orth), np.nan, chose_orthogonal)
+
+    # Build the (N_TRIALS_TOTAL, F_full) raw matrix column by column.
+    columns = {
+        "trial": np.asarray(sim_out["trial"], dtype=np.float32),
+        "city": np.asarray(sim_out["city"], dtype=np.float32),
+        "day": np.asarray(sim_out["day"], dtype=np.float32),
+        "chose_orthogonal": chose_orthogonal,
+        "p_chose_orthogonal": p_orth.astype(np.float32),
+        "objective": np.asarray(sim_out["objective"], dtype=np.float32),
+    }
+    for k in SAVED_FIELDS:
+        if k in columns:
+            continue
+        columns[k] = np.asarray(sim_out[k], dtype=np.float32)
+
+    raw = np.stack([columns[k] for k in SAVED_FIELDS], axis=1).astype(np.float32)
+    return raw
 
 
 # ==============================================================================
@@ -262,26 +327,36 @@ def untransform(omega_vec: torch.Tensor) -> Dict[str, float]:
 # ==============================================================================
 # 3. FEATURE ENGINEERING
 # ==============================================================================
-def build_features_from_sim(choices: np.ndarray) -> np.ndarray:
+def _saved_field_index(name: str) -> int:
+    """Column index of `name` in the saved raw matrix."""
+    return SAVED_FIELDS.index(name)
+
+
+def build_features_from_sim(raw: np.ndarray) -> np.ndarray:
     """
-    Convert simulated choice vector to per-trial feature matrix.
-    Input: flat array of 0/1 choices from simulate_data (length N_TRIALS_TOTAL).
-    Output: float32 array of shape (N_TRIALS_TOTAL, 1) — single feature per trial,
-    shaped for the transformer encoder (sequence of single-channel tokens).
+    Materialise the encoder input X from a per-simulation raw matrix.
+    Input:  raw of shape (N_TRIALS_TOTAL, len(SAVED_FIELDS)).
+    Output: float32 array of shape (N_TRIALS_TOTAL, len(FEATURES)).
     """
-    return choices.astype(np.float32).reshape(-1, 1)
+    cols = [raw[:, _saved_field_index(name)] for name in FEATURES]
+    return np.stack(cols, axis=1).astype(np.float32)
 
 
 def build_features_from_participant(df_participant: pd.DataFrame) -> np.ndarray:
     """
-    Extract binary choice vector from a single participant's data.
-    Sorted by city/day/trial. path_chosen='b' -> 1, else (incl. NaN) -> 0.
-    Output: float32 array of shape (N_TRIALS_TOTAL, 1).
+    Build the encoder input X from a single participant's preprocessed CSV.
+    Pulls each FEATURES column straight from the DataFrame (utils.py already
+    computes all *_diff columns for the participant pipeline).
+    Output: float32 array of shape (N_TRIALS_TOTAL, len(FEATURES)).
     """
     df_sorted = df_participant.sort_values(["city", "day", "trial"])
-    # choices = (df_sorted["path_chosen"] == "b").values.astype(np.float32)
-    choices = (df_sorted["chose_orthogonal"] == True).values.astype(np.float32)
-    return choices.reshape(-1, 1)
+    cols = []
+    for name in FEATURES:
+        if name == "chose_orthogonal":
+            cols.append((df_sorted["chose_orthogonal"] == True).values.astype(np.float32))
+        else:
+            cols.append(df_sorted[name].values.astype(np.float32))
+    return np.stack(cols, axis=1).astype(np.float32)
 
 
 # ==============================================================================
@@ -332,7 +407,8 @@ class TrialTransformer(nn.Module):
 
 
 # Encoder hyperparameters fixed across pretrain/load (so state_dict matches).
-ENCODER_IN_DIM = 1
+# in_dim is derived from FEATURES; change FEATURES (top of file) to alter it.
+ENCODER_IN_DIM = len(FEATURES)
 ENCODER_OUT_DIM = 64
 
 
@@ -523,18 +599,18 @@ def _sample_env_ids(n: int, seed: int = 0) -> List[int]:
 
 def worker_simulate(i, omega, env_id, seed_offset=0):
     """
-    Simulate one (params, choices) pair on the assigned env set.
+    Simulate one parameter set on the assigned env set.
+    Returns the raw per-trial matrix of shape (N_TRIALS_TOTAL, len(SAVED_FIELDS)).
     Called by joblib Parallel — must be a top-level function.
     """
     params = untransform(omega)
     envs = _load_env_objects_cached(int(env_id))
-    choices = simulate_data(params, envs, seed=seed_offset + i)
-    return build_features_from_sim(choices)
+    return simulate_data(params, envs, seed=seed_offset + i)
 
 
 def _parallel_simulate(omegas: torch.Tensor, seed_offset: int = 0) -> List[np.ndarray]:
     """Run the BAMCP simulator in parallel for a batch of omegas. Returns list of
-    per-trial feature arrays of shape (N_TRIALS_TOTAL, 1)."""
+    per-trial raw arrays of shape (N_TRIALS_TOTAL, len(SAVED_FIELDS))."""
     n = omegas.shape[0]
     env_ids = _sample_env_ids(n, seed=seed_offset)
     print(f"  Launching parallel simulation ({n} sims, {N_JOBS} workers, "
@@ -548,62 +624,91 @@ def _parallel_simulate(omegas: torch.Tensor, seed_offset: int = 0) -> List[np.nd
 
 def _simulate_or_load(
     omegas: torch.Tensor, seed_offset: int,
-    x_path: Optional[Path], omega_path: Optional[Path],
+    data_path: Optional[Path], columns_path: Optional[Path], omega_path: Optional[Path],
     force: bool = False,
 ) -> Tuple[List[np.ndarray], torch.Tensor]:
     """
-    Return (X_list, omegas). If both cache paths exist (and force is False), load
-    from disk and skip simulation. Otherwise run _parallel_simulate, save X (N, T, F)
-    and omega (N, D) as separate .npy files, then return.
+    Return (raw_list, omegas) where each entry of raw_list is the per-sim raw
+    matrix of shape (N_TRIALS_TOTAL, len(SAVED_FIELDS)). If the cached data,
+    columns, and omega files all exist (and force is False) AND the cached
+    column list matches the current SAVED_FIELDS, load from disk and skip
+    simulation. Otherwise resim, save the new (N, T, F_full) array plus a
+    JSON sidecar naming the columns.
     """
-    if not force and x_path is not None and omega_path is not None and x_path.exists() and omega_path.exists():
-        print(f"  [Cache] Loading simulations from {x_path.name} / {omega_path.name}")
-        X_arr = np.load(x_path)
-        X_list = [X_arr[i] for i in range(len(X_arr))]
-        omegas = torch.tensor(np.load(omega_path), dtype=torch.float32)
-        return X_list, omegas
-    X_list = _parallel_simulate(omegas, seed_offset=seed_offset)
-    if x_path is not None and omega_path is not None:
-        x_path.parent.mkdir(parents=True, exist_ok=True)
-        np.save(x_path, np.stack(X_list))
+    cache_ok = (
+        not force
+        and data_path is not None
+        and columns_path is not None
+        and omega_path is not None
+        and data_path.exists()
+        and columns_path.exists()
+        and omega_path.exists()
+    )
+    if cache_ok:
+        with open(columns_path, "r") as f:
+            cached_cols = json.load(f)
+        if cached_cols == SAVED_FIELDS:
+            print(f"  [Cache] Loading simulations from {data_path.name} / {omega_path.name}")
+            raw_arr = np.load(data_path)
+            raw_list = [raw_arr[i] for i in range(len(raw_arr))]
+            omegas = torch.tensor(np.load(omega_path), dtype=torch.float32)
+            return raw_list, omegas
+        print(f"  [Cache] Column schema in {columns_path.name} does not match "
+              f"current SAVED_FIELDS; resimulating.")
+
+    raw_list = _parallel_simulate(omegas, seed_offset=seed_offset)
+    if data_path is not None and columns_path is not None and omega_path is not None:
+        data_path.parent.mkdir(parents=True, exist_ok=True)
+        np.save(data_path, np.stack(raw_list))
         np.save(omega_path, omegas.numpy())
-        print(f"  [Cache] Saved X -> {x_path.name}, omega -> {omega_path.name}")
-    return X_list, omegas
+        with open(columns_path, "w") as f:
+            json.dump(SAVED_FIELDS, f, indent=2)
+        print(f"  [Cache] Saved data -> {data_path.name}, omega -> {omega_path.name}, "
+              f"columns -> {columns_path.name}")
+    return raw_list, omegas
 
 
 def simulate_round(sampler_fn, n_samples, encoder: TrialTransformer,
                    seed_offset: int = 0,
-                   x_path: Optional[Path] = None,
+                   data_path: Optional[Path] = None,
+                   columns_path: Optional[Path] = None,
                    omega_path: Optional[Path] = None,
                    force: bool = False) -> SimulationBlock:
     """
-    Simulate n_samples (omega, choices) pairs, then push each through the (frozen)
-    encoder to produce embeddings. Returns SimulationBlock(omegas, embeds).
+    Simulate n_samples (omega, raw) pairs, materialise X via
+    `build_features_from_sim`, then push each X through the (frozen) encoder
+    to produce embeddings. Returns SimulationBlock(omegas, embeds).
 
     The encoder is parked on CPU during the joblib parallel sim to avoid CUDA /
     multiprocessing conflicts, then moved back to GPU for embedding.
 
-    If x_path and omega_path both exist on disk, simulation is skipped and the
-    cached arrays are loaded instead.
+    If data/columns/omega caches exist on disk (and schema matches), simulation
+    is skipped and the cached arrays are loaded instead.
     """
     omegas = sampler_fn((n_samples,)).cpu()
 
-    cached = (not force and x_path is not None and omega_path is not None
-              and x_path.exists() and omega_path.exists())
+    cached = (
+        not force
+        and data_path is not None and columns_path is not None and omega_path is not None
+        and data_path.exists() and columns_path.exists() and omega_path.exists()
+    )
     if not cached:
         encoder.cpu()
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-    X_list, omegas = _simulate_or_load(omegas, seed_offset, x_path, omega_path, force=force)
+    raw_list, omegas = _simulate_or_load(
+        omegas, seed_offset, data_path, columns_path, omega_path, force=force,
+    )
 
     encoder.to(device)
     encoder.eval()
     embeds = []
     with torch.no_grad():
-        for x in X_list:
-            tensor_x = torch.tensor(x, dtype=torch.float32).unsqueeze(0)  # (1, N, 1)
+        for raw in raw_list:
+            x = build_features_from_sim(raw)  # (N, F)
+            tensor_x = torch.tensor(x, dtype=torch.float32).unsqueeze(0)  # (1, N, F)
             emb = encoder(tensor_x.to(device)).cpu()                      # (1, out_dim)
             embeds.append(emb)
     embeds_tensor = torch.cat(embeds, dim=0)
@@ -622,7 +727,12 @@ def run_pretrain(args, prior):
     """
     print(f"\n [Pretrain] Simulating {args.n1_pre} pairs for encoder pretraining...")
     omegas = prior.sample((args.n1_pre,)).cpu()
-    X_list, omegas = _simulate_or_load(omegas, 0, PRETRAIN_X_PATH, PRETRAIN_OMEGA_PATH, force=args.resim)
+    raw_list, omegas = _simulate_or_load(
+        omegas, 0,
+        PRETRAIN_DATA_PATH, PRETRAIN_COLUMNS_PATH, PRETRAIN_OMEGA_PATH,
+        force=args.resim,
+    )
+    X_list = [build_features_from_sim(r) for r in raw_list]
     Omega_list = [omegas[i].numpy() for i in range(len(omegas))]
 
     encoder, _ = train_encoder_on_simulations(
@@ -651,7 +761,9 @@ def run_snpe(args, prior, encoder):
     # --- Round 1 ---
     print(f"\n [Round1] Simulating {args.n1_pre} pairs...")
     block1 = simulate_round(prior.sample, args.n1_pre, encoder, seed_offset=0,
-                            x_path=SNPE_R1_X_PATH, omega_path=SNPE_R1_OMEGA_PATH, force=args.resim)
+                            data_path=SNPE_R1_DATA_PATH,
+                            columns_path=SNPE_R1_COLUMNS_PATH,
+                            omega_path=SNPE_R1_OMEGA_PATH, force=args.resim)
 
     stdzr = SummaryStandardizer()
     embeds_1_z = stdzr.fit_transform(block1.embeds.numpy())
@@ -690,7 +802,9 @@ def run_snpe(args, prior, encoder):
             ], dim=0)
 
         block2 = simulate_round(proposal_sampler, args.n2, encoder, seed_offset=1_000_000,
-                                x_path=SNPE_R2_X_PATH, omega_path=SNPE_R2_OMEGA_PATH, force=args.resim)
+                                data_path=SNPE_R2_DATA_PATH,
+                                columns_path=SNPE_R2_COLUMNS_PATH,
+                                omega_path=SNPE_R2_OMEGA_PATH, force=args.resim)
         embeds_2_z = stdzr.transform(block2.embeds.numpy())  # reuse R1 standardiser
 
         omegas_all = torch.cat([block1.omegas, block2.omegas], dim=0)
@@ -716,14 +830,15 @@ def run_snpe(args, prior, encoder):
     print(f"  [SNPE] Posterior saved to {POSTF_PATH}")
 
 
-def _embed_observation(x_raw: np.ndarray, encoder: TrialTransformer,
+def _embed_observation(x: np.ndarray, encoder: TrialTransformer,
                        stdzr: SummaryStandardizer) -> torch.Tensor:
-    """Encode a single (N_trials, 1) observation through the frozen encoder and
-    z-score with the Round 1 standardiser. Returns a (1, out_dim) tensor on `device`."""
+    """Encode a single (N_trials, F) feature matrix through the frozen encoder
+    and z-score with the Round 1 standardiser.
+    Returns a (1, out_dim) tensor on `device`."""
     encoder.eval()
     with torch.no_grad():
-        tensor_x = torch.tensor(x_raw[None, ...], dtype=torch.float32).to(device)  # (1, N, 1)
-        z = encoder(tensor_x).cpu().numpy()                                        # (1, out_dim)
+        tensor_x = torch.tensor(x[None, ...], dtype=torch.float32).to(device)  # (1, N, F)
+        z = encoder(tensor_x).cpu().numpy()                                    # (1, out_dim)
     z_z = stdzr.transform(z)
     return torch.tensor(z_z, dtype=torch.float32).to(device)
 
@@ -738,7 +853,7 @@ def run_recovery(args, prior, posterior, encoder, stdzr):
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
-    X_list = _parallel_simulate(omegas_true, seed_offset=4242)
+    raw_list = _parallel_simulate(omegas_true, seed_offset=4242)
 
     encoder.to(device)
     encoder.eval()
@@ -746,7 +861,8 @@ def run_recovery(args, prior, posterior, encoder, stdzr):
     details = []
     for i in range(args.K):
         gt_params = untransform(omegas_true[i])
-        x_obs = _embed_observation(X_list[i], encoder, stdzr)  # (1, out_dim) z-scored
+        x_feat = build_features_from_sim(raw_list[i])          # (N, F)
+        x_obs = _embed_observation(x_feat, encoder, stdzr)     # (1, out_dim) z-scored
 
         samples = posterior.sample((args.num_post,), x=x_obs).cpu()
 
@@ -783,11 +899,11 @@ def run_inference(args, posterior, encoder, stdzr):
             print(f"   ... Progress: {i}/{len(pids)} participants", flush=True)
         try:
             df_sub = df_all[df_all["pid"] == pid]
-            x_raw = build_features_from_participant(df_sub)        # (N, 1)
-            if x_raw.shape[0] != N_TRIALS_TOTAL:
-                print(f" [Skip] {pid}: {x_raw.shape[0]} trials != expected {N_TRIALS_TOTAL}")
+            x_feat = build_features_from_participant(df_sub)       # (N, F)
+            if x_feat.shape[0] != N_TRIALS_TOTAL:
+                print(f" [Skip] {pid}: {x_feat.shape[0]} trials != expected {N_TRIALS_TOTAL}")
                 continue
-            x_obs = _embed_observation(x_raw, encoder, stdzr)      # (1, out_dim) z-scored
+            x_obs = _embed_observation(x_feat, encoder, stdzr)     # (1, out_dim) z-scored
 
             samples = posterior.sample((args.num_samples,), x=x_obs).cpu()
 
@@ -923,19 +1039,23 @@ def main():
 
     global RUN_DIR, ENC_PATH, STD_MEAN_PATH, STD_STD_PATH
     global POST1_PATH, POSTF_PATH, RECOVERY_CSV, POST_SUMMARY_CSV
-    global PRETRAIN_X_PATH, PRETRAIN_OMEGA_PATH
-    global SNPE_R1_X_PATH, SNPE_R1_OMEGA_PATH, SNPE_R2_X_PATH, SNPE_R2_OMEGA_PATH
+    global PRETRAIN_DATA_PATH, PRETRAIN_COLUMNS_PATH, PRETRAIN_OMEGA_PATH
+    global SNPE_R1_DATA_PATH, SNPE_R1_COLUMNS_PATH, SNPE_R1_OMEGA_PATH
+    global SNPE_R2_DATA_PATH, SNPE_R2_COLUMNS_PATH, SNPE_R2_OMEGA_PATH
     FIXED_PARAMS["n_samples"] = args.n_samples
     RUN_DIR = ART_DIR / (
         f"{args.n1_pre}_n1sims_{args.n2}_n2sims_{args.n_samples}_samples"
     )
     RUN_DIR.mkdir(parents=True, exist_ok=True)
     ENC_PATH = RUN_DIR / "encoder.pt"
-    PRETRAIN_X_PATH = RUN_DIR / "pretrain_X.npy"
+    PRETRAIN_DATA_PATH = RUN_DIR / "pretrain_data.npy"
+    PRETRAIN_COLUMNS_PATH = RUN_DIR / "pretrain_columns.json"
     PRETRAIN_OMEGA_PATH = RUN_DIR / "pretrain_omega.npy"
-    SNPE_R1_X_PATH = RUN_DIR / "snpe_r1_X.npy"
+    SNPE_R1_DATA_PATH = RUN_DIR / "snpe_r1_data.npy"
+    SNPE_R1_COLUMNS_PATH = RUN_DIR / "snpe_r1_columns.json"
     SNPE_R1_OMEGA_PATH = RUN_DIR / "snpe_r1_omega.npy"
-    SNPE_R2_X_PATH = RUN_DIR / "snpe_r2_X.npy"
+    SNPE_R2_DATA_PATH = RUN_DIR / "snpe_r2_data.npy"
+    SNPE_R2_COLUMNS_PATH = RUN_DIR / "snpe_r2_columns.json"
     SNPE_R2_OMEGA_PATH = RUN_DIR / "snpe_r2_omega.npy"
     STD_MEAN_PATH = RUN_DIR / "embeds_mean.npy"
     STD_STD_PATH = RUN_DIR / "embeds_std.npy"
