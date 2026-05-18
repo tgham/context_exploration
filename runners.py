@@ -20,16 +20,15 @@ def extract_grid_info(agent, env_copy, city, day, t):
 
             ## get the number of costs and no-costs that comprise these overlapping states
             try:
-                path_past_observed_high_costs = sum(env_copy.costs[obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
-                path_past_observed_low_costs = sum(env_copy.costs[obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
+                path_actual_high_costs = sum(env_copy.costs[obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
+                path_actual_low_costs = sum(env_copy.costs[obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
             except:
-                path_past_observed_high_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
-                path_past_observed_low_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
+                path_actual_high_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
+                path_actual_low_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
             agent.path_future_overlaps[city, day, t, i] = env_copy.path_future_overlaps[t][i]
             agent.path_past_overlaps[city, day, t, i] = path_past_overlap
-            agent.path_past_observed_high_costs[city, day, t, i] = path_past_observed_high_costs
-            agent.path_past_observed_low_costs[city, day, t, i] = path_past_observed_low_costs
-
+            agent.path_actual_high_costs[city, day, t, i] = path_actual_high_costs
+            agent.path_actual_low_costs[city, day, t, i] = path_actual_low_costs
 
 
         ## sometimes need to convert each np array to list of tuples...
@@ -39,17 +38,17 @@ def extract_grid_info(agent, env_copy, city, day, t):
             overlap = set(path).intersection(set(obs_list))
             path_past_overlap = len(overlap)
             try:
-                path_past_observed_high_costs = sum(env_copy.costs[obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
-                path_past_observed_low_costs = sum(env_copy.costs[obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
+                path_actual_high_costs = sum(env_copy.costs[obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
+                path_actual_low_costs = sum(env_copy.costs[obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
             except:
-                path_past_observed_high_costs = sum(env_copy.costss[t][int(obs[0]), int(obs[1])] == env_copy.high_cost for obs in overlap)
-                path_past_observed_low_costs = sum(env_copy.costss[t][int(obs[0]), int(obs[1])] == env_copy.low_cost for obs in overlap)
+                path_actual_high_costs = sum(env_copy.costss[t][int(obs[0]), int(obs[1])] == env_copy.high_cost for obs in overlap)
+                path_actual_low_costs = sum(env_copy.costss[t][int(obs[0]), int(obs[1])] == env_copy.low_cost for obs in overlap)
             agent.path_future_overlaps[city, day, t, i] = env_copy.path_future_overlaps[t][i]
             agent.path_past_overlaps[city, day, t, i] = path_past_overlap
-            agent.path_past_observed_high_costs[city, day, t, i] = path_past_observed_high_costs
-            agent.path_past_observed_low_costs[city, day, t, i] = path_past_observed_low_costs
+            agent.path_actual_high_costs[city, day, t, i] = path_actual_high_costs
+            agent.path_actual_low_costs[city, day, t, i] = path_actual_low_costs
 
-        assert agent.path_past_overlaps[city, day, t, i] == agent.path_past_observed_high_costs[city, day, t, i] + agent.path_past_observed_low_costs[city, day, t, i], 'path {} past overlap does not match observed costs and no-costs\n path past overlap: {}, path observed costs: {}, path observed no-costs: {}'.format(i+1, agent.path_past_overlaps[city, day, t, i], agent.path_past_observed_high_costs[city, day, t, i], agent.path_past_observed_low_costs[city, day, t, i])
+        assert agent.path_past_overlaps[city, day, t, i] == agent.path_actual_high_costs[city, day, t, i] + agent.path_actual_low_costs[city, day, t, i], 'path {} past overlap does not match observed costs and no-costs\n path past overlap: {}, path observed costs: {}, path observed no-costs: {}'.format(i+1, agent.path_past_overlaps[city, day, t, i], agent.path_actual_high_costs[city, day, t, i], agent.path_actual_low_costs[city, day, t, i])
 
 
         ## get aligned vs orthogonal states
@@ -195,8 +194,8 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
     agent.path_future_rel_overlaps = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.path_future_irrel_overlaps = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.path_past_overlaps = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
-    agent.path_past_observed_high_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
-    agent.path_past_observed_low_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
+    agent.path_actual_high_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
+    agent.path_actual_low_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.path_len = np.zeros((n_cities, n_days, n_trials))
     agent.day_costs = np.zeros((n_cities, n_days, n_trials))
     agent.distr_diff = np.zeros((n_cities, n_days, n_trials))
@@ -216,6 +215,20 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
     agent.aligned_path_orthogonal_arm_len = np.zeros((n_cities, n_days, n_trials))
     agent.orthogonal_path_aligned_arm_len = np.zeros((n_cities, n_days, n_trials))
     agent.orthogonal_path_orthogonal_arm_len = np.zeros((n_cities, n_days, n_trials))
+    agent.aligned_path_aligned_arm_gen_high_costs = np.zeros((n_cities, n_days, n_trials))
+    agent.aligned_path_aligned_arm_gen_low_costs = np.zeros((n_cities, n_days, n_trials))
+    agent.aligned_path_orthogonal_arm_gen_high_costs = np.zeros((n_cities, n_days, n_trials))
+    agent.aligned_path_orthogonal_arm_gen_low_costs = np.zeros((n_cities, n_days, n_trials))
+    agent.orthogonal_path_aligned_arm_gen_high_costs = np.zeros((n_cities, n_days, n_trials))
+    agent.orthogonal_path_aligned_arm_gen_low_costs = np.zeros((n_cities, n_days, n_trials))
+    agent.orthogonal_path_orthogonal_arm_gen_high_costs = np.zeros((n_cities, n_days, n_trials))
+    agent.orthogonal_path_orthogonal_arm_gen_low_costs = np.zeros((n_cities, n_days, n_trials))
+    agent.aligned_arm_len_diff = np.zeros((n_cities, n_days, n_trials))
+    agent.orthogonal_arm_len_diff = np.zeros((n_cities, n_days, n_trials))
+    agent.aligned_arm_gen_high_costs_diff = np.zeros((n_cities, n_days, n_trials))
+    agent.aligned_arm_gen_low_costs_diff = np.zeros((n_cities, n_days, n_trials))
+    agent.orthogonal_arm_gen_high_costs_diff = np.zeros((n_cities, n_days, n_trials))
+    agent.orthogonal_arm_gen_low_costs_diff = np.zeros((n_cities, n_days, n_trials))
 
     ## define whether or not we're extracting expt info based on yoked
     # if yoked:
@@ -357,12 +370,48 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                         
                 if not np.isnan(orthogonal_path):
                     agent.p_chose_orthogonal[city, day, t] = agent.p_choice[city, day, t][orthogonal_path]
-                    
+
                     ## also save arm lengths etc.
                     agent.aligned_path_aligned_arm_len[city,day,t] = agent.aligned_arm_len[city, day, t, aligned_path]
                     agent.aligned_path_orthogonal_arm_len[city,day,t] = agent.orthogonal_arm_len[city, day, t, aligned_path]
                     agent.orthogonal_path_aligned_arm_len[city,day,t] = agent.aligned_arm_len[city, day, t, orthogonal_path]
                     agent.orthogonal_path_orthogonal_arm_len[city,day,t] = agent.orthogonal_arm_len[city, day, t, orthogonal_path]
+
+                    ## per-path gen costs (aligned/orthogonal arm of aligned/orthogonal path)
+                    agent.aligned_path_aligned_arm_gen_high_costs[city,day,t] = agent.aligned_arm_gen_high_costs[city, day, t, aligned_path]
+                    agent.aligned_path_aligned_arm_gen_low_costs[city,day,t]  = agent.aligned_arm_gen_low_costs[city, day, t, aligned_path]
+                    agent.aligned_path_orthogonal_arm_gen_high_costs[city,day,t] = agent.orthogonal_arm_gen_high_costs[city, day, t, aligned_path]
+                    agent.aligned_path_orthogonal_arm_gen_low_costs[city,day,t]  = agent.orthogonal_arm_gen_low_costs[city, day, t, aligned_path]
+                    agent.orthogonal_path_aligned_arm_gen_high_costs[city,day,t] = agent.aligned_arm_gen_high_costs[city, day, t, orthogonal_path]
+                    agent.orthogonal_path_aligned_arm_gen_low_costs[city,day,t]  = agent.aligned_arm_gen_low_costs[city, day, t, orthogonal_path]
+                    agent.orthogonal_path_orthogonal_arm_gen_high_costs[city,day,t] = agent.orthogonal_arm_gen_high_costs[city, day, t, orthogonal_path]
+                    agent.orthogonal_path_orthogonal_arm_gen_low_costs[city,day,t]  = agent.orthogonal_arm_gen_low_costs[city, day, t, orthogonal_path]
+
+                    ## diffs (orthogonal - aligned)
+                    agent.aligned_arm_len_diff[city,day,t] = (
+                        agent.orthogonal_path_aligned_arm_len[city,day,t]
+                        - agent.aligned_path_aligned_arm_len[city,day,t]
+                    )
+                    agent.orthogonal_arm_len_diff[city,day,t] = (
+                        agent.orthogonal_path_orthogonal_arm_len[city,day,t]
+                        - agent.aligned_path_orthogonal_arm_len[city,day,t]
+                    )
+                    agent.aligned_arm_gen_high_costs_diff[city,day,t] = (
+                        agent.orthogonal_path_aligned_arm_gen_high_costs[city,day,t]
+                        - agent.aligned_path_aligned_arm_gen_high_costs[city,day,t]
+                    )
+                    agent.aligned_arm_gen_low_costs_diff[city,day,t] = (
+                        agent.orthogonal_path_aligned_arm_gen_low_costs[city,day,t]
+                        - agent.aligned_path_aligned_arm_gen_low_costs[city,day,t]
+                    )
+                    agent.orthogonal_arm_gen_high_costs_diff[city,day,t] = (
+                        agent.orthogonal_path_orthogonal_arm_gen_high_costs[city,day,t]
+                        - agent.aligned_path_orthogonal_arm_gen_high_costs[city,day,t]
+                    )
+                    agent.orthogonal_arm_gen_low_costs_diff[city,day,t] = (
+                        agent.orthogonal_path_orthogonal_arm_gen_low_costs[city,day,t]
+                        - agent.aligned_path_orthogonal_arm_gen_low_costs[city,day,t]
+                    )
 
                 else:
                     agent.p_chose_orthogonal[city, day, t] = np.nan
@@ -370,6 +419,20 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                     agent.aligned_path_orthogonal_arm_len[city,day,t] = np.nan
                     agent.orthogonal_path_aligned_arm_len[city,day,t] = np.nan
                     agent.orthogonal_path_orthogonal_arm_len[city,day,t] = np.nan
+                    agent.aligned_path_aligned_arm_gen_high_costs[city,day,t] = np.nan
+                    agent.aligned_path_aligned_arm_gen_low_costs[city,day,t] = np.nan
+                    agent.aligned_path_orthogonal_arm_gen_high_costs[city,day,t] = np.nan
+                    agent.aligned_path_orthogonal_arm_gen_low_costs[city,day,t] = np.nan
+                    agent.orthogonal_path_aligned_arm_gen_high_costs[city,day,t] = np.nan
+                    agent.orthogonal_path_aligned_arm_gen_low_costs[city,day,t] = np.nan
+                    agent.orthogonal_path_orthogonal_arm_gen_high_costs[city,day,t] = np.nan
+                    agent.orthogonal_path_orthogonal_arm_gen_low_costs[city,day,t] = np.nan
+                    agent.aligned_arm_len_diff[city,day,t] = np.nan
+                    agent.orthogonal_arm_len_diff[city,day,t] = np.nan
+                    agent.aligned_arm_gen_high_costs_diff[city,day,t] = np.nan
+                    agent.aligned_arm_gen_low_costs_diff[city,day,t] = np.nan
+                    agent.orthogonal_arm_gen_high_costs_diff[city,day,t] = np.nan
+                    agent.orthogonal_arm_gen_low_costs_diff[city,day,t] = np.nan
 
 
                 ### take ppt's action if a) we are fitting, or b) we are extracting behavioural measures by yoking to ppt's choices
@@ -492,6 +555,20 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
             'aligned_path_orthogonal_arm_len':[],
             'orthogonal_path_aligned_arm_len':[],
             'orthogonal_path_orthogonal_arm_len':[],
+            'aligned_path_aligned_arm_gen_high_costs':[],
+            'aligned_path_aligned_arm_gen_low_costs':[],
+            'aligned_path_orthogonal_arm_gen_high_costs':[],
+            'aligned_path_orthogonal_arm_gen_low_costs':[],
+            'orthogonal_path_aligned_arm_gen_high_costs':[],
+            'orthogonal_path_aligned_arm_gen_low_costs':[],
+            'orthogonal_path_orthogonal_arm_gen_high_costs':[],
+            'orthogonal_path_orthogonal_arm_gen_low_costs':[],
+            'aligned_arm_len_diff':[],
+            'orthogonal_arm_len_diff':[],
+            'aligned_arm_gen_high_costs_diff':[],
+            'aligned_arm_gen_low_costs_diff':[],
+            'orthogonal_arm_gen_high_costs_diff':[],
+            'orthogonal_arm_gen_low_costs_diff':[],
             'leaf_visits_a':[],
             'leaf_visits_b':[],
             'leaf_visits_c':[],
@@ -532,6 +609,20 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                     sim_out['aligned_path_orthogonal_arm_len'].append(agent.aligned_path_orthogonal_arm_len[c][d][t])
                     sim_out['orthogonal_path_aligned_arm_len'].append(agent.orthogonal_path_aligned_arm_len[c][d][t])
                     sim_out['orthogonal_path_orthogonal_arm_len'].append(agent.orthogonal_path_orthogonal_arm_len[c][d][t])
+                    sim_out['aligned_path_aligned_arm_gen_high_costs'].append(agent.aligned_path_aligned_arm_gen_high_costs[c][d][t])
+                    sim_out['aligned_path_aligned_arm_gen_low_costs'].append(agent.aligned_path_aligned_arm_gen_low_costs[c][d][t])
+                    sim_out['aligned_path_orthogonal_arm_gen_high_costs'].append(agent.aligned_path_orthogonal_arm_gen_high_costs[c][d][t])
+                    sim_out['aligned_path_orthogonal_arm_gen_low_costs'].append(agent.aligned_path_orthogonal_arm_gen_low_costs[c][d][t])
+                    sim_out['orthogonal_path_aligned_arm_gen_high_costs'].append(agent.orthogonal_path_aligned_arm_gen_high_costs[c][d][t])
+                    sim_out['orthogonal_path_aligned_arm_gen_low_costs'].append(agent.orthogonal_path_aligned_arm_gen_low_costs[c][d][t])
+                    sim_out['orthogonal_path_orthogonal_arm_gen_high_costs'].append(agent.orthogonal_path_orthogonal_arm_gen_high_costs[c][d][t])
+                    sim_out['orthogonal_path_orthogonal_arm_gen_low_costs'].append(agent.orthogonal_path_orthogonal_arm_gen_low_costs[c][d][t])
+                    sim_out['aligned_arm_len_diff'].append(agent.aligned_arm_len_diff[c][d][t])
+                    sim_out['orthogonal_arm_len_diff'].append(agent.orthogonal_arm_len_diff[c][d][t])
+                    sim_out['aligned_arm_gen_high_costs_diff'].append(agent.aligned_arm_gen_high_costs_diff[c][d][t])
+                    sim_out['aligned_arm_gen_low_costs_diff'].append(agent.aligned_arm_gen_low_costs_diff[c][d][t])
+                    sim_out['orthogonal_arm_gen_high_costs_diff'].append(agent.orthogonal_arm_gen_high_costs_diff[c][d][t])
+                    sim_out['orthogonal_arm_gen_low_costs_diff'].append(agent.orthogonal_arm_gen_low_costs_diff[c][d][t])
                     sim_out['temp'].append(agent.temp)
                     sim_out['aligned_weight'].append(agent.aligned_weight)
                     sim_out['orthogonal_weight'].append(agent.orthogonal_weight)
@@ -912,20 +1003,97 @@ def run_emp(agent, env, horizon=None, policy='bellman', termination_arm=None, ve
     }
 
 
+def _canonical_count_matrix(C, _perm_cache={}):
+    """Return the lex-MAX count matrix in the orbit of C under
+    S_{n_arms} x S_{n_outcomes} acting by row and column permutation,
+    along with a hashable key.
+
+    Lex-max in row-major order packs counts towards low arm/outcome indices,
+    so the canonical form always uses a0, o0 first and increments only when a
+    genuinely new arm/outcome is required. Equivalent histories therefore
+    share the same canonical key, and the canonical labels are the smallest
+    that the multiset of counts admits.
+
+    Two count matrices in the same orbit induce identical posteriors up to
+    arm- and outcome-relabelling, so the per-history quantities computed by
+    enumerate_emp_histories (current_emp, Q, probs, delta_emp, entropy) are
+    constant on orbits.
+    """
+    n_arms, n_outcomes = C.shape
+    cache_key = (n_arms, n_outcomes)
+    if cache_key not in _perm_cache:
+        _perm_cache[cache_key] = (
+            [np.array(p) for p in itertools.permutations(range(n_arms))],
+            [np.array(p) for p in itertools.permutations(range(n_outcomes))],
+        )
+    row_perms, col_perms = _perm_cache[cache_key]
+
+    best_flat = None
+    best_C = None
+    for rp in row_perms:
+        Cr = C[rp]
+        for cp in col_perms:
+            cand = Cr[:, cp]
+            flat = tuple(cand.flatten().tolist())
+            if best_flat is None or flat > best_flat:
+                best_flat = flat
+                best_C = cand
+    return best_C, best_flat
+
+
+def _orbit_size(canon_C):
+    """Number of distinct count matrices in the orbit of canon_C under
+    S_{n_arms} x S_{n_outcomes}, i.e. (n_arms! * n_outcomes!) / |Stab(C)|."""
+    n_arms, n_outcomes = canon_C.shape
+    from math import factorial
+    stab = 0
+    for rp in itertools.permutations(range(n_arms)):
+        Cr = canon_C[np.array(rp)]
+        for cp in itertools.permutations(range(n_outcomes)):
+            if np.array_equal(Cr[:, np.array(cp)], canon_C):
+                stab += 1
+    return (factorial(n_arms) * factorial(n_outcomes)) // stab
+
+
+def _orbit_sequence_count(canon_C):
+    """Number of raw (a, o) sequences (orderings of the count matrix entries)
+    that canonicalise to canon_C. Equals
+        (orbit_size of matrix) * (multinomial t! / Π C[a,o]!)
+    where t = canon_C.sum(). This is the multiplicity to record per
+    canonical row so that summing orbit_size at trial t recovers
+    (n_arms * n_outcomes) ** t.
+    """
+    from math import factorial
+    t = int(canon_C.sum())
+    multinom = factorial(t)
+    for c in canon_C.flatten():
+        multinom //= factorial(int(c))
+    return _orbit_size(canon_C) * multinom
+
+
 def enumerate_emp_histories(n_arms=2, n_outcomes=2, n_trials=3, alpha=1.0, termination_arm = True,
                             ells=(0.33, 1.0, 3.0), temp=1.0):
-    """Enumerate every reachable (a, o) history of length 0..n_trials-1.
+    """Enumerate canonical (a, o) histories of length 0..n_trials-1.
 
-    For each history h and each ell, computes:
+    Histories are canonicalised under arm-relabel x outcome-relabel
+    (S_{n_arms} x S_{n_outcomes} acting on the count matrix). One row per
+    equivalence class per ell — the dominant cost (`_bellman_emp_Q`) runs
+    once per orbit instead of once per raw sequence.
+
+    For each canonical history h and each ell, computes:
       - current_emp: empowerment of the posterior implied by h
       - Q[a]: Bayes-adaptive optimal value of taking arm a from h with the
         remaining horizon n_trials - len(h)
       - probs[a]: softmax(Q / temp) — the agent's choice probabilities
-      - p_repeat: probs[h[-1][0]] if h non-empty else NaN
       - delta_emp[a]: 1-step expected empowerment gain
             E_o~p(o|a,h)[Emp(h u (a,o))] - Emp(h)
+      - orbit_size: number of raw (a, o) sequences that canonicalise to h.
+        Sum over rows at trial t equals (n_arms * n_outcomes) ** t.
 
-    Returns a long-format DataFrame with one row per (ell, history).
+    Note: `prev_action` and `p_repeat` are not emitted — they depend on
+    sequence order, which is undefined for a canonical count matrix.
+
+    Returns a long-format DataFrame with one row per (ell, canonical history).
     """
     import importlib.util as _ilu
     from scipy.special import softmax as _softmax
@@ -936,14 +1104,31 @@ def enumerate_emp_histories(n_arms=2, n_outcomes=2, n_trials=3, alpha=1.0, termi
     EmpBandit = _mod.EmpBandit
 
     rows = []
-    pairs = list(itertools.product(range(n_arms), range(n_outcomes)))
+    init_alphas = np.full((n_arms, n_outcomes), float(alpha))
+
+    ## Build canonical states incrementally: at each trial t, extend every
+    ## canonical history of length t-1 by every (a, o) pair, canonicalise the
+    ## resulting count matrix, and dedupe. canon_states[t] maps canonical key
+    ## -> canonical count matrix.
+    zero_C = np.zeros((n_arms, n_outcomes), dtype=int)
+    canon_states = [{tuple(zero_C.flatten().tolist()): zero_C}]
+    for t in range(1, n_trials):
+        next_states = {}
+        for prev_C in canon_states[t - 1].values():
+            for a in range(n_arms):
+                for o in range(n_outcomes):
+                    new_C = prev_C.copy()
+                    new_C[a, o] += 1
+                    canon_C, key = _canonical_count_matrix(new_C)
+                    if key not in next_states:
+                        next_states[key] = canon_C
+        canon_states.append(next_states)
 
     for ell in ells:
         for t in range(n_trials):
-            for history in itertools.product(pairs, repeat=t):
-                alphas = np.full((n_arms, n_outcomes), float(alpha))
-                for (a, o) in history:
-                    alphas[a, o] += 1
+            for key, canon_C in canon_states[t].items():
+                alphas = init_alphas + canon_C
+                orbit_size = _orbit_sequence_count(canon_C)
 
                 current_p = alphas / alphas.sum(axis=1, keepdims=True)
                 current_emp = EmpBandit.empowerment(current_p, ell)
@@ -952,7 +1137,7 @@ def enumerate_emp_histories(n_arms=2, n_outcomes=2, n_trials=3, alpha=1.0, termi
                 max_reach = np.max(current_p, axis=0)
 
                 h_remaining = n_trials - t
-                Q = _bellman_emp_Q(alphas.copy(), n_arms, n_outcomes, 
+                Q = _bellman_emp_Q(alphas.copy(), n_arms, n_outcomes,
                                    h_remaining, termination_arm, ell, verbose=False)
                 best_a = np.argmax(Q)
 
@@ -972,38 +1157,51 @@ def enumerate_emp_histories(n_arms=2, n_outcomes=2, n_trials=3, alpha=1.0, termi
                         expected += p_o * EmpBandit.empowerment(next_p, ell)
                     delta_emp[a] = expected - current_emp
                     entropy[a] = EmpBandit.entropy(alphas[a])
-                
+
                 if best_a < n_arms:
                     chosen_entropy = entropy[best_a]
                 else:
                     chosen_entropy = np.nan
                 chosen_prob = probs[best_a]
 
-                prev_action = history[-1][0] if t > 0 else None
-                p_repeat = probs[prev_action] if prev_action is not None else np.nan
+                ## get number of untried arms or unobserved outcomes
+                n_untried_arms = np.sum(alphas.sum(axis=1) == init_alphas.sum(axis=1).min())
+                n_unobserved_outcomes = np.sum(alphas.sum(axis=0) == init_alphas.sum(axis=0).min())
 
                 ## choose least sampled (if there are ties, choose the max)
                 least_sampled = np.where(alphas.sum(axis=1) == alphas.sum(axis=1).min())[0]
                 if len(least_sampled) > 1:
                     p_choose_least_sampled = probs[least_sampled].max()
-
                 else:
                     p_choose_least_sampled = probs[least_sampled[0]]
+
+                ## canonical "history" representation: list of (a, o, count)
+                ## tuples sorted by (a, o), and a stringified version matching
+                ## the format used by get_history_counts / filter_histories.
+                canon_counts = tuple(
+                    ((int(a), int(o)), int(canon_C[a, o]))
+                    for a in range(n_arms) for o in range(n_outcomes)
+                    if canon_C[a, o] > 0
+                )
+                history_str = '-'.join(
+                    f'a{a}o{o}:{c}' for ((a, o), c) in canon_counts
+                ) or 'init'
 
                 row = {
                     'ell': ell,
                     't': t,
-                    'history': history,
-                    'history_str': '-'.join(f'a{a}o{o}' for (a, o) in history) or 'init',
-                    'prev_action': prev_action if prev_action is not None else np.nan,
+                    'history': canon_counts,
+                    'history_str': history_str,
+                    'orbit_size': orbit_size,
                     'current_emp': current_emp,
-                    'p_repeat': p_repeat,
                     'p_choose_least_sampled': p_choose_least_sampled,
                     'best_a': best_a,
                     'policy_entropy': policy_entropy,
                     'chosen_prob': chosen_prob,
                     'chosen_entropy': chosen_entropy,
                     'total_entropy': np.sum(entropy),
+                    'n_untried_arms': n_untried_arms,
+                    'n_unobserved_outcomes': n_unobserved_outcomes,
                 }
                 for a in range(n_arms):
                     row[f'Q_{a}'] = Q[a]
@@ -1018,7 +1216,10 @@ def enumerate_emp_histories(n_arms=2, n_outcomes=2, n_trials=3, alpha=1.0, termi
                 rows.append(row)
 
     df = pd.DataFrame(rows)
-    df['history_counts'], df['history_counts_str'] = zip(*df['history'].apply(get_history_counts))
+    ## history_counts / history_counts_str: already canonical here, but kept
+    ## for compatibility with filter_histories and downstream notebooks.
+    df['history_counts'] = df['history']
+    df['history_counts_str'] = df['history_str']
 
     return df
 
