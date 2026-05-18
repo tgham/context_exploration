@@ -2,6 +2,7 @@ import copy
 import itertools
 import numpy as np
 import pandas as pd
+from collections import defaultdict
 from tqdm.auto import tqdm
 
 
@@ -523,60 +524,7 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
 
     ## or, if we are running our own simulations, give the simulation output
     elif (not fit) & (df_trials is None):
-        sim_out ={
-            'participant':[],
-            'agent':[],
-            'city':[],
-            'day':[],
-            'trial':[],
-            'context':[],
-            'objective':[],
-            'actions':[],
-            'CE_actions':[],
-            'total_costs':[],
-            'distr_diff':[],
-            'p_choice_A':[],
-            'p_choice_B':[],
-            'p_choice_C':[],
-            'p_correct':[],
-            'p_chose_more_future_rel_overlap':[],
-            'p_chose_orthogonal':[],
-            'Q_a':[],
-            'Q_b':[],
-            'Q_c':[],
-            'CE_p_choice_A':[],
-            'CE_p_choice_B':[],
-            'CE_p_choice_C':[],
-            'CE_p_correct':[],
-            'CE_Q_a':[],
-            'CE_Q_b':[],
-            'CE_Q_c':[],
-            'aligned_path_aligned_arm_len':[],
-            'aligned_path_orthogonal_arm_len':[],
-            'orthogonal_path_aligned_arm_len':[],
-            'orthogonal_path_orthogonal_arm_len':[],
-            'aligned_path_aligned_arm_gen_high_costs':[],
-            'aligned_path_aligned_arm_gen_low_costs':[],
-            'aligned_path_orthogonal_arm_gen_high_costs':[],
-            'aligned_path_orthogonal_arm_gen_low_costs':[],
-            'orthogonal_path_aligned_arm_gen_high_costs':[],
-            'orthogonal_path_aligned_arm_gen_low_costs':[],
-            'orthogonal_path_orthogonal_arm_gen_high_costs':[],
-            'orthogonal_path_orthogonal_arm_gen_low_costs':[],
-            'aligned_arm_len_diff':[],
-            'orthogonal_arm_len_diff':[],
-            'aligned_arm_gen_high_costs_diff':[],
-            'aligned_arm_gen_low_costs_diff':[],
-            'orthogonal_arm_gen_high_costs_diff':[],
-            'orthogonal_arm_gen_low_costs_diff':[],
-            'leaf_visits_a':[],
-            'leaf_visits_b':[],
-            'leaf_visits_c':[],
-            'temp': [],
-            'aligned_weight': [],
-            'orthogonal_weight': [],
-            'horizon': [],
-        }
+        sim_out = defaultdict(list)
         for c in range(n_cities):
             for d in range(n_days):
                 for t in range(n_trials):
