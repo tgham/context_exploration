@@ -1209,10 +1209,10 @@ def load_data(path, ppc = False):
     df_all['path_B_future_rel_overlaps'] = np.nan
     df_all['path_A_future_irrel_overlaps'] = np.nan
     df_all['path_B_future_irrel_overlaps'] = np.nan
-    df_all['path_A_past_observed_high_costs'] = np.nan
-    df_all['path_B_past_observed_high_costs'] = np.nan
-    df_all['path_A_past_observed_low_costs'] = np.nan
-    df_all['path_B_past_observed_low_costs'] = np.nan
+    df_all['path_A_actual_high_costs'] = np.nan
+    df_all['path_B_actual_high_costs'] = np.nan
+    df_all['path_A_actual_low_costs'] = np.nan
+    df_all['path_B_actual_low_costs'] = np.nan
 
     df_all['path_A_aligned_arm_len'] = np.nan
     df_all['path_B_aligned_arm_len'] = np.nan
@@ -1249,8 +1249,8 @@ def load_data(path, ppc = False):
     
     ## diffs, where this is always defined as vertical - horizontal
     df_all['past_overlaps_diff'] = np.nan 
-    df_all['observed_high_costs_diff'] = np.nan 
-    df_all['observed_low_costs_diff'] = np.nan
+    df_all['actual_high_costs_diff'] = np.nan 
+    df_all['actual_low_costs_diff'] = np.nan
     df_all['net_observed_diff'] = np.nan
     df_all['distr_diff'] = np.nan
     
@@ -1381,10 +1381,10 @@ def load_data(path, ppc = False):
         df_all.loc[df_all['pid'] == pid, 'path_A_future_overlaps'] = agent.path_future_overlaps[:,:,:,0].flatten()
         df_all.loc[df_all['pid'] == pid, 'path_B_future_overlaps'] = agent.path_future_overlaps[:,:,:,1].flatten()
         df_all.loc[df_all['pid'] == pid, 'total_past_overlaps'] = agent.path_past_overlaps[:,:,:,0].flatten() + agent.path_past_overlaps[:,:,:,1].flatten()
-        df_all.loc[df_all['pid'] == pid, 'path_A_past_observed_high_costs'] = agent.path_past_observed_high_costs[:,:,:,0].flatten()
-        df_all.loc[df_all['pid'] == pid, 'path_B_past_observed_high_costs'] = agent.path_past_observed_high_costs[:,:,:,1].flatten()
-        df_all.loc[df_all['pid'] == pid, 'path_A_past_observed_low_costs'] = agent.path_past_observed_low_costs[:,:,:,0].flatten()
-        df_all.loc[df_all['pid'] == pid, 'path_B_past_observed_low_costs'] = agent.path_past_observed_low_costs[:,:,:,1].flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_A_actual_high_costs'] = agent.path_actual_high_costs[:,:,:,0].flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_B_actual_high_costs'] = agent.path_actual_high_costs[:,:,:,1].flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_A_actual_low_costs'] = agent.path_actual_low_costs[:,:,:,0].flatten()
+        df_all.loc[df_all['pid'] == pid, 'path_B_actual_low_costs'] = agent.path_actual_low_costs[:,:,:,1].flatten()
         df_all.loc[df_all['pid'] == pid, 'path_A_future_rel_overlaps'] = agent.path_future_rel_overlaps[:,:,:,0].flatten()
         df_all.loc[df_all['pid'] == pid, 'path_B_future_rel_overlaps'] = agent.path_future_rel_overlaps[:,:,:,1].flatten()
         df_all.loc[df_all['pid'] == pid, 'path_A_future_irrel_overlaps'] = agent.path_future_irrel_overlaps[:,:,:,0].flatten()
@@ -1430,12 +1430,12 @@ def load_data(path, ppc = False):
 
     # diffs (A-B)
     # df_all['past_overlaps_diff'] = df_all['path_A_past_overlaps'] - df_all['path_B_past_overlaps']
-    # df_all['observed_high_costs_diff'] = df_all['path_A_past_observed_high_costs'] - df_all['path_B_past_observed_high_costs']
-    # df_all['observed_low_costs_diff'] = df_all['path_A_past_observed_low_costs'] - df_all['path_B_past_observed_low_costs']
+    # df_all['actual_high_costs_diff'] = df_all['path_A_actual_high_costs'] - df_all['path_B_actual_high_costs']
+    # df_all['actual_low_costs_diff'] = df_all['path_A_actual_low_costs'] - df_all['path_B_actual_low_costs']
     
     
     ## calculate the absolute net observed difference, including both costs and no costs
-    # df_all['net_observed_diff'] = np.abs((df_all['path_A_past_observed_high_costs'] - df_all['path_A_past_observed_low_costs']) - (df_all['path_B_past_observed_high_costs'] - df_all['path_B_past_observed_low_costs']))
+    # df_all['net_actual_diff'] = np.abs((df_all['path_A_actual_high_costs'] - df_all['path_A_actual_low_costs']) - (df_all['path_B_actual_high_costs'] - df_all['path_B_actual_low_costs']))
     
     # or, diffs (vertical - horizontal)
     # df_all.loc[(df_all['dominant_axis_A'] == 'vertical')
@@ -1443,15 +1443,15 @@ def load_data(path, ppc = False):
     # df_all.loc[(df_all['dominant_axis_A'] == 'horizontal')
     #              , 'past_overlaps_diff'] = df_all.loc[(df_all['dominant_axis_A'] == 'horizontal'), 'path_B_past_overlaps'] - df_all.loc[(df_all['dominant_axis_A'] == 'horizontal'), 'path_A_past_overlaps']
     # df_all.loc[(df_all['dominant_axis_A'] == 'vertical')
-    #              , 'observed_high_costs_diff'] = df_all.loc[(df_all['dominant_axis_A'] == 'vertical'), 'path_A_past_observed_high_costs'] - df_all.loc[(df_all['dominant_axis_A'] == 'vertical'), 'path_B_past_observed_high_costs']
+    #              , 'actual_high_costs_diff'] = df_all.loc[(df_all['dominant_axis_A'] == 'vertical'), 'path_A_actual_high_costs'] - df_all.loc[(df_all['dominant_axis_A'] == 'vertical'), 'path_B_actual_high_costs']
     # df_all.loc[(df_all['dominant_axis_A'] == 'horizontal')
-    #                 , 'observed_high_costs_diff'] = df_all.loc[(df_all['dominant_axis_A'] == 'horizontal'), 'path_B_past_observed_high_costs'] - df_all.loc[(df_all['dominant_axis_A'] == 'horizontal'), 'path_A_past_observed_high_costs']
+    #                 , 'actual_high_costs_diff'] = df_all.loc[(df_all['dominant_axis_A'] == 'horizontal'), 'path_B_actual_high_costs'] - df_all.loc[(df_all['dominant_axis_A'] == 'horizontal'), 'path_A_actual_high_costs']
     # df_all.loc[(df_all['dominant_axis_A'] == 'vertical')
     #                 & (df_all['dominant_axis_A'] == 'vertical')
-    #                 , 'observed_low_costs_diff'] = df_all.loc[(df_all['dominant_axis_A'] == 'vertical'), 'path_A_past_observed_low_costs'] - df_all.loc[(df_all['dominant_axis_A'] == 'vertical'), 'path_B_past_observed_low_costs']
+    #                 , 'actual_low_costs_diff'] = df_all.loc[(df_all['dominant_axis_A'] == 'vertical'), 'path_A_actual_low_costs'] - df_all.loc[(df_all['dominant_axis_A'] == 'vertical'), 'path_B_actual_low_costs']
     # df_all.loc[(df_all['dominant_axis_A'] == 'horizontal')
     #                 & (df_all['dominant_axis_A'] == 'horizontal')
-    #                 , 'observed_low_costs_diff'] = df_all.loc[(df_all['dominant_axis_A'] == 'horizontal'), 'path_B_past_observed_low_costs'] - df_all.loc[(df_all['dominant_axis_A'] == 'horizontal'), 'path_A_past_observed_low_costs']
+    #                 , 'actual_low_costs_diff'] = df_all.loc[(df_all['dominant_axis_A'] == 'horizontal'), 'path_B_actual_low_costs'] - df_all.loc[(df_all['dominant_axis_A'] == 'horizontal'), 'path_A_actual_low_costs']
     
     ## or, diffs (orthogonal - aligned)
     df_all.loc[(df_all['aligned_path'] == 'b')
@@ -1460,16 +1460,16 @@ def load_data(path, ppc = False):
                     , 'past_overlaps_diff'] = df_all.loc[(df_all['aligned_path'] == 'a'), 'path_B_past_overlaps'] - df_all.loc[(df_all['aligned_path'] == 'a'), 'path_A_past_overlaps']
     df_all.loc[(df_all['aligned_path'] == 'b')
                     & (df_all['aligned_path'] == 'b')
-                    , 'observed_high_costs_diff'] = df_all.loc[(df_all['aligned_path'] == 'b'), 'path_A_past_observed_high_costs'] - df_all.loc[(df_all['aligned_path'] == 'b'), 'path_B_past_observed_high_costs']
+                    , 'actual_high_costs_diff'] = df_all.loc[(df_all['aligned_path'] == 'b'), 'path_A_actual_high_costs'] - df_all.loc[(df_all['aligned_path'] == 'b'), 'path_B_actual_high_costs']
     df_all.loc[(df_all['aligned_path'] == 'a')
                     & (df_all['aligned_path'] == 'a')
-                    , 'observed_high_costs_diff'] = df_all.loc[(df_all['aligned_path'] == 'a'), 'path_B_past_observed_high_costs'] - df_all.loc[(df_all['aligned_path'] == 'a'), 'path_A_past_observed_high_costs']
+                    , 'actual_high_costs_diff'] = df_all.loc[(df_all['aligned_path'] == 'a'), 'path_B_actual_high_costs'] - df_all.loc[(df_all['aligned_path'] == 'a'), 'path_A_actual_high_costs']
     df_all.loc[(df_all['aligned_path'] == 'b')
-                    , 'observed_low_costs_diff'] = df_all.loc[(df_all['aligned_path'] == 'b'), 'path_A_past_observed_low_costs'] - df_all.loc[(df_all['aligned_path'] == 'b'), 'path_B_past_observed_low_costs']
+                    , 'actual_low_costs_diff'] = df_all.loc[(df_all['aligned_path'] == 'b'), 'path_A_actual_low_costs'] - df_all.loc[(df_all['aligned_path'] == 'b'), 'path_B_actual_low_costs']
     df_all.loc[(df_all['aligned_path'] == 'a')
-                    , 'observed_low_costs_diff'] = df_all.loc[(df_all['aligned_path'] == 'a'), 'path_B_past_observed_low_costs'] - df_all.loc[(df_all['aligned_path'] == 'a'), 'path_A_past_observed_low_costs']
-    df_all['observed_high_costs_total'] = df_all['path_A_past_observed_high_costs'] + df_all['path_B_past_observed_high_costs']
-    df_all['observed_low_costs_total'] = df_all['path_A_past_observed_low_costs'] + df_all['path_B_past_observed_low_costs']
+                    , 'actual_low_costs_diff'] = df_all.loc[(df_all['aligned_path'] == 'a'), 'path_B_actual_low_costs'] - df_all.loc[(df_all['aligned_path'] == 'a'), 'path_A_actual_low_costs']
+    df_all['actual_high_costs_total'] = df_all['path_A_actual_high_costs'] + df_all['path_B_actual_high_costs']
+    df_all['actual_low_costs_total'] = df_all['path_A_actual_low_costs'] + df_all['path_B_actual_low_costs']
 
     
     ## sanity check: total past overlaps should be the sum of path A and B past overlaps
