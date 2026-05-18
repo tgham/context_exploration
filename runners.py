@@ -280,8 +280,8 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
     agent.aligned_arm_gen_low_costs_diff = np.zeros((n_cities, n_days, n_trials))
     agent.orthogonal_arm_gen_high_costs_diff = np.zeros((n_cities, n_days, n_trials))
     agent.orthogonal_arm_gen_low_costs_diff = np.zeros((n_cities, n_days, n_trials))
-    agent.future_rel_overlap_aligned_path = np.zeros((n_cities, n_days, n_trials))
-    agent.future_rel_overlap_orthogonal_path = np.zeros((n_cities, n_days, n_trials))
+    agent.aligned_path_future_rel_overlap = np.zeros((n_cities, n_days, n_trials))
+    agent.orthogonal_path_future_rel_overlap = np.zeros((n_cities, n_days, n_trials))
     agent.future_rel_overlap_diff = np.zeros((n_cities, n_days, n_trials))
 
     ## define whether or not we're extracting expt info based on yoked
@@ -486,9 +486,9 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                     )
 
                     ## also save future rel overlaps of each path
-                    agent.future_rel_overlap_aligned_path = agent.path_future_rel_overlaps[city, day, t, aligned_path]
-                    agent.future_rel_overlap_orthogonal_path = agent.path_future_rel_overlaps[city, day, t, orthogonal_path]
-                    agent.future_rel_overlap_diff = agent.future_rel_overlap_orthogonal_path - agent.future_rel_overlap_aligned_path
+                    agent.aligned_path_future_rel_overlap[city, day, t] = agent.path_future_rel_overlaps[city, day, t, aligned_path]
+                    agent.orthogonal_path_future_rel_overlap[city, day, t] = agent.path_future_rel_overlaps[city, day, t, orthogonal_path]
+                    agent.future_rel_overlap_diff[city, day, t] = agent.orthogonal_path_future_rel_overlap[city, day, t] - agent.aligned_path_future_rel_overlap[city, day, t]
 
                 else:
                     agent.p_chose_orthogonal[city, day, t] = np.nan
@@ -662,8 +662,8 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                     sim_out['aligned_arm_gen_low_costs_diff'].append(agent.aligned_arm_gen_low_costs_diff[c][d][t])
                     sim_out['orthogonal_arm_gen_high_costs_diff'].append(agent.orthogonal_arm_gen_high_costs_diff[c][d][t])
                     sim_out['orthogonal_arm_gen_low_costs_diff'].append(agent.orthogonal_arm_gen_low_costs_diff[c][d][t])
-                    sim_out['future_rel_overlap_aligned_path'].append(agent.future_rel_overlap_aligned_path[c][d][t])
-                    sim_out['future_rel_overlap_orthogonal_path'].append(agent.future_rel_overlap_orthogonal_path[c][d][t])
+                    sim_out['aligned_path_future_rel_overlap'].append(agent.aligned_path_future_rel_overlap[c][d][t])
+                    sim_out['orthogonal_path_future_rel_overlap'].append(agent.orthogonal_path_future_rel_overlap[c][d][t])
                     sim_out['future_rel_overlap_diff'].append(agent.future_rel_overlap_diff[c][d][t])
                     sim_out['temp'].append(agent.temp)
                     sim_out['aligned_weight'].append(agent.aligned_weight)

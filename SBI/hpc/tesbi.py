@@ -170,7 +170,7 @@ SAVED_FIELDS = [
     # "orthogonal_arm_gen_high_costs_diff", "orthogonal_arm_gen_low_costs_diff",
 
     ## overlaps
-    "future_rel_overlap_aligned_path", "future_rel_overlap_orthogonal_path", "future_rel_overlap_diff",
+    "aligned_path_future_rel_overlap", "orthogonal_path_future_rel_overlap", "future_rel_overlap_diff",
 ]
 
 # FEATURES: subset of SAVED_FIELDS that the encoder actually sees. Edit this
@@ -271,7 +271,7 @@ def simulate_data(params: Dict[str, float], envs: Dict, seed: Optional[int] = No
 
     p_orth = np.asarray(sim_out["p_chose_orthogonal"], dtype=np.float64)
     chose_orthogonal = np.random.binomial(1, p_orth).astype(np.float32)
-    
+
     # Sample once at sim time; saved alongside p_chose_orthogonal so re-sampling
     # is also possible later if a feature set wants stochastic choices.
     # p_for_sample = np.where(np.isnan(p_orth), 0.0, p_orth)
