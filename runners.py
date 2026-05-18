@@ -261,6 +261,8 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
     agent.aligned_path_gen_low_costs = np.zeros((n_cities, n_days, n_trials))
     agent.orthogonal_path_gen_high_costs = np.zeros((n_cities, n_days, n_trials))
     agent.orthogonal_path_gen_low_costs = np.zeros((n_cities, n_days, n_trials))
+    agent.aligned_path_gen_net_costs = np.zeros((n_cities, n_days, n_trials))
+    agent.orthogonal_path_gen_net_costs = np.zeros((n_cities, n_days, n_trials))
     agent.aligned_path_aligned_arm_gen_high_costs = np.zeros((n_cities, n_days, n_trials))
     agent.aligned_path_aligned_arm_gen_low_costs = np.zeros((n_cities, n_days, n_trials))
     agent.aligned_path_orthogonal_arm_gen_high_costs = np.zeros((n_cities, n_days, n_trials))
