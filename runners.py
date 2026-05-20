@@ -204,6 +204,7 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
         agent.greedy = hyperparams['greedy']
     else:
         agent.greedy = True
+        # agent.greedy = False
 
     ## initialise model's internal variables
     agent.n_afc = n_afc
@@ -666,6 +667,7 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                     sim_out['orthogonal_path_future_rel_overlap'].append(agent.orthogonal_path_future_rel_overlap[c][d][t])
                     sim_out['future_rel_overlap_diff'].append(agent.future_rel_overlap_diff[c][d][t])
                     sim_out['temp'].append(agent.temp)
+                    sim_out['lapse'].append(agent.lapse)
                     sim_out['aligned_weight'].append(agent.aligned_weight)
                     sim_out['orthogonal_weight'].append(agent.orthogonal_weight)
                     sim_out['horizon'].append(agent.horizon)

@@ -24,12 +24,13 @@ class Farmer(ABC):
 
     def __init__(self,
                  mcts_class=None, run_fn=None, 
-                 temp=1, horizon=3,
+                 temp=1, lapse = 0, horizon=3,
                  exploration_constant=None, discount_factor=None, n_samples=None,
                  **task_params):
 
         ## behavioural parameters
         self.temp = temp
+        self.lapse = lapse
 
         ## task-specific parameters (passed through to env via receive_task_params)
         self.task_params = task_params
@@ -84,8 +85,8 @@ class Farmer(ABC):
 
     ## choice function
     def softmax(self, Q):
-        # CPs = (1-self.lapse) * softmax(Q/self.temp) + self.lapse/len(Q)
-        CPs = softmax(Q/self.temp)
+        CPs = (1-self.lapse) * softmax(Q/self.temp) + self.lapse/len(Q)
+        # CPs = softmax(Q/self.temp)
         return CPs
 
 
@@ -142,12 +143,13 @@ class BAMCP(Farmer):
 
     def __init__(self,
                  mcts_class, run_fn,
-                 temp=1, horizon=3,
+                 temp=1, lapse=0,
+                 horizon=3,
                  exploration_constant=None, discount_factor=None, n_samples=None,
                  **task_params):
         super().__init__(
             mcts_class, run_fn,
-            temp, horizon, exploration_constant, discount_factor, n_samples,
+            temp, lapse, horizon, exploration_constant, discount_factor, n_samples,
             **task_params)
         self.aligned_weight = task_params.get('aligned_weight', 1.0)
         self.orthogonal_weight = task_params.get('orthogonal_weight', 1.0)
@@ -297,11 +299,11 @@ class BAMCP(Farmer):
 class CE(BAMCP):
     def __init__(self,
                  mcts_class, run_fn,
-                 temp=1, horizon=None,
+                 temp=1, lapse=0, horizon=None,
                  exploration_constant=None, discount_factor=None, n_samples=None,
                  **task_params):
         super().__init__(mcts_class, run_fn,
-                         temp=temp, horizon=horizon,
+                         temp=temp, lapse=lapse, horizon=horizon,
                          exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples,
                          **task_params)
         self.aligned_weight = task_params.get('aligned_weight', 1.0)

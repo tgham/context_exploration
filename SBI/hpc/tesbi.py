@@ -109,12 +109,16 @@ print("-" * 60)
 # Parameter Ranges
 PARAM_RANGES = {
     "temp": (0.0, 3.0),
+    "lapse": (0.0, 1.0),
     "aligned_weight": (0.0, 1.0),
     "orthogonal_weight":   (0.0, 1.0),
     # "horizon": (0, 3),
     }
 
-PARAM_ORDER = ["temp", "aligned_weight", "orthogonal_weight", 
+PARAM_ORDER = ["temp",
+            #    "lapse",
+                "aligned_weight", 
+               "orthogonal_weight", 
             #    "horizon"
                ]
 
@@ -122,7 +126,9 @@ FIXED_PARAMS = {
     "n_samples": 10000,
     "exploration_constant": 3,
     "discount_factor":   0.9,
-    "horizon": 3 ## override for now
+    "horizon": 3, ## override for now
+    # 'orthogonal_weight': 1,  # override for now
+    'lapse': 0,  # override for now
     }
 
 # Experiment Structure (expt 3: 32 cities × 1 day × 4 trials = 128 binary choices)
@@ -179,7 +185,12 @@ SAVED_FIELDS = [
 FEATURES = [
     "chose_orthogonal",
     "trial",
-    "gen_net_costs_diff",
+    # "gen_net_costs_diff",
+
+    'aligned_path_gen_net_costs',
+    'orthogonal_path_gen_net_costs',
+
+    "objective"
 ]
 
 # Environment Objects
@@ -251,6 +262,7 @@ def simulate_data(params: Dict[str, float], envs: Dict, seed: Optional[int] = No
         mcts_class=MonteCarloTreeSearch_AFC,
         run_fn=run_grid,
         temp=params["temp"],
+        lapse=params["lapse"],
         horizon=params["horizon"],
         exploration_constant=params["exploration_constant"],
         discount_factor=params["discount_factor"],
@@ -354,6 +366,8 @@ def build_features_from_participant(df_participant: pd.DataFrame) -> np.ndarray:
     for name in FEATURES:
         if name == "chose_orthogonal":
             cols.append((df_sorted["chose_orthogonal"] == True).values.astype(np.float32))
+        elif name =='objective':
+            cols.append(df_sorted[name].map({'costs': -1, 'rewards': 1}).values.astype(np.float32))
         else:
             cols.append(df_sorted[name].values.astype(np.float32))
     return np.stack(cols, axis=1).astype(np.float32)
@@ -945,6 +959,7 @@ def worker_ppc(pid, env_id, params, seed):
         mcts_class=MonteCarloTreeSearch_AFC,
         run_fn=run_grid,
         temp=params["temp"],
+        lapse=params["lapse"],
         horizon=params["horizon"],
         exploration_constant=params["exploration_constant"],
         discount_factor=params["discount_factor"],
@@ -1013,7 +1028,7 @@ def main():
 
     # Pretrain (encoder) args
     parser.add_argument("--n1_pre", type=int, default=20000, help="Simulations for pretraining/Round 1")
-    parser.add_argument("--epochs", type=int, default=5, help="Encoder pretraining epochs")
+    parser.add_argument("--epochs", type=int, default=50, help="Encoder pretraining epochs")
     parser.add_argument("--patience", type=int, default=10, help="Early-stopping patience")
     parser.add_argument("--n2", type=int, default=15000, help="SNPE Round 2 simulations (0 to skip)")
     parser.add_argument("--resim", action="store_true", help="Re-simulate even if cached X/omega files exist")
@@ -1025,7 +1040,7 @@ def main():
     parser.add_argument("--density", choices=["nsf", "maf", "mdn"], default="nsf", help="Density estimator")
 
     # Recovery args
-    parser.add_argument("--K", type=int, default=20, help="Recovery test cases")
+    parser.add_argument("--K", type=int, default=50, help="Recovery test cases")
     parser.add_argument("--num_post", type=int, default=1000, help="Posterior samples per recovery case")
 
     # Inference args
