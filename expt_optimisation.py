@@ -20,8 +20,8 @@ import gymnasium as gym
 from gymnasium.envs.registration import register, registry, make, spec
 import pickle
 import copy 
-
-from utils import make_env, Node, Tree, data_keys, grid_keys, parse_lists, KL_divergence, profile_func, KL_sim, value_iteration, generate_ppt_sequence
+from collections import defaultdict
+from utils import *
 from MCTS import MonteCarloTreeSearch, MonteCarloTreeSearch_AFC
 
 import IPython
@@ -114,7 +114,7 @@ beta_params = {
     }
 
 ## trial info
-n_sim_participants = 50
+n_sim_participants = 51
 n_cities = 32
 n_days = 1
 n_trials = 4
@@ -152,46 +152,7 @@ if n_afc==3:
     
     
 ## init sim results
-all_sim_out = {
-        'participant':[],
-        'agent':[],
-        'temp':[],
-        'aligned_weight':[],
-        'orthogonal_weight':[],
-        'horizon':[],
-        'city':[],
-        'day':[],
-        'trial':[],
-        'objective':[],
-        'context':[],
-        'actions':[],
-        'total_costs':[],
-        'p_choice_A':[],
-        'p_choice_B':[],
-        'p_choice_C':[],
-        'p_correct':[],
-        'p_chose_more_future_rel_overlap':[],
-        'p_chose_orthogonal':[],
-        'Q_a':[],
-        'Q_b':[],
-        'Q_c':[],
-        'leaf_visits_a':[],
-        'leaf_visits_b':[],
-        'leaf_visits_c':[],
-        'aligned_path_aligned_arm_len':[],
-        'aligned_path_orthogonal_arm_len':[],
-        'orthogonal_path_aligned_arm_len':[],
-        'orthogonal_path_orthogonal_arm_len':[],
-        'CE_actions':[],
-        'CE_Q_a':[],
-        'CE_Q_b':[],
-        'CE_Q_c':[],
-        'CE_p_choice_A':[],
-        'CE_p_choice_B':[],
-        'CE_p_choice_C':[],
-        'CE_p_correct':[],
-        'distr_diff':[]
-    }
+all_sim_out = defaultdict(list)
 parallel = True
 n_cores = 128
 create=False
@@ -202,7 +163,7 @@ param_settings = {
     'temp': [1],           # temperature values to try
     'aligned_weight': [
                     1,
-                    2
+                    1.5
                     ],  
     'orthogonal_weight': [
                     0,
@@ -238,6 +199,7 @@ hyperparams = {
     'n_cities': n_cities,
     'N': N,
     'participant': None, ## hacky
+    'greedy': False ## greedy or prob matching
 }
 agents = [
     'BAMCP', 
