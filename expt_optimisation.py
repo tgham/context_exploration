@@ -199,6 +199,7 @@ hyperparams = {
     'n_cities': n_cities,
     'N': N,
     'participant': None, ## hacky
+    'greedy': False ## greedy or prob matching
 }
 agents = [
     'BAMCP', 
