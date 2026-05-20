@@ -113,39 +113,6 @@ def make_gittins_bandit_env(n_arms=2, n_trials=20, alpha=1, beta=1, gam=0.4737, 
     env = _mod.GittinsBanditWrapper(n_arms=n_arms, alpha=alpha, beta=beta, n_trials=n_trials, gam=gam, lam=lam)
     return env
 
-## create empowerment env
-def make_emp_env(n_arms=3, n_outcomes=5, n_trials=20, alpha=1.0, ell=1.0,
-                 termination_arm=False, seed=None):
-    """
-    Create an EmpBanditWrapper (MCTS-compatible empowerment bandit).
-
-    Args:
-        n_arms:     Number of arms.
-        n_outcomes: Number of possible outcomes per arm.
-        n_trials:   Number of trials the agent will play.
-        alpha:      Dirichlet concentration for the prior over each arm's outcome distribution.
-        ell:        Empowerment exponent (agent-side free parameter).
-        seed:       Optional random seed (set before the P matrix is sampled).
-
-    Returns:
-        An EmpBanditWrapper instance ready for use with BAMCP / MCTS.
-    """
-    import importlib.util as _ilu
-
-    _spec = _ilu.spec_from_file_location(
-        "bandit", "gym_bandits/bandit.py")
-    _mod = _ilu.module_from_spec(_spec)
-    _spec.loader.exec_module(_mod)
-
-    if seed is not None:
-        np.random.seed(seed)
-
-    env = _mod.EmpBanditWrapper(
-        n_arms=n_arms, n_outcomes=n_outcomes, alpha=alpha, ell=ell, n_trials=n_trials,
-        termination_arm=termination_arm, seed=seed,
-    )
-    return env
-
 
 ### misc utils
 
@@ -1431,6 +1398,13 @@ def load_data(path, ppc = False):
         df_all.loc[df_all['pid'] == pid, 'orthogonal_arm_gen_high_costs_diff'] = agent.orthogonal_arm_gen_high_costs_diff[:,:,:].flatten()
         df_all.loc[df_all['pid'] == pid, 'orthogonal_arm_gen_low_costs_diff'] = agent.orthogonal_arm_gen_low_costs_diff[:,:,:].flatten()
 
+        df_all.loc[df_all['pid'] == pid, 'aligned_path_gen_high_costs'] = agent.aligned_path_gen_high_costs[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'aligned_path_gen_low_costs'] = agent.aligned_path_gen_low_costs[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'orthogonal_path_gen_high_costs'] = agent.orthogonal_path_gen_high_costs[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'orthogonal_path_gen_low_costs'] = agent.orthogonal_path_gen_low_costs[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'gen_high_costs_diff'] = agent.gen_high_costs_diff[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'gen_low_costs_diff'] = agent.gen_low_costs_diff[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'gen_net_costs_diff'] = agent.gen_net_costs_diff[:,:,:].flatten()
 
 
 

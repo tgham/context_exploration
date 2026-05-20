@@ -7,7 +7,10 @@ from abc import ABC, abstractmethod
 import copy
 from scipy.special import gamma, digamma
 
-from samplers import BanditSampler, EmpSampler
+try:
+    from samplers import BanditSampler, EmpSampler
+except ImportError:
+    print("Warning: samplers module not found. Make sure to implement BanditSampler and EmpSampler for sampling from the bandit environments.")
 
 
 class BanditEnv(gym.Env):
