@@ -4,6 +4,9 @@ import numpy as np
 import pandas as pd
 from collections import defaultdict
 from tqdm.auto import tqdm
+from emp_utils import *
+from scipy.optimize import brentq, bisect
+
 
 
 def extract_grid_info(agent, env_copy, city, day, t):
@@ -1210,7 +1213,7 @@ def enumerate_emp_histories(n_arms=2, n_outcomes=2, n_trials=3, alpha=1.0, termi
                 n_untried_arms = np.sum(alphas.sum(axis=1) == init_alphas.sum(axis=1).min())
                 n_unobserved_outcomes = np.sum(alphas.sum(axis=0) == init_alphas.sum(axis=0).min())
 
-                ## choose least sampled (if there are ties, choose the max)
+                ## prob of choose least sampled (if there are ties, choose the max)
                 least_sampled = np.where(alphas.sum(axis=1) == alphas.sum(axis=1).min())[0]
                 if len(least_sampled) > 1:
                     p_choose_least_sampled = probs[least_sampled].max()
@@ -1229,6 +1232,35 @@ def enumerate_emp_histories(n_arms=2, n_outcomes=2, n_trials=3, alpha=1.0, termi
                     f'a{a}o{o}:{c}' for ((a, o), c) in canon_counts
                 ) or 'init'
 
+                ## find tipping point - i.e. ell at which argmax changes 
+                action_pairs = list(itertools.combinations(range(n_arms +1), 2))
+                tipping_points = []
+                for ai, (a1, a2) in enumerate(action_pairs):
+                    if a1 != a2:
+                        def pref_diff(ell_):
+                            Q = _bellman_emp_Q(alphas.copy(), n_arms, n_outcomes,
+                                               h_remaining, termination_arm, ell_, verbose=False)
+                            diff = Q[a1] - Q[a2]
+                            return diff
+                        try:
+                            ell_switch = bisect(pref_diff, 0.01, 100)
+                        except ValueError:
+                            continue
+
+                        ## only keep if this is a switch between best actions
+                        _eps = 1e-6
+                        argmax_lo = np.argmax(_bellman_emp_Q(alphas.copy(), n_arms, n_outcomes,
+                                                             h_remaining, termination_arm,
+                                                             ell_switch - _eps, verbose=False))
+                        argmax_hi = np.argmax(_bellman_emp_Q(alphas.copy(), n_arms, n_outcomes,
+                                                             h_remaining, termination_arm,
+                                                             ell_switch + _eps, verbose=False))
+                        if argmax_lo == argmax_hi:
+                            continue
+
+                        print(f"Tipping point for history {history_str}: arms {a1} and {a2}: {ell_switch}")
+                        tipping_points.append((ell_switch, a1, a2))
+                        
                 row = {
                     'ell': ell,
                     't': t,
@@ -1256,6 +1288,8 @@ def enumerate_emp_histories(n_arms=2, n_outcomes=2, n_trials=3, alpha=1.0, termi
                     row['Q_terminate'] = Q[-1]
                     row['p_terminate'] = probs[-1]
                 rows.append(row)
+        print()
+            
 
     df = pd.DataFrame(rows)
     ## history_counts / history_counts_str: already canonical here, but kept

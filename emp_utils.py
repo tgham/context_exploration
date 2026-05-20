@@ -17,6 +17,41 @@ from tqdm.auto import tqdm
 import copy
 import ast
 from itertools import permutations
+from scipy.optimize import brentq
+
+
+## create empowerment env
+def make_emp_env(n_arms=3, n_outcomes=5, n_trials=20, alpha=1.0, ell=1.0,
+                 termination_arm=False, seed=None):
+    """
+    Create an EmpBanditWrapper (MCTS-compatible empowerment bandit).
+
+    Args:
+        n_arms:     Number of arms.
+        n_outcomes: Number of possible outcomes per arm.
+        n_trials:   Number of trials the agent will play.
+        alpha:      Dirichlet concentration for the prior over each arm's outcome distribution.
+        ell:        Empowerment exponent (agent-side free parameter).
+        seed:       Optional random seed (set before the P matrix is sampled).
+
+    Returns:
+        An EmpBanditWrapper instance ready for use with BAMCP / MCTS.
+    """
+    import importlib.util as _ilu
+
+    _spec = _ilu.spec_from_file_location(
+        "bandit", "gym_bandits/bandit.py")
+    _mod = _ilu.module_from_spec(_spec)
+    _spec.loader.exec_module(_mod)
+
+    if seed is not None:
+        np.random.seed(seed)
+
+    env = _mod.EmpBanditWrapper(
+        n_arms=n_arms, n_outcomes=n_outcomes, alpha=alpha, ell=ell, n_trials=n_trials,
+        termination_arm=termination_arm, seed=seed,
+    )
+    return env
 
 def filter_histories(df, canonicalize=True):
     """Add cleaning columns to df — does not drop rows or build any
@@ -119,7 +154,11 @@ def filter_histories(df, canonicalize=True):
                 out[f'canon_best_a'] = out[[f'canon_Q_{i}' for i in range(n_arms)] + [f'Q_terminate']
                                         ].idxmax(axis=1).apply(lambda s: int(s.split('_')[2]) if s.startswith('canon_Q') else termination_idx)
             else:
-                out[f'canon_best_a'] = out[[f'canon_Q_{i}' for i in range(n_arms)]].idxmax(axis=1).apply(lambda s: int(s.split('_')[2]))
+                 out[f'canon_best_a'] = out[[f'canon_Q_{i}' for i in range(n_arms)]].idxmax(axis=1).apply(lambda s: int(s.split('_')[2]))
+
+            ## check which action has the best delta_emp
+            out[f'canon_best_delta_emp'] = out[[f'canon_delta_emp_{i}' for i in range(n_arms)]].idxmax(axis=1).apply(lambda s: int(s.split('_')[3]))
+            out[f'max_delta_emp'] = out[[f'canon_delta_emp_{i}' for i in range(n_arms)]].max(axis=1)
             
 
                 
@@ -150,3 +189,17 @@ def filter_histories(df, canonicalize=True):
 
     ## define choice probabilities wrt/ canonicalised actions, e.g. p0 is p(choose a0), where a0 is the first action in the history_counts
     return out
+
+## find ell at which the preference between two options switches
+def ell_tip(agent, env, a1, a2):
+    def pref_diff(ell):
+        env.ell = ell
+        Q = agent.compute_Q(env)
+        return Q[a1] - Q[a2]
+
+    try:
+        ell_switch = brentq(pref_diff, 0.01, 100)
+    except ValueError:
+        ell_switch = None
+
+    return ell_switch
