@@ -1097,8 +1097,16 @@ def main():
             raise FileNotFoundError(
                 f"Encoder weights not found at {ENC_PATH}. Run '--stage pretrain' first."
             )
+        ckpt = torch.load(ENC_PATH, map_location=device)
+        enc_in_dim = ckpt["proj.weight"].shape[1]
+        if enc_in_dim != ENCODER_IN_DIM:
+            raise ValueError(
+                f"Encoder at {ENC_PATH} was trained with {enc_in_dim} input features, "
+                f"but current FEATURES has {ENCODER_IN_DIM}. "
+                f"Delete encoder.pt and re-run '--stage pretrain' to retrain with the new feature set."
+            )
         encoder = make_encoder()
-        encoder.load_state_dict(torch.load(ENC_PATH, map_location=device))
+        encoder.load_state_dict(ckpt)
         encoder.eval()
         encoder.to(device)
         for p in encoder.parameters():
