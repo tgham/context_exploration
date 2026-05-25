@@ -66,9 +66,10 @@ def agent_loop(p, agent_params_list, hyperparams, agent_param_combos):
 
         ## unpack params 
         temp = agent_params[0]
-        aligned_weight = agent_params[1]
-        orthogonal_weight = agent_params[2]
-        horizon = agent_params[3]
+        lapse = agent_params[1]
+        aligned_weight = agent_params[2]
+        orthogonal_weight = agent_params[3]
+        horizon = agent_params[4]
 
         ## unpack hyperparams
         exploration_constant = hyperparams['exploration_constant']
@@ -77,9 +78,9 @@ def agent_loop(p, agent_params_list, hyperparams, agent_param_combos):
 
         task_params = dict(aligned_weight=aligned_weight, orthogonal_weight=orthogonal_weight)
         if agent == 'BAMCP':
-            farmer = BAMCP(mcts_class=MonteCarloTreeSearch_AFC, run_fn=run_grid, temp=temp, horizon=horizon, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples, **task_params) ## known context if expt 3
+            farmer = BAMCP(mcts_class=MonteCarloTreeSearch_AFC, run_fn=run_grid, temp=temp, lapse=lapse, horizon=horizon, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples, **task_params) ## known context if expt 3
         elif agent =='CE':
-            farmer = CE(mcts_class=MonteCarloTreeSearch_AFC, run_fn=run_grid, temp=temp, horizon=horizon, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples, **task_params) ## known context if expt 3
+            farmer = CE(mcts_class=MonteCarloTreeSearch_AFC, run_fn=run_grid, temp=temp, lapse=lapse, horizon=horizon, exploration_constant=exploration_constant, discount_factor=discount_factor, n_samples=n_samples, **task_params) ## known context if expt 3
         sim_out = farmer.run(hyperparams, agent_name=agent, df_trials=None, envs=env_objects, fit=False, yoked=False, progress=False)
         sim_outs.append(sim_out)
     
@@ -114,7 +115,7 @@ beta_params = {
     }
 
 ## trial info
-n_sim_participants = 51
+n_sim_participants = 52
 n_cities = 32
 n_days = 1
 n_trials = 4
@@ -160,10 +161,12 @@ create=False
 ## init agent and expt
 ## Define parameter variations to sweep over
 param_settings = {
-    'temp': [1],           # temperature values to try
+    'temp': [0.8],           # temperature values to try
+    'lapse': [0.3],           # temperature values to try
     'aligned_weight': [
                     1,
-                    1.5
+                    # 1.5
+                    2
                     ],  
     'orthogonal_weight': [
                     0,
@@ -178,6 +181,7 @@ param_settings = {
 ## Generate all combinations of parameter settings
 param_combinations = list(itertools.product(
     param_settings['temp'],
+    param_settings['lapse'],
     param_settings['aligned_weight'],
     param_settings['orthogonal_weight'],
     param_settings['horizon'],
@@ -190,7 +194,7 @@ for i, params in enumerate(agent_params_list):
     print(f"  [{i}] temp={params[0]}, aligned_weight={params[1]}, orthogonal_weight={params[2]}, horizon={params[3]}")
 
 hyperparams = {
-    'n_samples': 50000,
+    'n_samples': 30003,
     'exploration_constant': 3,
     'discount_factor': 0.9,
     'n_trials': n_trials,
@@ -199,7 +203,7 @@ hyperparams = {
     'n_cities': n_cities,
     'N': N,
     'participant': None, ## hacky
-    'greedy': False ## greedy or prob matching
+    'greedy': True ## greedy or prob matching
 }
 agents = [
     'BAMCP', 

@@ -193,10 +193,11 @@ class BAMCP(Farmer):
         assert self.mcts.root_trial == self.mcts.env.trial, 'trial mismatch between env and tree at start of search\n env trial: {} \n tree trial: {}'.format(self.mcts.env.trial, self.mcts.root_trial)
 
         ## generate new set of root samples
-        if self.mcts.env.trial ==0:
-            n_samples = int(self.n_samples)
-        else:
-            n_samples = int(self.n_samples/2)
+        # if self.mcts.env.trial ==0:
+        #     n_samples = int(self.n_samples)
+        # else:
+        #     n_samples = int(self.n_samples/2)
+        n_samples = int(self.n_samples)
         self.all_posterior_MDPs = self.sampler.sample_mdps(n_samples)
 
         ## debugging Q-vals
