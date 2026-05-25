@@ -1080,6 +1080,21 @@ def main():
     POST_SUMMARY_CSV = RUN_DIR / "params_posteriors.csv"
     print(f"[Setup] Run directory: {RUN_DIR}")
 
+    run_config = {
+        "param_order": PARAM_ORDER,
+        "param_ranges": PARAM_RANGES,
+        "fixed_params": FIXED_PARAMS,
+        "features": FEATURES,
+        "n1_pre": args.n1_pre,
+        "n2": args.n2,
+        "n_samples": args.n_samples,
+        "density": args.density,
+    }
+    run_config_path = RUN_DIR / "run_config.json"
+    with open(run_config_path, "w") as f:
+        json.dump(run_config, f, indent=2)
+    print(f"[Setup] Run config saved to {run_config_path}")
+
     prior, _, _ = make_box_prior()
 
     # --- Pipeline ---
