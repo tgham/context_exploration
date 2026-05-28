@@ -110,14 +110,13 @@ print("-" * 60)
 PARAM_RANGES = {
     "temp": (0.0, 3.0),
     "lapse": (0.0, 1.0),
-    "aligned_weight": (0.0, 1.0),
-    "orthogonal_weight":   (0.0, 1.0),
+    "aligned_weight": (0.0, 2.0),
+    "orthogonal_weight":   (0.0, 2.0),
     # "horizon": (0, 3),
     }
 
-PARAM_ORDER = [
-                "temp",
-            #    "lapse",
+PARAM_ORDER = ["temp",
+               "lapse",
                 "aligned_weight", 
                "orthogonal_weight", 
             #    "horizon"
@@ -129,7 +128,7 @@ FIXED_PARAMS = {
     "discount_factor":   0.9,
     "horizon": 3, ## override for now
     # 'orthogonal_weight': 1,  # override for now
-    'lapse': 0,  # override for now
+    # 'lapse': 0,  # override for now
     }
 
 # Experiment Structure (expt 3: 32 cities × 1 day × 4 trials = 128 binary choices)

@@ -382,6 +382,10 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                 if agent.greedy:
                     max_Q = np.nanmax(Q_vals)
                     action = np.argmax(Q_vals)
+
+                    ## hack: select the suboptimal first action on t1, i.e. the one with lower Q value
+                    # if t ==0:
+                    #     action = np.argmin(Q_vals)
                 else:
                     action = np.random.choice(len(Q_vals), p=action_probs)
 

@@ -181,9 +181,6 @@ class BAMCP(Farmer):
     def search(self):
         """
         Perform MCTS search using this agent's internal MCTS object.
-        
-        Args:
-            n_samples: Number of MCTS samples to use for the search.
             
         Returns:
             action: The selected action.
@@ -196,7 +193,12 @@ class BAMCP(Farmer):
         assert self.mcts.root_trial == self.mcts.env.trial, 'trial mismatch between env and tree at start of search\n env trial: {} \n tree trial: {}'.format(self.mcts.env.trial, self.mcts.root_trial)
 
         ## generate new set of root samples
-        self.all_posterior_MDPs = self.sampler.sample_mdps(self.n_samples)
+        # if self.mcts.env.trial ==0:
+        #     n_samples = int(self.n_samples)
+        # else:
+        #     n_samples = int(self.n_samples/2)
+        n_samples = int(self.n_samples)
+        self.all_posterior_MDPs = self.sampler.sample_mdps(n_samples)
 
         ## debugging Q-vals
         self.mcts.Q_tracker = []
@@ -212,7 +214,7 @@ class BAMCP(Farmer):
                 self.mcts.conditional_tree_cost_tracker[a].append([])
         
         ## loop through simulations
-        for s in range(self.n_samples):
+        for s in range(n_samples):
             
             ## root sampling of new posterior
             # posterior_MDP = self.all_posterior_MDPs[s]
