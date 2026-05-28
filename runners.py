@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 from collections import defaultdict
 from tqdm.auto import tqdm
-from emp_utils import *
 from scipy.optimize import brentq, bisect
 
 
@@ -24,16 +23,15 @@ def extract_grid_info(agent, env_copy, city, day, t):
 
             ## get the number of costs and no-costs that comprise these overlapping states
             try:
-                path_actual_high_costs = sum(env_copy.costs[obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
-                path_actual_low_costs = sum(env_copy.costs[obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
+                actual_high_costs = sum(env_copy.costs[obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
+                actual_low_costs = sum(env_copy.costs[obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
             except:
-                path_actual_high_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
-                path_actual_low_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
+                actual_high_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
+                actual_low_costs = sum(env_copy.costss[t][obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
             agent.path_future_overlaps[city, day, t, i] = env_copy.path_future_overlaps[t][i]
             agent.path_past_overlaps[city, day, t, i] = path_past_overlap
-            agent.path_actual_high_costs[city, day, t, i] = path_actual_high_costs
-            agent.path_actual_low_costs[city, day, t, i] = path_actual_low_costs
-
+            agent.actual_high_costs[city, day, t, i] = actual_high_costs
+            agent.actual_low_costs[city, day, t, i] = actual_low_costs
 
         ## sometimes need to convert each np array to list of tuples...
         except:
@@ -42,17 +40,17 @@ def extract_grid_info(agent, env_copy, city, day, t):
             overlap = set(path).intersection(set(obs_list))
             path_past_overlap = len(overlap)
             try:
-                path_actual_high_costs = sum(env_copy.costs[obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
-                path_actual_low_costs = sum(env_copy.costs[obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
+                actual_high_costs = sum(env_copy.costs[obs[0], obs[1]] == env_copy.high_cost for obs in overlap)
+                actual_low_costs = sum(env_copy.costs[obs[0], obs[1]] == env_copy.low_cost for obs in overlap)
             except:
-                path_actual_high_costs = sum(env_copy.costss[t][int(obs[0]), int(obs[1])] == env_copy.high_cost for obs in overlap)
-                path_actual_low_costs = sum(env_copy.costss[t][int(obs[0]), int(obs[1])] == env_copy.low_cost for obs in overlap)
+                actual_high_costs = sum(env_copy.costss[t][int(obs[0]), int(obs[1])] == env_copy.high_cost for obs in overlap)
+                actual_low_costs = sum(env_copy.costss[t][int(obs[0]), int(obs[1])] == env_copy.low_cost for obs in overlap)
             agent.path_future_overlaps[city, day, t, i] = env_copy.path_future_overlaps[t][i]
             agent.path_past_overlaps[city, day, t, i] = path_past_overlap
-            agent.path_actual_high_costs[city, day, t, i] = path_actual_high_costs
-            agent.path_actual_low_costs[city, day, t, i] = path_actual_low_costs
-
-        assert agent.path_past_overlaps[city, day, t, i] == agent.path_actual_high_costs[city, day, t, i] + agent.path_actual_low_costs[city, day, t, i], 'path {} past overlap does not match observed costs and no-costs\n path past overlap: {}, path observed costs: {}, path observed no-costs: {}'.format(i+1, agent.path_past_overlaps[city, day, t, i], agent.path_actual_high_costs[city, day, t, i], agent.path_actual_low_costs[city, day, t, i])
+            agent.actual_high_costs[city, day, t, i] = actual_high_costs
+            agent.actual_low_costs[city, day, t, i] = actual_low_costs
+            agent.actual_net_costs[city, day, t, i] = actual_high_costs - actual_low_costs
+        assert agent.path_past_overlaps[city, day, t, i] == agent.actual_high_costs[city, day, t, i] + agent.actual_low_costs[city, day, t, i], 'path {} past overlap does not match observed costs and no-costs\n path past overlap: {}, path observed costs: {}, path observed no-costs: {}'.format(i+1, agent.path_past_overlaps[city, day, t, i], agent.actual_high_costs[city, day, t, i], agent.actual_low_costs[city, day, t, i])
 
 
         ## get aligned vs orthogonal states
@@ -237,36 +235,52 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
     agent.path_future_rel_overlaps = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.path_future_irrel_overlaps = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.path_past_overlaps = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
-    agent.path_actual_high_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
-    agent.path_actual_low_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.path_len = np.zeros((n_cities, n_days, n_trials))
     agent.day_costs = np.zeros((n_cities, n_days, n_trials))
     agent.distr_diff = np.zeros((n_cities, n_days, n_trials))
 
     ## observations on the context-aligned and orthogonal arm of each path
+    agent.actual_high_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
+    agent.actual_low_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
+    agent.actual_net_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.aligned_arm_actual_high_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.aligned_arm_actual_low_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
+    agent.aligned_arm_actual_net_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.orthogonal_arm_actual_high_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.orthogonal_arm_actual_low_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
+    agent.orthogonal_arm_actual_net_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
+
     agent.gen_high_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.gen_low_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.gen_net_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.aligned_arm_gen_high_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.aligned_arm_gen_low_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
+    agent.aligned_arm_gen_net_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.orthogonal_arm_gen_high_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.orthogonal_arm_gen_low_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
+    agent.orthogonal_arm_gen_net_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
+
     agent.aligned_arm_len = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.orthogonal_arm_len = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.aligned_path_aligned_arm_len = np.zeros((n_cities, n_days, n_trials))
     agent.aligned_path_orthogonal_arm_len = np.zeros((n_cities, n_days, n_trials))
     agent.orthogonal_path_aligned_arm_len = np.zeros((n_cities, n_days, n_trials))
     agent.orthogonal_path_orthogonal_arm_len = np.zeros((n_cities, n_days, n_trials))
+
+    agent.aligned_path_actual_high_costs = np.zeros((n_cities, n_days, n_trials))
+    agent.aligned_path_actual_low_costs = np.zeros((n_cities, n_days, n_trials))
+    agent.aligned_path_actual_net_costs = np.zeros((n_cities, n_days, n_trials))
+    agent.orthogonal_path_actual_high_costs = np.zeros((n_cities, n_days, n_trials))
+    agent.orthogonal_path_actual_low_costs = np.zeros((n_cities, n_days, n_trials))
+    agent.orthogonal_path_actual_net_costs = np.zeros((n_cities, n_days, n_trials))
+
     agent.aligned_path_gen_high_costs = np.zeros((n_cities, n_days, n_trials))
     agent.aligned_path_gen_low_costs = np.zeros((n_cities, n_days, n_trials))
+    agent.aligned_path_gen_net_costs = np.zeros((n_cities, n_days, n_trials))
     agent.orthogonal_path_gen_high_costs = np.zeros((n_cities, n_days, n_trials))
     agent.orthogonal_path_gen_low_costs = np.zeros((n_cities, n_days, n_trials))
-    agent.aligned_path_gen_net_costs = np.zeros((n_cities, n_days, n_trials))
     agent.orthogonal_path_gen_net_costs = np.zeros((n_cities, n_days, n_trials))
+
     agent.aligned_path_aligned_arm_gen_high_costs = np.zeros((n_cities, n_days, n_trials))
     agent.aligned_path_aligned_arm_gen_low_costs = np.zeros((n_cities, n_days, n_trials))
     agent.aligned_path_orthogonal_arm_gen_high_costs = np.zeros((n_cities, n_days, n_trials))
@@ -277,6 +291,9 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
     agent.orthogonal_path_orthogonal_arm_gen_low_costs = np.zeros((n_cities, n_days, n_trials))
     agent.aligned_arm_len_diff = np.zeros((n_cities, n_days, n_trials))
     agent.orthogonal_arm_len_diff = np.zeros((n_cities, n_days, n_trials))
+    agent.actual_high_costs_diff = np.zeros((n_cities, n_days, n_trials))
+    agent.actual_low_costs_diff = np.zeros((n_cities, n_days, n_trials))
+    agent.actual_net_costs_diff = np.zeros((n_cities, n_days, n_trials))
     agent.gen_high_costs_diff = np.zeros((n_cities, n_days, n_trials))
     agent.gen_low_costs_diff = np.zeros((n_cities, n_days, n_trials))
     agent.gen_net_costs_diff = np.zeros((n_cities, n_days, n_trials))
@@ -435,6 +452,22 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                     agent.orthogonal_path_aligned_arm_len[city,day,t] = agent.aligned_arm_len[city, day, t, orthogonal_path]
                     agent.orthogonal_path_orthogonal_arm_len[city,day,t] = agent.orthogonal_arm_len[city, day, t, orthogonal_path]
 
+                    ## per-path actual costs
+                    agent.aligned_path_actual_high_costs[city,day,t] = agent.actual_high_costs[city, day, t, aligned_path]
+                    agent.aligned_path_actual_low_costs[city,day,t]  = agent.actual_low_costs[city, day, t, aligned_path]
+                    agent.orthogonal_path_actual_high_costs[city,day,t] = agent.actual_high_costs[city, day, t, orthogonal_path]
+                    agent.orthogonal_path_actual_low_costs[city,day,t]  = agent.actual_low_costs[city, day, t, orthogonal_path]
+                    agent.aligned_path_actual_net_costs[city,day,t] = agent.actual_net_costs[city, day, t, aligned_path]
+                    agent.orthogonal_path_actual_net_costs[city,day,t] = agent.actual_net_costs[city, day, t, orthogonal_path]
+                    agent.aligned_path_aligned_arm_actual_high_costs[city,day,t] = agent.aligned_arm_actual_high_costs[city, day, t, aligned_path]
+                    agent.aligned_path_aligned_arm_actual_low_costs[city,day,t]  = agent.aligned_arm_actual_low_costs[city, day, t, aligned_path]
+                    agent.aligned_path_orthogonal_arm_actual_high_costs[city,day,t] = agent.orthogonal_arm_actual_high_costs[city, day, t, aligned_path]
+                    agent.aligned_path_orthogonal_arm_actual_low_costs[city,day,t]  = agent.orthogonal_arm_actual_low_costs[city, day, t, aligned_path]
+                    agent.orthogonal_path_aligned_arm_actual_high_costs[city,day,t] = agent.aligned_arm_actual_high_costs[city, day, t, orthogonal_path]
+                    agent.orthogonal_path_aligned_arm_actual_low_costs[city,day,t]  = agent.aligned_arm_actual_low_costs[city, day, t, orthogonal_path]
+                    agent.orthogonal_path_orthogonal_arm_actual_high_costs[city,day,t] = agent.orthogonal_arm_actual_high_costs[city, day, t, orthogonal_path]
+                    agent.orthogonal_path_orthogonal_arm_actual_low_costs[city,day,t]  = agent.orthogonal_arm_actual_low_costs[city, day, t, orthogonal_path]
+
                     ## per-path gen costs (total, and then aligned/orthogonal arm of aligned/orthogonal path)
                     agent.aligned_path_gen_high_costs[city,day,t] = agent.gen_high_costs[city, day, t, aligned_path]
                     agent.aligned_path_gen_low_costs[city,day,t]  = agent.gen_low_costs[city, day, t, aligned_path]
@@ -459,6 +492,18 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                     agent.orthogonal_arm_len_diff[city,day,t] = (
                         agent.orthogonal_path_orthogonal_arm_len[city,day,t]
                         - agent.aligned_path_orthogonal_arm_len[city,day,t]
+                    )
+                    agent.actual_high_costs_diff[city,day,t] = (
+                        agent.orthogonal_path_actual_high_costs[city, day, t]
+                        - agent.aligned_path_actual_high_costs[city, day, t]
+                    )
+                    agent.actual_low_costs_diff[city,day,t] = (
+                        agent.orthogonal_path_actual_low_costs[city, day, t]
+                        - agent.aligned_path_actual_low_costs[city, day, t]
+                    )
+                    agent.actual_net_costs_diff[city,day,t] = (
+                        agent.orthogonal_path_actual_net_costs[city, day, t]
+                        - agent.aligned_path_actual_net_costs[city, day, t]
                     )
                     agent.gen_high_costs_diff[city,day,t] = (
                         agent.orthogonal_path_gen_high_costs[city, day, t]
