@@ -146,48 +146,14 @@ N_TRIALS_TOTAL = HYPERPARAMS["n_cities"] * HYPERPARAMS["n_days"] * HYPERPARAMS["
 # ==============================================================================
 # FEATURE SCHEMA
 # ==============================================================================
-# SAVED_FIELDS: full per-trial schema persisted to disk after each simulation.
-# Adding/removing fields here requires resimulating (the on-disk shape changes).
-SAVED_FIELDS = [
-
-    ## basic info
-    "trial", "city", "day", 
-    "chose_orthogonal", "p_chose_orthogonal", "objective",
-
-    ## arm lengths 
-    "aligned_path_aligned_arm_len", "aligned_path_orthogonal_arm_len",
-    "orthogonal_path_aligned_arm_len", "orthogonal_path_orthogonal_arm_len",
-    "aligned_arm_len_diff", "orthogonal_arm_len_diff",
-
-    ## total actual costs
-    "aligned_path_aligned_arm_actual_high_costs", "aligned_path_aligned_arm_actual_low_costs","aligned_path_aligned_arm_actual_net_costs",
-    "orthogonal_path_aligned_arm_actual_high_costs", "orthogonal_path_aligned_arm_actual_low_costs","orthogonal_path_aligned_arm_actual_net_costs",
-    "aligned_path_orthogonal_arm_actual_high_costs", "aligned_path_orthogonal_arm_actual_low_costs","aligned_path_orthogonal_arm_actual_net_costs",
-    "orthogonal_path_orthogonal_arm_actual_high_costs", "orthogonal_path_orthogonal_arm_actual_low_costs","orthogonal_path_orthogonal_arm_actual_net_costs",
-    "aligned_arm_actual_high_costs_diff", "aligned_arm_actual_low_costs_diff","aligned_arm_actual_net_costs_diff",
-    "orthogonal_arm_actual_high_costs_diff", "orthogonal_arm_actual_low_costs_diff","orthogonal_arm_actual_net_costs_diff",
-
-    "aligned_path_actual_high_costs", "aligned_path_actual_low_costs","aligned_path_actual_net_costs",
-    "orthogonal_path_actual_high_costs", "orthogonal_path_actual_low_costs","orthogonal_path_actual_net_costs",
-    "actual_high_costs_diff", "actual_low_costs_diff","actual_net_costs_diff",
-
-    ## total gen costs
-    "aligned_path_gen_high_costs", "aligned_path_gen_low_costs","aligned_path_gen_net_costs",
-    "orthogonal_path_gen_high_costs", "orthogonal_path_gen_low_costs","orthogonal_path_gen_net_costs",
-    "gen_high_costs_diff", "gen_low_costs_diff","gen_net_costs_diff",
-    "gen_net_costs_diff",
-    
-    ## arm gen costs
-    # "aligned_path_aligned_arm_gen_high_costs", "aligned_path_aligned_arm_gen_low_costs",
-    # "aligned_path_orthogonal_arm_gen_high_costs", "aligned_path_orthogonal_arm_gen_low_costs",
-    # "orthogonal_path_aligned_arm_gen_high_costs", "orthogonal_path_aligned_arm_gen_low_costs",
-    # "orthogonal_path_orthogonal_arm_gen_high_costs", "orthogonal_path_orthogonal_arm_gen_low_costs",
-    # "aligned_arm_gen_high_costs_diff", "aligned_arm_gen_low_costs_diff",
-    # "orthogonal_arm_gen_high_costs_diff", "orthogonal_arm_gen_low_costs_diff",
-
-    ## overlaps
-    "aligned_path_future_rel_overlap", "orthogonal_path_future_rel_overlap", "future_rel_overlap_diff",
-]
+# SAVED_FIELDS: the per-trial schema persisted to disk after each simulation.
+# Rather than hand-pick columns, we save *every* per-trial numeric scalar field
+# the simulator emits (plus the derived `chose_orthogonal`). The exact list is
+# discovered at simulation time from the simulator output (see `simulate_data`
+# / `_simulate_or_load`), recorded in the per-dataset `*_columns.json` sidecar,
+# and loaded back into this global so downstream column indexing works. It is
+# `None` until the first simulate-or-load call populates it.
+SAVED_FIELDS: Optional[List[str]] = None
 
 # FEATURES: subset of SAVED_FIELDS that the encoder actually sees. Edit this
 # list to try a new feature set without resimulating — but you must delete (or
@@ -260,14 +226,30 @@ POST_SUMMARY_CSV = RUN_DIR / "params_posteriors.csv"
 # ==============================================================================
 # 1. SIMULATOR WRAPPER
 # ==============================================================================
-def simulate_data(params: Dict[str, float], envs: Dict, seed: Optional[int] = None) -> np.ndarray:
+def _to_trial_column(values) -> Optional[np.ndarray]:
+    """Coerce a single sim_out value to a 1-D float32 column of length
+    N_TRIALS_TOTAL, or return None if it isn't a per-trial numeric scalar
+    (e.g. strings like `agent`, the `context` vector, or action paths)."""
+    try:
+        arr = np.asarray(values, dtype=np.float32)
+    except (ValueError, TypeError):
+        return None
+    if arr.ndim != 1 or arr.shape[0] != N_TRIALS_TOTAL:
+        return None
+    return arr
+
+
+def simulate_data(params: Dict[str, float], envs: Dict, seed: Optional[int] = None) -> Tuple[np.ndarray, List[str]]:
     """
     Runs the BAMCP simulator for a single parameter set on the given envs.
 
-    Returns the full per-trial raw matrix of shape
-        (N_TRIALS_TOTAL, len(SAVED_FIELDS))
-    as float32. Columns follow `SAVED_FIELDS`. Downstream code derives the
-    encoder input (subset / on-the-fly diffs) via `build_features_from_sim`.
+    Saves *every* per-trial numeric scalar the simulator emits (plus the
+    derived `chose_orthogonal`), rather than a hand-picked subset. Returns
+        (raw, fields)
+    where `raw` is a float32 matrix of shape (N_TRIALS_TOTAL, len(fields)) and
+    `fields` names its columns (stable across simulations, since it follows the
+    simulator's deterministic emission order). Downstream code derives the
+    encoder input via `build_features_from_sim`.
     """
     if seed is not None:
         np.random.seed(seed)
@@ -306,26 +288,20 @@ def simulate_data(params: Dict[str, float], envs: Dict, seed: Optional[int] = No
     # chose_orthogonal = np.random.binomial(1, p_for_sample).astype(np.float32)
     # chose_orthogonal = np.where(np.isnan(p_orth), np.nan, chose_orthogonal)
 
-    # Build the (N_TRIALS_TOTAL, F_full) raw matrix column by column.
-    columns = {
-        "trial": np.asarray(sim_out["trial"], dtype=np.float32),
-        "city": np.asarray(sim_out["city"], dtype=np.float32),
-        "day": np.asarray(sim_out["day"], dtype=np.float32),
-        "chose_orthogonal": chose_orthogonal,
-        "p_chose_orthogonal": p_orth.astype(np.float32),
-        "objective": np.asarray(sim_out["objective"], dtype=np.float32),
-    }
-    for k in SAVED_FIELDS:
+    # Build the raw matrix from the derived choice column plus every per-trial
+    # numeric scalar the simulator emitted (non-numeric / non-per-trial keys
+    # such as `agent`, `participant`, `context` are skipped automatically).
+    columns = {"chose_orthogonal": chose_orthogonal}
+    for k, v in sim_out.items():
         if k in columns:
             continue
-        columns[k] = np.asarray(sim_out[k], dtype=np.float32)
-    
-    for k in SAVED_FIELDS:
-        # print(f"  {k}: {len(columns[k])} entries")
-        assert len(columns[k]) == 128, ValueError(f"Column {k} has wrong length {len(columns[k])} != {N_TRIALS_TOTAL}")
+        col = _to_trial_column(v)
+        if col is not None:
+            columns[k] = col
 
-    raw = np.stack([columns[k] for k in SAVED_FIELDS], axis=1).astype(np.float32)
-    return raw
+    fields = list(columns.keys())
+    raw = np.stack([columns[k] for k in fields], axis=1).astype(np.float32)
+    return raw, fields
 
 
 # ==============================================================================
@@ -359,8 +335,20 @@ def untransform(omega_vec: torch.Tensor) -> Dict[str, float]:
 # ==============================================================================
 # 3. FEATURE ENGINEERING
 # ==============================================================================
+def _set_saved_fields(fields: List[str]) -> None:
+    """Record the column schema discovered at simulate/load time so the
+    `_saved_field_index` lookup below resolves against the on-disk layout."""
+    global SAVED_FIELDS
+    SAVED_FIELDS = list(fields)
+
+
 def _saved_field_index(name: str) -> int:
     """Column index of `name` in the saved raw matrix."""
+    if SAVED_FIELDS is None:
+        raise RuntimeError(
+            "SAVED_FIELDS is not populated yet — simulate or load a dataset "
+            "(which records the column schema) before building features."
+        )
     return SAVED_FIELDS.index(name)
 
 
@@ -634,7 +622,7 @@ def _sample_env_ids(n: int, seed: int = 0) -> List[int]:
 def worker_simulate(i, omega, env_id, seed_offset=0):
     """
     Simulate one parameter set on the assigned env set.
-    Returns the raw per-trial matrix of shape (N_TRIALS_TOTAL, len(SAVED_FIELDS)).
+    Returns (raw, fields): the per-trial raw matrix and its column names.
     Called by joblib Parallel — must be a top-level function.
     """
     params = untransform(omega)
@@ -642,9 +630,10 @@ def worker_simulate(i, omega, env_id, seed_offset=0):
     return simulate_data(params, envs, seed=seed_offset + i)
 
 
-def _parallel_simulate(omegas: torch.Tensor, seed_offset: int = 0) -> List[np.ndarray]:
-    """Run the BAMCP simulator in parallel for a batch of omegas. Returns list of
-    per-trial raw arrays of shape (N_TRIALS_TOTAL, len(SAVED_FIELDS))."""
+def _parallel_simulate(omegas: torch.Tensor, seed_offset: int = 0) -> Tuple[List[np.ndarray], List[str]]:
+    """Run the BAMCP simulator in parallel for a batch of omegas. Returns
+    (raw_list, fields): a list of per-trial raw arrays and the shared column
+    names (identical across sims, taken from the first result)."""
     n = omegas.shape[0]
     env_ids = _sample_env_ids(n, seed=seed_offset)
     print(f"  Launching parallel simulation ({n} sims, {N_JOBS} workers, "
@@ -653,7 +642,10 @@ def _parallel_simulate(omegas: torch.Tensor, seed_offset: int = 0) -> List[np.nd
         delayed(worker_simulate)(int(i), omegas[i].clone(), int(env_ids[i]), int(seed_offset))
         for i in range(n)
     ]
-    return Parallel(n_jobs=N_JOBS, verbose=1)(tasks)
+    results = Parallel(n_jobs=N_JOBS, verbose=1)(tasks)
+    raw_list = [raw for raw, _ in results]
+    fields = results[0][1]
+    return raw_list, fields
 
 
 def _simulate_or_load(
@@ -663,11 +655,14 @@ def _simulate_or_load(
 ) -> Tuple[List[np.ndarray], torch.Tensor]:
     """
     Return (raw_list, omegas) where each entry of raw_list is the per-sim raw
-    matrix of shape (N_TRIALS_TOTAL, len(SAVED_FIELDS)). If the cached data,
-    columns, and omega files all exist (and force is False) AND the cached
-    column list matches the current SAVED_FIELDS, load from disk and skip
-    simulation. Otherwise resim, save the new (N, T, F_full) array plus a
-    JSON sidecar naming the columns.
+    matrix of shape (N_TRIALS_TOTAL, len(SAVED_FIELDS)). The column schema is
+    discovered from the simulator (or read back from the cached sidecar) and
+    recorded in the SAVED_FIELDS global.
+
+    If the cached data, columns, and omega files all exist (and force is False)
+    AND the cached schema still contains every column FEATURES needs, load from
+    disk and skip simulation. Otherwise resim, save the new (N, T, F_full)
+    array plus a JSON sidecar naming the columns.
     """
     cache_ok = (
         not force
@@ -681,22 +676,25 @@ def _simulate_or_load(
     if cache_ok:
         with open(columns_path, "r") as f:
             cached_cols = json.load(f)
-        if cached_cols == SAVED_FIELDS:
+        missing = [f for f in FEATURES if f not in cached_cols]
+        if not missing:
             print(f"  [Cache] Loading simulations from {data_path.name} / {omega_path.name}")
+            _set_saved_fields(cached_cols)
             raw_arr = np.load(data_path)
             raw_list = [raw_arr[i] for i in range(len(raw_arr))]
             omegas = torch.tensor(np.load(omega_path), dtype=torch.float32)
             return raw_list, omegas
-        print(f"  [Cache] Column schema in {columns_path.name} does not match "
-              f"current SAVED_FIELDS; resimulating.")
+        print(f"  [Cache] Cached schema in {columns_path.name} is missing columns "
+              f"required by FEATURES {missing}; resimulating.")
 
-    raw_list = _parallel_simulate(omegas, seed_offset=seed_offset)
+    raw_list, fields = _parallel_simulate(omegas, seed_offset=seed_offset)
+    _set_saved_fields(fields)
     if data_path is not None and columns_path is not None and omega_path is not None:
         data_path.parent.mkdir(parents=True, exist_ok=True)
         np.save(data_path, np.stack(raw_list))
         np.save(omega_path, omegas.numpy())
         with open(columns_path, "w") as f:
-            json.dump(SAVED_FIELDS, f, indent=2)
+            json.dump(fields, f, indent=2)
         print(f"  [Cache] Saved data -> {data_path.name}, omega -> {omega_path.name}, "
               f"columns -> {columns_path.name}")
     return raw_list, omegas
@@ -888,7 +886,8 @@ def run_recovery(args, prior, posterior, encoder, stdzr):
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
-    raw_list = _parallel_simulate(omegas_true, seed_offset=4242)
+    raw_list, fields = _parallel_simulate(omegas_true, seed_offset=4242)
+    _set_saved_fields(fields)
 
     encoder.to(device)
     encoder.eval()
