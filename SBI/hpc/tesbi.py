@@ -108,7 +108,7 @@ print("-" * 60)
 
 # Parameter Ranges
 PARAM_RANGES = {
-    "temp": (0.0, 3.0),
+    "temp": (0.0, 1.0),
     "lapse": (0.0, 1.0),
     "aligned_weight": (0.0, 2.0),
     "orthogonal_weight":   (0.0, 2.0),
@@ -138,7 +138,7 @@ HYPERPARAMS = {
     "n_cities": 32,
     "N": 9,
     "n_afc": 2,
-    "greedy": True,
+    "greedy": False,
 }
 
 N_TRIALS_TOTAL = HYPERPARAMS["n_cities"] * HYPERPARAMS["n_days"] * HYPERPARAMS["n_trials"]  # 128
@@ -159,12 +159,22 @@ SAVED_FIELDS = [
     "orthogonal_path_aligned_arm_len", "orthogonal_path_orthogonal_arm_len",
     "aligned_arm_len_diff", "orthogonal_arm_len_diff",
 
+    ## total actual costs
+    "aligned_path_aligned_arm_actual_high_costs", "aligned_path_aligned_arm_actual_low_costs","aligned_path_aligned_arm_actual_net_costs",
+    "orthogonal_path_aligned_arm_actual_high_costs", "orthogonal_path_aligned_arm_actual_low_costs","orthogonal_path_aligned_arm_actual_net_costs",
+    "aligned_path_orthogonal_arm_actual_high_costs", "aligned_path_orthogonal_arm_actual_low_costs","aligned_path_orthogonal_arm_actual_net_costs",
+    "orthogonal_path_orthogonal_arm_actual_high_costs", "orthogonal_path_orthogonal_arm_actual_low_costs","orthogonal_path_orthogonal_arm_actual_net_costs",
+    "aligned_arm_actual_high_costs_diff", "aligned_arm_actual_low_costs_diff","aligned_arm_actual_net_costs_diff",
+    "orthogonal_arm_actual_high_costs_diff", "orthogonal_arm_actual_low_costs_diff","orthogonal_arm_actual_net_costs_diff",
+
+    "aligned_path_actual_high_costs", "aligned_path_actual_low_costs","aligned_path_actual_net_costs",
+    "orthogonal_path_actual_high_costs", "orthogonal_path_actual_low_costs","orthogonal_path_actual_net_costs",
+    "actual_high_costs_diff", "actual_low_costs_diff","actual_net_costs_diff",
+
     ## total gen costs
-    "aligned_path_gen_high_costs", "aligned_path_gen_low_costs",
-    "orthogonal_path_gen_high_costs", "orthogonal_path_gen_low_costs",
-    "gen_high_costs_diff", "gen_low_costs_diff",
-    "aligned_path_gen_net_costs",
-    "orthogonal_path_gen_net_costs",
+    "aligned_path_gen_high_costs", "aligned_path_gen_low_costs","aligned_path_gen_net_costs",
+    "orthogonal_path_gen_high_costs", "orthogonal_path_gen_low_costs","orthogonal_path_gen_net_costs",
+    "gen_high_costs_diff", "gen_low_costs_diff","gen_net_costs_diff",
     "gen_net_costs_diff",
     
     ## arm gen costs
@@ -187,8 +197,14 @@ FEATURES = [
     "trial",
     # "gen_net_costs_diff",
 
+    'aligned_path_actual_net_costs',
+    'orthogonal_path_actual_net_costs',
+    
     'aligned_path_gen_net_costs',
     'orthogonal_path_gen_net_costs',
+    
+    # 'aligned_path_aligned_arm_len',
+    # 'orthogonal_path_aligned_arm_len',
 
     "objective"
 ]
@@ -303,6 +319,10 @@ def simulate_data(params: Dict[str, float], envs: Dict, seed: Optional[int] = No
         if k in columns:
             continue
         columns[k] = np.asarray(sim_out[k], dtype=np.float32)
+    
+    for k in SAVED_FIELDS:
+        # print(f"  {k}: {len(columns[k])} entries")
+        assert len(columns[k]) == 128, ValueError(f"Column {k} has wrong length {len(columns[k])} != {N_TRIALS_TOTAL}")
 
     raw = np.stack([columns[k] for k in SAVED_FIELDS], axis=1).astype(np.float32)
     return raw
@@ -805,14 +825,15 @@ def run_snpe(args, prior, encoder):
             embeds_1_z.mean(axis=0, keepdims=True), dtype=torch.float32
         ).to(device)
 
+        ## mixture proposal
         def proposal_sampler(shape):
             n = shape[0]
             n_prior = int(args.mix_prior_frac * n)
             n_post = n - n_prior
             post_samples = posterior_1.sample((n_post,), x=ref_x).reshape(n_post, -1)
             return torch.cat([
-                prior.sample((n_prior,)).to(device),
-                post_samples.to(device),
+                prior.sample((n_prior,)).to(device), # sample from prior (e.g. uniform box)
+                post_samples.to(device), # sample from posterior P(omegas | x_ref)
             ], dim=0)
 
         block2 = simulate_round(proposal_sampler, args.n2, encoder, seed_offset=1_000_000,
