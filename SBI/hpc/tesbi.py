@@ -964,12 +964,11 @@ def run_inference(args, posterior, encoder, stdzr):
         print(f"  [Inference] All summaries saved to {POST_SUMMARY_CSV}")
 
 
-PPC_FIELDS = ["p_correct", "p_chose_orthogonal", "p_chose_more_future_rel_overlap"]
 
 
 def worker_ppc(pid, env_id, params, seed):
     """Load this pid's envs, run BAMCP at `params`, return a long-format DataFrame
-    with city/day/trial + the three PPC fields, tagged with pid."""
+    with all simulated trial fields, tagged with pid."""
     if seed is not None:
         np.random.seed(seed); random.seed(seed); torch.manual_seed(seed)
 
@@ -992,7 +991,7 @@ def worker_ppc(pid, env_id, params, seed):
         envs=envs, fit=False, yoked=False, progress=False,
     )
 
-    df = pd.DataFrame({k: sim_out[k] for k in ["city", "day", "trial"] + PPC_FIELDS})
+    df = pd.DataFrame(dict(sim_out))
     df["pid"] = pid
     return df
 
