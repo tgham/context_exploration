@@ -108,14 +108,15 @@ print("-" * 60)
 
 # Parameter Ranges
 PARAM_RANGES = {
-    "temp": (0.0, 1.0),
+    # "temp": (0.0, 1.0),
     "lapse": (0.0, 1.0),
     "aligned_weight": (0.0, 2.0),
     "orthogonal_weight":   (0.0, 2.0),
     # "horizon": (0, 3),
     }
 
-PARAM_ORDER = ["temp",
+PARAM_ORDER = [
+                # "temp",
                "lapse",
                 "aligned_weight", 
                "orthogonal_weight", 
@@ -127,6 +128,7 @@ FIXED_PARAMS = {
     "exploration_constant": 3,
     "discount_factor":   0.9,
     "horizon": 3, ## override for now
+    "temp": 1, ## override for now
     # 'orthogonal_weight': 1,  # override for now
     # 'lapse': 0,  # override for now
     }
@@ -161,13 +163,19 @@ SAVED_FIELDS: Optional[List[str]] = None
 FEATURES = [
     "chose_orthogonal",
     "trial",
+    
     # "gen_net_costs_diff",
+    # "actual_net_costs_diff",
 
     'aligned_path_actual_net_costs',
     'orthogonal_path_actual_net_costs',
-    
     'aligned_path_gen_net_costs',
     'orthogonal_path_gen_net_costs',
+ 
+    # 'aligned_path_aligned_arm_actual_net_costs',
+    # 'orthogonal_path_aligned_arm_actual_net_costs',
+    # 'aligned_path_aligned_arm_gen_net_costs',
+    # 'orthogonal_path_aligned_arm_gen_net_costs',
     
     # 'aligned_path_aligned_arm_len',
     # 'orthogonal_path_aligned_arm_len',
@@ -1059,7 +1067,7 @@ def main():
     parser.add_argument("--density", choices=["nsf", "maf", "mdn"], default="nsf", help="Density estimator")
 
     # Recovery args
-    parser.add_argument("--K", type=int, default=50, help="Recovery test cases")
+    parser.add_argument("--K", type=int, default=500, help="Recovery test cases")
     parser.add_argument("--num_post", type=int, default=1000, help="Posterior samples per recovery case")
 
     # Inference args
