@@ -1006,6 +1006,22 @@ def run_inference(args, posterior, encoder, stdzr):
                 percentiles=[0.05, 0.5, 0.95]
             ).T[["mean", "std", "5%", "50%", "95%"]]
 
+            # For discrete params, record the full categorical posterior, not
+            # just summary stats (mean/median are not valid categories). `mode`
+            # is the most probable category (the point estimate used by PPC);
+            # `p_{c}` columns hold the inferred probability of each category c
+            # over its full PARAM_RANGES range (zero-count categories -> 0.0).
+            # All NaN for continuous params, which use the mean downstream.
+            summ["mode"] = np.nan
+            for k in discrete_param_names():
+                if k not in post_df.columns:
+                    continue
+                summ.loc[k, "mode"] = int(post_df[k].mode().iloc[0])
+                lo, hi = PARAM_RANGES[k]
+                probs = post_df[k].value_counts(normalize=True)
+                for c in range(int(lo), int(hi) + 1):
+                    summ.loc[k, f"p_{c}"] = float(probs.get(c, 0.0))
+
             subj_dir = out_root / pid
             subj_dir.mkdir(exist_ok=True)
             post_df.to_csv(subj_dir / "posterior_samples.csv", index=False)
@@ -1061,6 +1077,20 @@ def run_ppc(args):
     post_csv = Path(args.post_csv) if args.post_csv else POST_SUMMARY_CSV
     post_df = pd.read_csv(post_csv)
     means = post_df.pivot_table(index="pid", columns="index", values="mean")
+    # Discrete params are simulated at their posterior *mode* (stored by
+    # run_inference); fall back to the rounded mean if an older summary CSV
+    # without a "mode" column is supplied via --post_csv.
+    modes = (
+        post_df.pivot_table(index="pid", columns="index", values="mode")
+        if "mode" in post_df.columns else None
+    )
+
+    def _point_estimate(pid, k):
+        if k in DISCRETE_PARAMS:
+            if modes is not None and k in modes.columns and not pd.isna(modes.loc[pid, k]):
+                return int(round(modes.loc[pid, k]))
+            return int(round(means.loc[pid, k]))  # fallback: rounded mean
+        return float(means.loc[pid, k])
 
     df_all = pd.read_csv(str(PARTICIPANT_DATA_CSV), low_memory=False)
     pids = sorted(df_all["pid"].unique())
@@ -1073,8 +1103,7 @@ def run_ppc(args):
         if pid not in id_mapping:
             print(f"   [skip] {pid}: not in id_mapping"); continue
         env_id = _env_id_for_pid(id_mapping, pid)
-        row = means.loc[pid]
-        params = {k: float(row[k]) for k in PARAM_ORDER}
+        params = {k: _point_estimate(pid, k) for k in PARAM_ORDER}
         params.update(FIXED_PARAMS)
         tasks.append((pid, env_id, params, 4242 + i))
 
