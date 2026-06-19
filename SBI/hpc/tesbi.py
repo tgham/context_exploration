@@ -63,7 +63,7 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from joblib import Parallel, delayed
 
-from sbi.inference import SNPE
+from sbi.inference import SNPE, MNPE
 from sbi.utils import BoxUniform
 
 # ==============================================================================
@@ -112,23 +112,48 @@ PARAM_RANGES = {
     "lapse": (0.0, 1.0),
     "aligned_weight": (0.0, 2.0),
     "orthogonal_weight":   (0.0, 2.0),
-    # "horizon": (0, 3),
+    "horizon": (0, 3),
     }
 
 PARAM_ORDER = [
                 # "temp",
                "lapse",
-                "aligned_weight", 
-               "orthogonal_weight", 
-            #    "horizon"
+                "aligned_weight",
+               "orthogonal_weight",
+               "horizon"
                ]
+
+# Parameters that are discrete integer categoricals rather than continuous.
+# When any of these appear in PARAM_ORDER, inference switches from SNPE to
+# sbi's Mixed NPE (MNPE), which models the discrete dims with a categorical
+# mass network and the continuous dims with a normalising flow.
+DISCRETE_PARAMS = {"horizon"}
+
+
+def discrete_param_names() -> List[str]:
+    """Discrete entries of PARAM_ORDER, in order."""
+    return [p for p in PARAM_ORDER if p in DISCRETE_PARAMS]
+
+
+# MNPE requires the discrete columns to be the *trailing* columns of theta
+# (continuous first, discrete last). Enforce that PARAM_ORDER is laid out that
+# way so the integer dims line up with what MNPE's MixedDensityEstimator expects.
+_disc_positions = [i for i, p in enumerate(PARAM_ORDER) if p in DISCRETE_PARAMS]
+if _disc_positions:
+    assert _disc_positions == list(range(len(PARAM_ORDER) - len(_disc_positions), len(PARAM_ORDER))), (
+        f"MNPE requires discrete params {discrete_param_names()} to be the last entries of "
+        f"PARAM_ORDER (continuous first, discrete last); got PARAM_ORDER={PARAM_ORDER}."
+    )
+
+# True when MNPE (mixed continuous/discrete inference) should be used.
+USE_MNPE = len(discrete_param_names()) > 0
 
 FIXED_PARAMS = {
     "n_samples": 10000,
     "exploration_constant": 3,
     "discount_factor":   0.9,
-    "horizon": 3, ## override for now
     "temp": 1, ## override for now
+    # "horizon": 3, ## override for now
     # 'orthogonal_weight': 1,  # override for now
     # 'lapse': 0,  # override for now
     }
@@ -329,13 +354,29 @@ def make_box_prior() -> Tuple[BoxUniform, torch.Tensor, torch.Tensor]:
     return prior, low, high
 
 
+def sample_prior(prior: BoxUniform, shape) -> torch.Tensor:
+    """Draw omegas from the prior, but with discrete params (DISCRETE_PARAMS)
+    replaced by true integer-uniform draws over their inclusive [lo, hi] range.
+
+    Drop-in for `prior.sample` (takes a shape tuple, e.g. ``(n,)``). MNPE needs
+    the discrete theta columns to be integer-valued; BoxUniform alone would
+    sample them continuously. Returns a CPU tensor.
+    """
+    omega = prior.sample(shape).cpu()
+    for j, k in enumerate(PARAM_ORDER):
+        if k in DISCRETE_PARAMS:
+            lo, hi = PARAM_RANGES[k]
+            omega[..., j] = torch.randint(int(lo), int(hi) + 1, omega[..., j].shape).float()
+    return omega
+
+
 def untransform(omega_vec: torch.Tensor) -> Dict[str, float]:
     """Converts transformed (log) parameters back to original space."""
     vals = omega_vec.detach().cpu().numpy().astype(float)
     out = {}
     for i, k in enumerate(PARAM_ORDER):
         v = vals[i]
-        out[k] = float(v)
+        out[k] = int(v) if k in DISCRETE_PARAMS else float(v)
     out.update(FIXED_PARAMS)
     return out
 
@@ -766,7 +807,7 @@ def run_pretrain(args, prior):
     state_dict to ENC_PATH.
     """
     print(f"\n [Pretrain] Simulating {args.n1_pre} pairs for encoder pretraining...")
-    omegas = prior.sample((args.n1_pre,)).cpu()
+    omegas = sample_prior(prior, (args.n1_pre,))
     raw_list, omegas = _simulate_or_load(
         omegas, 0,
         PRETRAIN_DATA_PATH, PRETRAIN_COLUMNS_PATH, PRETRAIN_OMEGA_PATH,
@@ -798,9 +839,19 @@ def run_snpe(args, prior, encoder):
     """
     encoder = encoder.to(device)
 
+    # Trainer factory: MNPE (mixed continuous/discrete) when a discrete param is
+    # present in PARAM_ORDER, else the original continuous SNPE. Reused for both
+    # rounds so the two construction sites stay in sync.
+    def make_inference():
+        if USE_MNPE:
+            return MNPE(prior=prior, density_estimator="mnpe", device=str(device))
+        return SNPE(prior=prior, density_estimator=args.density, device=str(device))
+
+    trainer_name = "MNPE" if USE_MNPE else f"SNPE ({args.density})"
+
     # --- Round 1 ---
     print(f"\n [Round1] Simulating {args.n1_pre} pairs...")
-    block1 = simulate_round(prior.sample, args.n1_pre, encoder, seed_offset=0,
+    block1 = simulate_round(lambda shape: sample_prior(prior, shape), args.n1_pre, encoder, seed_offset=0,
                             data_path=SNPE_R1_DATA_PATH,
                             columns_path=SNPE_R1_COLUMNS_PATH,
                             omega_path=SNPE_R1_OMEGA_PATH, force=args.resim)
@@ -810,8 +861,8 @@ def run_snpe(args, prior, encoder):
     np.save(STD_MEAN_PATH, stdzr.mean_)
     np.save(STD_STD_PATH, stdzr.std_)
 
-    print(f"  [Round1] Training SNPE ({args.density}) on {device}...")
-    inference = SNPE(prior=prior, density_estimator=args.density, device=str(device))
+    print(f"  [Round1] Training {trainer_name} on {device}...")
+    inference = make_inference()
     inference.append_simulations(block1.omegas, torch.tensor(embeds_1_z, dtype=torch.float32))
     density = inference.train(
         stop_after_epochs=20,
@@ -838,7 +889,7 @@ def run_snpe(args, prior, encoder):
             n_post = n - n_prior
             post_samples = posterior_1.sample((n_post,), x=ref_x).reshape(n_post, -1)
             return torch.cat([
-                prior.sample((n_prior,)).to(device), # sample from prior (e.g. uniform box)
+                sample_prior(prior, (n_prior,)).to(device), # sample from prior (e.g. uniform box)
                 post_samples.to(device), # sample from posterior P(omegas | x_ref)
             ], dim=0)
 
@@ -854,8 +905,8 @@ def run_snpe(args, prior, encoder):
             torch.tensor(embeds_2_z, dtype=torch.float32),
         ], dim=0)
 
-        print(f"  [Round2] Training final posterior on {device}...")
-        inference = SNPE(prior=prior, density_estimator=args.density, device=str(device))
+        print(f"  [Round2] Training final {trainer_name} posterior on {device}...")
+        inference = make_inference()
         inference.append_simulations(omegas_all, embeds_all.float())
         density = inference.train(
             stop_after_epochs=20,
@@ -887,7 +938,7 @@ def _embed_observation(x: np.ndarray, encoder: TrialTransformer,
 def run_recovery(args, prior, posterior, encoder, stdzr):
     """Validates the posterior against known ground-truth simulated cases."""
     print(f"\n [Recovery] Checking {args.K} ground-truth cases...")
-    omegas_true = prior.sample((args.K,)).cpu()
+    omegas_true = sample_prior(prior, (args.K,))
 
     encoder.cpu()
     gc.collect()
@@ -1111,6 +1162,8 @@ def main():
         "param_order": PARAM_ORDER,
         "param_ranges": PARAM_RANGES,
         "fixed_params": FIXED_PARAMS,
+        "discrete_params": discrete_param_names(),
+        "trainer": "mnpe" if USE_MNPE else "snpe",
         "features": FEATURES,
         "n1_pre": args.n1_pre,
         "n2": args.n2,
