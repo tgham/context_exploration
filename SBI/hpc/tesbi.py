@@ -963,16 +963,34 @@ def run_recovery(args, prior, posterior, encoder, stdzr):
         samples_np = samples.numpy()
         for k_idx, k in enumerate(PARAM_ORDER):
             vals = samples_np[:, k_idx]
-            mu = np.mean(vals)
-            lo, hi = np.percentile(vals, 5), np.percentile(vals, 95)
             gt_val = gt_params[k]
             row[f"gt_{k}"] = gt_val
-            row[f"mu_{k}"] = mu
-            row[f"hit90_{k}"] = 1.0 if lo <= gt_val <= hi else 0.0
+            if k in DISCRETE_PARAMS:
+                # Categorical recovery: mean/percentile-CI are meaningless for a
+                # discrete param. Report the modal estimate, whether it matches
+                # the true category (hard accuracy), and the posterior mass the
+                # inference put on the true category (soft / calibration metric).
+                lo_r, hi_r = PARAM_RANGES[k]
+                cats = np.arange(int(lo_r), int(hi_r) + 1)
+                pmf = np.array([(vals == c).mean() for c in cats])
+                gt_cat = int(round(gt_val))
+                row[f"mode_{k}"] = int(cats[np.argmax(pmf)])
+                row[f"correct_{k}"] = 1.0 if row[f"mode_{k}"] == gt_cat else 0.0
+                row[f"p_true_{k}"] = float(pmf[gt_cat - int(lo_r)])
+            else:
+                mu = np.mean(vals)
+                lo_q, hi_q = np.percentile(vals, 5), np.percentile(vals, 95)
+                row[f"mu_{k}"] = mu
+                row[f"hit90_{k}"] = 1.0 if lo_q <= gt_val <= hi_q else 0.0
         details.append(row)
 
-    pd.DataFrame(details).to_csv(RECOVERY_CSV, index=False)
+    df_rec = pd.DataFrame(details)
+    df_rec.to_csv(RECOVERY_CSV, index=False)
     print(f"  [Recovery] Saved to {RECOVERY_CSV}")
+    for k in discrete_param_names():
+        if f"correct_{k}" in df_rec.columns:
+            print(f"  [Recovery] {k}: modal accuracy = {df_rec[f'correct_{k}'].mean():.3f}, "
+                  f"mean P(true category) = {df_rec[f'p_true_{k}'].mean():.3f}")
 
 
 def run_inference(args, posterior, encoder, stdzr):
