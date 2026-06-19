@@ -1423,10 +1423,17 @@ def load_data(path, ppc = False):
 
         df_all.loc[df_all['pid'] == pid, 'aligned_path_gen_high_costs'] = agent.aligned_path_gen_high_costs[:,:,:].flatten()
         df_all.loc[df_all['pid'] == pid, 'aligned_path_gen_low_costs'] = agent.aligned_path_gen_low_costs[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'aligned_path_gen_net_costs'] = agent.aligned_path_gen_net_costs[:,:,:].flatten()
         df_all.loc[df_all['pid'] == pid, 'orthogonal_path_gen_high_costs'] = agent.orthogonal_path_gen_high_costs[:,:,:].flatten()
         df_all.loc[df_all['pid'] == pid, 'orthogonal_path_gen_low_costs'] = agent.orthogonal_path_gen_low_costs[:,:,:].flatten()
-        df_all.loc[df_all['pid'] == pid, 'aligned_path_gen_net_costs'] = agent.aligned_path_gen_net_costs[:,:,:].flatten()
         df_all.loc[df_all['pid'] == pid, 'orthogonal_path_gen_net_costs'] = agent.orthogonal_path_gen_net_costs[:,:,:].flatten()
+        
+        df_all.loc[df_all['pid'] == pid, 'aligned_path_actual_high_costs'] = agent.aligned_path_actual_high_costs[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'aligned_path_actual_low_costs'] = agent.aligned_path_actual_low_costs[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'aligned_path_actual_net_costs'] = agent.aligned_path_actual_net_costs[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'orthogonal_path_actual_high_costs'] = agent.orthogonal_path_actual_high_costs[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'orthogonal_path_actual_low_costs'] = agent.orthogonal_path_actual_low_costs[:,:,:].flatten()
+        df_all.loc[df_all['pid'] == pid, 'orthogonal_path_actual_net_costs'] = agent.orthogonal_path_actual_net_costs[:,:,:].flatten()
         
         df_all.loc[df_all['pid'] == pid, 'gen_high_costs_diff'] = agent.gen_high_costs_diff[:,:,:].flatten()
         df_all.loc[df_all['pid'] == pid, 'gen_low_costs_diff'] = agent.gen_low_costs_diff[:,:,:].flatten()
