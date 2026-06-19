@@ -17,3 +17,11 @@ expt/jspsych/*
 expt/assets/galaxies/*
 expt/assets/planets/*
 expt/assets/ships/*
+# SBI/*
+!SBI/hpc
+!SBI/hpc/**
+!SBI/outputs
+!SBI/outputs/**
+SBI/outputs/subjects
+SBI/outputs/30000_sims_50000_samples/subjects
+SBI/outputs/2_step/
