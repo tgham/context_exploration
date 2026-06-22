@@ -15,11 +15,17 @@ import argparse
 
 # Parameters Config
 PARAMS = [
-    'temp',
+    # 'temp',
     'lapse',
     'aligned_weight','orthogonal_weight',
-    # 'horizon'
+    'horizon'
 ]
+
+# Discrete (categorical) params. These are recovered as a modal category rather
+# than a continuous point estimate, so they get a confusion-matrix panel (true
+# vs recovered mode) instead of a scatter + r/RMSE. Mirrors DISCRETE_PARAMS in
+# SBI/hpc/tesbi.py.
+DISCRETE_PARAMS = {'horizon'}
 
 # LaTeX formatted names
 PARAM_DISPLAY_NAMES = {
@@ -27,7 +33,7 @@ PARAM_DISPLAY_NAMES = {
     'lapse': r"$\lambda$",
     'aligned_weight': r"$w_{aligned}$",
     'orthogonal_weight': r"$w_{orthogonal}$",
-    # 'horizon': r"$H$",
+    'horizon': r"$H$",
 }
 
 # Plot Settings
@@ -84,6 +90,54 @@ def get_stats(x, y):
     rmse = np.sqrt(np.mean((x - y)**2))
     return r, rmse
 
+def plot_discrete_recovery(ax, df, param):
+    """Confusion-matrix panel for a categorical param: true category (rows) vs
+    recovered modal category (cols), shaded by per-true-row recovery rate and
+    annotated with rate and raw count. Title carries overall modal accuracy."""
+    col_true, col_mode = f"gt_{param}", f"mode_{param}"
+    if col_true not in df.columns or col_mode not in df.columns:
+        print(f"Warning: Missing discrete columns for {param}. Skipping.")
+        ax.axis('off')
+        return
+
+    x = df[col_true].to_numpy(float).round().astype(int)
+    y = df[col_mode].to_numpy(float).round().astype(int)
+    cats = list(range(min(x.min(), y.min()), max(x.max(), y.max()) + 1))
+    K = len(cats)
+    idx = {c: i for i, c in enumerate(cats)}
+
+    cm = np.zeros((K, K))
+    for t, p in zip(x, y):
+        cm[idx[t], idx[p]] += 1
+    row_sums = cm.sum(axis=1, keepdims=True)
+    cm_norm = np.divide(cm, row_sums, out=np.zeros_like(cm), where=row_sums > 0)
+
+    # Overall accuracy: prefer the stored per-case flag, else the matrix trace.
+    if f"correct_{param}" in df.columns:
+        acc = df[f"correct_{param}"].mean()
+    else:
+        acc = np.trace(cm) / cm.sum() if cm.sum() else np.nan
+
+    ax.imshow(cm_norm, cmap='Blues', vmin=0, vmax=1, aspect='equal')
+    for r in range(K):
+        for c in range(K):
+            frac = cm_norm[r, c]
+            ax.text(c, r, f"{frac:.2f}\n({int(cm[r, c])})",
+                    ha='center', va='center',
+                    fontsize=STYLE['tick_fontsize'] - 1,
+                    color='white' if frac > 0.5 else STYLE['scatter_color'])
+
+    display_name = PARAM_DISPLAY_NAMES.get(param, param)
+    ax.set_xticks(range(K)); ax.set_xticklabels(cats)
+    ax.set_yticks(range(K)); ax.set_yticklabels(cats)
+    ax.set_xlabel(f"Recovered {display_name} (mode)", fontsize=STYLE['label_fontsize'])
+    ax.set_ylabel(f"True {display_name}", fontsize=STYLE['label_fontsize'])
+    ax.set_title(f"acc = {acc:.3f}", fontsize=STYLE['tick_fontsize'])
+    ax.tick_params(axis='both', which='major', labelsize=STYLE['tick_fontsize'])
+
+    print(f"Parameter: {param:15s} | modal accuracy = {acc:.3f}")
+
+
 def plot_recovery_grid(df, params, output_path):
     """
     Generates a publication-quality grid of True vs. Recovered parameters.
@@ -97,7 +151,14 @@ def plot_recovery_grid(df, params, output_path):
 
     for i, param in enumerate(params):
         ax = axes[i]
-        
+
+        # Discrete params get a confusion matrix instead of a scatter. Fall back
+        # to the continuous scatter if mode_ columns are absent (e.g. an older
+        # recovery CSV produced before MNPE handling).
+        if param in DISCRETE_PARAMS and f"mode_{param}" in df.columns:
+            plot_discrete_recovery(ax, df, param)
+            continue
+
         # 1. Extract Data
         col_true = f"gt_{param}"
         col_rec = f"mu_{param}"
