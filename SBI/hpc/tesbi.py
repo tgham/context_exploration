@@ -108,15 +108,15 @@ print("-" * 60)
 
 # Parameter Ranges
 PARAM_RANGES = {
-    # "temp": (0.0, 1.0),
+    "temp": (0.0, 0.5),
     "lapse": (0.0, 1.0),
-    "aligned_weight": (0.0, 2.0),
-    "orthogonal_weight":   (0.0, 2.0),
+    "aligned_weight": (0.0, 3.0),
+    "orthogonal_weight":   (0.0, 3.0),
     "horizon": (0, 3),
     }
 
 PARAM_ORDER = [
-                # "temp",
+                "temp",
                "lapse",
                 "aligned_weight",
                "orthogonal_weight",
@@ -152,7 +152,7 @@ FIXED_PARAMS = {
     "n_samples": 10000,
     "exploration_constant": 3,
     "discount_factor":   0.9,
-    "temp": 1, ## override for now
+    # "temp": 0.5, ## override for now
     # "horizon": 3, ## override for now
     # 'orthogonal_weight': 1,  # override for now
     # 'lapse': 0,  # override for now
@@ -192,18 +192,21 @@ FEATURES = [
     # "gen_net_costs_diff",
     # "actual_net_costs_diff",
 
-    'aligned_path_actual_net_costs',
-    'orthogonal_path_actual_net_costs',
-    'aligned_path_gen_net_costs',
-    'orthogonal_path_gen_net_costs',
+    # 'aligned_path_actual_net_costs',
+    # 'orthogonal_path_actual_net_costs',
+    # 'aligned_path_gen_net_costs',
+    # 'orthogonal_path_gen_net_costs',
+
+    # 'aligned_path_future_rel_overlap',
+    # 'orthogonal_path_future_rel_overlap',
  
-    # 'aligned_path_aligned_arm_actual_net_costs',
-    # 'orthogonal_path_aligned_arm_actual_net_costs',
-    # 'aligned_path_aligned_arm_gen_net_costs',
-    # 'orthogonal_path_aligned_arm_gen_net_costs',
+    'aligned_path_aligned_arm_actual_net_costs',
+    'orthogonal_path_aligned_arm_actual_net_costs',
+    'aligned_path_aligned_arm_gen_net_costs',
+    'orthogonal_path_aligned_arm_gen_net_costs',
     
-    # 'aligned_path_aligned_arm_len',
-    # 'orthogonal_path_aligned_arm_len',
+    'aligned_path_aligned_arm_len',
+    'orthogonal_path_aligned_arm_len',
 
     "objective"
 ]
