@@ -1,6 +1,7 @@
 import argparse
 import sys
 from pathlib import Path
+import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -13,8 +14,14 @@ PLOT_PARAMS = [
     'temp',
     'lapse',
     'aligned_weight','orthogonal_weight',
-    # 'horizon'
+    'horizon'
 ]
+
+# Discrete (categorical) params. These summarise per participant as a modal
+# category, so the across-participant distribution is a bar chart of modes
+# rather than a density histogram of means. Mirrors DISCRETE_PARAMS in
+# SBI/hpc/tesbi.py.
+DISCRETE_PARAMS = {'horizon'}
 
 # LaTeX formatted names
 PARAM_DISPLAY_NAMES = {
@@ -22,7 +29,7 @@ PARAM_DISPLAY_NAMES = {
     'lapse': r"$\lambda$",
     'aligned_weight': r"$w_{aligned}$",
     'orthogonal_weight': r"$w_{orthogonal}$",
-    # 'horizon': r"$H$",
+    'horizon': r"$H$",
 }
 
 # Plot Colors
@@ -66,12 +73,23 @@ def load_and_merge_data(params_path, stats_path, params_to_keep):
     
     # Pivot logic using pivot_table to handle duplicates gracefully
     if 'index' in df_param.columns:
-        df_pivot = df_param.pivot_table(index=['pid'], columns='index', values='mean').reset_index()
+        pivot_col = 'index'
     elif 'param' in df_param.columns:
-        df_pivot = df_param.pivot_table(index=['pid'], columns='param', values='mean').reset_index()
+        pivot_col = 'param'
     else:
         raise ValueError("Cannot figure out pivot column (expected 'index' or 'param').")
-        
+
+    df_pivot = df_param.pivot_table(index='pid', columns=pivot_col, values='mean')
+
+    # Discrete params summarise as the modal category, not the (meaningless) mean.
+    # Overwrite their column with the stored `mode` value where available.
+    if 'mode' in df_param.columns:
+        df_mode = df_param.pivot_table(index='pid', columns=pivot_col, values='mode')
+        for p in DISCRETE_PARAMS:
+            if p in df_mode.columns:
+                df_pivot[p] = df_mode[p]
+
+    df_pivot = df_pivot.reset_index()
     df_pivot.columns.name = None
     
     # 2. Load Stats
@@ -92,6 +110,35 @@ def load_and_merge_data(params_path, stats_path, params_to_keep):
     
     print(f"Data Loaded. Subjects (Baseline): {len(df_final)}")
     return df_final
+
+
+def plot_discrete_distribution(ax, data, param, show_ylabel):
+    """Bar chart of the across-participant distribution of modal categories for a
+    discrete param: x = category, height = fraction of participants whose
+    posterior mode is that category. The most common category is highlighted."""
+    cats = list(range(int(data.min()), int(data.max()) + 1))
+    props = data.value_counts(normalize=True)
+    heights = [float(props.get(c, 0.0)) for c in cats]
+    top = cats[int(np.argmax(heights))]
+
+    colors = [COLOR_MODE if c == top else FILL_COLOR for c in cats]
+    ax.bar(cats, heights, color=colors, edgecolor=EDGE_COLOR, linewidth=0.5, alpha=0.75)
+    for c, h in zip(cats, heights):
+        if h > 0:
+            ax.text(c, h, f"{h:.2f}", ha='center', va='bottom', fontsize=8)
+
+    label = PARAM_DISPLAY_NAMES.get(param, param)
+    ax.set_xlabel(label, labelpad=5)
+    ax.set_xticks(cats)
+    ax.set_ylim(0, max(heights) * 1.15 if heights else 1)
+    ax.set_ylabel("Prop. of participants" if show_ylabel else "")
+
+    sns.despine(ax=ax)
+
+    print(f"Variable: {label} (discrete)")
+    print(f"  Most common mode: {top}")
+    print(f"  Distribution: {dict(zip(cats, [round(h, 3) for h in heights]))}")
+    print("-" * 20)
 
 
 def plot_parameter_distributions(df, params, output_path):
@@ -119,7 +166,12 @@ def plot_parameter_distributions(df, params, output_path):
         if data.empty:
             ax.axis('off')
             continue
-        
+
+        # Discrete params: bar chart of modal categories, not a density histogram.
+        if param in DISCRETE_PARAMS:
+            plot_discrete_distribution(ax, data, param, show_ylabel=(i % ncols == 0))
+            continue
+
         # --- Calculate Statistics ---
         mean_val = data.mean()
         median_val = data.median()
@@ -176,6 +228,10 @@ def plot_parameter_distributions(df, params, output_path):
                   frameon=False, loc='best')
 
         sns.despine(ax=ax)
+
+    # Hide any unused panels in the grid.
+    for j in range(len(params), len(axes)):
+        axes[j].axis('off')
 
     plt.tight_layout()
     plt.subplots_adjust(wspace=0.25, hspace=0.55)
