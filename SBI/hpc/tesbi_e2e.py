@@ -105,7 +105,7 @@ print("-" * 60)
 
 # ==============================================================================
 # CONFIGURATION
-# ==============================================================================
+# ============================================================================== 
 
 # Parameter Ranges
 PARAM_RANGES = {
@@ -113,7 +113,7 @@ PARAM_RANGES = {
     "lapse": (0.0, 1.0),
     "aligned_weight": (0.0, 3.0),
     "orthogonal_weight":   (0.0, 3.0),
-    "horizon": (0, 3),
+    "horizon": (0, 3),  # discrete: samples uniformly from {0, 1, 2, 3}
     }
 
 PARAM_ORDER = [
@@ -148,6 +148,12 @@ if _disc_positions:
 
 # True when MNPE (mixed continuous/discrete inference) should be used.
 USE_MNPE = len(discrete_param_names()) > 0
+
+# Restrict certain discrete parameters to specific subsets of values
+# e.g. {"horizon": [0, 3]} means horizon can only be 0 or 3, not 1 or 2
+DISCRETE_PARAM_VALUES = {
+    "horizon": [0, 3],  # Only consider horizon 0 vs 3
+}
 
 FIXED_PARAMS = {
     "n_samples": 10000,
@@ -343,6 +349,8 @@ def make_box_prior() -> Tuple[BoxUniform, torch.Tensor, torch.Tensor]:
 def sample_prior(prior: BoxUniform, shape) -> torch.Tensor:
     """Draw omegas from the prior, but with discrete params (DISCRETE_PARAMS)
     replaced by true integer-uniform draws over their inclusive [lo, hi] range.
+    If DISCRETE_PARAM_VALUES specifies a subset for a discrete param, sample
+    uniformly from that subset instead.
 
     Drop-in for `prior.sample` (takes a shape tuple, e.g. ``(n,)``). MNPE needs
     the discrete theta columns to be integer-valued; BoxUniform alone would
@@ -351,8 +359,15 @@ def sample_prior(prior: BoxUniform, shape) -> torch.Tensor:
     omega = prior.sample(shape).cpu()
     for j, k in enumerate(PARAM_ORDER):
         if k in DISCRETE_PARAMS:
-            lo, hi = PARAM_RANGES[k]
-            omega[..., j] = torch.randint(int(lo), int(hi) + 1, omega[..., j].shape).float()
+            if k in DISCRETE_PARAM_VALUES:
+                # Sample uniformly from the restricted set of values
+                values = DISCRETE_PARAM_VALUES[k]
+                indices = torch.randint(0, len(values), omega[..., j].shape)
+                omega[..., j] = torch.tensor([values[i] for i in indices.flatten()]).float().reshape(omega[..., j].shape)
+            else:
+                # Sample uniformly from [lo, hi]
+                lo, hi = PARAM_RANGES[k]
+                omega[..., j] = torch.randint(int(lo), int(hi) + 1, omega[..., j].shape).float()
     return omega
 
 
