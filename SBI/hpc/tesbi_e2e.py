@@ -109,7 +109,7 @@ print("-" * 60)
 
 # Parameter Ranges
 PARAM_RANGES = {
-    "temp": (0.0, 0.5),
+    # "temp": (0.0, 0.5),
     "lapse": (0.0, 1.0),
     "aligned_weight": (0.0, 3.0),
     "orthogonal_weight":   (0.0, 3.0),
@@ -117,7 +117,7 @@ PARAM_RANGES = {
     }
 
 PARAM_ORDER = [
-                "temp",
+                # "temp",
                "lapse",
                 "aligned_weight",
                "orthogonal_weight",
@@ -159,7 +159,7 @@ FIXED_PARAMS = {
     "n_samples": 10000,
     "exploration_constant": 3,
     "discount_factor":   0.9,
-    # "temp": 1, ## override for now
+    "temp": 0.25, ## override for now
     # "horizon": 3, ## override for now
     # 'orthogonal_weight': 1,  # override for now
     # 'lapse': 0,  # override for now

@@ -17,13 +17,15 @@
 # srun python -u ./gittins_expt.py --n_sims 100 --n_workers 50 --n_alphas 20 --n_samples 500000
 # srun python -u ./bandit_single_search.py --n_sims 100 --n_workers 100 --max_beta 8 --n_samples 1000000 --exploration_constant 3.01
 
-micromamba activate sbi_env
-srun python -u ./SBI/hpc/tesbi.py --stage all --density nsf --n_samples 30000 --n1_pre 50000 --n2 0
+## 2step
+# micromamba activate sbi_env
+# srun python -u ./SBI/hpc/tesbi.py --stage all --density nsf --n_samples 30000 --n1_pre 50000 --n2 0
 # srun python -u ./SBI/hpc/tesbi.py --stage pretrain --n_samples 10000 --n1_pre 30000 --n2 0
 # srun python -u ./SBI/hpc/tesbi.py --stage snpe --density nsf --n_samples 10000 --n1_pre 30000 --n2 0
 # srun python -u ./SBI/hpc/tesbi.py --stage recover --density nsf --n_samples 10000 --n1_pre 30000 --n2 0
 # srun python -u ./SBI/hpc/tesbi.py --stage posterior --n_samples 10001 --n1_pre 30000 --n2 0
 # srun python -u ./SBI/hpc/tesbi.py --stage ppc --n_samples 10001 --n1_pre 30000 --n2 0
 
-
-
+## e2e
+micromamba activate sbi_env
+srun python -u ./SBI/hpc/tesbi_e2e.py --stage all --n_sims 40000 --n_samples 25000
