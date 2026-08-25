@@ -10,7 +10,8 @@ from scipy.special import gamma, digamma
 try:
     from samplers import BanditSampler, EmpSampler
 except ImportError:
-    print("Warning: samplers module not found. Make sure to implement BanditSampler and EmpSampler for sampling from the bandit environments.")
+    # print("Warning: samplers module not found. Make sure to implement BanditSampler and EmpSampler for sampling from the bandit environments.")
+    pass
 
 
 class BanditEnv(gym.Env):
@@ -326,7 +327,10 @@ class EmpBandit(BanditEnv):
         self.alpha = alpha
         self.alphas = np.full_like(p_matrix, alpha)  # Dirichlet parameters for each arm
         self.posterior_p_matrix = self.alphas/self.alphas.sum(axis=1, keepdims=True)
-        self.ell = ell
+        if ell is not None:
+            self.ell = ell
+        else:
+            self.ell = 1
 
         self.sim = False
         self.info = {}
