@@ -372,7 +372,6 @@ class EmpBandit(BanditEnv):
             if not self.sim:
                 self.obs = np.vstack((self.obs, trial_obs))
             self._trial += 1
-            print('vol term')
             return trial_obs, reward, True, False, self.info
 
         outcome = int(self.np_random.choice(self.n_outcomes, p=self.p_matrix[action]))
