@@ -364,6 +364,7 @@ class EmpBandit(BanditEnv):
         self.posterior_p_matrix[action, :] = self.alphas[action, :] / self.alphas[action, :].sum()
 
     def step(self, action):
+        
         ## voluntary termination: collect current empowerment, end episode, no posterior update
         if self.termination_arm and action == self.terminate_action:
             trial_obs = (action, -1)
@@ -371,6 +372,7 @@ class EmpBandit(BanditEnv):
             if not self.sim:
                 self.obs = np.vstack((self.obs, trial_obs))
             self._trial += 1
+            print('vol term')
             return trial_obs, reward, True, False, self.info
 
         outcome = int(self.np_random.choice(self.n_outcomes, p=self.p_matrix[action]))
@@ -399,6 +401,11 @@ class EmpBandit(BanditEnv):
 
     def make_sampler(self):
         return EmpSampler(self)
+    
+    ## hacky: force append obs
+    def set_obs(self, obs):
+        self.obs = np.vstack((self.obs, obs))
+        
 
 
 # ---------------------------------------------------------------------------
