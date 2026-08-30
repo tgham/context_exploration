@@ -415,7 +415,7 @@ class EmpBanditWrapper(EmpBandit):
 
     def __init__(self, n_arms=5, n_outcomes=3, alpha=1.0, ell=1.0, n_trials=20,
                  termination_arm=False, seed=None):
-        super().__init__(n_arms=n_arms, n_outcomes=n_outcomes, alpha=alpha, ell=ell,
+        super().__init__(n_arms=n_arms, n_outcomes=n_outcomes, alpha=alpha, ell=ell, p_matrix=None,
                          termination_arm=termination_arm, seed=seed)
         self.n_trials = n_trials
 
