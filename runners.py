@@ -284,6 +284,10 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
     agent.orthogonal_arm_gen_low_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.orthogonal_arm_gen_net_costs = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
 
+    ## posterior mean (CE) value on the aligned and orthogonal arm of each path
+    agent.aligned_arm_CE_vals = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
+    agent.orthogonal_arm_CE_vals = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
+
     agent.aligned_arm_len = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.orthogonal_arm_len = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.aligned_path_aligned_arm_len = np.zeros((n_cities, n_days, n_trials))
@@ -330,6 +334,10 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
     agent.orthogonal_path_orthogonal_arm_gen_high_costs = np.zeros((n_cities, n_days, n_trials))
     agent.orthogonal_path_orthogonal_arm_gen_low_costs = np.zeros((n_cities, n_days, n_trials))
     agent.orthogonal_path_orthogonal_arm_gen_net_costs = np.zeros((n_cities, n_days, n_trials))
+    agent.aligned_path_aligned_arm_CE_vals = np.zeros((n_cities, n_days, n_trials))
+    agent.aligned_path_orthogonal_arm_CE_vals = np.zeros((n_cities, n_days, n_trials))
+    agent.orthogonal_path_aligned_arm_CE_vals = np.zeros((n_cities, n_days, n_trials))
+    agent.orthogonal_path_orthogonal_arm_CE_vals = np.zeros((n_cities, n_days, n_trials))
     agent.aligned_arm_len_diff = np.zeros((n_cities, n_days, n_trials))
     agent.orthogonal_arm_len_diff = np.zeros((n_cities, n_days, n_trials))
     agent.actual_high_costs_diff = np.zeros((n_cities, n_days, n_trials))
@@ -352,6 +360,8 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
     agent.orthogonal_arm_gen_high_costs_diff = np.zeros((n_cities, n_days, n_trials))
     agent.orthogonal_arm_gen_low_costs_diff = np.zeros((n_cities, n_days, n_trials))
     agent.orthogonal_arm_gen_net_costs_diff = np.zeros((n_cities, n_days, n_trials))
+    agent.aligned_arm_CE_vals_diff = np.zeros((n_cities, n_days, n_trials))
+    agent.orthogonal_arm_CE_vals_diff = np.zeros((n_cities, n_days, n_trials))
     
     agent.aligned_path_future_rel_overlap = np.zeros((n_cities, n_days, n_trials))
     agent.orthogonal_path_future_rel_overlap = np.zeros((n_cities, n_days, n_trials))
@@ -461,6 +471,12 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                 agent.CE_p_choice[city, day, t] = CE_action_probs
                 agent.CE_p_correct[city, day, t] = agent.CE_p_choice[city, day, t][correct_path]
 
+                ## split the CE value of each path into its aligned and orthogonal arms
+                CE_arm_vals = agent.sampler.posterior_mean_arm_vals()
+                agent.aligned_arm_CE_vals[city, day, t] = CE_arm_vals[:, 0]
+                agent.orthogonal_arm_CE_vals[city, day, t] = CE_arm_vals[:, 1]
+                assert np.allclose(CE_arm_vals @ env_copy.sim_weight_map, CE_Q_vals), 'arm-wise CE values do not sum to CE Q values\n arm vals: {}, CE Q: {}'.format(CE_arm_vals, CE_Q_vals)
+
                 ## get info on orthogonal/overlap of paths
                 more_future_rel_overlap = np.argmax(env_copy.path_future_rel_overlaps[t])
                 less_future_rel_overlap = np.argmin(env_copy.path_future_rel_overlaps[t])
@@ -548,6 +564,12 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                     agent.orthogonal_path_orthogonal_arm_gen_low_costs[city,day,t]  = agent.orthogonal_arm_gen_low_costs[city, day, t, orthogonal_path]
                     agent.orthogonal_path_orthogonal_arm_gen_net_costs[city,day,t]  = agent.orthogonal_arm_gen_net_costs[city, day, t, orthogonal_path]
 
+                    ## per-path CE values on aligned/orthogonal arm of aligned/orthogonal path
+                    agent.aligned_path_aligned_arm_CE_vals[city,day,t] = agent.aligned_arm_CE_vals[city, day, t, aligned_path]
+                    agent.aligned_path_orthogonal_arm_CE_vals[city,day,t] = agent.orthogonal_arm_CE_vals[city, day, t, aligned_path]
+                    agent.orthogonal_path_aligned_arm_CE_vals[city,day,t] = agent.aligned_arm_CE_vals[city, day, t, orthogonal_path]
+                    agent.orthogonal_path_orthogonal_arm_CE_vals[city,day,t] = agent.orthogonal_arm_CE_vals[city, day, t, orthogonal_path]
+
                     ## diffs (orthogonal - aligned)
                     agent.aligned_arm_len_diff[city,day,t] = (
                         agent.orthogonal_path_aligned_arm_len[city,day,t]
@@ -632,6 +654,15 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                         - agent.aligned_path_orthogonal_arm_gen_net_costs[city,day,t]
                     )
 
+                    agent.aligned_arm_CE_vals_diff[city,day,t] = (
+                        agent.orthogonal_path_aligned_arm_CE_vals[city,day,t]
+                        - agent.aligned_path_aligned_arm_CE_vals[city,day,t]
+                    )
+                    agent.orthogonal_arm_CE_vals_diff[city,day,t] = (
+                        agent.orthogonal_path_orthogonal_arm_CE_vals[city,day,t]
+                        - agent.aligned_path_orthogonal_arm_CE_vals[city,day,t]
+                    )
+
                     ## also save future rel overlaps of each path
                     agent.aligned_path_future_rel_overlap[city, day, t] = agent.path_future_rel_overlaps[city, day, t, aligned_path]
                     agent.orthogonal_path_future_rel_overlap[city, day, t] = agent.path_future_rel_overlaps[city, day, t, orthogonal_path]
@@ -699,6 +730,12 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                     agent.orthogonal_arm_gen_high_costs_diff[city,day,t] = np.nan
                     agent.orthogonal_arm_gen_low_costs_diff[city,day,t] = np.nan
                     agent.orthogonal_arm_gen_net_costs_diff[city,day,t] = np.nan
+                    agent.aligned_path_aligned_arm_CE_vals[city,day,t] = np.nan
+                    agent.aligned_path_orthogonal_arm_CE_vals[city,day,t] = np.nan
+                    agent.orthogonal_path_aligned_arm_CE_vals[city,day,t] = np.nan
+                    agent.orthogonal_path_orthogonal_arm_CE_vals[city,day,t] = np.nan
+                    agent.aligned_arm_CE_vals_diff[city,day,t] = np.nan
+                    agent.orthogonal_arm_CE_vals_diff[city,day,t] = np.nan
 
 
                 ### take ppt's action if a) we are fitting, or b) we are extracting behavioural measures by yoking to ppt's choices
@@ -882,6 +919,13 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                     sim_out['orthogonal_arm_gen_high_costs_diff'].append(agent.orthogonal_arm_gen_high_costs_diff[c][d][t])
                     sim_out['orthogonal_arm_gen_low_costs_diff'].append(agent.orthogonal_arm_gen_low_costs_diff[c][d][t])
                     sim_out['orthogonal_arm_gen_net_costs_diff'].append(agent.orthogonal_arm_gen_net_costs_diff[c][d][t])
+
+                    sim_out['aligned_path_aligned_arm_CE_vals'].append(agent.aligned_path_aligned_arm_CE_vals[c][d][t])
+                    sim_out['aligned_path_orthogonal_arm_CE_vals'].append(agent.aligned_path_orthogonal_arm_CE_vals[c][d][t])
+                    sim_out['orthogonal_path_aligned_arm_CE_vals'].append(agent.orthogonal_path_aligned_arm_CE_vals[c][d][t])
+                    sim_out['orthogonal_path_orthogonal_arm_CE_vals'].append(agent.orthogonal_path_orthogonal_arm_CE_vals[c][d][t])
+                    sim_out['aligned_arm_CE_vals_diff'].append(agent.aligned_arm_CE_vals_diff[c][d][t])
+                    sim_out['orthogonal_arm_CE_vals_diff'].append(agent.orthogonal_arm_CE_vals_diff[c][d][t])
                     
                     sim_out['aligned_path_future_rel_overlap'].append(agent.aligned_path_future_rel_overlap[c][d][t])
                     sim_out['orthogonal_path_future_rel_overlap'].append(agent.orthogonal_path_future_rel_overlap[c][d][t])

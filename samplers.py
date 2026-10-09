@@ -345,6 +345,28 @@ class GridSampler:
         posterior_mean_Q = np.array(path_costs)
         return posterior_mean_Q
 
+    def posterior_mean_arm_vals(self):
+        """
+        Sum of posterior mean values on the aligned and orthogonal arms of each path (unweighted by arm_weight).
+
+        Returns:
+            arm_vals: Array of shape (n_afc, 2) — [:, 0] = aligned arm, [:, 1] = orthogonal arm.
+        """
+
+        ## get posterior mean grid
+        posterior_mean_mdp = self.mean_mdp()
+
+        ## split each path's posterior mean value by arm (category 0=aligned, 1=orthogonal)
+        t = self.env.trial
+        arm_vals = np.zeros((self.env.n_afc, 2))
+        for path_id in range(self.env.n_afc):
+            path = np.array(posterior_mean_mdp.path_states[t][path_id], dtype=int)
+            path_weight_idx = posterior_mean_mdp.path_weights[t][path_id]
+            state_vals = posterior_mean_mdp.costs[path[:, 0], path[:, 1]].astype(float)
+            arm_vals[path_id] = np.bincount(path_weight_idx, weights=state_vals, minlength=2)
+
+        return arm_vals
+
 
 ### MAB sampler
 class BanditSampler:
