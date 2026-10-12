@@ -32,6 +32,7 @@ def extract_grid_info(agent, env_copy, city, day, t):
             agent.path_past_overlaps[city, day, t, i] = path_past_overlap
             agent.actual_high_costs[city, day, t, i] = actual_high_costs
             agent.actual_low_costs[city, day, t, i] = actual_low_costs
+            agent.actual_net_costs[city, day, t, i] = actual_high_costs - actual_low_costs
 
         ## sometimes need to convert each np array to list of tuples...
         except:
@@ -236,6 +237,8 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
     agent.p_choice = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.p_correct = np.zeros((n_cities, n_days, n_trials))
     agent.p_chose_orthogonal = np.zeros((n_cities, n_days, n_trials))
+    agent.orthogonal_path_idx = np.zeros((n_cities, n_days, n_trials)) + np.nan
+    agent.chose_orthogonal = np.zeros((n_cities, n_days, n_trials)) + np.nan ## realised choice (the action actually taken)
     agent.p_chose_more_future_rel_overlap = np.zeros((n_cities, n_days, n_trials))
     agent.Q_vals = np.zeros((n_cities, n_days, n_trials, agent.n_afc))
     agent.actions = np.zeros((n_cities, n_days, n_trials))
@@ -517,6 +520,7 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                         
                 if not np.isnan(orthogonal_path):
                     agent.p_chose_orthogonal[city, day, t] = agent.p_choice[city, day, t][orthogonal_path]
+                    agent.orthogonal_path_idx[city, day, t] = orthogonal_path
 
                     ## also save arm lengths etc.
                     agent.aligned_path_aligned_arm_len[city,day,t] = agent.aligned_arm_len[city, day, t, aligned_path]
@@ -778,6 +782,8 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                     agent.total_costs[city, day, t] = cost
                     agent.path_quality[city, day, t] = agent.total_costs[city, day, t]/agent.path_len[city, day, t]
                     day_terminated = t == (n_trials-1)
+                    if not np.isnan(agent.orthogonal_path_idx[city, day, t]):
+                        agent.chose_orthogonal[city, day, t] = float(int(action) == int(agent.orthogonal_path_idx[city, day, t]))
 
 
                 ## else, skip to next trial??
@@ -844,6 +850,7 @@ def run_grid(agent, hyperparams, agent_name='CE', df_trials=None, envs=None, fit
                     sim_out['p_correct'].append(agent.p_correct[c][d][t])
                     sim_out['p_chose_more_future_rel_overlap'].append(agent.p_chose_more_future_rel_overlap[c][d][t])
                     sim_out['p_chose_orthogonal'].append(agent.p_chose_orthogonal[c][d][t])
+                    sim_out['chose_orthogonal'].append(agent.chose_orthogonal[c][d][t])
                     sim_out['p_choice_A'].append(agent.p_choice[c][d][t][0])
                     sim_out['p_choice_B'].append(agent.p_choice[c][d][t][1])
                     sim_out['Q_a'].append(agent.Q_vals[c][d][t][0])
