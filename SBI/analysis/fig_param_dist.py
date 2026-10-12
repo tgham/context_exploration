@@ -247,6 +247,7 @@ def main():
         parser.add_argument("--n1_pre", type = int, default = 20000, help = "Simulations for pretraining/Round 1")
         parser.add_argument("--n2", type = int, default = 15000, help = "Simulations for SNPE Round 2")
         parser.add_argument("--n_samples", type = int, default = 10000, help = "BAMCP samples")
+        parser.add_argument("--method", type = str, default = '2_step', help = "SBI method")
         args = parser.parse_args()
 
         # --- Directory Setup ---
@@ -254,7 +255,12 @@ def main():
         PROJECT_ROOT = CURRENT_DIR.parent
 
         DATA_DIR = PROJECT_ROOT / "data"
-        OUT_DIR = PROJECT_ROOT / f"outputs/2_step/{args.n1_pre}_n1sims_{args.n2}_n2sims_{args.n_samples}_samples"
+        if args.method == '2_step':
+            OUT_DIR = PROJECT_ROOT / f"outputs/2_step/{args.n1_pre}_n1sims_{args.n2}_n2sims_{args.n_samples}_samples"
+        elif args.method == 'e2e':
+            OUT_DIR = PROJECT_ROOT / f"outputs/e2e/{args.n1_pre}_sims_{args.n_samples}_samples"
+        else:
+            raise ValueError(f"Unknown method: {args.method}. Please choose '2step' or 'e2e'.")
 
         # Ensure output directory exists
         FIG_DIR = OUT_DIR / "figs"
