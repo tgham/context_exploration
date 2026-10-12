@@ -3,15 +3,7 @@ tesbi_e2e.py
 
 End-to-End Transformer-encoded Simulation-Based Inference (TeSBI) for BAMCP.
 
-================================================================================
-WHAT'S DIFFERENT FROM tesbi.py (the two-stage pipeline)
-================================================================================
-tesbi.py trains in TWO stages: (1) pretrain a Transformer encoder under MSE loss
-to predict omega, then (2) freeze it, precompute + z-score embeddings, and fit an
-sbi SNPE/MNPE density estimator on those frozen embeddings.
-
-This script trains END-TO-END in a SINGLE stage. The Transformer encoder is passed
-to sbi as the `embedding_net`. sbi hands that *same* encoder to both the categorical
+The Transformer encoder is passed to sbi as the `embedding_net`. sbi hands that *same* encoder to both the categorical
 mass net (for the discrete `horizon`) and the conditional normalising flow (for the
 continuous params), so one `inference.train()` call backprops into the encoder from
 BOTH losses. The result is the correct factorised mixed posterior
@@ -61,8 +53,11 @@ import pandas as pd
 import numpy as np
 import torch
 import torch.nn as nn
+from torch.distributions import Distribution, biject_to, constraints
+from torch.distributions.transforms import CatTransform, IndependentTransform, identity_transform
 from joblib import Parallel, delayed
 
+import sbi
 from sbi.inference import SNPE, MNPE
 from sbi.neural_nets import posterior_nn
 from sbi.utils import BoxUniform
@@ -109,7 +104,7 @@ print("-" * 60)
 
 # Parameter Ranges
 PARAM_RANGES = {
-    # "temp": (0.0, 0.5),
+    # "temp": (0.0, 0.5), # ignore for now, fixed to 0.25
     "lapse": (0.0, 1.0),
     "aligned_weight": (0.0, 3.0),
     "orthogonal_weight":   (0.0, 3.0),
@@ -137,8 +132,7 @@ def discrete_param_names() -> List[str]:
 
 
 # MNPE requires the discrete columns to be the *trailing* columns of theta
-# (continuous first, discrete last). Enforce that PARAM_ORDER is laid out that
-# way so the integer dims line up with what MNPE's MixedDensityEstimator expects.
+# (continuous first, discrete last)
 _disc_positions = [i for i, p in enumerate(PARAM_ORDER) if p in DISCRETE_PARAMS]
 if _disc_positions:
     assert _disc_positions == list(range(len(PARAM_ORDER) - len(_disc_positions), len(PARAM_ORDER))), (
@@ -149,11 +143,25 @@ if _disc_positions:
 # True when MNPE (mixed continuous/discrete inference) should be used.
 USE_MNPE = len(discrete_param_names()) > 0
 
-# Restrict certain discrete parameters to specific subsets of values
-# e.g. {"horizon": [0, 3]} means horizon can only be 0 or 3, not 1 or 2
+## check version can handle discrete params
+if USE_MNPE and tuple(int(p) for p in sbi.__version__.split(".")[:2]) < (0, 26):
+    raise ImportError(
+        f"MNPE needs sbi>=0.26.0 to map discrete values to categories; found sbi {sbi.__version__}."
+    )
+
+# Restrict  discrete parameters to specific subsets of values
 DISCRETE_PARAM_VALUES = {
-    "horizon": [0, 3],  # Only consider horizon 0 vs 3
+    "horizon": [0, 3],
 }
+
+
+def discrete_values(name: str) -> List[int]:
+    """Allowed values of a discrete param: its DISCRETE_PARAM_VALUES subset if
+    given, otherwise every integer in its inclusive PARAM_RANGES range."""
+    if name in DISCRETE_PARAM_VALUES:
+        return [int(v) for v in DISCRETE_PARAM_VALUES[name]]
+    lo, hi = PARAM_RANGES[name]
+    return list(range(int(lo), int(hi) + 1))
 
 FIXED_PARAMS = {
     "n_samples": 10000,
@@ -181,18 +189,10 @@ N_TRIALS_TOTAL = HYPERPARAMS["n_cities"] * HYPERPARAMS["n_days"] * HYPERPARAMS["
 # FEATURE SCHEMA
 # ==============================================================================
 # SAVED_FIELDS: the per-trial schema persisted to disk after each simulation.
-# Rather than hand-pick columns, we save *every* per-trial numeric scalar field
-# the simulator emits (plus the derived `chose_orthogonal`). The exact list is
-# discovered at simulation time from the simulator output (see `simulate_data`
-# / `_simulate_or_load`), recorded in the per-dataset `*_columns.json` sidecar,
-# and loaded back into this global so downstream column indexing works. It is
-# `None` until the first simulate-or-load call populates it.
+# We actually save all features the simulator emits, but the encoder only sees a subset (FEATURES).
 SAVED_FIELDS: Optional[List[str]] = None
 
-# FEATURES: subset of SAVED_FIELDS that the encoder actually sees. Edit this
-# list to try a new feature set without resimulating — but you must delete (or
-# move) any cached dataset since the encoder input dim is baked into a trained
-# posterior.
+# FEATURES: subset of SAVED_FIELDS that the encoder actually sees
 FEATURES = [
     "chose_orthogonal",
     "trial",
@@ -200,18 +200,18 @@ FEATURES = [
     # "gen_net_costs_diff",
     # "actual_net_costs_diff",
 
-    'aligned_path_actual_net_costs',
-    'orthogonal_path_actual_net_costs',
-    'aligned_path_gen_net_costs',
-    'orthogonal_path_gen_net_costs',
+    # 'aligned_path_actual_net_costs',
+    # 'orthogonal_path_actual_net_costs',
+    # 'aligned_path_gen_net_costs',
+    # 'orthogonal_path_gen_net_costs',
 
     # 'aligned_path_aligned_arm_actual_net_costs',
     # 'orthogonal_path_aligned_arm_actual_net_costs',
     # 'aligned_path_aligned_arm_gen_net_costs',
     # 'orthogonal_path_aligned_arm_gen_net_costs',
 
-    # 'aligned_path_aligned_arm_len',
-    # 'orthogonal_path_aligned_arm_len',
+    'aligned_path_aligned_arm_len',
+    'orthogonal_path_aligned_arm_len',
 
     "objective"
 ]
@@ -274,13 +274,9 @@ def simulate_data(params: Dict[str, float], envs: Dict, seed: Optional[int] = No
     """
     Runs the BAMCP simulator for a single parameter set on the given envs.
 
-    Saves *every* per-trial numeric scalar the simulator emits (plus the
-    derived `chose_orthogonal`), rather than a hand-picked subset. Returns
-        (raw, fields)
+    Saves *every* per-trial numeric scalar the simulator emits. Returns (raw, fields)
     where `raw` is a float32 matrix of shape (N_TRIALS_TOTAL, len(fields)) and
-    `fields` names its columns (stable across simulations, since it follows the
-    simulator's deterministic emission order). Downstream code derives the
-    encoder input via `build_features_from_sim`.
+    `fields` names its columns
     """
     if seed is not None:
         np.random.seed(seed)
@@ -310,16 +306,9 @@ def simulate_data(params: Dict[str, float], envs: Dict, seed: Optional[int] = No
         progress=False,
     )
 
-    p_orth = np.asarray(sim_out["p_chose_orthogonal"], dtype=np.float64)
-    chose_orthogonal = np.random.binomial(1, p_orth).astype(np.float32)
-
-    # Build the raw matrix from the derived choice column plus every per-trial
-    # numeric scalar the simulator emitted (non-numeric / non-per-trial keys
-    # such as `agent`, `participant`, `context` are skipped automatically).
-    columns = {"chose_orthogonal": chose_orthogonal}
+    # Build the raw matrix and the list of column names
+    columns = {}
     for k, v in sim_out.items():
-        if k in columns:
-            continue
         col = _to_trial_column(v)
         if col is not None:
             columns[k] = col
@@ -332,43 +321,103 @@ def simulate_data(params: Dict[str, float], envs: Dict, seed: Optional[int] = No
 # ==============================================================================
 # 2. PARAMETER SETUP
 # ==============================================================================
-def make_box_prior() -> Tuple[BoxUniform, torch.Tensor, torch.Tensor]:
-    """Constructs the SBI BoxUniform prior based on configured ranges."""
-    low, high = [], []
-    for k in PARAM_ORDER:
-        lo, hi = PARAM_RANGES[k]
-        low.append(lo)
-        high.append(hi)
+class _MixedSupport(constraints.Constraint):
+    """Support of MixedPrior: the continuous box, times each discrete dim's
+    allowed value set."""
+    event_dim = 1
 
-    low = torch.tensor(low, dtype=torch.float32).to(device)
-    high = torch.tensor(high, dtype=torch.float32).to(device)
-    prior = BoxUniform(low=low, high=high)
-    return prior, low, high
+    def __init__(self, low: torch.Tensor, high: torch.Tensor, disc_values: List[torch.Tensor]):
+        super().__init__()
+        self.low, self.high, self.disc_values = low, high, disc_values
+
+    def check(self, value):
+        n_cont = self.low.numel()
+        cont = value[..., :n_cont]
+        ok = ((cont >= self.low) & (cont <= self.high)).all(dim=-1)
+        for j, vals in enumerate(self.disc_values):
+            ok = ok & (value[..., n_cont + j].unsqueeze(-1) == vals).any(dim=-1)
+        return ok
 
 
-def sample_prior(prior: BoxUniform, shape) -> torch.Tensor:
-    """Draw omegas from the prior, but with discrete params (DISCRETE_PARAMS)
-    replaced by true integer-uniform draws over their inclusive [lo, hi] range.
-    If DISCRETE_PARAM_VALUES specifies a subset for a discrete param, sample
-    uniformly from that subset instead.
+@biject_to.register(_MixedSupport)
+def _mixed_support_bijection(constraint: _MixedSupport):
+    """sbi's DirectPosterior builds an unconstrained theta transform from the
+    prior support (used for MAP / potentials, not for sampling): sigmoid-to-box
+    for the continuous dims, identity for the discrete dims."""
+    cont = biject_to(constraints.interval(constraint.low, constraint.high))
+    return IndependentTransform(
+        CatTransform([cont, identity_transform], dim=-1,
+                     lengths=[constraint.low.numel(), len(constraint.disc_values)]),
+        reinterpreted_batch_ndims=1,
+    )
 
-    Drop-in for `prior.sample` (takes a shape tuple, e.g. ``(n,)``). MNPE needs
-    the discrete theta columns to be integer-valued; BoxUniform alone would
-    sample them continuously. Returns a CPU tensor.
+
+class MixedPrior(Distribution):
+    """The prior omegas are actually simulated from: BoxUniform over the
+    continuous entries of PARAM_ORDER, times an independent uniform categorical
+    over each discrete entry's allowed values (see `discrete_values`).
+
+    A plain BoxUniform would give the discrete dims a continuous density over
+    [lo, hi], i.e. put mass on values (e.g. horizon 1, 2) that are never
+    simulated, and assign log_prob -inf at the upper bound (e.g. horizon 3).
+    Discrete dims must be trailing (asserted at the top of the file).
     """
-    omega = prior.sample(shape).cpu()
-    for j, k in enumerate(PARAM_ORDER):
-        if k in DISCRETE_PARAMS:
-            if k in DISCRETE_PARAM_VALUES:
-                # Sample uniformly from the restricted set of values
-                values = DISCRETE_PARAM_VALUES[k]
-                indices = torch.randint(0, len(values), omega[..., j].shape)
-                omega[..., j] = torch.tensor([values[i] for i in indices.flatten()]).float().reshape(omega[..., j].shape)
-            else:
-                # Sample uniformly from [lo, hi]
-                lo, hi = PARAM_RANGES[k]
-                omega[..., j] = torch.randint(int(lo), int(hi) + 1, omega[..., j].shape).float()
-    return omega
+    arg_constraints = {}
+
+    def __init__(self, low: torch.Tensor, high: torch.Tensor, disc_values: List[torch.Tensor]):
+        self.cont = BoxUniform(low=low, high=high)
+        self.low, self.high, self.disc_values = low, high, disc_values
+        dim = low.numel() + len(disc_values)
+        super().__init__(batch_shape=torch.Size(), event_shape=torch.Size([dim]), validate_args=False)
+
+    @property
+    def support(self):
+        return _MixedSupport(self.low, self.high, self.disc_values)
+
+    @property
+    def mean(self):
+        return torch.cat([self.cont.mean] + [v.mean().reshape(1) for v in self.disc_values])
+
+    @property
+    def stddev(self):
+        return torch.cat([self.cont.stddev] + [v.std(unbiased=False).reshape(1) for v in self.disc_values])
+
+    @property
+    def variance(self):
+        return self.stddev ** 2
+
+    def sample(self, sample_shape=torch.Size()):
+        sample_shape = torch.Size(sample_shape)
+        cols = [self.cont.sample(sample_shape)]
+        for vals in self.disc_values:
+            idx = torch.randint(len(vals), sample_shape, device=vals.device)
+            cols.append(vals[idx].unsqueeze(-1))
+        return torch.cat(cols, dim=-1)
+
+    def log_prob(self, value):
+        n_cont = self.low.numel()
+        lp = self.cont.log_prob(value[..., :n_cont])
+        for j, vals in enumerate(self.disc_values):
+            hit = (value[..., n_cont + j].unsqueeze(-1) == vals).any(dim=-1)
+            lp = lp + torch.where(hit, -np.log(len(vals)), -np.inf)
+        return lp
+
+
+def make_prior() -> MixedPrior:
+    """Constructs the prior from PARAM_RANGES (continuous params) and
+    `discrete_values` (discrete params)."""
+    cont = [k for k in PARAM_ORDER if k not in DISCRETE_PARAMS]
+    low = torch.tensor([PARAM_RANGES[k][0] for k in cont], dtype=torch.float32, device=device)
+    high = torch.tensor([PARAM_RANGES[k][1] for k in cont], dtype=torch.float32, device=device)
+    disc_values = [torch.tensor(discrete_values(k), dtype=torch.float32, device=device)
+                   for k in discrete_param_names()]
+    return MixedPrior(low, high, disc_values)
+
+
+def sample_prior(prior: MixedPrior, shape) -> torch.Tensor:
+    """Draw omegas from the prior (takes a shape tuple, e.g. ``(n,)``).
+    Returns a CPU tensor."""
+    return prior.sample(shape).cpu()
 
 
 def untransform(omega_vec: torch.Tensor) -> Dict[str, float]:
@@ -412,12 +461,20 @@ def build_features_from_sim(raw: np.ndarray) -> np.ndarray:
     return np.stack(cols, axis=1).astype(np.float32)
 
 
+# Fill value marking a missed trial in x (every feature of that trial set to it).
+MISSED_TRIAL = -999.0
+
+
 def build_features_from_participant(df_participant: pd.DataFrame) -> np.ndarray:
     """
     Build the encoder input X from a single participant's preprocessed CSV.
     Pulls each FEATURES column straight from the DataFrame (utils.py already
     computes all *_diff columns for the participant pipeline).
     Output: float32 array of shape (N_TRIALS_TOTAL, len(FEATURES)).
+
+    Missed trials (no `path_chosen`) are returned as rows filled with
+    MISSED_TRIAL (sbi rejects non-finite x, so NaN can't be used); SeqEmbedding
+    masks them out of attention and pooling.
     """
     df_sorted = df_participant.sort_values(["city", "day", "trial"])
     cols = []
@@ -428,12 +485,16 @@ def build_features_from_participant(df_participant: pd.DataFrame) -> np.ndarray:
             cols.append(df_sorted[name].map({'costs': -1, 'rewards': 1}).values.astype(np.float32))
         else:
             cols.append(df_sorted[name].values.astype(np.float32))
-    return np.stack(cols, axis=1).astype(np.float32)
+    X = np.stack(cols, axis=1).astype(np.float32)
+    X[df_sorted["path_chosen"].isna().values] = MISSED_TRIAL
+    return X
 
 
 # ==============================================================================
 # 4. TRANSFORMER ENCODER (trained jointly as the sbi embedding_net)
 # ==============================================================================
+
+## positional encoding used to give the transformer a sense of trial order
 class SinusoidalPE(nn.Module):
     """Sinusoidal positional encoding."""
     def __init__(self, d_model: int, max_len: int = 1024):
@@ -469,12 +530,18 @@ class TrialTransformer(nn.Module):
             nn.Linear(model_dim, out_dim),
         )
 
-    def forward(self, x):
+    def forward(self, x, pad_mask: Optional[torch.Tensor] = None):
+        """pad_mask: optional (B, N_trials) bool, True for trials to ignore
+        (missed trials). They are excluded from attention and from pooling."""
         h = self.proj(x)
         if self.use_pos:
             h = self.pe(h)
-        h = self.encoder(h)
-        h = h.mean(dim=1)  # mean pool across trials
+        h = self.encoder(h, src_key_padding_mask=pad_mask)
+        if pad_mask is None:
+            h = h.mean(dim=1)  # mean pool across trials
+        else:
+            keep = (~pad_mask).unsqueeze(-1).to(h.dtype)
+            h = (h * keep).sum(dim=1) / keep.sum(dim=1).clamp_min(1.0)  # mean over kept trials
         return self.head(h)
 
 
@@ -489,14 +556,25 @@ class SeqEmbedding(nn.Module):
 
     sbi conditions on x as a 2-D batch, so we feed it flattened per-trial
     features of shape (B, N_TRIALS_TOTAL * F) and reshape back to
-    (B, N_TRIALS_TOTAL, F) here before running the transformer. This keeps sbi's
-    internal z-scoring / shape handling on a plain 2-D tensor while the encoder
-    still sees the trial sequence. Output: (B, ENCODER_OUT_DIM).
+    (B, N_TRIALS_TOTAL, F) here before running the transformer, so sbi's shape
+    handling sees a plain 2-D tensor while the encoder still sees the trial
+    sequence. Output: (B, ENCODER_OUT_DIM).
+
+    Standardisation happens here, per *feature* (stats pooled over sims x trials,
+    stored as buffers so they travel with the pickled posterior), so sbi's own
+    x z-scoring must be off (z_score_x="none"). sbi's "structured" would use one
+    scalar for all features; "independent" would use one per (trial, feature).
+
+    Trials whose features all equal MISSED_TRIAL are masked out of attention
+    and pooling (see build_features_from_participant).
     """
-    def __init__(self, n_trials: int, n_features: int, out_dim: int = ENCODER_OUT_DIM):
+    def __init__(self, n_trials: int, n_features: int, out_dim: int = ENCODER_OUT_DIM,
+                 feat_mean: Optional[torch.Tensor] = None, feat_std: Optional[torch.Tensor] = None):
         super().__init__()
         self.n_trials = n_trials
         self.n_features = n_features
+        self.register_buffer("feat_mean", torch.zeros(n_features) if feat_mean is None else feat_mean.float().clone())
+        self.register_buffer("feat_std", torch.ones(n_features) if feat_std is None else feat_std.float().clamp_min(1e-6).clone())
         self.encoder = TrialTransformer(in_dim=n_features, out_dim=out_dim, use_pos_enc=True)
 
     def forward(self, x):
@@ -506,13 +584,22 @@ class SeqEmbedding(nn.Module):
         # unflatten the trailing feature axis into (N_trials, F).
         lead = x.shape[:-1]
         x = x.reshape(-1, self.n_trials, self.n_features)
-        out = self.encoder(x)
+        missed = (x == MISSED_TRIAL).all(dim=-1)  # (B, N_trials)
+        x = (x - self.feat_mean) / self.feat_std
+        x = x.masked_fill(missed.unsqueeze(-1), 0.0)
+        out = self.encoder(x, pad_mask=missed if missed.any() else None)
         return out.reshape(*lead, out.shape[-1])
 
 
-def make_embedding_net() -> SeqEmbedding:
-    """Construct a fresh flatten-aware encoder for use as the sbi embedding_net."""
-    return SeqEmbedding(N_TRIALS_TOTAL, ENCODER_IN_DIM, ENCODER_OUT_DIM)
+def make_embedding_net(x_train: torch.Tensor) -> SeqEmbedding:
+    """Construct a fresh flatten-aware encoder for use as the sbi embedding_net,
+    with per-feature standardisation stats taken from the flattened training x
+    of shape (n_sims, N_TRIALS_TOTAL * F). x_train must be finite (checked in
+    run_train)."""
+    seq = x_train.reshape(-1, ENCODER_IN_DIM)
+    seq = seq[~(seq == MISSED_TRIAL).all(dim=-1)]
+    return SeqEmbedding(N_TRIALS_TOTAL, ENCODER_IN_DIM, ENCODER_OUT_DIM,
+                        feat_mean=seq.mean(dim=0), feat_std=seq.std(dim=0))
 
 
 # ==============================================================================
@@ -571,6 +658,20 @@ def _parallel_simulate(omegas: torch.Tensor, seed_offset: int = 0) -> Tuple[List
     return raw_list, fields
 
 
+
+
+def _sim_config(n_sims: int) -> Dict:
+    """Everything that determines what a cached simulation dataset contains."""
+    return {
+        "n_sims": int(n_sims),
+        "param_order": PARAM_ORDER,
+        "param_ranges": {k: list(v) for k, v in PARAM_RANGES.items()},
+        "discrete_param_values": DISCRETE_PARAM_VALUES,
+        "fixed_params": FIXED_PARAMS,
+        "hyperparams": HYPERPARAMS,
+    }
+
+
 def _simulate_or_load(
     omegas: torch.Tensor, seed_offset: int,
     data_path: Optional[Path], columns_path: Optional[Path], omega_path: Optional[Path],
@@ -586,7 +687,14 @@ def _simulate_or_load(
     AND the cached schema still contains every column FEATURES needs, load from
     disk and skip simulation. Otherwise resim, save the new (N, T, F_full)
     array plus a JSON sidecar naming the columns.
+
+    The cache must also carry a `sim_config.json` matching `_sim_config` (prior,
+    fixed params, ...). A missing or mismatched config raises
+    rather than silently reusing (or silently re-running hours of) simulations;
+    pass --resim to overwrite it.
     """
+    sim_config_path = data_path.with_name("sim_config.json") if data_path is not None else None
+    expected_cfg = json.loads(json.dumps(_sim_config(omegas.shape[0])))
     cache_ok = (
         not force
         and data_path is not None
@@ -597,6 +705,19 @@ def _simulate_or_load(
         and omega_path.exists()
     )
     if cache_ok:
+        cached_cfg = None
+        if sim_config_path.exists():
+            with open(sim_config_path, "r") as f:
+                cached_cfg = json.load(f)
+        if cached_cfg != expected_cfg:
+            diff = (
+                "no sim_config.json (dataset predates cache validation)" if cached_cfg is None
+                else {k: (cached_cfg.get(k), expected_cfg[k]) for k in expected_cfg if cached_cfg.get(k) != expected_cfg[k]}
+            )
+            raise RuntimeError(
+                f"Cached simulations in {data_path.parent} do not match the current "
+                f"simulation config: {diff}. Re-run with --resim (or use a fresh run dir)."
+            )
         with open(columns_path, "r") as f:
             cached_cols = json.load(f)
         missing = [f for f in FEATURES if f not in cached_cols]
@@ -618,6 +739,8 @@ def _simulate_or_load(
         np.save(omega_path, omegas.numpy())
         with open(columns_path, "w") as f:
             json.dump(fields, f, indent=2)
+        with open(sim_config_path, "w") as f:
+            json.dump(expected_cfg, f, indent=2)
         print(f"  [Cache] Saved data -> {data_path.name}, omega -> {omega_path.name}, "
               f"columns -> {columns_path.name}")
     return raw_list, omegas
@@ -654,13 +777,27 @@ def run_train(args, prior):
     optimises encoder + categorical + flow under the posterior NLL.
     """
     omegas = sample_prior(prior, (args.n_sims,))  # only used if cache is cold
+    # With --stage all, run_simulate has already honoured --resim; forcing again
+    # here would throw away that dataset and simulate everything a second time.
     raw_list, omegas = _simulate_or_load(
-        omegas, 0, DATA_PATH, COLUMNS_PATH, OMEGA_PATH, force=args.resim,
+        omegas, 0, DATA_PATH, COLUMNS_PATH, OMEGA_PATH,
+        force=args.resim and args.stage == "train",
     )
     x = _features_matrix(raw_list)  # (n_sims, N_TRIALS_TOTAL * F)
     print(f"  [Train] x shape {tuple(x.shape)} (flattened {N_TRIALS_TOTAL} trials x {len(FEATURES)} features)")
 
-    embedding_net = make_embedding_net()
+    # Unyoked simulations never produce NaN features, so a non-finite x means a
+    # simulator/feature bug. Fail here rather than let sbi silently drop those
+    # sims (exclude_invalid_x), which would hide the bug and could bias training.
+    bad = ~torch.isfinite(x.reshape(x.shape[0], N_TRIALS_TOTAL, len(FEATURES)))
+    if bad.any():
+        per_feat = {f: int(bad[..., j].any(dim=1).sum()) for j, f in enumerate(FEATURES) if bad[..., j].any()}
+        raise ValueError(
+            f"{int(bad.any(dim=(1, 2)).sum())}/{x.shape[0]} simulations have non-finite features "
+            f"(sims affected per feature: {per_feat}). Simulated data should never contain NaN/inf."
+        )
+
+    embedding_net = make_embedding_net(x)
     n_enc_params = sum(p.numel() for p in embedding_net.parameters())
     print(f"  [Train] Encoder embedding_net params: {n_enc_params:,}")
 
@@ -668,7 +805,7 @@ def run_train(args, prior):
     density_estimator = posterior_nn(
         model="mnpe" if USE_MNPE else args.density,
         embedding_net=embedding_net,
-        z_score_x="structured",       # data x: sbi maps this to z_score_y internally
+        z_score_x="none",             # x is standardised per feature inside SeqEmbedding
         z_score_theta="independent",
     )
     inference = (MNPE if USE_MNPE else SNPE)(
@@ -717,13 +854,12 @@ def run_recovery(args, prior, posterior):
                 # discrete param. Report the modal estimate, whether it matches
                 # the true category (hard accuracy), and the posterior mass the
                 # inference put on the true category (soft / calibration metric).
-                lo_r, hi_r = PARAM_RANGES[k]
-                cats = np.arange(int(lo_r), int(hi_r) + 1)
+                cats = np.array(discrete_values(k))
                 pmf = np.array([(np.round(vals) == c).mean() for c in cats])
                 gt_cat = int(round(gt_val))
                 row[f"mode_{k}"] = int(cats[np.argmax(pmf)])
                 row[f"correct_{k}"] = 1.0 if row[f"mode_{k}"] == gt_cat else 0.0
-                row[f"p_true_{k}"] = float(pmf[gt_cat - int(lo_r)])
+                row[f"p_true_{k}"] = float(pmf[cats == gt_cat].sum())
             else:
                 mu = np.mean(vals)
                 lo_q, hi_q = np.percentile(vals, 5), np.percentile(vals, 95)
@@ -774,16 +910,15 @@ def run_inference(args, posterior):
             # just summary stats (mean/median are not valid categories). `mode`
             # is the most probable category (the point estimate used by PPC);
             # `p_{c}` columns hold the inferred probability of each category c
-            # over its full PARAM_RANGES range (zero-count categories -> 0.0).
+            # over its allowed values (zero-count categories -> 0.0).
             # All NaN for continuous params, which use the mean downstream.
             summ["mode"] = np.nan
             for k in discrete_param_names():
                 if k not in post_df.columns:
                     continue
                 summ.loc[k, "mode"] = int(post_df[k].mode().iloc[0])
-                lo, hi = PARAM_RANGES[k]
                 probs = post_df[k].value_counts(normalize=True)
-                for c in range(int(lo), int(hi) + 1):
+                for c in discrete_values(k):
                     summ.loc[k, f"p_{c}"] = float(probs.get(c, 0.0))
 
             subj_dir = out_root / pid
@@ -803,9 +938,9 @@ def run_inference(args, posterior):
         print(f"  [Inference] All summaries saved to {POST_SUMMARY_CSV}")
 
 
-def worker_ppc(pid, env_id, params, seed):
+def worker_ppc(pid, env_id, params, seed, draw=0):
     """Load this pid's envs, run BAMCP at `params`, return a long-format DataFrame
-    with all simulated trial fields, tagged with pid."""
+    with all simulated trial fields, tagged with pid and posterior draw index."""
     if seed is not None:
         np.random.seed(seed); random.seed(seed); torch.manual_seed(seed)
 
@@ -829,50 +964,74 @@ def worker_ppc(pid, env_id, params, seed):
     )
 
     df = pd.DataFrame(dict(sim_out))
+    # The simulated (realised) choice would otherwise collide with the human
+    # `chose_orthogonal` when ppc.csv is merged with the participant df.
+    df = df.rename(columns={"chose_orthogonal": "sim_chose_orthogonal"})
     df["pid"] = pid
+    df["draw"] = draw
     return df
 
 
+def _ppc_param_sets(samples: pd.DataFrame, n_draws: int, rng: np.random.Generator) -> List[Dict]:
+    """Parameter sets to simulate for one pid, from its joint posterior samples.
+
+    n_draws > 0: n_draws joint draws (a proper posterior predictive).
+    n_draws == 0: a single point estimate that respects the mixed structure:
+        the modal discrete configuration, and the continuous posterior mean
+        *conditional on* that configuration (the unconditional mean would
+        average over horizons and may sit where the posterior has little mass).
+    """
+    disc = discrete_param_names()
+    cont = [k for k in PARAM_ORDER if k not in DISCRETE_PARAMS]
+
+    def _as_params(row) -> Dict:
+        out = {k: int(round(row[k])) for k in disc}
+        out.update({k: float(row[k]) for k in cont})
+        out.update(FIXED_PARAMS)
+        return out
+
+    if n_draws > 0:
+        idx = rng.choice(len(samples), size=n_draws, replace=len(samples) < n_draws)
+        return [_as_params(samples.iloc[j]) for j in idx]
+
+    point = {}
+    sub = samples
+    if disc:
+        modal = samples.groupby(disc).size().idxmax()
+        modal = modal if isinstance(modal, tuple) else (modal,)
+        point.update(dict(zip(disc, modal)))
+        sub = samples[(samples[disc] == pd.Series(point)).all(axis=1)]
+    point.update(sub[cont].mean().to_dict())
+    return [_as_params(point)]
+
+
 def run_ppc(args):
-    """Posterior predictive check: simulate BAMCP at each pid's posterior point
-    estimate on that pid's own env objects. Parallelised across pids."""
-    post_csv = Path(args.post_csv) if args.post_csv else POST_SUMMARY_CSV
-    post_df = pd.read_csv(post_csv)
-    means = post_df.pivot_table(index="pid", columns="index", values="mean")
-    # Discrete params are simulated at their posterior *mode* (stored by
-    # run_inference); fall back to the rounded mean if an older summary CSV
-    # without a "mode" column is supplied via --post_csv.
-    modes = (
-        post_df.pivot_table(index="pid", columns="index", values="mode")
-        if "mode" in post_df.columns else None
-    )
-
-    def _point_estimate(pid, k):
-        if k in DISCRETE_PARAMS:
-            if modes is not None and k in modes.columns and not pd.isna(modes.loc[pid, k]):
-                return int(round(modes.loc[pid, k]))
-            return int(round(means.loc[pid, k]))  # fallback: rounded mean
-        return float(means.loc[pid, k])
-
+    """Posterior predictive check on each pid's own env objects, simulated from
+    the joint posterior samples saved by run_inference (see _ppc_param_sets for
+    point-estimate vs. joint-draw modes). Parallelised across pids x draws."""
+    subjects_dir = Path(args.subjects_dir) if args.subjects_dir else RUN_DIR / "subjects"
     df_all = pd.read_csv(str(PARTICIPANT_DATA_CSV), low_memory=False)
     pids = sorted(df_all["pid"].unique())
     id_mapping = _load_id_mapping()
+    rng = np.random.default_rng(4242)
 
     tasks = []
     for i, pid in enumerate(pids):
-        if pid not in means.index:
-            print(f"   [skip] {pid}: no posterior row"); continue
+        samples_path = subjects_dir / pid / "posterior_samples.csv"
+        if not samples_path.exists():
+            print(f"   [skip] {pid}: no {samples_path}"); continue
         if pid not in id_mapping:
             print(f"   [skip] {pid}: not in id_mapping"); continue
         env_id = _env_id_for_pid(id_mapping, pid)
-        params = {k: _point_estimate(pid, k) for k in PARAM_ORDER}
-        params.update(FIXED_PARAMS)
-        tasks.append((pid, env_id, params, 4242 + i))
+        param_sets = _ppc_param_sets(pd.read_csv(samples_path), args.ppc_draws, rng)
+        for d, params in enumerate(param_sets):
+            tasks.append((pid, env_id, params, 4242 + i * len(param_sets) + d, d))
 
-    print(f"\n [PPC] Simulating {len(tasks)} participants in parallel ({N_JOBS} workers)...")
+    mode = f"{args.ppc_draws} joint posterior draws" if args.ppc_draws > 0 else "conditional point estimate"
+    print(f"\n [PPC] Simulating {len(tasks)} runs ({mode}) in parallel ({N_JOBS} workers)...")
     results = Parallel(n_jobs=N_JOBS, verbose=1)(
-        delayed(worker_ppc)(pid, env_id, params, seed)
-        for (pid, env_id, params, seed) in tasks
+        delayed(worker_ppc)(pid, env_id, params, seed, draw)
+        for (pid, env_id, params, seed, draw) in tasks
     )
 
     df_ppc = pd.concat(results, ignore_index=True)
@@ -914,8 +1073,10 @@ def main():
     parser.add_argument("--num_samples", type=int, default=4000, help="Posterior samples per participant")
 
     # PPC args
-    parser.add_argument("--post_csv", type=str, default=None,
-                        help="Path to params_posteriors.csv for PPC (default: POST_SUMMARY_CSV)")
+    parser.add_argument("--subjects_dir", type=str, default=None,
+                        help="Dir of per-pid posterior_samples.csv for PPC (default: RUN_DIR/subjects)")
+    parser.add_argument("--ppc_draws", type=int, default=0,
+                        help="Joint posterior draws simulated per pid; 0 = single conditional point estimate")
 
     args = parser.parse_args()
 
@@ -949,7 +1110,7 @@ def main():
         json.dump(run_config, f, indent=2)
     print(f"[Setup] Run config saved to {RUN_DIR / 'run_config.json'}")
 
-    prior, _, _ = make_box_prior()
+    prior = make_prior()
 
     # --- Pipeline ---
 
