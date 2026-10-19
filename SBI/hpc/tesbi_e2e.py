@@ -151,7 +151,9 @@ if USE_MNPE and tuple(int(p) for p in sbi.__version__.split(".")[:2]) < (0, 26):
 
 # Restrict  discrete parameters to specific subsets of values
 DISCRETE_PARAM_VALUES = {
-    "horizon": [0, 3],
+    "horizon": [0,
+                # 1,2,
+                3],
 }
 
 
@@ -212,6 +214,11 @@ FEATURES = [
 
     'aligned_path_aligned_arm_len',
     'orthogonal_path_aligned_arm_len',
+    
+    # 'aligned_path_aligned_arm_CE_vals',
+    # 'aligned_path_orthogonal_arm_CE_vals',
+    # 'orthogonal_path_aligned_arm_CE_vals',
+    # 'orthogonal_path_orthogonal_arm_CE_vals',
 
     "objective"
 ]

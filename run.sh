@@ -28,4 +28,8 @@
 
 ## e2e
 micromamba activate sbi_env
-srun python -u ./SBI/hpc/tesbi_e2e.py --stage all --n_sims 40000 --n_samples 25000
+srun python -u ./SBI/hpc/tesbi_e2e.py --stage all --n_sims 20000 --n_samples 15000 -
+# srun python -u ./SBI/hpc/tesbi_e2e.py --stage train --n_sims   20000 --n_samples 15000
+# srun python -u ./SBI/hpc/tesbi_e2e.py --stage recover --n_sims 20000 --n_samples 15000
+# srun python -u ./SBI/hpc/tesbi_e2e.py --stage posterior --n_sims 20000 --n_samples 15000
+# srun python -u ./SBI/hpc/tesbi_e2e.py --stage ppc --n_sims 20000 --n_samples 15000
