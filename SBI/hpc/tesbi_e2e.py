@@ -35,6 +35,9 @@ USAGE EXAMPLES
 
 --- HPC FULL RUN ---
     python SBI/hpc/tesbi_e2e.py --stage all --n_sims 30000 --n_samples 10000
+
+--- ADD SIMS TO AN EXISTING DATASET (reuses the 30000, simulates 20000 more) ---
+    python SBI/hpc/tesbi_e2e.py --stage all --n_sims 50000 --extend_from 30000 --n_samples 10000
 ================================================================================
 """
 import sys
@@ -753,6 +756,90 @@ def _simulate_or_load(
     return raw_list, omegas
 
 
+def _extend_dataset(prior, n_existing: int, n_total: int, src_dir: Path) -> None:
+    """
+    Build the n_total-sim dataset at DATA_PATH/OMEGA_PATH/COLUMNS_PATH by loading
+    the n_existing-sim dataset in src_dir and simulating n_total - n_existing new
+    sims on top. The source's sim_config.json must match the current config
+    exactly (n_sims aside), so the two chunks come from the same prior/simulator.
+
+    New sims use seed_offset=n_existing, so simulator seeds continue where the
+    source left off, and new omegas are drawn under a seed derived from
+    n_existing so they don't replay the source's prior draws. The source dataset
+    is left untouched; the merged one is written to the current RUN_DIR.
+    """
+    if n_total <= n_existing:
+        raise ValueError(f"--n_sims ({n_total}) must exceed --extend_from ({n_existing}).")
+    src_data, src_omega = src_dir / "sim_data.npy", src_dir / "sim_omega.npy"
+    src_cols, src_cfg = src_dir / "sim_columns.json", src_dir / "sim_config.json"
+    for p in (src_data, src_omega, src_cols, src_cfg):
+        if not p.exists():
+            raise FileNotFoundError(f"Cannot extend: {p} not found.")
+
+    with open(src_cfg, "r") as f:
+        cached_cfg = json.load(f)
+    expected_cfg = json.loads(json.dumps(_sim_config(n_existing)))
+    if cached_cfg != expected_cfg:
+        diff = {k: (cached_cfg.get(k), expected_cfg[k]) for k in expected_cfg if cached_cfg.get(k) != expected_cfg[k]}
+        raise RuntimeError(
+            f"Cannot extend {src_dir}: its simulation config does not match the current one: {diff}."
+        )
+    with open(src_cols, "r") as f:
+        cols = json.load(f)
+    missing = [f for f in FEATURES if f not in cols]
+    if missing:
+        raise RuntimeError(f"Cannot extend {src_dir}: cached schema lacks columns required by FEATURES {missing}.")
+
+    raw_old = np.load(src_data)
+    omegas_old = np.load(src_omega)
+    if len(raw_old) != n_existing or len(omegas_old) != n_existing:
+        raise RuntimeError(
+            f"Cannot extend {src_dir}: expected {n_existing} sims, found "
+            f"{len(raw_old)} data rows / {len(omegas_old)} omegas."
+        )
+
+    n_new = n_total - n_existing
+    print(f"  [Extend] Loaded {n_existing} sims from {src_dir}; simulating {n_new} more...")
+    with torch.random.fork_rng():
+        torch.manual_seed(n_existing)
+        omegas_new = sample_prior(prior, (n_new,))
+    raw_new, fields = _parallel_simulate(omegas_new, seed_offset=n_existing)
+    if fields != cols:
+        raise RuntimeError(
+            f"Simulator column schema changed since {src_dir} was built: {cols} -> {fields}."
+        )
+
+    DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
+    np.save(DATA_PATH, np.concatenate([raw_old, np.stack(raw_new)]))
+    np.save(OMEGA_PATH, np.concatenate([omegas_old, omegas_new.numpy()]))
+    with open(COLUMNS_PATH, "w") as f:
+        json.dump(fields, f, indent=2)
+    with open(DATA_PATH.with_name("sim_config.json"), "w") as f:
+        json.dump(json.loads(json.dumps(_sim_config(n_total))), f, indent=2)
+
+    # Record how the dataset was assembled (kept out of sim_config.json, which is
+    # compared for equality on load).
+    src_prov = src_dir / "sim_provenance.json"
+    if src_prov.exists():
+        with open(src_prov, "r") as f:
+            chunks = json.load(f)["chunks"]
+    else:
+        chunks = [{"n": n_existing, "seed_offset": 0, "built_in": str(src_dir)}]
+    chunks.append({"n": n_new, "seed_offset": n_existing, "omega_seed": n_existing, "built_in": str(RUN_DIR)})
+    with open(RUN_DIR / "sim_provenance.json", "w") as f:
+        json.dump({"chunks": chunks}, f, indent=2)
+    print(f"  [Extend] Saved {n_total} sims -> {DATA_PATH}")
+
+
+def _maybe_extend(args, prior, force: bool) -> None:
+    """If --extend_from is set and this run's dataset isn't built yet (or force),
+    build it from the smaller run's dataset."""
+    if args.extend_from is None or (DATA_PATH.exists() and not force):
+        return
+    src_dir = ART_DIR / f"{args.extend_from}_sims_{args.n_samples}_samples"
+    _extend_dataset(prior, args.extend_from, args.n_sims, src_dir)
+
+
 # ==============================================================================
 # 6. PIPELINE STAGES
 # ==============================================================================
@@ -767,9 +854,11 @@ def _features_matrix(raw_list: List[np.ndarray]) -> torch.Tensor:
 def run_simulate(args, prior):
     """Stage 1: draw omegas, run BAMCP, cache the raw per-trial features."""
     print(f"\n [Simulate] Simulating {args.n_sims} (omega, choices) pairs...")
+    _maybe_extend(args, prior, force=args.resim)
     omegas = sample_prior(prior, (args.n_sims,))
     _simulate_or_load(
-        omegas, 0, DATA_PATH, COLUMNS_PATH, OMEGA_PATH, force=args.resim,
+        omegas, 0, DATA_PATH, COLUMNS_PATH, OMEGA_PATH,
+        force=args.resim and args.extend_from is None,  # extension already honoured --resim
     )
     print("  [Simulate] Done.")
 
@@ -783,12 +872,14 @@ def run_train(args, prior):
     conditional flow (continuous params), so one `inference.train()` call jointly
     optimises encoder + categorical + flow under the posterior NLL.
     """
-    omegas = sample_prior(prior, (args.n_sims,))  # only used if cache is cold
     # With --stage all, run_simulate has already honoured --resim; forcing again
     # here would throw away that dataset and simulate everything a second time.
+    force = args.resim and args.stage == "train"
+    _maybe_extend(args, prior, force=force)
+    omegas = sample_prior(prior, (args.n_sims,))  # only used if cache is cold
     raw_list, omegas = _simulate_or_load(
         omegas, 0, DATA_PATH, COLUMNS_PATH, OMEGA_PATH,
-        force=args.resim and args.stage == "train",
+        force=force and args.extend_from is None,
     )
     x = _features_matrix(raw_list)  # (n_sims, N_TRIALS_TOTAL * F)
     print(f"  [Train] x shape {tuple(x.shape)} (flattened {N_TRIALS_TOTAL} trials x {len(FEATURES)} features)")
@@ -1066,6 +1157,10 @@ def main():
     parser.add_argument("--epochs", type=int, default=500, help="Max training epochs")
     parser.add_argument("--stop_after_epochs", type=int, default=20, help="Early-stopping patience (epochs)")
     parser.add_argument("--resim", action="store_true", help="Re-simulate even if cached data/omega files exist")
+    parser.add_argument("--extend_from", type=int, default=None,
+                        help="n_sims of an existing run (same --n_samples and sim config) whose dataset is "
+                             "reused; only the remaining --n_sims minus this are simulated. The merged dataset "
+                             "goes in this run's dir; the source is left untouched.")
 
     parser.add_argument("--n_samples", type=int, default=FIXED_PARAMS["n_samples"],
                         help="BAMCP MCTS rollouts per decision (samples per simulated model)")
@@ -1109,6 +1204,7 @@ def main():
         "features": FEATURES,
         "encoder_out_dim": ENCODER_OUT_DIM,
         "n_sims": args.n_sims,
+        "extend_from": args.extend_from,
         "n_samples": args.n_samples,
         "density": args.density,
         "pipeline": "end_to_end",
