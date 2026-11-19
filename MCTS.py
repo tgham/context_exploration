@@ -331,27 +331,9 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
     ## node_ids are defined by the informational state, i.e. the counts of low and high cost states in each cell
     def init_node_id(self, obs=None, parent_node_id=None):
         
-        ## uses sparse representation: tuple of ((i, j), (low_count, high_count)) for observed cells only
-
-        # Initialize counts from parent node_id (sparse tuple) if provided
-        if parent_node_id is not None:
-            counts = dict(parent_node_id)
-        else:
-            counts = {}
-        
-        # Add new observations - optimized loop
-        high_cost = self.env.high_cost
-        for i, j, c in obs:
-            key = (int(i), int(j))
-            prev = counts.get(key)
-            if prev is None:
-                counts[key] = (0, 1) if c == high_cost else (1, 0)
-            elif c == high_cost:
-                counts[key] = (prev[0], prev[1] + 1)
-            else:
-                counts[key] = (prev[0] + 1, prev[1])
-        
-        return tuple(sorted(counts.items()))
+        # NB: node_ids are local keys, i.e. they only need to distinguish sibling state nodes under the same action leaf.
+        # Since the path for a given (parent node, action) is fixed, the child node's belief state is fully determined by the binary cost outcome along that path.
+        return (np.asarray(obs)[:, 2] == self.env.high_cost).tobytes()
     
     ## in AFC, there is no meaningful state of the MDP, so belief state just contains the trial number
     def check_node(self, node):
