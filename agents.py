@@ -268,7 +268,7 @@ class BAMCP(Farmer):
 
         ## prune tree (not always successful due to high branching factor, or if participant made no choice in which case reset the tree)
         init_info_state = self.mcts.tree.root.node_id
-        trial_obs = env_copy.trial_obs.copy()
+        trial_obs = env_copy.trial_obs
         t = self.mcts.root_trial
         next_node_id = self.mcts.init_node_id(trial_obs, init_info_state)
 
