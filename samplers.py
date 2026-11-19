@@ -289,10 +289,10 @@ class GridSampler:
         )
 
         ## clone the environment for each sample grid
-        sample_mdps = [self.env.sim_clone(sample_grids[s]) for s in range(n_samples)]
+        sample_mdps = self.env.sim_clones(sample_grids)
 
         return sample_mdps
-    
+
 
 
     def mean_mdp(self):
