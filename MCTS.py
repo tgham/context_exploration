@@ -6,12 +6,11 @@ import numpy as np
 ## base class 
 class MonteCarloTreeSearch():
 
-    def __init__(self, env, tree, exploration_constant=2, discount_factor=0.99, horizon=None, norm_mode='node_minmax', debug=False):
+    def __init__(self, env, tree, exploration_constant=2, discount_factor=0.99, horizon=None, debug=False):
 
         ## initialize tree and and MCTS params
         self.tree = tree
-        self.norm_mode = norm_mode ## how to scale Q values in UCT: 'node_minmax' (per-node running min/max) or 'fixed' (subclass-defined return bounds)
-        self.debug = debug ## if True, record per-simulation diagnostics (see reset_trackers); off by default as it slows search
+        self.debug = debug # record per-simulation diagnostics
         self.discount_factor = discount_factor
         self.exploration_constant = exploration_constant
         if horizon is None:
@@ -267,23 +266,13 @@ class MonteCarloTreeSearch():
         exploration_term = self.exploration_constant * sqrt(log(node.n_state_visits) / action_leaf.n_action_visits)
         
         return exploitation_term + exploration_term
-
     
-    ## offset and scale used to normalise Q values in UCT
-    def uct_norm(self, node):
-        """
-        Returns (offset, scale) such that the exploitation term is (Q - offset) / scale.
-        Default: per-node running min/max of action values. Subclasses can override
-        for norm_mode='fixed' with known return bounds.
-        """
-        return node.min_Q, node.max_Q - node.min_Q + 1e-8
-
-
     ## argmax based on UCT values?
     def best_child(self, node):
 
-        ## normalise Q values (see uct_norm)
-        min_Q, norm_term = self.uct_norm(node)
+        ## normalise by per-node Q
+        min_Q, max_Q = node.min_Q, node.max_Q
+        norm_term = max_Q - min_Q + 1e-8
         log_N = log(node.n_state_visits)
         c = self.exploration_constant
 
@@ -336,45 +325,8 @@ class MonteCarloTreeSearch():
 
 class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
 
-    def __init__(self, env, tree, exploration_constant=2, discount_factor=0.99, horizon=None, norm_mode='fixed', debug=False):
-        super().__init__(env, tree, exploration_constant, discount_factor, horizon, norm_mode, debug)
-
-    ## fixed UCT normalisation: the maximum possible spread of discounted returns from each trial to the horizon
-    def compute_return_range(self):
-        """
-        R_range[t] = sum_{k=t}^{horizon_trial} gamma^(k-t) * max_a sum_{cells on path_{k,a}} |w(cell)| * |low - high|
-
-        Precomputed per trial for the current root, so it scales with path lengths,
-        the reward weights (sim_weight_map) and the number of remaining trials.
-        """
-        env = self.env
-        cost_diff = abs(env.low_cost - env.high_cost)
-        weights = np.abs(np.asarray(env.sim_weight_map, dtype=float))
-
-        ## max weighted reward spread on each trial
-        trial_spread = np.zeros(env.n_trials)
-        for k in range(self.root_trial, self.horizon_trial + 1):
-            trial_spread[k] = max(
-                float(weights[np.asarray(env.path_weights[k][a], dtype=int)].sum()) * cost_diff
-                for a in range(env.n_afc)
-            )
-
-        ## discounted sum to the horizon, computed backwards
-        R_range = [0.0] * env.n_trials
-        running = 0.0
-        for k in range(self.horizon_trial, self.root_trial - 1, -1):
-            running = trial_spread[k] + self.discount_factor * running
-            R_range[k] = running
-
-        ## guard against zero range (e.g. both weights zero)
-        self.R_range = [r if r > 0 else 1.0 for r in R_range]
-
-    def uct_norm(self, node):
-        if self.norm_mode == 'fixed':
-            if self.R_range is None:
-                self.compute_return_range()
-            return 0.0, self.R_range[node.trial]
-        return super().uct_norm(node)
+    def __init__(self, env, tree, exploration_constant=2, discount_factor=0.99, horizon=None, debug=False):
+        super().__init__(env, tree, exploration_constant, discount_factor, horizon, debug)
 
     ## node_ids are defined by the informational state, i.e. the counts of low and high cost states in each cell
     def init_node_id(self, obs=None, parent_node_id=None):
@@ -421,10 +373,6 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
         self.horizon_trial = min(self.root_trial + self.horizon, self.env.n_trials-1)
         self.env.set_trunc_trial(self.horizon_trial)
 
-        ## bounds for fixed UCT normalisation (depend on root, horizon and weights);
-        ## computed lazily in uct_norm, since the env's weights may not be set yet
-        self.R_range = None
-
 
     ## rollout policy (greedy or random)
     def rollout_policy(self):
@@ -456,9 +404,9 @@ class MonteCarloTreeSearch_Bandit(MonteCarloTreeSearch):
     """MCTS subclass with bandit-appropriate node IDs and rollout policy."""
 
     def __init__(self, env, tree, exploration_constant=2,
-                 discount_factor=0.99, horizon=None, norm_mode='node_minmax', debug=False):
+                 discount_factor=0.99, horizon=None, debug=False):
         super().__init__(env, tree, exploration_constant,
-                         discount_factor, horizon, norm_mode, debug)
+                         discount_factor, horizon, debug)
 
     
     ## node_id is the sufficient statistic for the belief state in the bandit: the counts of successes and failures for each arm
@@ -537,9 +485,9 @@ class MonteCarloTreeSearch_Emp(MonteCarloTreeSearch):
     """MCTS subclass with bandit-appropriate node IDs and rollout policy."""
 
     def __init__(self, env, tree, exploration_constant=2,
-                 discount_factor=0.99, horizon=None, norm_mode='node_minmax', debug=False):
+                 discount_factor=0.99, horizon=None, debug=False):
         super().__init__(env, tree, exploration_constant,
-                         discount_factor, horizon, norm_mode, debug)
+                         discount_factor, horizon, debug)
 
     
     ## node_id is the sufficient statistic for the multinomial distirbution in the empowerment problem: the counts of each outcome for each arm
