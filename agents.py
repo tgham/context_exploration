@@ -153,6 +153,7 @@ class BAMCP(Farmer):
             **task_params)
         self.aligned_weight = task_params.get('aligned_weight', 1.0)
         self.orthogonal_weight = task_params.get('orthogonal_weight', 1.0)
+        self.debug = task_params.get('debug', False) ## record per-simulation diagnostics in self.mcts (slower)
 
 
     ## initialise MCTS object for tree search
@@ -172,6 +173,7 @@ class BAMCP(Farmer):
                 exploration_constant=self.exploration_constant,
                 discount_factor=self.discount_factor,
                 horizon=self.horizon,
+                debug=self.debug,
             )
         else:
             self.mcts.refresh_env(env)
@@ -200,19 +202,11 @@ class BAMCP(Farmer):
         n_samples = int(self.n_samples)
         self.all_posterior_MDPs = self.sampler.sample_mdps(n_samples)
 
-        ## debugging Q-vals
-        self.mcts.Q_tracker = []
-        self.mcts.return_tracker = []
-        self.mcts.first_node_updates = []
-        self.mcts.first_node_updates_by_depth = []
-        self.mcts.tree_cost_tracker = []
-        self.mcts.conditional_tree_cost_tracker = [[] for _ in range(self.mcts.n_afc)]
-        for t in range(self.mcts.env.n_trials):
-            self.mcts.first_node_updates_by_depth.append([])
-            self.mcts.tree_cost_tracker.append([])
-            for a in range(self.mcts.n_afc):
-                self.mcts.conditional_tree_cost_tracker[a].append([])
-        
+        ## debugging trackers: cleared for each search
+        debug = self.mcts.debug
+        if debug:
+            self.mcts.reset_trackers()
+
         ## loop through simulations
         for s in range(n_samples):
             
@@ -228,12 +222,11 @@ class BAMCP(Farmer):
             ##backup
             self.mcts.backup()
 
-            ## update Q tracker
-            try:
-                Qs = [self.mcts.tree.root.action_leaves[a].performance for a in self.mcts.tree.root.action_leaves.keys()]
-                self.mcts.Q_tracker.append(Qs)
-            except:
-                pass
+            ## update Q tracker (once every root action has been expanded)
+            if debug:
+                root_leaves = self.mcts.tree.root.action_leaves.values()
+                if all(leaf is not None for leaf in root_leaves):
+                    self.mcts.Q_tracker.append([leaf.performance for leaf in root_leaves])
 
         ## return final Q estimates
         MCTS_estimates = np.full(self.mcts.n_afc, np.nan)
