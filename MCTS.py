@@ -44,9 +44,14 @@ class MonteCarloTreeSearch():
 
     ### abstract methods
 
-    ## create node id, which represents the agent's current state of knowledge
+    ## create node id, which represents the agent's state of knowledge
+    ##   - root (parent_node_id=None): obs is the env's full observation history
+    ##   - otherwise: obs is what env.step() returned, and parent_node_id is the id of the parent state node
+    ## Contract: a node_id is a dict key and must distinguish sibling state nodes under the same action leaf.
+    ## It can be a full (global) belief state, e.g. the bandit's success/failure counts, or any smaller
+    ## (local) key that is unique among siblings, e.g. the AFC path outcome.
     @abstractmethod
-    def init_node_id(self, obs=None, init_info_state=None):
+    def init_node_id(self, obs=None, parent_node_id=None):
         pass
 
     ## update MCTS object with misc info from the env
@@ -328,12 +333,18 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
     def __init__(self, env, tree, exploration_constant=2, discount_factor=0.99, horizon=None, debug=False):
         super().__init__(env, tree, exploration_constant, discount_factor, horizon, debug)
 
-    ## node_ids are defined by the informational state, i.e. the counts of low and high cost states in each cell
+    ## node_ids are local keys: they only need to distinguish sibling state nodes under the same action leaf.
+    ## Given (parent node, action), the path is fixed (posterior samples only differ in costs), so the child's
+    ## belief state is fully determined by the costs observed along that path, i.e. the obs returned by env.step().
+    ## NB: if paths are ever sampled per simulation, the key must also include the path coordinates.
     def init_node_id(self, obs=None, parent_node_id=None):
-        
-        # NB: node_ids are local keys, i.e. they only need to distinguish sibling state nodes under the same action leaf.
-        # Since the path for a given (parent node, action) is fixed, the child node's belief state is fully determined by the binary cost outcome along that path.
-        return (np.asarray(obs)[:, 2] == self.env.high_cost).tobytes()
+
+        ## root: obs is the full (x, y, cost) history; convert it to a hashable form
+        if parent_node_id is None:
+            return tuple(map(tuple, np.asarray(obs).tolist()))
+
+        ## child: obs is the tuple of costs along the chosen path
+        return tuple(obs)
     
     ## in AFC, there is no meaningful state of the MDP, so belief state just contains the trial number
     def check_node(self, node):
@@ -359,20 +370,9 @@ class MonteCarloTreeSearch_AFC(MonteCarloTreeSearch):
     ## rollout policy (greedy or random)
     def rollout_policy(self):
 
-        ### greedy:
-
-        ## get the total reward of the paths
-        t = self.env.trial
-        path_rewards = []
-        for action in range(self.n_afc):
-            path = self.env.path_states[t][action]
-            path_weight_idx = self.env.path_weights[t][action]
-            weighted_rewards = [float(self.env.costs[x, y]) * self.env.sim_weight_map[path_weight_idx[k]] for k, (x, y) in enumerate(path)]
-            path_rewards.append(sum(weighted_rewards))
-        
-        ## take greedy action
-        best_ro_reward = max(path_rewards)
-        ro_action = path_rewards.index(best_ro_reward)
+        ### greedy: take the path with the highest (weighted) reward under the sampled MDP; first max on ties
+        path_rewards = self.env.weighted_path_costs(self.env.trial)
+        ro_action = path_rewards.index(max(path_rewards))
 
         
         ### RANDOM: randomly choose between the paths
