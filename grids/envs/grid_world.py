@@ -412,20 +412,78 @@ class GridEnv(gym.Env):
         sim_env.costs = costs
         sim_env.sim = True
 
-        # # Explicitly shallow-copy attributes that might be mutated in-place
-        # if hasattr(self, 'trial_obs') and self.trial_obs is not None:
-        #     if isinstance(self.trial_obs, np.ndarray):
-        #         sim_env.trial_obs = self.trial_obs.copy()
-        #     else:
-        #         sim_env.trial_obs = copy.copy(self.trial_obs)
-
-        # if hasattr(self, 'obs') and self.obs is not None:
-        #     if isinstance(self.obs, np.ndarray):
-        #         sim_env.obs = self.obs.copy()
-        #     else:
-        #         sim_env.obs = copy.copy(self.obs)
+        # no precomputed path table: step() / weighted_path_costs() compute from the cost grid
+        sim_env._path_table = None
+        sim_env._sample_idx = None
 
         return sim_env
+
+
+    ## FUNCTIONS OPTIMISED FOR SIMULATION - PRECOMPUTE AS MUCH AS POSSIBLE
+    def sim_clones(self, sample_grids):
+        """
+        Create one sim env per sampled cost grid (e.g. posterior samples for MCTS).
+
+        Paths are fixed, so only the cost grid differs between samples. So for every trial within the
+        search horizon (current trial to trunc_trial), the observation and weighted cost of each path
+        are precomputed here, vectorised across samples. The table is shared by all clones, and each
+        clone knows its own sample index, which makes each simulated step() a table lookup.
+
+        Args:
+            sample_grids: (S, N, N) array of sampled cost grids.
+        Returns:
+            list of S sim envs.
+        """
+        ## shared table; None for trials outside the search horizon
+        ##   path_obs[t][a][s]: list of costs along path a on trial t, under sample s
+        ##   path_costs[t][s]:  list over paths of the weighted path cost on trial t, under sample s
+        path_obs = [None] * self.n_trials
+        path_costs = [None] * self.n_trials
+        for t in range(self._trial, self.trunc_trial + 1):
+            path_obs[t], costs_t = [], []
+            for a, path in enumerate(self.path_states[t]):
+                path = np.asarray(path, dtype=np.int64)
+                cell_costs = sample_grids[:, path[:, 0], path[:, 1]]       # (S, L)
+                path_obs[t].append(cell_costs.tolist())
+                costs_t.append(self._weighted_sum(cell_costs, self.path_weights[t][a]))
+            path_costs[t] = np.stack(costs_t, axis=1).tolist()             # (S, n_afc)
+        table = (path_obs, path_costs)
+
+        sim_envs = []
+        for s in range(sample_grids.shape[0]):
+            sim_env = self.sim_clone(sample_grids[s])
+            sim_env._path_table, sim_env._sample_idx = table, s
+            sim_envs.append(sim_env)
+        return sim_envs
+
+    def _weighted_sum(self, path_costs, path_weight_idx):
+        """
+        Weighted cost of a path: sum_k cost_k * sim_weight_map[path_weight_idx[k]].
+        path_costs has shape (L,) or (S, L). Summation runs left to right over path cells,
+        so all code paths give bit-identical results.
+        """
+        path_costs = np.asarray(path_costs, dtype=np.float64)
+        w = self.sim_weight_map[np.asarray(path_weight_idx)]
+        total = path_costs[..., 0] * w[0]
+        for k in range(1, len(w)):
+            total = total + path_costs[..., k] * w[k]
+        return total
+
+    def weighted_path_costs(self, t):
+        """Subjective (reward-weighted) cost of each path on trial t, under this env's cost grid."""
+        table = getattr(self, '_path_table', None)   # getattr: envs pickled before this attribute existed
+        if table is not None and table[1][t] is not None:
+            return table[1][t][self._sample_idx]
+        return [float(self._weighted_sum(self.costs[tuple(np.asarray(path).T)], self.path_weights[t][a]))
+                for a, path in enumerate(self.path_states[t])]
+
+    def path_obs(self, t, action):
+        """Observation from taking path `action` on trial t: tuple of the costs along the path, in path order."""
+        table = getattr(self, '_path_table', None)
+        if table is not None and table[0][t] is not None:
+            return tuple(table[0][t][action][self._sample_idx])
+        path = np.asarray(self.path_states[t][action])
+        return tuple(self.costs[path[:, 0], path[:, 1]].tolist())
 
     ## reset the environment
     def reset(self, seed=None):
@@ -1028,41 +1086,40 @@ class GridEnv(gym.Env):
         return GridSampler(self)
 
     
-    ## take path using pre-computed path_states (avoids looping through individual step calls)
+    ## take a whole path using pre-computed path_states
     def step(self, action):
         """
-        
+        Take path `action` on the current trial.
+
         Args:
             action: index of the path to take from path_states[self._trial]
-        
-        Returns standard env.step outputs:
-            states: list of states visited
-            costs: list of costs at each state
-        """
-        path = self.path_states[self._trial][action]
-        path_arr = np.array(path, dtype=np.int64)
-        costs = self.costs[path_arr[:, 0], path_arr[:, 1]].astype(np.float64)
-        self.trial_obs = np.column_stack([path_arr, costs])
-        # self.trial_obs = [(x, y, costs[k]) for k, (x, y) in enumerate(path)]
 
-        ## apply reward-func weighting in sim mode
+        Returns (standard gym outputs):
+            obs:        tuple of the costs observed along the path, in path order
+                        (the coordinates are implied by the trial and action). Also stored as self.trial_obs.
+            cost:       sim mode:  subjective cost, weighted by sim_weight_map (aligned vs orthogonal cells)
+                        real mode: actual (unweighted) total cost of the path
+            terminated: True if this was the final trial
+            truncated:  True if the search horizon (trunc_trial) has been reached
+            info:       dummy dict
+        In real mode, the (x, y, cost) of each visited cell is also appended to the history self.obs.
+        """
+        t = self._trial
+        self.trial_obs = self.path_obs(t, action)
+
         if self.sim:
-            path_weight_idx = self.path_weights[self._trial][action]
-            weighted_costs = [float(self.costs[x, y]) * self.sim_weight_map[path_weight_idx[k]] for k, (x, y) in enumerate(path)]
-            # print('original costs:', costs)
-            # print('weighted costs:', weighted_costs)
-            # print('path weight indices:', self.path_weights[self._trial][action])
-            cost = sum(weighted_costs)
+            cost = self.weighted_path_costs(t)[action]
         else:
-            self.obs = np.vstack([self.obs, self.trial_obs])
+            path = np.asarray(self.path_states[t][action], dtype=np.int64)
+            costs = np.asarray(self.trial_obs, dtype=np.float64)
+            self.obs = np.vstack([self.obs, np.column_stack([path, costs])])
             cost = sum(costs)
-            
+
         # Mark as terminated if done final trial
-        self.terminated = self._trial >= self.n_trials - 1
+        self.terminated = t >= self.n_trials - 1
 
         ## mark as truncated if we have reached horizon
-        truncated = self._trial >= self.trunc_trial
-
+        truncated = t >= self.trunc_trial
         # Update trial counter
         self.increment_trial()
 
