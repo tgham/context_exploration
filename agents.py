@@ -197,7 +197,10 @@ class BAMCP(Farmer):
         #     n_samples = int(self.n_samples)
         # else:
         #     n_samples = int(self.n_samples/2)
-        n_samples = int(self.n_samples)
+        # n_samples = int(self.n_samples)
+
+        ## receding number of samples based on remaining trials - e.g. for n_trials = 4, we have 4/4, then 3/4, then 2/4, then 1/4 of the original n_samples
+        n_samples = int(self.n_samples * self.mcts.env.n_trials/(self.mcts.env.n_trials - self.mcts.env.trial))
         self.all_posterior_MDPs = self.sampler.sample_mdps(n_samples)
 
         ## debugging Q-vals
